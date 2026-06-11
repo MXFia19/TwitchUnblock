@@ -1,74 +1,76 @@
 #!/bin/bash
-set -e  # stoppe le script si une commande échoue
 
-# ─── Config ────────────────────────────────────────────────────
-SCHEME="TwitchUnblock"
-WORKSPACE="TwitchUnblock.xcodeproj"   # ou TwitchUnblock.xcworkspace si tu as des SPM packages
-CONFIGURATION="Release"
-SDK="iphoneos"
-DERIVED_DATA="build/DerivedData"
-OUTPUT_DIR="build"
-APP_NAME="TwitchUnblock"
+# Inspired by https://github.com/cranci1/Sora/blob/dev/ipabuild.sh
 
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "  🟣 TwitchUnblock — Build IPA"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+set -e
 
-# ─── Xcode version ─────────────────────────────────────────────
-echo "▶ Xcode : $(xcodebuild -version | head -1)"
-echo "▶ SDK   : $(xcodebuild -showsdks | grep iphoneos | tail -1)"
+cd "$(dirname "$0")"
 
-# ─── Clean build dir ───────────────────────────────────────────
-rm -rf "$OUTPUT_DIR"
-mkdir -p "$OUTPUT_DIR"
+WORKING_LOCATION="$(pwd)"
+APPLICATION_NAME=TwitchUnblock
+SCHEME_NAME="TwitchUnblock"
 
-# ─── Build (sans signature — AltStore re-signe à l'install) ────
-echo ""
-echo "▶ Compilation Release arm64..."
+# ─── XcodeGen — génère le .xcodeproj si absent ─────────────────
+if [ ! -d "$APPLICATION_NAME.xcodeproj" ]; then
+  echo "--- Generating .xcodeproj with XcodeGen ---"
+  if ! command -v xcodegen &> /dev/null; then
+    brew install xcodegen --quiet
+  fi
+  xcodegen generate --spec project.yml
+fi
+
+if [ ! -d "build" ]; then
+  mkdir build
+fi
+
+cd build
+
+echo "--- Resolving Swift Package Dependencies ---"
+
+xcodebuild -resolvePackageDependencies \
+  -project "$WORKING_LOCATION/$APPLICATION_NAME.xcodeproj" \
+  -scheme "$SCHEME_NAME"
+
+echo "--- Building $APPLICATION_NAME for iOS ---"
 
 xcodebuild \
-  -project "$WORKSPACE" \
-  -scheme "$SCHEME" \
-  -configuration "$CONFIGURATION" \
-  -sdk "$SDK" \
-  -derivedDataPath "$DERIVED_DATA" \
-  -destination "generic/platform=iOS" \
-  ONLY_ACTIVE_ARCH=NO \
-  ARCHS="arm64" \
-  CODE_SIGN_IDENTITY="" \
-  CODE_SIGNING_REQUIRED=NO \
-  CODE_SIGNING_ALLOWED=NO \
-  DEVELOPMENT_TEAM="" \
-  | xcpretty --color 2>/dev/null || cat   # affiche les logs bruts si xcpretty absent
+  -project "$WORKING_LOCATION/$APPLICATION_NAME.xcodeproj" \
+  -scheme "$SCHEME_NAME" \
+  -configuration Release \
+  -derivedDataPath "$WORKING_LOCATION/build/DerivedDataApp" \
+  -destination 'generic/platform=iOS' \
+  -skipPackagePluginValidation \
+  clean build \
+  CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGN_ENTITLEMENTS="" CODE_SIGNING_ALLOWED="NO"
 
-# ─── Localiser le .app ─────────────────────────────────────────
-APP_PATH=$(find "$DERIVED_DATA/Build/Products/$CONFIGURATION-$SDK" \
-  -name "$APP_NAME.app" -maxdepth 1 | head -1)
+DD_APP_PATH="$WORKING_LOCATION/build/DerivedDataApp/Build/Products/Release-iphoneos/$APPLICATION_NAME.app"
+TARGET_APP="$WORKING_LOCATION/build/$APPLICATION_NAME.app"
 
-if [ -z "$APP_PATH" ]; then
-  echo "❌ Erreur : $APP_NAME.app introuvable dans $DERIVED_DATA"
+if [ ! -d "$DD_APP_PATH" ]; then
+  echo "Error: Build failed, .app not found at $DD_APP_PATH"
   exit 1
 fi
 
-echo "✅ .app trouvé : $APP_PATH"
+cp -r "$DD_APP_PATH" "$TARGET_APP"
 
-# ─── Packager en IPA ───────────────────────────────────────────
-echo ""
-echo "▶ Création du .ipa..."
+echo "--- Removing code signature ---"
+codesign --remove "$TARGET_APP"
+if [ -e "$TARGET_APP/_CodeSignature" ]; then
+  rm -rf "$TARGET_APP/_CodeSignature"
+fi
+if [ -e "$TARGET_APP/embedded.mobileprovision" ]; then
+  rm -rf "$TARGET_APP/embedded.mobileprovision"
+fi
 
-PAYLOAD_DIR="$OUTPUT_DIR/Payload"
-mkdir -p "$PAYLOAD_DIR"
-cp -r "$APP_PATH" "$PAYLOAD_DIR/"
+echo "--- Packaging IPA ---"
+mkdir Payload
+cp -r "$APPLICATION_NAME.app" "Payload/$APPLICATION_NAME.app"
+strip "Payload/$APPLICATION_NAME.app/$APPLICATION_NAME"
+zip -vr "$APPLICATION_NAME.ipa" Payload
 
-cd "$OUTPUT_DIR"
-zip -r "$APP_NAME.ipa" Payload/ -x "*.DS_Store"
-cd ..
+rm -rf "$APPLICATION_NAME.app"
+rm -rf Payload
 
-rm -rf "$OUTPUT_DIR/Payload"
-
-# ─── Résultat ──────────────────────────────────────────────────
-IPA_SIZE=$(du -sh "$OUTPUT_DIR/$APP_NAME.ipa" | cut -f1)
-echo ""
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "  ✅ IPA généré : $OUTPUT_DIR/$APP_NAME.ipa ($IPA_SIZE)"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "--- Success: build/$APPLICATION_NAME.ipa created ---"
+EOF
+chmod +x /home/claude/TwitchUnblock/buildipa.sh

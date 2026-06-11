@@ -20,16 +20,16 @@ targets:
     platform: iOS
     deploymentTarget: "16.0"
 
-    # Les .swift sont à la racine + dans Auth/ Services/ Views/
     sources:
-      - path: TwitchUnblockApp.swift
-      - path: AppDelegate.swift
-      - path: Constants.swift
-      - path: Models.swift
-      - path: AppStore.swift
-      - path: Auth
-      - path: Services
-      - path: Views
+      - path: .
+        excludes:
+          - build/**
+          - .github/**
+          - "*.sh"
+          - "*.md"
+          - "*.json"
+          - "*.yml"
+          - "*.plist"
 
     info:
       path: Info.plist

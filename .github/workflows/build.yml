@@ -1,0 +1,93 @@
+# Inspired by https://github.com/cranci1/Luna/blob/main/.github/workflows/build.yml
+
+name: Build and upload nightly
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:   # permet de déclencher manuellement depuis GitHub
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+
+  # ─────────────────────────────────────────────────────────────
+  build-ios:
+    name: Build iOS IPA
+    runs-on: macos-26
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Make build script executable
+        run: chmod +x ./buildipa.sh
+
+      - name: Build iOS IPA
+        run: ./buildipa.sh
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: TwitchUnblock-Nightly-IPA
+          path: build/TwitchUnblock.ipa
+
+      - name: Upload IPA to beta release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create beta \
+            --title "Nightly" \
+            --notes "Dernier build automatique — branche \`main\`" \
+            2>/dev/null || true
+          gh release upload beta build/TwitchUnblock.ipa --clobber
+
+      - name: Update apps.json (AltStore source)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          IPA_SIZE=$(wc -c < build/TwitchUnblock.ipa | tr -d ' ')
+          BUILD_DATE=$(date -u +%Y-%m-%d)
+          jq --argjson size "$IPA_SIZE" --arg date "$BUILD_DATE" \
+            '.apps[0].versions[0].size = $size | .apps[0].versions[0].date = $date | .apps[0].versionDate = $date' \
+            apps.json > apps.json.tmp && mv apps.json.tmp apps.json
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add apps.json
+          git diff --cached --quiet || \
+            (git commit -m "chore: update apps.json [skip ci]" && git push origin HEAD:main)
+
+  # ─────────────────────────────────────────────────────────────
+  build-catalyst:
+    name: Build Mac Catalyst DMG
+    runs-on: macos-26
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Make build script executable
+        run: chmod +x ./buildcatalyst.sh
+
+      - name: Build Mac Catalyst DMG
+        run: ./buildcatalyst.sh
+
+      - name: Upload DMG artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: TwitchUnblock-Nightly-Catalyst-DMG
+          path: build/TwitchUnblock-Catalyst.dmg
+
+      - name: Upload DMG to beta release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create beta \
+            --title "Nightly" \
+            --notes "Dernier build automatique — branche \`main\`" \
+            2>/dev/null || true
+          gh release upload beta build/TwitchUnblock-Catalyst.dmg --clobber

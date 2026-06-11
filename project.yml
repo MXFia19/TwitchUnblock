@@ -1,0 +1,47 @@
+name: TwitchUnblock
+
+options:
+  bundleIdPrefix: com.yourname
+  deploymentTarget:
+    iOS: "16.0"
+  xcodeVersion: "16.0"
+  generateEmptyDirectories: true
+
+settings:
+  base:
+    SWIFT_VERSION: 5.9
+    IPHONEOS_DEPLOYMENT_TARGET: "16.0"
+    ENABLE_BITCODE: NO
+    SUPPORTS_MACCATALYST: NO
+
+targets:
+  TwitchUnblock:
+    type: application
+    platform: iOS
+    deploymentTarget: "16.0"
+
+    # Les .swift sont à la racine + dans Auth/ Services/ Views/
+    sources:
+      - path: TwitchUnblockApp.swift
+      - path: AppDelegate.swift
+      - path: Constants.swift
+      - path: Models.swift
+      - path: AppStore.swift
+      - path: Auth
+      - path: Services
+      - path: Views
+
+    info:
+      path: Info.plist
+
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.yourname.TwitchUnblock
+        PRODUCT_NAME: TwitchUnblock
+        SWIFT_VERSION: 5.9
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: ""
+        CODE_SIGNING_REQUIRED: NO
+        CODE_SIGNING_ALLOWED: NO
+        CODE_SIGN_ENTITLEMENTS: ""
+        DEVELOPMENT_TEAM: ""

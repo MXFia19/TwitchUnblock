@@ -10,13 +10,55 @@ WORKING_LOCATION="$(pwd)"
 APPLICATION_NAME=TwitchUnblock
 SCHEME_NAME="TwitchUnblock"
 
-# ─── XcodeGen — génère le .xcodeproj si absent ─────────────────
+# ─── Génère le .xcodeproj si absent ────────────────────────────
 if [ ! -d "$APPLICATION_NAME.xcodeproj" ]; then
   echo "--- Generating .xcodeproj with XcodeGen ---"
+
   if ! command -v xcodegen &> /dev/null; then
     brew install xcodegen --quiet
   fi
-  xcodegen generate --spec project.yml
+
+  # Génère project.yml à la volée (pas besoin de le commiter)
+  cat > /tmp/project.yml << YAML
+name: TwitchUnblock
+options:
+  bundleIdPrefix: com.yourname
+  deploymentTarget:
+    iOS: "16.0"
+  xcodeVersion: "16.0"
+  generateEmptyDirectories: true
+settings:
+  base:
+    SWIFT_VERSION: 5.9
+    IPHONEOS_DEPLOYMENT_TARGET: "16.0"
+    ENABLE_BITCODE: NO
+    SUPPORTS_MACCATALYST: NO
+targets:
+  TwitchUnblock:
+    type: application
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: TwitchUnblock
+        excludes:
+          - "**/*.md"
+          - "**/*.txt"
+    info:
+      path: TwitchUnblock/Info.plist
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.yourname.TwitchUnblock
+        PRODUCT_NAME: TwitchUnblock
+        SWIFT_VERSION: 5.9
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGNING_REQUIRED: NO
+        CODE_SIGNING_ALLOWED: NO
+        CODE_SIGN_IDENTITY: ""
+        DEVELOPMENT_TEAM: ""
+YAML
+
+  xcodegen generate --spec /tmp/project.yml --project "$WORKING_LOCATION"
+  echo "✅ $APPLICATION_NAME.xcodeproj généré"
 fi
 
 if [ ! -d "build" ]; then
@@ -33,8 +75,7 @@ xcodebuild -resolvePackageDependencies \
 
 echo "--- Building $APPLICATION_NAME for iOS ---"
 
-xcodebuild \
-  -project "$WORKING_LOCATION/$APPLICATION_NAME.xcodeproj" \
+xcodebuild -project "$WORKING_LOCATION/$APPLICATION_NAME.xcodeproj" \
   -scheme "$SCHEME_NAME" \
   -configuration Release \
   -derivedDataPath "$WORKING_LOCATION/build/DerivedDataApp" \
@@ -72,5 +113,3 @@ rm -rf "$APPLICATION_NAME.app"
 rm -rf Payload
 
 echo "--- Success: build/$APPLICATION_NAME.ipa created ---"
-EOF
-chmod +x /home/claude/TwitchUnblock/buildipa.sh

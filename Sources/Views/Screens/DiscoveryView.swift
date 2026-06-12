@@ -205,23 +205,30 @@ struct DiscoveryView: View {
         loadingFollowed = false
     }
 
-    private func loadTopStreams(_ l: TopLang, isRefresh: Bool = false) async {
+        private func loadTopStreams(_ l: TopLang, isRefresh: Bool = false) async {
         guard let token = store.twitchToken else { return }
         
-        if topStreams.isEmpty {
+        // On n'affiche le loader que si la liste est vide et qu'on ne fait pas un pull-to-refresh
+        if topStreams.isEmpty && !isRefresh {
             loadingTop = true
         }
         
         do {
-            topStreams = (try await getTopStreams(token: token, lang: l == .fr ? "fr" : nil))
+            let fetchedStreams = try await getTopStreams(token: token, lang: l == .fr ? "fr" : nil)
+            // On met à jour la liste uniquement si Twitch nous a bien renvoyé des streams
+            if !fetchedStreams.isEmpty {
+                topStreams = fetchedStreams
+            }
         } catch is CancellationError {
             // Ignorer l'annulation
             return
         } catch {
-            topStreams = []
+            // S'il y a une erreur réseau, on ne vide SURTOUT PAS la liste existante
+            print("Erreur de rafraîchissement des top streams")
         }
         loadingTop = false
     }
+
 
     private func loadAll(isRefresh: Bool = false) async {
         await loadFollowedStreams(isRefresh: isRefresh)

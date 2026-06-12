@@ -19,6 +19,6 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add TwitchUnblock.xcodeproj .gitignore
+          git add TwitchUnblock.xcodeproj
           git commit -m "chore: lock project to .xcodeproj and remove xcodegen" || true
           git push

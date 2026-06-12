@@ -29,18 +29,54 @@ jobs:
       - name: Build iOS IPA
         run: ./buildipa.sh
 
+      - name: Define Release Variables
+        id: vars
+        run: |
+          NEW_VERSION="1.0.${{ github.run_number }}"
+          TAG_NAME="nightly-${{ github.run_number }}"
+          BUILD_DATE=$(date -u +%Y-%m-%d)
+          DOWNLOAD_URL="https://github.com/MXFia19/TwitchUnblock/releases/download/$TAG_NAME/TwitchUnblock.ipa"
+          
+          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "tag=$TAG_NAME" >> $GITHUB_OUTPUT
+          echo "date=$BUILD_DATE" >> $GITHUB_OUTPUT
+          echo "download_url=$DOWNLOAD_URL" >> $GITHUB_OUTPUT
+
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v7
         with:
           name: TwitchUnblock-Nightly-IPA
           path: build/TwitchUnblock.ipa
 
-      - name: Upload IPA to beta release
+      - name: Create New Release & Upload IPA
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create beta \
-            --title "Nightly" \
-            --notes "Dernier build automatique — branche \`main\`" \
-            2>/dev/null || true
-          gh release upload beta build/TwitchUnblock.ipa --clobber
+          gh release create "${{ steps.vars.outputs.tag }}" build/TwitchUnblock.ipa \
+            --title "Nightly Build ${{ steps.vars.outputs.version }}" \
+            --notes "Build automatique de la branche \`main\` le ${{ steps.vars.outputs.date }}."
+
+      - name: Update apps.json (AltStore source)
+        run: |
+          IPA_SIZE=$(wc -c < build/TwitchUnblock.ipa | tr -d ' ')
+          
+          jq --arg version "${{ steps.vars.outputs.version }}" \
+             --arg date "${{ steps.vars.outputs.date }}" \
+             --arg url "${{ steps.vars.outputs.download_url }}" \
+             --argjson size "$IPA_SIZE" \
+            '.apps[0].version = $version |
+             .apps[0].versionDate = $date |
+             .apps[0].downloadURL = $url |
+             .apps[0].size = $size |
+             .apps[0].versions[0].version = $version |
+             .apps[0].versions[0].date = $date |
+             .apps[0].versions[0].downloadURL = $url |
+             .apps[0].versions[0].size = $size' apps.json > apps.json.tmp
+             
+          mv apps.json.tmp apps.json
+          
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add apps.json
+          git diff --cached --quiet || \
+            (git commit -m "chore: bump version to ${{ steps.vars.outputs.version }} [skip ci]" && git push origin HEAD:main)

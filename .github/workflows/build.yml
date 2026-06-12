@@ -32,15 +32,19 @@ jobs:
           echo "date=$BUILD_DATE" >> $GITHUB_OUTPUT
           echo "download_url=$DOWNLOAD_URL" >> $GITHUB_OUTPUT
 
-      # ✨ L'ÉTAPE MAGIQUE (Corrigée pour XcodeGen)
-      - name: Inject Version and App Icon into Xcode
+      # ✨ L'ÉTAPE MAGIQUE (Corrigée pour XcodeGen ET le bug des bandes noires)
+      - name: Inject Version, App Icon and LaunchScreen
         run: |
-          echo "--- Ajout des versions dans project.yml ---"
-          # On injecte la version directement dans la configuration du projet
-          sed -i '' "s/PRODUCT_NAME: TwitchUnblock/PRODUCT_NAME: TwitchUnblock\n        MARKETING_VERSION: ${{ steps.vars.outputs.version }}\n        CURRENT_PROJECT_VERSION: ${{ github.run_number }}\n        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon/g" project.yml
+          echo "--- Fix du bug des bandes noires (LaunchScreen) & Versions ---"
+          sed -i '' "s/PRODUCT_NAME: TwitchUnblock/PRODUCT_NAME: TwitchUnblock\n        MARKETING_VERSION: ${{ steps.vars.outputs.version }}\n        CURRENT_PROJECT_VERSION: ${{ github.run_number }}\n        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon\n        INFOPLIST_KEY_UILaunchStoryboardName: LaunchScreen/g" project.yml
+          
+          echo "--- Sécurisation du Info.plist ---"
+          find . -name "Info.plist" -exec plutil -replace CFBundleIdentifier -string "com.mxfia19.TwitchUnblock" {} \;
+          find . -name "Info.plist" -exec plutil -replace CFBundleShortVersionString -string "${{ steps.vars.outputs.version }}" {} \;
+          find . -name "Info.plist" -exec plutil -replace CFBundleVersion -string "${{ github.run_number }}" {} \;
+          find . -name "Info.plist" -exec plutil -replace UILaunchStoryboardName -string "LaunchScreen" {} \;
           
           echo "--- Création de l'icône iOS ---"
-          # On crée l'architecture d'icône exacte demandée par Apple
           mkdir -p Sources/Assets.xcassets/AppIcon.appiconset
           curl -sL https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/assets/icon.png -o Sources/Assets.xcassets/AppIcon.appiconset/icon.png
           cat <<EOF > Sources/Assets.xcassets/AppIcon.appiconset/Contents.json

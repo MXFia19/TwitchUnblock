@@ -12,7 +12,6 @@ struct DiscoveryView: View {
     @State private var loadingFollowed  = false
     @State private var loadingTop       = false
     @State private var errorFollowed: String? = nil
-    @State private var isRefreshing     = false
 
     enum TopLang { case fr, all }
 
@@ -21,7 +20,7 @@ struct DiscoveryView: View {
     var body: some View {
         Group {
             if store.twitchToken == nil {
-                // 1. VUE DÉCONNECTÉE : On utilise une VStack pour centrer le bouton
+                // VUE DÉCONNECTÉE
                 VStack(spacing: 0) {
                     VodHistoryRowView { item in
                         onPlayVod(item.term, item.display, item.thumb, item.streamer)
@@ -29,16 +28,16 @@ struct DiscoveryView: View {
                     .padding(.horizontal, 16)
                     .padding(.top, 8)
 
-                    Spacer() // Pousse l'encadré vers le centre
+                    Spacer()
 
                     loginPrompt
 
-                    Spacer() // Maintient l'encadré au centre
+                    Spacer()
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(Color.tDark)
             } else {
-                // 2. VUE CONNECTÉE : On garde la ScrollView et le pull-to-refresh
+                // VUE CONNECTÉE
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 0) {
                         VodHistoryRowView { item in
@@ -50,8 +49,11 @@ struct DiscoveryView: View {
                         loggedInContent
                     }
                 }
+                .padding(.top, 1) // Hack SwiftUI : Annule le grand espace noir de la Safe Area
                 .background(Color.tDark)
-                .refreshable { await refresh() }
+                .refreshable { 
+                    await refresh() 
+                }
             }
         }
         .onAppear {
@@ -164,18 +166,21 @@ struct DiscoveryView: View {
         }
     }
 
-    private func loadFollowedStreams() async {
+    private func loadFollowedStreams(isRefresh: Bool = false) async {
         guard let token = store.twitchToken else { return }
-        loadingFollowed = true; errorFollowed = nil
+        
+        // On n'affiche le gros loader que si la liste est vide (pas pendant un simple refresh)
+        if followedStreams.isEmpty {
+            loadingFollowed = true
+        }
+        errorFollowed = nil
 
         do {
-            // 3. CORRECTION DU REFRESH : On réutilise l'ID Twitch s'il est déjà connu
             let currentUserId: String
             if let existingId = store.twitchUserId, !existingId.isEmpty {
                 currentUserId = existingId
             } else {
                 guard let user = await getTwitchUser(token: token) else {
-                    // On ne déconnecte plus l'utilisateur pour une simple erreur de réseau !
                     errorFollowed = store.t("err_loading")
                     loadingFollowed = false
                     return
@@ -186,9 +191,12 @@ struct DiscoveryView: View {
             }
 
             followedStreams = try await getFollowedStreams(token: token, userId: currentUserId)
+            
+        } catch is CancellationError {
+            // Si SwiftUI annule la tâche (scroll trop rapide par ex.), on ignore sans planter
+            return
         } catch {
             errorFollowed = store.t("err_loading")
-            // On déconnecte UNIQUEMENT si l'erreur mentionne clairement un problème de token/auth
             let errorDesc = error.localizedDescription.lowercased()
             if errorDesc.contains("token") || errorDesc.contains("401") || errorDesc.contains("unauthorized") {
                 store.logout()
@@ -197,20 +205,31 @@ struct DiscoveryView: View {
         loadingFollowed = false
     }
 
-    private func loadTopStreams(_ l: TopLang) async {
+    private func loadTopStreams(_ l: TopLang, isRefresh: Bool = false) async {
         guard let token = store.twitchToken else { return }
-        loadingTop = true
-        topStreams = (try? await getTopStreams(token: token, lang: l == .fr ? "fr" : nil)) ?? []
+        
+        if topStreams.isEmpty {
+            loadingTop = true
+        }
+        
+        do {
+            topStreams = (try await getTopStreams(token: token, lang: l == .fr ? "fr" : nil))
+        } catch is CancellationError {
+            // Ignorer l'annulation
+            return
+        } catch {
+            topStreams = []
+        }
         loadingTop = false
     }
 
-    private func loadAll() async {
-        await loadFollowedStreams()
-        await loadTopStreams(topLang)
+    private func loadAll(isRefresh: Bool = false) async {
+        await loadFollowedStreams(isRefresh: isRefresh)
+        await loadTopStreams(topLang, isRefresh: isRefresh)
     }
 
     private func refresh() async {
-        await loadAll()
+        await loadAll(isRefresh: true)
     }
 }
 

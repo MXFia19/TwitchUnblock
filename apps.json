@@ -1,35 +1,35 @@
 {
   "name": "TwitchUnblock",
-  "identifier": "com.MXFia19.twitchunblock-source",
+  "identifier": "com.yourname.twitchunblock-source",
   "subtitle": "Regarder Twitch sans sub",
   "description": "Source AltStore pour TwitchUnblock — builds nightlys automatiques.",
-  "iconURL": "https://raw.githubusercontent.com/MXFia19/TwitchUnblock/main/assets/icon.png",
-  "website": "https://github.com/MXFia19/TwitchUnblock",
+  "iconURL": "https://raw.githubusercontent.com/YOURNAME/TwitchUnblock/main/assets/icon.png",
+  "website": "https://github.com/YOURNAME/TwitchUnblock",
   "tintColor": "9146ff",
   "featuredApps": [
-    "com.MXFia19.TwitchUnblock"
+    "com.yourname.TwitchUnblock"
   ],
   "apps": [
     {
       "name": "TwitchUnblock",
-      "bundleIdentifier": "com.MXFia19.TwitchUnblock",
-      "developerName": "MXFia19",
+      "bundleIdentifier": "com.yourname.TwitchUnblock",
+      "developerName": "YOURNAME",
       "subtitle": "Twitch VODs & Live sans abonnement",
       "localizedDescription": "Regardez vos VODs et streams Twitch sans subscription, avec sélecteur de qualité, PiP natif, historique, sync cloud et support VLC / Outplayer / Infuse.",
-      "iconURL": "https://raw.githubusercontent.com/MXFia19/TwitchUnblock/main/assets/icon.png",
+      "iconURL": "https://raw.githubusercontent.com/YOURNAME/TwitchUnblock/main/assets/icon.png",
       "tintColor": "9146ff",
       "screenshotURLs": [],
       "version": "1.0.0",
       "versionDate": "2026-06-11",
       "versionDescription": "Build nightly automatique depuis la branche main.",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/beta/TwitchUnblock.ipa",
+      "downloadURL": "https://github.com/YOURNAME/TwitchUnblock/releases/download/beta/TwitchUnblock.ipa",
       "size": 0,
       "versions": [
         {
           "version": "1.0.0",
           "date": "2026-06-11",
           "localizedDescription": "Build nightly automatique.",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/beta/TwitchUnblock.ipa",
+          "downloadURL": "https://github.com/YOURNAME/TwitchUnblock/releases/download/beta/TwitchUnblock.ipa",
           "size": 0,
           "minOSVersion": "16.0"
         }

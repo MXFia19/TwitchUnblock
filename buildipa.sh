@@ -10,55 +10,13 @@ WORKING_LOCATION="$(pwd)"
 APPLICATION_NAME=TwitchUnblock
 SCHEME_NAME="TwitchUnblock"
 
-# ─── Génère le .xcodeproj si absent ────────────────────────────
+# ─── XcodeGen ──────────────────────────────────────────────────
 if [ ! -d "$APPLICATION_NAME.xcodeproj" ]; then
   echo "--- Generating .xcodeproj with XcodeGen ---"
-
   if ! command -v xcodegen &> /dev/null; then
     brew install xcodegen --quiet
   fi
-
-  # Génère project.yml à la volée (pas besoin de le commiter)
-  cat > /tmp/project.yml << YAML
-name: TwitchUnblock
-options:
-  bundleIdPrefix: com.yourname
-  deploymentTarget:
-    iOS: "16.0"
-  xcodeVersion: "16.0"
-  generateEmptyDirectories: true
-settings:
-  base:
-    SWIFT_VERSION: 5.9
-    IPHONEOS_DEPLOYMENT_TARGET: "16.0"
-    ENABLE_BITCODE: NO
-    SUPPORTS_MACCATALYST: NO
-targets:
-  TwitchUnblock:
-    type: application
-    platform: iOS
-    deploymentTarget: "16.0"
-    sources:
-      - path: TwitchUnblock
-        excludes:
-          - "**/*.md"
-          - "**/*.txt"
-    info:
-      path: TwitchUnblock/Info.plist
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.yourname.TwitchUnblock
-        PRODUCT_NAME: TwitchUnblock
-        SWIFT_VERSION: 5.9
-        CODE_SIGN_STYLE: Manual
-        CODE_SIGNING_REQUIRED: NO
-        CODE_SIGNING_ALLOWED: NO
-        CODE_SIGN_IDENTITY: ""
-        DEVELOPMENT_TEAM: ""
-YAML
-
-  xcodegen generate --spec /tmp/project.yml --project "$WORKING_LOCATION"
-  echo "✅ $APPLICATION_NAME.xcodeproj généré"
+  xcodegen generate --spec project.yml
 fi
 
 if [ ! -d "build" ]; then

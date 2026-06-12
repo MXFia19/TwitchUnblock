@@ -21,15 +21,7 @@ targets:
     deploymentTarget: "16.0"
 
     sources:
-      - path: .
-        excludes:
-          - build/**
-          - .github/**
-          - "*.sh"
-          - "*.md"
-          - "*.json"
-          - "*.yml"
-          - "*.plist"
+      - path: Sources
 
     info:
       path: Info.plist

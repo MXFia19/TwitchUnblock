@@ -1,0 +1,24 @@
+name: Freeze Xcode Project
+
+on: workflow_dispatch
+
+jobs:
+  freeze:
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate Project
+        run: xcodegen generate
+      - name: Remove from gitignore
+        run: sed -i '' '/\.xcodeproj/d' .gitignore || true
+      - name: Commit and Push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add TwitchUnblock.xcodeproj .gitignore
+          git commit -m "chore: lock project to .xcodeproj and remove xcodegen" || true
+          git push

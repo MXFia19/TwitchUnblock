@@ -67,18 +67,21 @@ jobs:
           brew install xcodegen
           xcodegen generate --spec project.yml
 
-      - name: Post-Generation Fix (Anti-Black Bars & Identity)
+      - name: Post-Generation Fix (Anti-Black Bars, Identity & PiP)
         run: |
-          echo "--- Fix Info.plist (Plein écran, ID, Version) ---"
-          # On modifie le fichier APRÈS XcodeGen pour qu'il ne casse rien !
+          echo "--- Fix Info.plist (Plein écran, ID, Version, PiP) ---"
+          # Identifiants et version
           find . -name "Info.plist" -exec plutil -replace CFBundleIdentifier -string "com.mxfia19.TwitchUnblock" {} \;
           find . -name "Info.plist" -exec plutil -replace CFBundleShortVersionString -string "${{ steps.vars.outputs.version }}" {} \;
           find . -name "Info.plist" -exec plutil -replace CFBundleVersion -string "${{ github.run_number }}" {} \;
           find . -name "Info.plist" -exec plutil -replace CFBundleIconName -string "AppIcon" {} \;
           
-          # Force le plein écran (supprime l'ancienne méthode et ajoute la nouvelle)
+          # Force le plein écran sans bandes noires
           find . -name "Info.plist" -exec plutil -remove UILaunchStoryboardName {} \; || true
           find . -name "Info.plist" -exec plutil -replace UILaunchScreen -xml "<dict/>" {} \;
+          
+          # ✨ RÉPARATION DU PIP ET DE L'AUDIO EN ARRIÈRE-PLAN
+          find . -name "Info.plist" -exec plutil -replace UIBackgroundModes -json '["audio"]' {} \;
 
       - name: Make build script executable
         run: chmod +x ./buildipa.sh

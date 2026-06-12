@@ -22,7 +22,7 @@ struct AutocompleteInputView: View {
                     .foregroundColor(.white)
                     .submitLabel(.search)
                     .onSubmit { showSuggestions = false; onSubmit() }
-                    .onChange(of: text) { _, newValue in handleChange(newValue) }
+                    .onChange(of: text) { newValue in handleChange(newValue) }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 12)
 

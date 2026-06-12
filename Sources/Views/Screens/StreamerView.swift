@@ -85,9 +85,7 @@ struct StreamerView: View {
                     if let live = liveData {
                         LiveCardView(
                             isOnline: live.error == nil,
-                            title: live.error != nil
-                                ? (offlineSinceText.map { "\(store.t("offline_since"))\($0)" } ?? store.t("offline_msg"))
-                                : live.title,
+                            title: live.error != nil ? store.t("offline_msg") : live.title,
                             game: live.game,
                             avatarURL: avatarURL,
                             thumbnailURL: live.thumbnail,

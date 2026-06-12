@@ -42,7 +42,7 @@ struct DiscoveryView: View {
                 Task { await loadAll() }
             }
         }
-        .onChange(of: store.twitchToken) { _, token in
+        .onChange(of: store.twitchToken) { token in
             if token != nil { Task { await loadAll() } }
             else { followedStreams = []; topStreams = [] }
         }

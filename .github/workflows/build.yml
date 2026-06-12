@@ -1,4 +1,4 @@
-```yaml
+
 name: Build and upload nightly
 
 on:
@@ -116,4 +116,6 @@ jobs:
             (git commit -m "chore: bump version to ${{ steps.vars.outputs.version }} [skip ci]" && git push origin HEAD:master)
 
 
-```
+
+
+

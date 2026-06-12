@@ -12,20 +12,28 @@ struct MainTabView: View {
     @State private var errorMsg: String? = nil
     @State private var statusTitle = ""
 
-    enum TabName: String, CaseIterable {
-        case discovery, streamer, direct, settings
+        enum TabName: String, CaseIterable {
+        case discovery, streamer, history, direct, settings // Ajout de "history"
         var icon: String {
-            switch self { case .discovery: "🌟"; case .streamer: "👤"; case .direct: "🔗"; case .settings: "⚙️" }
+            switch self { 
+            case .discovery: return "🌟"
+            case .streamer:  return "👤"
+            case .history:   return "🕒" // Nouvelle icône
+            case .direct:    return "🔗"
+            case .settings:  return "⚙️" 
+            }
         }
         func label(_ store: AppStore) -> String {
             switch self {
-            case .discovery: store.t("tab_discovery")
-            case .streamer:  store.t("tab_streamer")
-            case .direct:    store.t("tab_direct")
-            case .settings:  store.t("settings")
+            case .discovery: return store.t("tab_discovery")
+            case .streamer:  return store.t("tab_streamer")
+            case .history:   return "VODs" // Titre du nouvel onglet
+            case .direct:    return store.t("tab_direct")
+            case .settings:  return store.t("settings")
             }
         }
     }
+
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -33,9 +41,8 @@ struct MainTabView: View {
             Color.tDark.ignoresSafeArea()
 
             VStack(spacing: 0) {
-                // 2. Padding ajouté en haut pour contourner l'encoche de l'iPhone (Dynamic Island)
+                // On supprime le .padding(.top) qui causait le bug !
                 HeaderView()
-                    .padding(.top, UIApplication.safeAreaTop) 
                     .zIndex(10)
 
                 Group {
@@ -44,6 +51,8 @@ struct MainTabView: View {
                         DiscoveryView(onPlayStream: playLive, onPlayVod: playVod)
                     case .streamer:
                         StreamerView(onPlayVod: playVod, onPlayLive: playLive)
+                    case .history:
+                        HistoryView(onPlayVod: playVod) // Le nouvel onglet
                     case .direct:
                         DirectView(onPlayVod: playVod)
                     case .settings:
@@ -54,7 +63,8 @@ struct MainTabView: View {
 
                 CustomTabBar(activeTab: $activeTab)
             }
-            .ignoresSafeArea()
+            // ⚠️ SUPPRIME le `.ignoresSafeArea()` qui était ici !
+
 
             // ── Mini bar (player réduit) ──────────────────────────────
             if playerMode != nil && !playerVisible && qualityLinks != nil {
@@ -193,9 +203,15 @@ struct MainTabView: View {
     }
 
     // MARK: – Playback
-    private func playVod(_ id: String, _ title: String? = nil, _ thumb: String? = nil, _ streamer: String? = nil) {
+        private func playVod(_ id: String, _ title: String? = nil, _ thumb: String? = nil, _ streamer: String? = nil) {
+        // 1. On sauvegarde dans l'historique
+        let item = HistoryItem(term: id, display: title ?? "VOD", thumb: thumb, type: .vod, streamer: streamer)
+        store.saveToHistory(item)
+        
+        // 2. On lance la vidéo
         startPlayback(.vod(id: id, title: title, thumb: thumb, streamer: streamer))
     }
+
     private func playLive(_ channel: String) {
         startPlayback(.live(channelName: channel))
     }

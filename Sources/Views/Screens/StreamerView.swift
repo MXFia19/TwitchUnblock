@@ -32,14 +32,16 @@ struct StreamerView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
 
-                // ── Search bar ──────────────────────────────────────
+                   // ── Search bar ──────────────────────────────────────
                 VStack(spacing: 8) {
-                    HStack(spacing: 10) {
+                    // ✨ L'ajout de alignment: .top est ici :
+                    HStack(alignment: .top, spacing: 10) { 
                         AutocompleteInputView(
                             text: $channelInput,
                             placeholder: store.t("ph_streamer"),
                             onSubmit: { Task { await search() } }
                         )
+
                         Button { Task { await search() } } label: {
                             Text("🔍")
                                 .font(.system(size: 20))

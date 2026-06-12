@@ -19,17 +19,17 @@
       "iconURL": "https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/assets/icon.png",
       "tintColor": "9146ff",
       "screenshotURLs": [],
-      "version": "1.0.30",
+      "version": "1.0.31",
       "versionDate": "2026-06-12",
       "versionDescription": "Build automatique initial.",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/nightly-30/TwitchUnblock.ipa",
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/nightly-31/TwitchUnblock.ipa",
       "size": 314203,
       "versions": [
         {
-          "version": "1.0.30",
+          "version": "1.0.31",
           "date": "2026-06-12",
           "localizedDescription": "Build automatique initial.",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/nightly-30/TwitchUnblock.ipa",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/nightly-31/TwitchUnblock.ipa",
           "size": 314203,
           "minOSVersion": "16.0"
         }

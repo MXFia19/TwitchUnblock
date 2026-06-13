@@ -28,6 +28,10 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
     func updateUIViewController(_ vc: AVPlayerViewController, context: Context) {
         let currentURL = (vc.player?.currentItem?.asset as? AVURLAsset)?.url
         if currentURL != url {
+            // ✨ LA CORRECTION EST ICI : On force l'ancien lecteur à se mettre en pause 
+            // avant de le remplacer par la nouvelle qualité !
+            vc.player?.pause()
+            
             let player = AVPlayer(url: url)
             vc.player = player
             context.coordinator.setupObserver(player: player, onProgress: onProgress)
@@ -38,7 +42,7 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
         }
     }
 
-    // ✨ CORRECTION : Force l'arrêt de la vidéo quand la vue est détruite
+    // Force l'arrêt de la vidéo quand la vue est détruite
     static func dismantleUIViewController(_ vc: AVPlayerViewController, coordinator: Coordinator) {
         vc.player?.pause()
         vc.player = nil
@@ -52,7 +56,7 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
         private var playerRef: AVPlayer?
 
         init() {
-            // ✨ CORRECTION : Coupe instantanément le son si on reçoit le signal "ForceStopVideo"
+            // Coupe instantanément le son si on reçoit le signal "ForceStopVideo" depuis la croix
             NotificationCenter.default.addObserver(forName: NSNotification.Name("ForceStopVideo"), object: nil, queue: .main) { [weak self] _ in
                 self?.playerVC?.player?.pause()
                 self?.playerVC?.player = nil

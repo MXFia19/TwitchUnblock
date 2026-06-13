@@ -59,8 +59,8 @@ struct MainTabView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                // ✨ CORRECTION 1 : La Mini-bar est maintenant DANS la pile verticale, 
-                // juste au dessus du menu, s'emboîtant parfaitement sans grand espace !
+                // ✨ CORRECTION POSITION : 
+                // La mini-bar est maintenant DANS la pile, juste au-dessus des onglets !
                 if playerMode != nil && !playerVisible && qualityLinks != nil {
                     miniBar
                         .zIndex(99)
@@ -187,10 +187,11 @@ struct MainTabView: View {
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
             Button { stopPlayer() } label: {
-                // Zone de clic agrandie pour pouvoir fermer plus facilement
-                Text("✕").foregroundColor(.tMuted).font(.system(size: 16, weight: .bold))
+                Text("✕")
+                    .foregroundColor(.tMuted)
+                    .font(.system(size: 16, weight: .bold))
                     .frame(width: 32, height: 32)
-                    .contentShape(Rectangle())
+                    .contentShape(Rectangle()) // Rend toute la zone cliquable
             }
         }
         .padding(.horizontal, 16).padding(.vertical, 10)
@@ -198,7 +199,7 @@ struct MainTabView: View {
         .cornerRadius(12)
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.tPrimary.opacity(0.4), lineWidth: 1))
         .padding(.horizontal, 12)
-        .padding(.bottom, 8) // ✨ Seulement 8 pixels de marge avec le menu du bas
+        .padding(.bottom, 8) // ✨ Seulement 8 pixels de marge pour qu'elle touche presque le menu
         .onTapGesture { withAnimation { playerVisible = true } }
     }
 
@@ -253,7 +254,7 @@ struct MainTabView: View {
     }
 
     private func stopPlayer() {
-        // ✨ CORRECTION 2 : On envoie un signal pour couper l'audio !
+        // ✨ CORRECTION AUDIO : On diffuse un message à toute l'app pour couper l'AVPlayer
         NotificationCenter.default.post(name: NSNotification.Name("ForceStopVideo"), object: nil)
 
         withAnimation {

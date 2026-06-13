@@ -1,158 +1,113 @@
-import SwiftUI
+import Foundation
 import Combine
 
-// MARK: - AppStore Principal
-class AppStore: ObservableObject {
-    @Published var lang: Lang {
+final class AppStore: ObservableObject {
+
+    // MARK: – Language
+    @Published var lang: Lang = .fr {
         didSet { UserDefaults.standard.set(lang.rawValue, forKey: "lang") }
     }
 
-    // ✨ Le Proxy est maintenant désactivé de base (false)
-    @Published var useProxy: Bool {
-        didSet { UserDefaults.standard.set(useProxy, forKey: "useProxy") }
+    // MARK: – Twitch Auth
+    @Published var twitchToken: String? {
+        didSet {
+            if let t = twitchToken { UserDefaults.standard.set(t, forKey: "twitch_token") }
+            else { UserDefaults.standard.removeObject(forKey: "twitch_token") }
+        }
+    }
+    @Published var twitchUserId: String?
+
+    // MARK: – Proxy
+    @Published var useProxy: Bool = true {
+        didSet { UserDefaults.standard.set(useProxy, forKey: "twitch_use_proxy") }
     }
 
-    @Published var history: [HistoryItem] = []
+    // MARK: – History
+    @Published var history: [HistoryItem] = [] {
+        didSet { persistHistory() }
+    }
 
+    // MARK: – VOD Progress
+    @Published private(set) var vodProgress: [String: Double] = [:]
+
+    // MARK: – Init
     init() {
-        // Chargement de la langue
-        let savedLang = UserDefaults.standard.string(forKey: "lang") ?? "fr"
-        self.lang = Lang(rawValue: savedLang) ?? .fr
-
-        // Chargement du proxy (si jamais défini auparavant, on force à false)
-        if UserDefaults.standard.object(forKey: "useProxy") == nil {
-            self.useProxy = false
-        } else {
-            self.useProxy = UserDefaults.standard.bool(forKey: "useProxy")
-        }
-
-        loadHistory()
-    }
-
-    // MARK: - Gestion de l'historique
-    func loadHistory() {
-        if let data = UserDefaults.standard.data(forKey: "history"),
+        let ud = UserDefaults.standard
+        if let l = ud.string(forKey: "lang"), let parsed = Lang(rawValue: l) { lang = parsed }
+        twitchToken = ud.string(forKey: "twitch_token")
+        useProxy = ud.object(forKey: "twitch_use_proxy") as? Bool ?? false
+        if let data = ud.data(forKey: "twitch_vod_history"),
            let decoded = try? JSONDecoder().decode([HistoryItem].self, from: data) {
-            self.history = decoded
+            history = decoded
+        }
+        if let data = ud.data(forKey: "vod_progress_all"),
+           let decoded = try? JSONDecoder().decode([String: Double].self, from: data) {
+            vodProgress = decoded
         }
     }
 
+    // MARK: – Translation
+    func t(_ key: String) -> String { translate(key, lang) }
+
+    // MARK: – Auth
+    func logout() {
+        twitchToken = nil
+        twitchUserId = nil
+    }
+
+    // MARK: – History management
     func saveToHistory(_ item: HistoryItem) {
-        var current = history.filter { $0.term != item.term }
-        current.insert(item, at: 0)
-        if current.count > 50 { current = Array(current.prefix(50)) } // Garde les 50 derniers
-        history = current
-        
-        if let encoded = try? JSONEncoder().encode(history) {
-            UserDefaults.standard.set(encoded, forKey: "history")
+        var filtered = history.filter { $0.term.lowercased() != item.term.lowercased() }
+        filtered.insert(item, at: 0)
+        history = Array(filtered.prefix(20))
+    }
+
+    func removeFromHistory(term: String) {
+        history.removeAll { $0.term == term }
+    }
+
+    func clearChannelHistory() {
+        history = history.filter { $0.type == .vod }
+    }
+
+    private func persistHistory() {
+        if let data = try? JSONEncoder().encode(history) {
+            UserDefaults.standard.set(data, forKey: "twitch_vod_history")
         }
     }
-    
-    func clearHistory() {
-        history.removeAll()
-        UserDefaults.standard.removeObject(forKey: "history")
+
+    // MARK: – VOD progress
+    func getVodProgress(_ vodId: String) -> Double { vodProgress[vodId] ?? 0 }
+
+    func setVodProgress(_ vodId: String, time: Double) {
+        vodProgress[vodId] = time
+        if let data = try? JSONEncoder().encode(vodProgress) {
+            UserDefaults.standard.set(data, forKey: "vod_progress_all")
+        }
     }
 
-    // MARK: - Dictionnaire des Traductions
-    private let dict: [Lang: [String: String]] = [
-        .fr: [
-            // Onglets & Header
-            "title": "Twitch sans Sub",
-            "tab_discovery": "Découverte",
-            "tab_streamer": "Streamers",
-            "tab_history": "VODs",
-            "tab_direct": "Lien / ID",
-            "settings": "Paramètres",
+    // MARK: – Cloud Sync
+    func pullFromCloud(userId: String) async {
+        guard let url = URL(string: "\(kAPIURL)/api/sync/get?userId=\(userId)") else { return }
+        do {
+            let (data, _) = try await URLSession.shared.data(from: url)
+            if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let histData = try? JSONSerialization.data(withJSONObject: json["history"] ?? []),
+               let items = try? JSONDecoder().decode([HistoryItem].self, from: histData) {
+                await MainActor.run { self.history = items }
+            }
+        } catch {}
+    }
 
-            // Statuts Live / VOD
-            "live_on": "EN DIRECT",
-            "offline": "HORS LIGNE",
-            "offline_since": "Hors ligne depuis : ",
-            "btn_watch_live": "Regarder le live",
-            "live_badge": "LIVE",
-
-            // Lecteur Vidéo
-            "reduce": "Réduire",
-            "loading_vod": "Chargement de la vidéo...",
-            "back": "Retour",
-
-            // Textes Découverte & Streamers
-            "search_streamer_placeholder": "Nom du streamer...",
-            "search_btn": "Rechercher",
-            "favorites_title": "💜 Vos Chaînes Suivies",
-            "top_streams_title": "🔥 Top Streams du Moment",
-
-            // Historique
-            "history_title": "Historique des VODs",
-            "history_empty": "Aucune vidéo dans l'historique.",
-            "clear_history": "Vider l'historique",
-
-            // Direct Link
-            "direct_placeholder": "Lien de la VOD ou ID...",
-            "direct_btn": "Lancer la VOD",
-
-            // Authentification Twitch
-            "login_twitch": "Se connecter avec Twitch",
-            "logout_twitch": "Se déconnecter",
-            "login_msg": "Connectez-vous pour retrouver vos chaînes préférées.",
-            
-            // Paramètres
-            "settings_title": "Paramètres de l'application",
-            "settings_proxy": "Activer le Proxy",
-            "settings_proxy_desc": "Utilisez le proxy uniquement si Twitch bloque certaines de vos VODs.",
-            "settings_lang": "Langue"
-        ],
-        .en: [
-            // Tabs & Header
-            "title": "Twitch Ad-Free",
-            "tab_discovery": "Discovery",
-            "tab_streamer": "Streamers",
-            "tab_history": "VODs",
-            "tab_direct": "Link / ID",
-            "settings": "Settings",
-
-            // Live / VOD Status
-            "live_on": "LIVE",
-            "offline": "OFFLINE",
-            "offline_since": "Offline since: ",
-            "btn_watch_live": "Watch Live",
-            "live_badge": "LIVE",
-
-            // Video Player
-            "reduce": "Minimize",
-            "loading_vod": "Loading video...",
-            "back": "Back",
-
-            // Discovery & Streamers texts
-            "search_streamer_placeholder": "Streamer name...",
-            "search_btn": "Search",
-            "favorites_title": "💜 Followed Channels",
-            "top_streams_title": "🔥 Top Streams Right Now",
-
-            // History
-            "history_title": "VOD History",
-            "history_empty": "No videos in history.",
-            "clear_history": "Clear History",
-
-            // Direct Link
-            "direct_placeholder": "VOD Link or ID...",
-            "direct_btn": "Play VOD",
-
-            // Twitch Auth
-            "login_twitch": "Login with Twitch",
-            "logout_twitch": "Logout",
-            "login_msg": "Log in to find your favorite channels.",
-            
-            // Settings
-            "settings_title": "App Settings",
-            "settings_proxy": "Enable Proxy",
-            "settings_proxy_desc": "Use the proxy only if Twitch is blocking your VODs.",
-            "settings_lang": "Language"
-        ]
-    ]
-
-    // Fonction de traduction
-    func t(_ key: String) -> String {
-        return dict[lang]?[key] ?? dict[.en]?[key] ?? key
+    func pushToCloud() {
+        guard let userId = twitchUserId,
+              let histData = try? JSONEncoder().encode(history),
+              let histJSON = try? JSONSerialization.jsonObject(with: histData),
+              let url = URL(string: "\(kAPIURL)/api/sync/post") else { return }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: ["userId": userId, "data": ["history": histJSON]])
+        URLSession.shared.dataTask(with: req).resume()
     }
 }

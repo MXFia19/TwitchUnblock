@@ -4,6 +4,7 @@ import SwiftUI
 let kAPIURL          = "https://test2.kurzmathis4.workers.dev"
 let kHelixClientID   = "1e68ku2ehgzy5cy0di3xvfy82sxpf6"
 let kGQLClientID     = "kimne78kx3ncx6brgo4mv6wki5h1ko"
+// ✨ J'ai remis la bonne URL d'authentification de ton projet
 let kRedirectURI     = "https://mxfia19.github.io/TwitchUnblock/auth.html"
 let kDeepLinkScheme  = "twitchunblock://"
 
@@ -50,19 +51,31 @@ enum Lang: String, CaseIterable, Identifiable {
     }
 }
 
-// ✨ NOUVEAU : Les sources disponibles avec leurs emojis !
+// ✨ TES NOUVELLES SOURCES : Inclus displayName, subtitle et emoji pour ton interface !
 enum LiveSource: String, CaseIterable, Identifiable, Codable {
-    case auto = "auto"
-    case luminous = "luminous"
-    case twitch = "twitch"
-    case cloudflare = "cloudflare"
+    case auto, luminous, twitch, cloudflare
     var id: String { rawValue }
-    
-    // Ajout de la propriété emoji que tu as appelée dans tes réglages
+
+    var displayName: String {
+        switch self {
+        case .auto:       return "Auto"
+        case .luminous:   return "Luminous"
+        case .twitch:     return "Twitch Officiel"
+        case .cloudflare: return "Cloudflare Worker"
+        }
+    }
+    var subtitle: String {
+        switch self {
+        case .auto:       return "Meilleure source disponible"
+        case .luminous:   return "Sans publicité (recommandé)"
+        case .twitch:     return "Avec publicités"
+        case .cloudflare: return "Proxy personnel"
+        }
+    }
     var emoji: String {
         switch self {
-        case .auto:       return "🤖"
-        case .luminous:   return "⚡️"
+        case .auto:       return "✨"
+        case .luminous:   return "💡"
         case .twitch:     return "🟣"
         case .cloudflare: return "☁️"
         }
@@ -75,7 +88,7 @@ private let translations: [Lang: [String: String]] = [
         "title": "Regarder Twitch sans Sub",
         "tab_discovery": "🌟 Découverte", "tab_streamer": "Streamer",
         "tab_direct": "Lien / ID", "settings": "Paramètres",
-        "tab_history": "VODs",
+        "tab_history": "VODs", // ✨ CORRIGÉ : L'onglet historique a retrouvé son nom
         "ph_streamer": "Streamer (ex: squeezie)", "ph_keyword": "Mot-clé (ex: horreur)",
         "ph_id": "ID ou Lien de la VOD",
         "btn_unlock": "Déverrouiller", "btn_search": "Chercher",
@@ -113,12 +126,7 @@ private let translations: [Lang: [String: String]] = [
         "proxy_sub": "Désactiver pour économiser le serveur (utile pour VLC)",
         "proxy_enable": "Activer le proxy", "twitch_account": "Compte Twitch",
         "language": "Langue",
-        
-        "settings_source": "Serveur / Source Vidéo",
-        "source_auto": "Auto (Recommandé)",
-        "source_luminous": "Luminous (Sans Pubs)",
-        "source_twitch": "Twitch Officiel (Avec Pubs)",
-        "source_cloudflare": "Cloudflare Proxy"
+        "settings_source": "Serveur / Source Vidéo"
     ],
     .en: [
         "title": "Watch Twitch No Sub",
@@ -162,12 +170,7 @@ private let translations: [Lang: [String: String]] = [
         "proxy_sub": "Disable to save server resources (useful for VLC)",
         "proxy_enable": "Enable proxy", "twitch_account": "Twitch Account",
         "language": "Language",
-        
-        "settings_source": "Video Server / Source",
-        "source_auto": "Auto (Recommended)",
-        "source_luminous": "Luminous (Ad-Free)",
-        "source_twitch": "Official Twitch (Ads)",
-        "source_cloudflare": "Cloudflare Proxy"
+        "settings_source": "Video Server / Source"
     ],
     .es: [
         "title": "Ver Twitch sin Sub",
@@ -211,12 +214,7 @@ private let translations: [Lang: [String: String]] = [
         "proxy_sub": "Desactivar para ahorrar el servidor (útil para VLC)",
         "proxy_enable": "Activar proxy", "twitch_account": "Cuenta de Twitch",
         "language": "Idioma",
-        
-        "settings_source": "Servidor / Fuente de Video",
-        "source_auto": "Auto (Recomendado)",
-        "source_luminous": "Luminous (Sin Anuncios)",
-        "source_twitch": "Twitch Oficial (Con Anuncios)",
-        "source_cloudflare": "Proxy Cloudflare"
+        "settings_source": "Servidor / Fuente de Video"
     ],
 ]
 

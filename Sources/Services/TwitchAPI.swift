@@ -228,7 +228,7 @@ func getChannelVideos(channelName: String, cursor: String? = nil) async -> (vide
     query {
         user(login: "\(channelName)") {
             profileImageURL(width: 70)
-            videos(first: 500, type: ARCHIVE, sort: TIME\(afterCursor)) {
+            videos(first: 20, type: ARCHIVE, sort: TIME\(afterCursor)) {
                 edges { cursor node { id title previewThumbnailURL(height: 180, width: 320) publishedAt lengthSeconds } }
                 pageInfo { hasNextPage }
             }

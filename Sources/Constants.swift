@@ -56,6 +56,7 @@ private let translations: [Lang: [String: String]] = [
         "title": "Regarder Twitch sans Sub",
         "tab_discovery": "🌟 Découverte", "tab_streamer": "Streamer",
         "tab_direct": "Lien / ID", "settings": "Paramètres",
+        "tab_history": "VODs", // ✨ CORRECTION ICI
         "ph_streamer": "Streamer (ex: squeezie)", "ph_keyword": "Mot-clé (ex: horreur)",
         "ph_id": "ID ou Lien de la VOD",
         "btn_unlock": "Déverrouiller", "btn_search": "Chercher",
@@ -98,6 +99,7 @@ private let translations: [Lang: [String: String]] = [
         "title": "Watch Twitch No Sub",
         "tab_discovery": "🌟 Discovery", "tab_streamer": "Streamer",
         "tab_direct": "Link / ID", "settings": "Settings",
+        "tab_history": "VODs", // ✨ CORRECTION ICI
         "ph_streamer": "Streamer (ex: shroud)", "ph_keyword": "Keyword (ex: horror)",
         "ph_id": "VOD ID or Link",
         "btn_unlock": "Unlock", "btn_search": "Search",
@@ -140,6 +142,7 @@ private let translations: [Lang: [String: String]] = [
         "title": "Ver Twitch sin Sub",
         "tab_discovery": "🌟 Descubrir", "tab_streamer": "Streamer",
         "tab_direct": "Enlace / ID", "settings": "Ajustes",
+        "tab_history": "VODs", // ✨ CORRECTION ICI
         "ph_streamer": "Streamer (ej: ibai)", "ph_keyword": "Palabra (ej: horror)",
         "ph_id": "ID o Enlace VOD",
         "btn_unlock": "Desbloquear", "btn_search": "Buscar",

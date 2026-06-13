@@ -1,4 +1,3 @@
-
 name: Build and upload nightly
 
 on:
@@ -107,12 +106,17 @@ jobs:
         run: |
           IPA_SIZE=$(stat -f%z build/TwitchUnblock.ipa || echo "1048576")
           
+          # ✨ MISE A JOUR DES PARAMÈTRES GLOBAUX (.apps[0]) ET DE L'HISTORIQUE (.versions[0])
           jq --arg version "${{ steps.vars.outputs.version }}" \
              --arg build "${{ github.run_number }}" \
              --arg date "${{ steps.vars.outputs.date }}" \
              --arg url "${{ steps.vars.outputs.download_url }}" \
              --argjson size "$IPA_SIZE" \
-            '.apps[0].versions[0].version = $version |
+            '.apps[0].version = $version |
+             .apps[0].versionDate = $date |
+             .apps[0].downloadURL = $url |
+             .apps[0].size = $size |
+             .apps[0].versions[0].version = $version |
              .apps[0].versions[0].buildVersion = $build |
              .apps[0].versions[0].date = $date |
              .apps[0].versions[0].downloadURL = $url |

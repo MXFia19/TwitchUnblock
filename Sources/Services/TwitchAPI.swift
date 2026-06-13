@@ -193,9 +193,19 @@ func getLive(channelName: String) async -> LiveData {
     let thumbnail = stream["previewImageURL"] as? String ?? ""
     var links: QualityLinks = [:]
 
-    // ✨ 1 - TENTATIVE LUMINOUS AVEC LOGS DÉTAILLÉS
-    logger.info("LIVE", "Tentative de connexion au serveur Luminous (Sans Pub)...")
-    if let lumUrl = URL(string: "https://as.luminous.dev/live/\(login).m3u8") {
+    // ✨ 1 - TENTATIVE LUMINOUS (SANS PUB) - CORRIGÉE SELON LE CODE RUST
+    logger.info("LIVE", "Tentative Luminous (Sans Pub)...")
+    
+    // 💡 Note : On ne met plus .m3u8 à la fin, et on n'envoie PAS notre token.
+    // Luminous récupère son propre token sur son serveur pour esquiver les pubs.
+    var lumComps = URLComponents(string: "https://as.luminous.dev/live/\(login)")!
+    lumComps.queryItems = [
+        .init(name: "allow_source", value: "true"),
+        .init(name: "allow_audio_only", value: "true"),
+        .init(name: "fast_bread", value: "true")
+    ]
+    
+    if let lumUrl = lumComps.url {
         var req = URLRequest(url: lumUrl)
         requestHeaders.forEach { req.setValue($1, forHTTPHeaderField: $0) }
         
@@ -208,21 +218,21 @@ func getLive(channelName: String) async -> LiveData {
                         if !links.isEmpty {
                             logger.success("LIVE", "✅ Luminous OK (Aucune Pub) : \(links.count) qualités")
                         } else {
-                            logger.warn("LIVE", "⚠️ Luminous a répondu mais la playlist est vide. Bascule sur l'officiel.")
+                            logger.warn("LIVE", "⚠️ Luminous a répondu mais la playlist est vide.")
                         }
                     }
                 } else {
-                    logger.warn("LIVE", "⚠️ Luminous a échoué (Erreur HTTP \(httpResp.statusCode)). Bascule sur l'officiel.")
+                    logger.warn("LIVE", "⚠️ Luminous a échoué (Erreur \(httpResp.statusCode)).")
                 }
             }
         } catch {
-            logger.error("LIVE", "❌ Impossible de joindre Luminous (\(error.localizedDescription)). Bascule sur l'officiel.")
+            logger.error("LIVE", "❌ Erreur réseau avec Luminous (\(error.localizedDescription)).")
         }
     }
 
     // ✨ 2 - FALLBACK OFFICIEL TWITCH (Avec pub)
     if links.isEmpty, let token = token {
-        logger.info("LIVE", "Tentative de connexion au serveur officiel Twitch...")
+        logger.info("LIVE", "Bascule sur le serveur officiel Twitch...")
         var comps = URLComponents(string: "https://usher.ttvnw.net/api/channel/hls/\(login).m3u8")!
         comps.queryItems = [
             .init(name: "allow_source",               value: "true"),

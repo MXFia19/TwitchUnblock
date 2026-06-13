@@ -31,19 +31,20 @@ struct StreamCardView: View {
                         .padding(8)
                 }
 
+                // ✨ LE BLOC TEXTE AVEC HAUTEUR STRICTE
                 VStack(alignment: .leading, spacing: 4) {
                     Text(stream.title)
                         .font(.system(size: 13, weight: .bold))
                         .foregroundColor(.tText)
                         .lineLimit(2)
-                        // Force une hauteur fixe pour éviter les décalages dans la grille
-                        .frame(height: 38, alignment: .top)
+                        .multilineTextAlignment(.leading)
                     
                     Text("\(stream.userName)\(stream.gameName.isEmpty ? "" : " • \(stream.gameName)")")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(.tPrimary)
                         .lineLimit(1)
                 }
+                .frame(height: 55, alignment: .top) // Hauteur figée à 55 points = aucune superposition possible
                 .padding(10)
             }
             .background(Color.tSurface)
@@ -60,10 +61,16 @@ struct VodCardView: View {
     let onPress: () -> Void
 
     private var dateString: String {
-        let df = ISO8601DateFormatter()
-        df.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        guard let date = df.date(from: vod.publishedAt) else { return vod.publishedAt }
-        return DateFormatter.localizedString(from: date, dateStyle: .short, timeStyle: .none)
+        let formatter = ISO8601DateFormatter()
+        // Formatage de la date corrigé pour éviter les dates trop longues
+        if let date = formatter.date(from: vod.publishedAt) {
+            let df = DateFormatter()
+            df.dateStyle = .short
+            df.timeStyle = .none
+            return df.string(from: date)
+        }
+        // Sécurité : si l'API renvoie un format bizarre, on ne garde que la date "YYYY-MM-DD"
+        return String(vod.publishedAt.prefix(10)) 
     }
 
     var body: some View {
@@ -88,17 +95,20 @@ struct VodCardView: View {
                     }
                 }
 
+                // ✨ LE BLOC TEXTE AVEC HAUTEUR STRICTE
                 VStack(alignment: .leading, spacing: 4) {
                     Text(vod.title)
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(.tText)
                         .lineLimit(2)
-                        // Force une hauteur fixe pour l'alignement
-                        .frame(height: 34, alignment: .top)
+                        .multilineTextAlignment(.leading)
                         
                     Text("\(dateString) • \(formatDuration(vod.lengthSeconds))")
-                        .font(.system(size: 11)).foregroundColor(.tMuted)
+                        .font(.system(size: 11))
+                        .foregroundColor(.tMuted)
+                        .lineLimit(1) // Coupe net si c'est trop long
                 }
+                .frame(height: 55, alignment: .top) // Hauteur figée = alignement parfait
                 .padding(10)
             }
             .background(Color.tSurface)

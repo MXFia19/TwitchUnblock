@@ -12,28 +12,25 @@ struct MainTabView: View {
     @State private var errorMsg: String? = nil
     @State private var statusTitle = ""
 
+    // ── Chat state ───────────────────────────────────────────────────────
+    @State private var showChat = false
+    @State private var currentChannelName: String? = nil
+    @State private var currentChannelId: String? = nil
+
     enum TabName: String, CaseIterable {
-        case discovery, streamer, history, direct, settings
+        case discovery, streamer, direct, settings
         var icon: String {
-            switch self { 
-            case .discovery: return "🌟"
-            case .streamer:  return "👤"
-            case .history:   return "🕒"
-            case .direct:    return "🔗"
-            case .settings:  return "⚙️" 
-            }
+            switch self { case .discovery: "🌟"; case .streamer: "👤"; case .direct: "🔗"; case .settings: "⚙️" }
         }
         func label(_ store: AppStore) -> String {
             switch self {
-            case .discovery: return store.t("tab_discovery")
-            case .streamer:  return store.t("tab_streamer")
-            case .history:   return store.t("tab_history")
-            case .direct:    return store.t("tab_direct")
-            case .settings:  return store.t("settings")
+            case .discovery: store.t("tab_discovery")
+            case .streamer:  store.t("tab_streamer")
+            case .direct:    store.t("tab_direct")
+            case .settings:  store.t("settings")
             }
         }
     }
-
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -49,8 +46,6 @@ struct MainTabView: View {
                         DiscoveryView(onPlayStream: playLive, onPlayVod: playVod)
                     case .streamer:
                         StreamerView(onPlayVod: playVod, onPlayLive: playLive)
-                    case .history:
-                        HistoryView(onPlayVod: playVod)
                     case .direct:
                         DirectView(onPlayVod: playVod)
                     case .settings:
@@ -59,17 +54,15 @@ struct MainTabView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                // ✨ CORRECTION POSITION : 
-                // La mini-bar est maintenant DANS la pile, juste au-dessus des onglets !
-                if playerMode != nil && !playerVisible && qualityLinks != nil {
-                    miniBar
-                        .zIndex(99)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                }
-
                 CustomTabBar(activeTab: $activeTab)
             }
-            .ignoresSafeArea(edges: .bottom)
+            .ignoresSafeArea() // le VStack part de y=0 ; Header et TabBar gèrent leur propre inset
+
+            // ── Mini bar (player réduit) ──────────────────────────────
+            if playerMode != nil && !playerVisible && qualityLinks != nil {
+                miniBar
+                    .zIndex(99)
+            }
 
             // ── Player overlay ────────────────────────────────────────
             if playerMode != nil {
@@ -88,6 +81,7 @@ struct MainTabView: View {
         ZStack(alignment: .top) {
             Color.tDark.ignoresSafeArea()
             VStack(spacing: 0) {
+                // Header
                 HStack(spacing: 12) {
                     Button(store.t("reduce")) { withAnimation { playerVisible = false } }
                         .font(.system(size: 15, weight: .bold))
@@ -97,7 +91,6 @@ struct MainTabView: View {
                         .font(.system(size: 14, weight: .bold))
                         .foregroundColor(.white)
                         .lineLimit(1)
-                        .minimumScaleFactor(0.5)
                         .frame(maxWidth: .infinity, alignment: .leading)
 
                     Button {
@@ -112,7 +105,7 @@ struct MainTabView: View {
                     }
                 }
                 .padding(.horizontal, 16)
-                .padding(.top, 16) 
+                .padding(.top, 52)
                 .padding(.bottom, 12)
                 .background(Color.tCard)
                 .overlay(Divider().background(Color.tBorder), alignment: .bottom)
@@ -139,6 +132,7 @@ struct MainTabView: View {
                                 qualityLinks: links,
                                 vodId: { if case .vod(let id, _, _, _) = playerMode { return id }; return nil }()
                             )
+                            // Info box
                             infoBox
                         }
                     }
@@ -151,27 +145,65 @@ struct MainTabView: View {
     @ViewBuilder
     private var infoBox: some View {
         if let mode = playerMode {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(statusTitle)
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundColor(.white)
-                if case .vod(_, _, _, let streamer) = mode, let s = streamer {
-                    Text("par \(s)").font(.system(size: 13, weight: .semibold)).foregroundColor(.tPrimary)
+            VStack(alignment: .leading, spacing: 0) {
+                // ── Info row ─────────────────────────────────────────
+                HStack(alignment: .top, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(statusTitle)
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundColor(.white)
+                        if case .vod(_, _, _, let streamer) = mode, let s = streamer {
+                            Text("par \(s)")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundColor(.tPrimary)
+                        }
+                        if case .live = mode {
+                            Text(store.t("live_badge"))
+                                .font(.system(size: 11, weight: .bold)).foregroundColor(.white)
+                                .padding(.horizontal, 8).padding(.vertical, 3)
+                                .background(Color.tLive).cornerRadius(4)
+                        }
+                    }
+                    Spacer()
+                    // Chat toggle (live only)
+                    if case .live = mode, let channel = currentChannelName {
+                        Button {
+                            withAnimation(.spring(response: 0.35)) { showChat.toggle() }
+                            logger.info("CHAT", showChat ? "Chat ouvert" : "Chat fermé", channel)
+                        } label: {
+                            HStack(spacing: 5) {
+                                Image(systemName: showChat ? "bubble.left.fill" : "bubble.left")
+                                Text("Chat")
+                                    .font(.system(size: 13, weight: .bold))
+                            }
+                            .foregroundColor(showChat ? .white : .tPrimary)
+                            .padding(.horizontal, 12).padding(.vertical, 8)
+                            .background(showChat ? Color.tPrimary : Color.tPrimary.opacity(0.15))
+                            .cornerRadius(10)
+                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.tPrimary, lineWidth: 1))
+                        }
+                    }
                 }
-                if case .live = mode {
-                    Text(store.t("live_badge"))
-                        .font(.system(size: 11, weight: .bold)).foregroundColor(.white)
-                        .padding(.horizontal, 8).padding(.vertical, 3)
-                        .background(Color.tLive).cornerRadius(4)
+                .padding(16)
+                .background(Color.tCard)
+                .cornerRadius(12)
+
+                // ── Chat panel ───────────────────────────────────────
+                if showChat, let channel = currentChannelName {
+                    ChatView(
+                        channelName: channel,
+                        channelId: currentChannelId,
+                        token: store.twitchToken
+                    )
+                    .frame(height: 340)
+                    .cornerRadius(12)
+                    .padding(.top, 8)
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(16)
-            .background(Color.tCard)
-            .cornerRadius(12)
         }
     }
 
+    // Helper pour éviter l'expression trop complexe dans miniBar
     private var miniBarPrefix: String {
         guard let mode = playerMode else { return "▶️ " }
         if case .live = mode { return "🔴 " }
@@ -187,29 +219,22 @@ struct MainTabView: View {
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
             Button { stopPlayer() } label: {
-                Text("✕")
-                    .foregroundColor(.tMuted)
-                    .font(.system(size: 16, weight: .bold))
-                    .frame(width: 32, height: 32)
-                    .contentShape(Rectangle()) // Rend toute la zone cliquable
+                Text("✕").foregroundColor(.tMuted).font(.system(size: 16, weight: .bold))
             }
         }
-        .padding(.horizontal, 16).padding(.vertical, 10)
+        .padding(.horizontal, 16).padding(.vertical, 12)
         .background(Color.tCard)
         .cornerRadius(12)
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.tPrimary.opacity(0.4), lineWidth: 1))
         .padding(.horizontal, 12)
-        .padding(.bottom, 8) // ✨ Seulement 8 pixels de marge pour qu'elle touche presque le menu
+        .padding(.bottom, 90)
         .onTapGesture { withAnimation { playerVisible = true } }
     }
 
     // MARK: – Playback
     private func playVod(_ id: String, _ title: String? = nil, _ thumb: String? = nil, _ streamer: String? = nil) {
-        let item = HistoryItem(term: id, type: .vod, display: title ?? "VOD", thumb: thumb, streamer: streamer, addedAt: Date().timeIntervalSince1970 * 1000)
-        store.saveToHistory(item)
         startPlayback(.vod(id: id, title: title, thumb: thumb, streamer: streamer))
     }
-
     private func playLive(_ channel: String) {
         startPlayback(.live(channelName: channel))
     }
@@ -220,43 +245,47 @@ struct MainTabView: View {
         loading = true
         errorMsg = nil
         qualityLinks = nil
+        showChat = false   // reset chat on new playback
+
+        // Store channel name for chat
+        if case .live(let channel) = mode {
+            currentChannelName = channel.lowercased()
+        } else {
+            currentChannelName = nil
+            currentChannelId = nil
+        }
 
         Task {
-            do {
-                switch mode {
-                case .vod(let id, let title, _, _):
-                    let data = await getM3U8(vodId: id)
-                    if let err = data.error, data.links.isEmpty {
-                        await MainActor.run { errorMsg = err; loading = false }
-                    } else {
-                        await MainActor.run {
-                            qualityLinks  = data.links
-                            statusTitle   = title ?? "VOD \(id)"
-                            loading       = false
-                        }
-                    }
-                case .live(let channel):
-                    let data = await getLive(channelName: channel)
-                    if let err = data.error, err != "offline" {
-                        await MainActor.run { errorMsg = err; loading = false }
-                    } else if let links = data.links, !links.isEmpty {
-                        await MainActor.run {
-                            qualityLinks  = links
-                            statusTitle   = data.title.isEmpty ? channel : data.title
-                            loading       = false
-                        }
-                    } else {
-                        await MainActor.run { errorMsg = "Stream indisponible"; loading = false }
+            switch mode {
+            case .vod(let id, let title, _, _):
+                let data = await getM3U8(vodId: id)
+                if let err = data.error, data.links.isEmpty {
+                    await MainActor.run { errorMsg = err; loading = false }
+                } else {
+                    await MainActor.run {
+                        qualityLinks = data.links
+                        statusTitle  = title ?? "VOD \(id)"
+                        loading      = false
                     }
                 }
+            case .live(let channel):
+                let data = await getLive(channelName: channel)
+                if let err = data.error, err != "offline" {
+                    await MainActor.run { errorMsg = err; loading = false }
+                } else if let links = data.links, !links.isEmpty {
+                    await MainActor.run {
+                        qualityLinks       = links
+                        statusTitle        = data.title.isEmpty ? channel : data.title
+                        loading            = false
+                    }
+                } else {
+                    await MainActor.run { errorMsg = "Stream indisponible"; loading = false }
+                }
             }
-        }
-    }
-
     private func stopPlayer() {
-        // ✨ CORRECTION AUDIO : On diffuse un message à toute l'app pour couper l'AVPlayer
-        NotificationCenter.default.post(name: NSNotification.Name("ForceStopVideo"), object: nil)
-
+        showChat = false
+        currentChannelName = nil
+        currentChannelId   = nil
         withAnimation {
             playerVisible = false
             playerMode    = nil
@@ -293,7 +322,6 @@ struct CustomTabBar: View {
                             .font(.system(size: 10, weight: .semibold))
                             .foregroundColor(isActive ? .tPrimary : .tMuted)
                             .lineLimit(1)
-                            .minimumScaleFactor(0.7)
                     }
                     .frame(maxWidth: .infinity)
                 }
@@ -301,7 +329,9 @@ struct CustomTabBar: View {
             }
         }
         .padding(.top, 10)
-        .padding(.bottom, 34) 
+        .padding(.bottom, (UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first?.windows.first(where: { $0.isKeyWindow })?.safeAreaInsets.bottom ?? 34) + 8)
         .background(Color.tCard)
         .overlay(Divider().background(Color.tBorder), alignment: .top)
     }

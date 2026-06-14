@@ -42,7 +42,6 @@ struct ChatView: View {
                         }
                         .padding(.vertical, 6)
                     }
-                    // ✅ Syntaxe compatible avec iOS 16 (sans le _,)
                     .onChange(of: chat.messages.first?.id) { newId in
                         guard autoScroll, let id = newId else { return }
                         withAnimation(.linear(duration: 0.1)) {
@@ -117,25 +116,31 @@ struct ChatMessageRow: View {
                     .padding(.vertical, 4)
             }
         }
+        // ✨ CORRECTION 1 : Force la ligne entière à s'aligner à gauche
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(message.isHighlight ? Color.tWarning.opacity(0.08) : Color.clear)
     }
 }
 
-// MARK: – Wrapping HStack (Native iOS 16 Layout)
+// MARK: – Wrapping HStack
 struct WrappingHStack: View {
     let message: ChatMessage
 
     var body: some View {
         let blocks = buildBlocks()
 
-        // ✨ LE NOUVEAU MOTEUR DE MISE EN PAGE PARFAIT
         MessageFlowLayout(spacing: 4, lineSpacing: 4) {
             // Badges
             ForEach(message.badges) { badge in
-                AsyncImage(url: URL(string: badge.url)) { img in
-                    img.resizable().interpolation(.medium)
-                } placeholder: { Color.clear }
-                .frame(width: 18, height: 18)
+                AsyncImage(url: URL(string: badge.url)) { phase in
+                    if let img = phase.image {
+                        img.resizable().interpolation(.medium).scaledToFit()
+                    } else {
+                        // ✨ CORRECTION 2 : Limite la taille de l'espace vide pour éviter de pousser le texte
+                        Color.clear.frame(width: 16)
+                    }
+                }
+                .frame(width: 16, height: 16)
             }
 
             // Username
@@ -159,8 +164,6 @@ struct WrappingHStack: View {
                 }
             }
         }
-        // Force l'alignement sur la gauche
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func buildBlocks() -> [TokenBlock] {
@@ -175,41 +178,40 @@ struct TokenBlock: Identifiable {
     let content: MessageToken
 }
 
-// MARK: – Native Message Layout Algorithm Corrigé
+// MARK: – Native Message Layout Algorithm
 struct MessageFlowLayout: Layout {
     var spacing: CGFloat
     var lineSpacing: CGFloat
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        // Sécurise la largeur pour éviter un plantage ou un calcul infini
-        let width = proposal.replacingUnspecifiedDimensions(by: .init(width: UIScreen.main.bounds.width, height: 0)).width
-        return computeLayout(width: width, subviews: subviews).size
+        // ✨ CORRECTION 3 : Sécurise la largeur max pour un calcul parfait des hauteurs
+        let availableWidth = proposal.width ?? UIScreen.main.bounds.width
+        let clampWidth = availableWidth > 10000 ? UIScreen.main.bounds.width : availableWidth
+        return computeLayout(width: clampWidth, subviews: subviews).size
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         let layout = computeLayout(width: bounds.width, subviews: subviews)
         for (index, subview) in subviews.enumerated() {
             let point = layout.positions[index]
-            // Aligne verticalement l'élément au milieu de la ligne
             let yOffset = (layout.lineHeights[index] - subview.sizeThatFits(.unspecified).height) / 2
             subview.place(at: CGPoint(x: bounds.minX + point.x, y: bounds.minY + point.y + yOffset), proposal: .unspecified)
         }
     }
 
-    // Le moteur mathématique qui aligne chaque mot de gauche à droite
     private func computeLayout(width: CGFloat, subviews: Subviews) -> (size: CGSize, positions: [CGPoint], lineHeights: [CGFloat]) {
         var currentX: CGFloat = 0
         var currentY: CGFloat = 0
         var maxLineHeight: CGFloat = 0
-        
+        var actualMaxWidth: CGFloat = 0
+
         var positions: [CGPoint] = []
         var lineHeights: [CGFloat] = Array(repeating: 0, count: subviews.count)
         var lineStartIndex = 0
 
         for (index, subview) in subviews.enumerated() {
             let size = subview.sizeThatFits(.unspecified)
-            
-            // Si on dépasse l'écran, on passe à la ligne
+
             if currentX > 0 && currentX + size.width > width {
                 for j in lineStartIndex..<index { lineHeights[j] = maxLineHeight }
                 currentX = 0
@@ -217,16 +219,16 @@ struct MessageFlowLayout: Layout {
                 maxLineHeight = 0
                 lineStartIndex = index
             }
-            
+
             positions.append(CGPoint(x: currentX, y: currentY))
             maxLineHeight = max(maxLineHeight, size.height)
             currentX += size.width + spacing
+            actualMaxWidth = max(actualMaxWidth, currentX - spacing)
         }
-        
-        // Dernière ligne
+
         for j in lineStartIndex..<subviews.count { lineHeights[j] = maxLineHeight }
 
-        return (CGSize(width: width, height: currentY + maxLineHeight), positions, lineHeights)
+        return (CGSize(width: actualMaxWidth, height: currentY + maxLineHeight), positions, lineHeights)
     }
 }
 
@@ -237,20 +239,17 @@ struct CachedEmoteImage: View {
 
     var body: some View {
         AsyncImage(url: URL(string: url)) { phase in
-            switch phase {
-            case .success(let img):
+            if let img = phase.image {
                 img.resizable()
                     .interpolation(.medium)
                     .scaledToFit()
-            case .failure:
+            } else if phase.error != nil {
                 Text(name).font(.system(size: 13)).foregroundColor(.tMuted)
-            case .empty:
-                Color.clear
-            @unknown default:
-                EmptyView()
+            } else {
+                // ✨ CORRECTION 4 : Contraint l'espace vide à 24 pixels (Au lieu de l'infini)
+                Color.clear.frame(width: 24)
             }
         }
-        // Force la taille pour éviter que le chat tremble quand l'image charge !
         .frame(height: 24)
     }
 }

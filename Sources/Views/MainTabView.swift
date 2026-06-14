@@ -282,6 +282,8 @@ struct MainTabView: View {
                     await MainActor.run { errorMsg = "Stream indisponible"; loading = false }
                 }
             }
+        }
+    }
     private func stopPlayer() {
         showChat = false
         currentChannelName = nil

@@ -60,7 +60,24 @@ struct DirectView: View {
 
                 // ── Player ──────────────────────────────────────────
                 if let links = qualityLinks, !loading {
-                    VideoPlayerView(qualityLinks: links, vodId: currentVodId)
+                    VideoPlayerView(
+    qualityLinks: links,
+    vodId: currentVodId,
+    channelName: nil // Pas de chat pour un lien direct
+) {
+    // La boîte d'infos qui s'affichera sous la vidéo
+    VStack(alignment: .leading, spacing: 6) {
+        Text("Lecture Directe")
+            .font(.system(size: 15, weight: .bold))
+            .foregroundColor(.white)
+    }
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .padding(16)
+    .background(Color.tCard)
+    .cornerRadius(12)
+    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.tBorder, lineWidth: 1))
+}
+
                 }
 
                 // ── VOD history ─────────────────────────────────────

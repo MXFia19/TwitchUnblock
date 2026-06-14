@@ -1,33 +1,23 @@
-# Inspired by https://github.com/cranci1/Luna/blob/main/.github/workflows/build.yml
-
 name: Build and upload nightly
 
 on:
   push:
     branches:
-      - main
-  workflow_dispatch:   # permet de déclencher manuellement depuis GitHub
+      - master
+  workflow_dispatch:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-
-  # ─────────────────────────────────────────────────────────────
   build-ios:
     name: Build iOS IPA
-    runs-on: macos-26
+    runs-on: macos-latest
     permissions:
       contents: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
-
-      - name: Make build script executable
-        run: chmod +x ./buildipa.sh
-
-      - name: Build iOS IPA
-        run: ./buildipa.sh
+        uses: actions/checkout@v4
 
       - name: Define Release Variables
         id: vars
@@ -42,8 +32,64 @@ jobs:
           echo "date=$BUILD_DATE" >> $GITHUB_OUTPUT
           echo "download_url=$DOWNLOAD_URL" >> $GITHUB_OUTPUT
 
+      - name: Create App Icon Folder
+        run: |
+          echo "--- Création de l'icône iOS ---"
+          mkdir -p Sources/Assets.xcassets/AppIcon.appiconset
+          curl -sL https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/assets/icon.png -o Sources/Assets.xcassets/AppIcon.appiconset/icon.png
+          cat <<EOF > Sources/Assets.xcassets/AppIcon.appiconset/Contents.json
+          {
+            "images" : [
+              {
+                "filename" : "icon.png",
+                "idiom" : "universal",
+                "platform" : "ios",
+                "size" : "1024x1024"
+              }
+            ],
+            "info" : {
+              "author" : "xcode",
+              "version" : 1
+            }
+          }
+          EOF
+
+      - name: Inject XcodeGen Settings
+        run: |
+          echo "--- Préparation du project.yml pour l'icône ---"
+          if [ -f "project.yml" ]; then
+            sed -i '' "s/PRODUCT_NAME: TwitchUnblock/PRODUCT_NAME: TwitchUnblock\n        MARKETING_VERSION: ${{ steps.vars.outputs.version }}\n        CURRENT_PROJECT_VERSION: ${{ github.run_number }}\n        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon/g" project.yml
+          fi
+
+      - name: Generate Xcode Project
+        run: |
+          brew install xcodegen
+          xcodegen generate --spec project.yml
+
+      - name: Post-Generation Fix (Anti-Black Bars, Identity & PiP)
+        run: |
+          echo "--- Fix Info.plist (Plein écran, ID, Version, PiP) ---"
+          # Identifiants et version
+          find . -name "Info.plist" -exec plutil -replace CFBundleIdentifier -string "com.mxfia19.TwitchUnblock" {} \;
+          find . -name "Info.plist" -exec plutil -replace CFBundleShortVersionString -string "${{ steps.vars.outputs.version }}" {} \;
+          find . -name "Info.plist" -exec plutil -replace CFBundleVersion -string "${{ github.run_number }}" {} \;
+          find . -name "Info.plist" -exec plutil -replace CFBundleIconName -string "AppIcon" {} \;
+          
+          # Force le plein écran sans bandes noires
+          find . -name "Info.plist" -exec plutil -remove UILaunchStoryboardName {} \; || true
+          find . -name "Info.plist" -exec plutil -replace UILaunchScreen -xml "<dict/>" {} \;
+          
+          # ✨ RÉPARATION DU PIP ET DE L'AUDIO EN ARRIÈRE-PLAN
+          find . -name "Info.plist" -exec plutil -replace UIBackgroundModes -json '["audio"]' {} \;
+
+      - name: Make build script executable
+        run: chmod +x ./buildipa.sh
+
+      - name: Build iOS IPA
+        run: ./buildipa.sh
+
       - name: Upload IPA artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: TwitchUnblock-Nightly-IPA
           path: build/TwitchUnblock.ipa
@@ -54,13 +100,15 @@ jobs:
         run: |
           gh release create "${{ steps.vars.outputs.tag }}" build/TwitchUnblock.ipa \
             --title "Nightly Build ${{ steps.vars.outputs.version }}" \
-            --notes "Build automatique de la branche \`main\` le ${{ steps.vars.outputs.date }}."
+            --notes "Build automatique de la branche \`master\` le ${{ steps.vars.outputs.date }}."
 
-      - name: Update apps.json (AltStore source)
+      - name: Update apps.json (Feather source)
         run: |
-          IPA_SIZE=$(wc -c < build/TwitchUnblock.ipa | tr -d ' ')
+          IPA_SIZE=$(stat -f%z build/TwitchUnblock.ipa || echo "1048576")
           
+          # ✨ MISE A JOUR DES PARAMÈTRES GLOBAUX (.apps[0]) ET DE L'HISTORIQUE (.versions[0])
           jq --arg version "${{ steps.vars.outputs.version }}" \
+             --arg build "${{ github.run_number }}" \
              --arg date "${{ steps.vars.outputs.date }}" \
              --arg url "${{ steps.vars.outputs.download_url }}" \
              --argjson size "$IPA_SIZE" \
@@ -69,14 +117,20 @@ jobs:
              .apps[0].downloadURL = $url |
              .apps[0].size = $size |
              .apps[0].versions[0].version = $version |
+             .apps[0].versions[0].buildVersion = $build |
              .apps[0].versions[0].date = $date |
              .apps[0].versions[0].downloadURL = $url |
              .apps[0].versions[0].size = $size' apps.json > apps.json.tmp
              
-          mv apps.json.tmp apps.json
+          if [ -s apps.json.tmp ]; then
+            mv apps.json.tmp apps.json
+          else
+            echo "Erreur critique : le fichier apps.json généré est corrompu ou vide."
+            exit 1
+          fi
           
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add apps.json
           git diff --cached --quiet || \
-            (git commit -m "chore: bump version to ${{ steps.vars.outputs.version }} [skip ci]" && git push origin HEAD:main)
+            (git commit -m "chore: bump version to ${{ steps.vars.outputs.version }} [skip ci]" && git push origin HEAD:master)

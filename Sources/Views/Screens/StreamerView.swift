@@ -14,8 +14,14 @@ struct StreamerView: View {
     @State private var avatarURL   = ""
     @State private var errorMsg:   String? = nil
     @State private var searched    = false
+    
+    // VARIABLES POUR LE SCROLL INFINI
+    @State private var vodCursor:     String? = nil
+    @State private var hasMoreVods    = false
+    @State private var isLoadingMore  = false
 
-    private let columns = [GridItem(.flexible()), GridItem(.flexible())]
+    // ✨ CORRECTION GRILLE : On force l'alignement vers le haut (.top) pour éviter que les cartes se décalent !
+    private let columns = [GridItem(.flexible(), alignment: .top), GridItem(.flexible(), alignment: .top)]
 
     private var filteredVods: [VodData] {
         guard !keywordInput.trimmingCharacters(in: .whitespaces).isEmpty else { return vods }
@@ -32,9 +38,8 @@ struct StreamerView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
 
-                   // ── Search bar ──────────────────────────────────────
+                // ── Search bar ──────────────────────────────────────
                 VStack(spacing: 8) {
-                    // ✨ L'ajout de alignment: .top est ici :
                     HStack(alignment: .top, spacing: 10) { 
                         AutocompleteInputView(
                             text: $channelInput,
@@ -111,7 +116,7 @@ struct StreamerView: View {
                             .font(.system(size: 13, weight: .semibold)).foregroundColor(.tSuccess)
                             .padding(.horizontal, 16).padding(.top, 8)
 
-                        LazyVGrid(columns: columns, spacing: 12) {
+                        LazyVGrid(columns: columns, spacing: 16) {
                             ForEach(filteredVods) { vod in
                                 let saved    = store.getVodProgress(vod.id)
                                 let progress = vod.lengthSeconds > 0 ? saved / Double(vod.lengthSeconds) : 0
@@ -119,9 +124,25 @@ struct StreamerView: View {
                                     onPlayVod(vod.id, vod.title, vod.previewThumbnailURL,
                                               channelInput.trimmingCharacters(in: .whitespaces).components(separatedBy: " ").first)
                                 }
+                                .onAppear {
+                                    // ✨ SECURITÉ : On empêche le double appel !
+                                    if vod.id == filteredVods.last?.id && hasMoreVods {
+                                        if !isLoadingMore {
+                                            isLoadingMore = true // Changement immédiat !
+                                            Task { await loadMoreVods() }
+                                        }
+                                    }
+                                }
                             }
                         }
                         .padding(.horizontal, 16).padding(.top, 8)
+                        
+                        if isLoadingMore {
+                            ProgressView()
+                                .tint(.tPrimary)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 20)
+                        }
                     }
                 }
 
@@ -135,7 +156,9 @@ struct StreamerView: View {
     private func search(_ channel: String? = nil) async {
         let name = (channel ?? channelInput).trimmingCharacters(in: .whitespaces).components(separatedBy: " ").first ?? ""
         guard !name.isEmpty else { errorMsg = store.t("err_missing"); return }
+        
         loading = true; errorMsg = nil; liveData = nil; vods = []; searched = true
+        vodCursor = nil; hasMoreVods = false; isLoadingMore = false
 
         async let liveTask    = getLive(channelName: name)
         async let videosTask  = getChannelVideos(channelName: name)
@@ -150,8 +173,32 @@ struct StreamerView: View {
             let item = HistoryItem(term: name, type: .channel, display: name, thumb: nil, streamer: nil, addedAt: Date().timeIntervalSince1970 * 1000)
             store.saveToHistory(item)
             liveData = live
+            
             vods = ch.videos
+            vodCursor = ch.cursor
+            hasMoreVods = ch.cursor != nil
         }
         loading = false
+    }
+    
+    private func loadMoreVods() async {
+        guard let currentCursor = vodCursor else { 
+            await MainActor.run { isLoadingMore = false }
+            return 
+        }
+        
+        let name = channelInput.trimmingCharacters(in: .whitespaces).components(separatedBy: " ").first ?? ""
+        let ch = await getChannelVideos(channelName: name, cursor: currentCursor)
+        
+        await MainActor.run {
+            // ✨ SECURITÉ : On retire les VODs en double pour éviter les bugs d'affichage !
+            let existingIds = Set(self.vods.map { $0.id })
+            let newVods = ch.videos.filter { !existingIds.contains($0.id) }
+            
+            self.vods.append(contentsOf: newVods)
+            self.vodCursor = ch.cursor
+            self.hasMoreVods = (ch.cursor != nil && !newVods.isEmpty)
+            self.isLoadingMore = false
+        }
     }
 }

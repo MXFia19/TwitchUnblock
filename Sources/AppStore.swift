@@ -35,7 +35,7 @@ final class AppStore: ObservableObject {
         let ud = UserDefaults.standard
         if let l = ud.string(forKey: "lang"), let parsed = Lang(rawValue: l) { lang = parsed }
         twitchToken = ud.string(forKey: "twitch_token")
-        useProxy = ud.object(forKey: "twitch_use_proxy") as? Bool ?? true
+        useProxy = ud.object(forKey: "twitch_use_proxy") as? Bool ?? false
         if let data = ud.data(forKey: "twitch_vod_history"),
            let decoded = try? JSONDecoder().decode([HistoryItem].self, from: data) {
             history = decoded

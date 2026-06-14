@@ -18,7 +18,7 @@ struct HeaderView: View {
                     .font(.system(size: 15, weight: .heavy))
                     .foregroundColor(.tText)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.5) // ✨ LA SOLUTION EST ICI : Autorise le texte à rétrécir
+                    .minimumScaleFactor(0.5) // Sécurité si le texte est long
             }
             Spacer()
 
@@ -42,8 +42,8 @@ struct HeaderView: View {
             }
         }
         .padding(.horizontal, 16)
-        // ✨ On utilise ton SafeAreaHelper propre au lieu du gros bloc de code !
-        .padding(.top, UIApplication.safeAreaTop + 8) 
+        // ✨ Le fix est ici : on a remplacé safeAreaTop par un padding natif standard
+        .padding(.top, 8) 
         .padding(.bottom, 12)
         .background(Color.tCard)
         .overlay(Divider().background(Color.tBorder), alignment: .bottom)

@@ -4,7 +4,7 @@ import SwiftUI
 let kAPIURL          = "https://test2.kurzmathis4.workers.dev"
 let kHelixClientID   = "1e68ku2ehgzy5cy0di3xvfy82sxpf6"
 let kGQLClientID     = "kimne78kx3ncx6brgo4mv6wki5h1ko"
-let kRedirectURI     = "https://mxfia19.github.io/Sub/auth.html"
+let kRedirectURI     = "https://mxfia19.github.io/TwitchUnblock/auth.html"
 let kDeepLinkScheme  = "twitchunblock://"
 
 // MARK: – Colors
@@ -50,12 +50,52 @@ enum Lang: String, CaseIterable, Identifiable {
     }
 }
 
+// ✨ NOUVEAU : Les sources se traduisent automatiquement !
+enum LiveSource: String, CaseIterable, Identifiable, Codable {
+    case auto, luminous, twitch, cloudflare
+    var id: String { rawValue }
+
+    // Lit la langue actuelle choisie par l'utilisateur
+    private var currentLang: Lang {
+        let saved = UserDefaults.standard.string(forKey: "lang") ?? "fr"
+        return Lang(rawValue: saved) ?? .fr
+    }
+
+    var displayName: String {
+        switch self {
+        case .auto:       return translate("source_auto", currentLang)
+        case .luminous:   return translate("source_luminous", currentLang)
+        case .twitch:     return translate("source_twitch", currentLang)
+        case .cloudflare: return translate("source_cloudflare", currentLang)
+        }
+    }
+    
+    var subtitle: String {
+        switch self {
+        case .auto:       return translate("source_auto_sub", currentLang)
+        case .luminous:   return translate("source_luminous_sub", currentLang)
+        case .twitch:     return translate("source_twitch_sub", currentLang)
+        case .cloudflare: return translate("source_cloudflare_sub", currentLang)
+        }
+    }
+    
+    var emoji: String {
+        switch self {
+        case .auto:       return "✨"
+        case .luminous:   return "💡"
+        case .twitch:     return "🟣"
+        case .cloudflare: return "☁️"
+        }
+    }
+}
+
 // MARK: – Translations
 private let translations: [Lang: [String: String]] = [
     .fr: [
         "title": "Regarder Twitch sans Sub",
         "tab_discovery": "🌟 Découverte", "tab_streamer": "Streamer",
         "tab_direct": "Lien / ID", "settings": "Paramètres",
+        "tab_history": "VODs",
         "ph_streamer": "Streamer (ex: squeezie)", "ph_keyword": "Mot-clé (ex: horreur)",
         "ph_id": "ID ou Lien de la VOD",
         "btn_unlock": "Déverrouiller", "btn_search": "Chercher",
@@ -93,11 +133,23 @@ private let translations: [Lang: [String: String]] = [
         "proxy_sub": "Désactiver pour économiser le serveur (utile pour VLC)",
         "proxy_enable": "Activer le proxy", "twitch_account": "Compte Twitch",
         "language": "Langue",
+        "settings_source": "Serveur / Source Vidéo",
+        
+        // Traductions sources
+        "source_auto": "Auto",
+        "source_auto_sub": "Meilleure source disponible",
+        "source_luminous": "Luminous",
+        "source_luminous_sub": "Sans publicité (recommandé)",
+        "source_twitch": "Twitch Officiel",
+        "source_twitch_sub": "Avec publicités",
+        "source_cloudflare": "Cloudflare Worker",
+        "source_cloudflare_sub": "Proxy personnel"
     ],
     .en: [
         "title": "Watch Twitch No Sub",
         "tab_discovery": "🌟 Discovery", "tab_streamer": "Streamer",
         "tab_direct": "Link / ID", "settings": "Settings",
+        "tab_history": "VODs",
         "ph_streamer": "Streamer (ex: shroud)", "ph_keyword": "Keyword (ex: horror)",
         "ph_id": "VOD ID or Link",
         "btn_unlock": "Unlock", "btn_search": "Search",
@@ -135,11 +187,23 @@ private let translations: [Lang: [String: String]] = [
         "proxy_sub": "Disable to save server resources (useful for VLC)",
         "proxy_enable": "Enable proxy", "twitch_account": "Twitch Account",
         "language": "Language",
+        "settings_source": "Video Server / Source",
+        
+        // Traductions sources
+        "source_auto": "Auto",
+        "source_auto_sub": "Best available source",
+        "source_luminous": "Luminous",
+        "source_luminous_sub": "Ad-free (recommended)",
+        "source_twitch": "Official Twitch",
+        "source_twitch_sub": "With ads",
+        "source_cloudflare": "Cloudflare Worker",
+        "source_cloudflare_sub": "Personal proxy"
     ],
     .es: [
         "title": "Ver Twitch sin Sub",
         "tab_discovery": "🌟 Descubrir", "tab_streamer": "Streamer",
         "tab_direct": "Enlace / ID", "settings": "Ajustes",
+        "tab_history": "VODs",
         "ph_streamer": "Streamer (ej: ibai)", "ph_keyword": "Palabra (ej: horror)",
         "ph_id": "ID o Enlace VOD",
         "btn_unlock": "Desbloquear", "btn_search": "Buscar",
@@ -177,6 +241,17 @@ private let translations: [Lang: [String: String]] = [
         "proxy_sub": "Desactivar para ahorrar el servidor (útil para VLC)",
         "proxy_enable": "Activar proxy", "twitch_account": "Cuenta de Twitch",
         "language": "Idioma",
+        "settings_source": "Servidor / Fuente de Video",
+        
+        // Traducciones fuentes
+        "source_auto": "Auto",
+        "source_auto_sub": "Mejor fuente disponible",
+        "source_luminous": "Luminous",
+        "source_luminous_sub": "Sin anuncios (recomendado)",
+        "source_twitch": "Twitch Oficial",
+        "source_twitch_sub": "Con anuncios",
+        "source_cloudflare": "Cloudflare Worker",
+        "source_cloudflare_sub": "Proxy personal"
     ],
 ]
 

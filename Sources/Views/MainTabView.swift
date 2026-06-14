@@ -12,13 +12,13 @@ struct MainTabView: View {
     @State private var errorMsg: String? = nil
     @State private var statusTitle = ""
 
-        enum TabName: String, CaseIterable {
-        case discovery, streamer, history, direct, settings // Ajout de "history"
+    enum TabName: String, CaseIterable {
+        case discovery, streamer, history, direct, settings
         var icon: String {
             switch self { 
             case .discovery: return "🌟"
             case .streamer:  return "👤"
-            case .history:   return "🕒" // Nouvelle icône
+            case .history:   return "🕒"
             case .direct:    return "🔗"
             case .settings:  return "⚙️" 
             }
@@ -27,7 +27,7 @@ struct MainTabView: View {
             switch self {
             case .discovery: return store.t("tab_discovery")
             case .streamer:  return store.t("tab_streamer")
-            case .history:   return "VODs" // Titre du nouvel onglet
+            case .history:   return store.t("tab_history")
             case .direct:    return store.t("tab_direct")
             case .settings:  return store.t("settings")
             }
@@ -37,11 +37,9 @@ struct MainTabView: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            // 1. Fond noir profond qui prend TOUT l'écran
             Color.tDark.ignoresSafeArea()
 
             VStack(spacing: 0) {
-                // On supprime le .padding(.top) qui causait le bug !
                 HeaderView()
                     .zIndex(10)
 
@@ -52,7 +50,7 @@ struct MainTabView: View {
                     case .streamer:
                         StreamerView(onPlayVod: playVod, onPlayLive: playLive)
                     case .history:
-                        HistoryView(onPlayVod: playVod) // Le nouvel onglet
+                        HistoryView(onPlayVod: playVod)
                     case .direct:
                         DirectView(onPlayVod: playVod)
                     case .settings:
@@ -61,16 +59,17 @@ struct MainTabView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
+                // ✨ CORRECTION POSITION : 
+                // La mini-bar est maintenant DANS la pile, juste au-dessus des onglets !
+                if playerMode != nil && !playerVisible && qualityLinks != nil {
+                    miniBar
+                        .zIndex(99)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+
                 CustomTabBar(activeTab: $activeTab)
             }
-            // ⚠️ SUPPRIME le `.ignoresSafeArea()` qui était ici !
-
-
-            // ── Mini bar (player réduit) ──────────────────────────────
-            if playerMode != nil && !playerVisible && qualityLinks != nil {
-                miniBar
-                    .zIndex(99)
-            }
+            .ignoresSafeArea(edges: .bottom)
 
             // ── Player overlay ────────────────────────────────────────
             if playerMode != nil {
@@ -89,7 +88,6 @@ struct MainTabView: View {
         ZStack(alignment: .top) {
             Color.tDark.ignoresSafeArea()
             VStack(spacing: 0) {
-                // Header Player
                 HStack(spacing: 12) {
                     Button(store.t("reduce")) { withAnimation { playerVisible = false } }
                         .font(.system(size: 15, weight: .bold))
@@ -99,7 +97,7 @@ struct MainTabView: View {
                         .font(.system(size: 14, weight: .bold))
                         .foregroundColor(.white)
                         .lineLimit(1)
-                        .minimumScaleFactor(0.5) // Sécurité si le titre est long
+                        .minimumScaleFactor(0.5)
                         .frame(maxWidth: .infinity, alignment: .leading)
 
                     Button {
@@ -114,7 +112,7 @@ struct MainTabView: View {
                     }
                 }
                 .padding(.horizontal, 16)
-                .padding(.top, UIApplication.safeAreaTop + 10) // Marge propre pour l'encoche
+                .padding(.top, 16) 
                 .padding(.bottom, 12)
                 .background(Color.tCard)
                 .overlay(Divider().background(Color.tBorder), alignment: .bottom)
@@ -141,7 +139,6 @@ struct MainTabView: View {
                                 qualityLinks: links,
                                 vodId: { if case .vod(let id, _, _, _) = playerMode { return id }; return nil }()
                             )
-                            // Info box
                             infoBox
                         }
                     }
@@ -190,25 +187,26 @@ struct MainTabView: View {
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
             Button { stopPlayer() } label: {
-                Text("✕").foregroundColor(.tMuted).font(.system(size: 16, weight: .bold))
+                Text("✕")
+                    .foregroundColor(.tMuted)
+                    .font(.system(size: 16, weight: .bold))
+                    .frame(width: 32, height: 32)
+                    .contentShape(Rectangle()) // Rend toute la zone cliquable
             }
         }
-        .padding(.horizontal, 16).padding(.vertical, 12)
+        .padding(.horizontal, 16).padding(.vertical, 10)
         .background(Color.tCard)
         .cornerRadius(12)
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.tPrimary.opacity(0.4), lineWidth: 1))
         .padding(.horizontal, 12)
-        .padding(.bottom, 90)
+        .padding(.bottom, 8) // ✨ Seulement 8 pixels de marge pour qu'elle touche presque le menu
         .onTapGesture { withAnimation { playerVisible = true } }
     }
 
     // MARK: – Playback
-        private func playVod(_ id: String, _ title: String? = nil, _ thumb: String? = nil, _ streamer: String? = nil) {
-        // 1. On sauvegarde dans l'historique
+    private func playVod(_ id: String, _ title: String? = nil, _ thumb: String? = nil, _ streamer: String? = nil) {
         let item = HistoryItem(term: id, type: .vod, display: title ?? "VOD", thumb: thumb, streamer: streamer, addedAt: Date().timeIntervalSince1970 * 1000)
         store.saveToHistory(item)
-        
-        // 2. On lance la vidéo
         startPlayback(.vod(id: id, title: title, thumb: thumb, streamer: streamer))
     }
 
@@ -256,6 +254,9 @@ struct MainTabView: View {
     }
 
     private func stopPlayer() {
+        // ✨ CORRECTION AUDIO : On diffuse un message à toute l'app pour couper l'AVPlayer
+        NotificationCenter.default.post(name: NSNotification.Name("ForceStopVideo"), object: nil)
+
         withAnimation {
             playerVisible = false
             playerMode    = nil
@@ -281,7 +282,6 @@ struct CustomTabBar: View {
             ForEach(MainTabView.TabName.allCases, id: \.self) { tab in
                 let isActive = activeTab == tab
                 Button { activeTab = tab } label: {
-                    // 3. Cadre forcé pour chaque onglet afin d'éviter le débordement
                     VStack(spacing: 4) {
                         ZStack {
                             RoundedRectangle(cornerRadius: 16)
@@ -293,6 +293,7 @@ struct CustomTabBar: View {
                             .font(.system(size: 10, weight: .semibold))
                             .foregroundColor(isActive ? .tPrimary : .tMuted)
                             .lineLimit(1)
+                            .minimumScaleFactor(0.7)
                     }
                     .frame(maxWidth: .infinity)
                 }
@@ -300,7 +301,7 @@ struct CustomTabBar: View {
             }
         }
         .padding(.top, 10)
-        .padding(.bottom, UIApplication.safeAreaBottom + 8) 
+        .padding(.bottom, 34) 
         .background(Color.tCard)
         .overlay(Divider().background(Color.tBorder), alignment: .top)
     }

@@ -1,6 +1,6 @@
 import SwiftUI
 
-// MARK: – StreamCardView (replaces StreamCard.tsx)
+// MARK: – StreamCardView
 struct StreamCardView: View {
     let stream: TwitchStream
     let onPress: () -> Void
@@ -31,16 +31,20 @@ struct StreamCardView: View {
                         .padding(8)
                 }
 
+                // ✨ LE BLOC TEXTE AVEC HAUTEUR STRICTE
                 VStack(alignment: .leading, spacing: 4) {
                     Text(stream.title)
                         .font(.system(size: 13, weight: .bold))
                         .foregroundColor(.tText)
                         .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                    
                     Text("\(stream.userName)\(stream.gameName.isEmpty ? "" : " • \(stream.gameName)")")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(.tPrimary)
                         .lineLimit(1)
                 }
+                .frame(height: 55, alignment: .top) // Hauteur figée à 55 points = aucune superposition possible
                 .padding(10)
             }
             .background(Color.tSurface)
@@ -50,17 +54,23 @@ struct StreamCardView: View {
     }
 }
 
-// MARK: – VodCardView (replaces VodCard.tsx)
+// MARK: – VodCardView
 struct VodCardView: View {
     let vod: VodData
-    let progress: Double   // 0–1
+    let progress: Double
     let onPress: () -> Void
 
     private var dateString: String {
-        let df = ISO8601DateFormatter()
-        df.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        guard let date = df.date(from: vod.publishedAt) else { return vod.publishedAt }
-        return DateFormatter.localizedString(from: date, dateStyle: .short, timeStyle: .none)
+        let formatter = ISO8601DateFormatter()
+        // Formatage de la date corrigé pour éviter les dates trop longues
+        if let date = formatter.date(from: vod.publishedAt) {
+            let df = DateFormatter()
+            df.dateStyle = .short
+            df.timeStyle = .none
+            return df.string(from: date)
+        }
+        // Sécurité : si l'API renvoie un format bizarre, on ne garde que la date "YYYY-MM-DD"
+        return String(vod.publishedAt.prefix(10)) 
     }
 
     var body: some View {
@@ -85,13 +95,20 @@ struct VodCardView: View {
                     }
                 }
 
+                // ✨ LE BLOC TEXTE AVEC HAUTEUR STRICTE
                 VStack(alignment: .leading, spacing: 4) {
                     Text(vod.title)
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(.tText).lineLimit(2)
+                        .foregroundColor(.tText)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                        
                     Text("\(dateString) • \(formatDuration(vod.lengthSeconds))")
-                        .font(.system(size: 11)).foregroundColor(.tMuted)
+                        .font(.system(size: 11))
+                        .foregroundColor(.tMuted)
+                        .lineLimit(1) // Coupe net si c'est trop long
                 }
+                .frame(height: 55, alignment: .top) // Hauteur figée = alignement parfait
                 .padding(10)
             }
             .background(Color.tSurface)
@@ -101,7 +118,7 @@ struct VodCardView: View {
     }
 }
 
-// MARK: – LiveCardView (replaces LiveCard.tsx)
+// MARK: – LiveCardView
 struct LiveCardView: View {
     let isOnline: Bool
     let title: String
@@ -115,9 +132,7 @@ struct LiveCardView: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            // Left column
             HStack(alignment: .top, spacing: 12) {
-                // Avatar
                 AsyncImage(url: URL(string: avatarURL)) { img in
                     img.resizable().scaledToFill()
                 } placeholder: {
@@ -128,14 +143,12 @@ struct LiveCardView: View {
                 .overlay(Circle().stroke(Color.tPrimary, lineWidth: 2))
 
                 VStack(alignment: .leading, spacing: 6) {
-                    // Badge
                     Text(isOnline ? store.t("live_on") : store.t("offline"))
                         .font(.system(size: 11, weight: .bold)).foregroundColor(.white)
                         .padding(.horizontal, 6).padding(.vertical, 2)
                         .background(isOnline ? Color.tLive : Color(hex: "555555"))
                         .cornerRadius(4)
 
-                    // Title
                     Text(title)
                         .font(.system(size: 14, weight: .bold))
                         .foregroundColor(isOnline ? .tText : .tMuted)
@@ -161,7 +174,6 @@ struct LiveCardView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
 
-            // Thumbnail (online only)
             if isOnline, let thumb = thumbnailURL, !thumb.isEmpty {
                 AsyncImage(url: URL(string: thumb.replacingOccurrences(of: "{width}", with: "320").replacingOccurrences(of: "{height}", with: "180"))) { img in
                     img.resizable().aspectRatio(16/9, contentMode: .fill)

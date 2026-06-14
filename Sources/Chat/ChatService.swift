@@ -205,26 +205,24 @@ final class ChatService: NSObject, ObservableObject {
         return tokens
     }
 
-    // Split a text segment into words, replacing known emotes and @mentions
+    // ✨ CORRECTION TOKENIZER : Oblige à séparer mot par mot pour que le Layout iOS 16 puisse retourner à la ligne !
     private func tokenizeText(_ segment: String, channelId: String?) async -> [MessageToken] {
         var tokens: [MessageToken] = []
         let words = segment.components(separatedBy: " ")
-        var buffer = ""
 
         for word in words {
-            if word.hasPrefix("@") {
-                if !buffer.isEmpty { tokens.append(.text(buffer)); buffer = "" }
+            guard !word.isEmpty else { continue }
+            
+            if word.hasPrefix("@") && word.count > 1 {
                 tokens.append(.mention(String(word.dropFirst())))
                 continue
             }
             if let emote = await EmoteService.shared.resolve(name: word, channelId: channelId) {
-                if !buffer.isEmpty { tokens.append(.text(buffer)); buffer = "" }
                 tokens.append(.emote(emote))
             } else {
-                buffer += (buffer.isEmpty ? "" : " ") + word
+                tokens.append(.text(word)) // Ajoute chaque mot séparément !
             }
         }
-        if !buffer.isEmpty { tokens.append(.text(buffer)) }
         return tokens
     }
 

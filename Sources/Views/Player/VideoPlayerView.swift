@@ -1,6 +1,58 @@
 import SwiftUI
 import AVKit
 import AVFoundation
+import WebKit
+
+// MARK: – Chat WebView (Mode Popout Twitch)
+struct ChatWebView: UIViewRepresentable {
+    let channel: String
+
+    func makeUIView(context: Context) -> WKWebView {
+        let config = WKWebViewConfiguration()
+        // Garde les cookies pour rester connecté à Twitch !
+        config.websiteDataStore = WKWebsiteDataStore.default() 
+        
+        let prefs = WKWebpagePreferences()
+        prefs.allowsContentJavaScript = true
+        config.defaultWebpagePreferences = prefs
+        
+        let webView = WKWebView(frame: .zero, configuration: config)
+        webView.isOpaque = false
+        webView.backgroundColor = .clear
+        webView.uiDelegate = context.coordinator
+        webView.navigationDelegate = context.coordinator
+        
+        // Force la vue mobile pour un meilleur affichage du chat
+        webView.customUserAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1"
+        
+        return webView
+    }
+
+    func updateUIView(_ webView: WKWebView, context: Context) {
+        // Lien officiel du chat Twitch Popout
+        let urlString = "https://www.twitch.tv/popout/\(channel.lowercased())/chat"
+        if context.coordinator.loadedURL != urlString {
+            context.coordinator.loadedURL = urlString
+            if let url = URL(string: urlString) {
+                webView.load(URLRequest(url: url))
+            }
+        }
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    class Coordinator: NSObject, WKUIDelegate, WKNavigationDelegate {
+        var loadedURL: String?
+        
+        // Permet d'ouvrir la page de connexion si Twitch demande un popup
+        func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
+            if navigationAction.targetFrame == nil {
+                webView.load(navigationAction.request)
+            }
+            return nil
+        }
+    }
+}
 
 // MARK: – AVPlayerViewController wrapper
 struct NativeVideoPlayer: UIViewControllerRepresentable {
@@ -17,7 +69,6 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
         vc.showsPlaybackControls = true
         context.coordinator.playerVC = vc
         context.coordinator.setupObserver(player: player, onProgress: onProgress)
-        // Restore position
         if savedTime > 5 {
             player.seek(to: CMTime(seconds: savedTime, preferredTimescale: 600))
         }
@@ -28,9 +79,7 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
     func updateUIViewController(_ vc: AVPlayerViewController, context: Context) {
         let currentURL = (vc.player?.currentItem?.asset as? AVURLAsset)?.url
         if currentURL != url {
-            // ✨ LA CORRECTION EST ICI : On force l'ancien lecteur à se mettre en pause 
-            // avant de le remplacer par la nouvelle qualité !
-            vc.player?.pause()
+            vc.player?.pause() // Stoppe l'ancien son
             
             let player = AVPlayer(url: url)
             vc.player = player
@@ -42,7 +91,6 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
         }
     }
 
-    // Force l'arrêt de la vidéo quand la vue est détruite
     static func dismantleUIViewController(_ vc: AVPlayerViewController, coordinator: Coordinator) {
         vc.player?.pause()
         vc.player = nil
@@ -56,7 +104,6 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
         private var playerRef: AVPlayer?
 
         init() {
-            // Coupe instantanément le son si on reçoit le signal "ForceStopVideo" depuis la croix
             NotificationCenter.default.addObserver(forName: NSNotification.Name("ForceStopVideo"), object: nil, queue: .main) { [weak self] _ in
                 self?.playerVC?.player?.pause()
                 self?.playerVC?.player = nil
@@ -79,24 +126,34 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
     }
 }
 
-// MARK: – Full Video Player View
-struct VideoPlayerView: View {
+// MARK: – Full Video Player View (Style Frosty)
+enum PlayerTab { case chat, options }
+
+struct VideoPlayerView<InfoContent: View>: View {
     let qualityLinks: QualityLinks
     let vodId: String?
+    let channelName: String?
+    let infoContent: InfoContent
 
     @EnvironmentObject private var store: AppStore
     @State private var selectedQuality: String = ""
-    @State private var showQualityPicker = false
-    @State private var showExternalSheet  = false
     @State private var currentTime: Double = 0
+    @State private var currentTab: PlayerTab = .options
 
     private var qualities: [String] { sortQualities(Array(qualityLinks.keys)) }
     private var currentURL: URL? { qualityLinks[selectedQuality].flatMap(URL.init) }
 
+    init(qualityLinks: QualityLinks, vodId: String?, channelName: String?, @ViewBuilder infoContent: () -> InfoContent) {
+        self.qualityLinks = qualityLinks
+        self.vodId = vodId
+        self.channelName = channelName
+        self.infoContent = infoContent()
+    }
+
     var body: some View {
         VStack(spacing: 0) {
-
-            // ── Player ──────────────────────────────────────────────
+            
+            // 1. LECTEUR VIDÉO (Fixé en haut)
             if let url = currentURL {
                 NativeVideoPlayer(
                     url: url,
@@ -109,106 +166,112 @@ struct VideoPlayerView: View {
                 .background(Color.black)
             }
 
-            // ── Options bar ─────────────────────────────────────────
-            HStack(spacing: 8) {
-                Button {
-                    showQualityPicker.toggle()
-                    showExternalSheet = false
-                } label: {
-                    Text("🎬 \(qualityLabel(selectedQuality))")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                        .background(Color.tPrimary)
-                        .cornerRadius(8)
+            // 2. ONGLETS FROSTY (Chat / Options)
+            HStack(spacing: 0) {
+                if channelName != nil {
+                    tabButton(title: "💬 Chat", tab: .chat)
                 }
-
-                Button {
-                    showExternalSheet.toggle()
-                    showQualityPicker = false
-                } label: {
-                    Text("📤")
-                        .font(.system(size: 16))
-                        .frame(width: 44, height: 38)
-                        .background(Color.tSurface)
-                        .cornerRadius(8)
-                }
+                tabButton(title: "⚙️ \(store.t("settings"))", tab: .options)
             }
-            .padding(12)
             .background(Color.tCard)
+            .overlay(Divider().background(Color.tBorder), alignment: .bottom)
 
-            // ── Quality picker ──────────────────────────────────────
-            if showQualityPicker {
+            // 3. CONTENU (Plein écran en bas)
+            if currentTab == .chat, let channel = channelName {
+                ChatWebView(channel: channel)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color.tDark) // Évite les flashs blancs
+            } else {
+                ScrollView {
+                    VStack(spacing: 24) {
+                        // Infos du stream (Titre, Catégorie)
+                        infoContent
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        
+                        optionsTab
+                    }
+                    .padding(16)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color.tDark)
+            }
+        }
+        .onAppear {
+            if selectedQuality.isEmpty { selectedQuality = qualities.first ?? "" }
+            // Ouvre le chat par défaut si c'est un live !
+            if channelName != nil { currentTab = .chat } else { currentTab = .options }
+        }
+    }
+
+    @ViewBuilder
+    private func tabButton(title: String, tab: PlayerTab) -> some View {
+        Button {
+            currentTab = tab
+        } label: {
+            VStack(spacing: 10) {
+                Text(title)
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(currentTab == tab ? .tPrimary : .tMuted)
+                
+                Rectangle()
+                    .fill(currentTab == tab ? Color.tPrimary : Color.clear)
+                    .frame(height: 3)
+            }
+            .padding(.top, 14)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    @ViewBuilder
+    private var optionsTab: some View {
+        VStack(spacing: 20) {
+            
+            // Sélecteur de qualité intégré
+            VStack(alignment: .leading, spacing: 8) {
+                Text("🎬 Qualité Vidéo").font(.system(size: 13, weight: .bold)).foregroundColor(.tMuted)
                 VStack(spacing: 0) {
                     ForEach(qualities, id: \.self) { q in
                         Button {
                             currentTime = 0
                             selectedQuality = q
-                            showQualityPicker = false
                         } label: {
                             HStack {
                                 Text(q == selectedQuality ? "✓  " : "    ")
                                     .foregroundColor(q == selectedQuality ? .tPrimary : .clear)
                                 Text(qualityLabel(q))
-                                    .foregroundColor(q == selectedQuality ? .tPrimary : .tMuted)
+                                    .foregroundColor(q == selectedQuality ? .tPrimary : .tText)
                                     .fontWeight(q == selectedQuality ? .bold : .semibold)
                                 Spacer()
                             }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 12)
+                            .padding(.horizontal, 16).padding(.vertical, 14)
                         }
-                        Divider().background(Color.tBorder)
+                        if q != qualities.last {
+                            Divider().background(Color.tBorder)
+                        }
                     }
                 }
                 .background(Color.tSurface)
-                .cornerRadius(10)
-                .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.tBorder, lineWidth: 1))
-                .padding(.horizontal, 12)
+                .cornerRadius(12)
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.tBorder, lineWidth: 1))
             }
 
-            // ── External apps sheet ─────────────────────────────────
-            if showExternalSheet, let rawURL = qualityLinks[selectedQuality] {
-                VStack(spacing: 8) {
-                    extButton("🟠 \(store.t("open_vlc"))", color: .tVLC) {
-                        open(scheme: "vlc://\(rawURL)")
-                    }
-                    extButton("🔵 \(store.t("open_outplayer"))", color: .tOutplayer) {
-                        open(scheme: "outplayer://\(rawURL)")
-                    }
-                    extButton("🔴 \(store.t("open_infuse"))", color: .tInfuse) {
-                        let encoded = rawURL.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? rawURL
-                        open(scheme: "infuse://x-callback-url/play?url=\(encoded)")
-                    }
-                    extButton("📋 \(store.t("btn_copy"))", color: .tSurface) {
-                        UIPasteboard.general.string = rawURL
-                        showExternalSheet = false
-                    }
-                    extButton("Fermer", color: Color(hex: "333333"), textColor: .tMuted) {
-                        showExternalSheet = false
+            // Boutons d'exportation
+            VStack(alignment: .leading, spacing: 8) {
+                Text("📤 Exporter vers...").font(.system(size: 13, weight: .bold)).foregroundColor(.tMuted)
+                VStack(spacing: 12) {
+                    if let rawURL = qualityLinks[selectedQuality] {
+                        extButton("🟠 \(store.t("open_vlc"))", color: .tVLC) { open(scheme: "vlc://\(rawURL)") }
+                        extButton("🔵 \(store.t("open_outplayer"))", color: .tOutplayer) { open(scheme: "outplayer://\(rawURL)") }
+                        extButton("🔴 \(store.t("open_infuse"))", color: .tInfuse) {
+                            let encoded = rawURL.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? rawURL
+                            open(scheme: "infuse://x-callback-url/play?url=\(encoded)")
+                        }
+                        extButton("📋 \(store.t("btn_copy"))", color: .tSurface) {
+                            UIPasteboard.general.string = rawURL
+                        }
                     }
                 }
-                .padding(.horizontal, 12)
-                .padding(.bottom, 8)
             }
-
-            // ── URL bar ─────────────────────────────────────────────
-            if let rawURL = qualityLinks[selectedQuality] {
-                Text(rawURL)
-                    .font(.system(size: 10, design: .monospaced))
-                    .foregroundColor(.tPurple)
-                    .lineLimit(1)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(10)
-                    .background(Color.tSurface)
-                    .cornerRadius(8)
-                    .padding([.horizontal, .bottom], 12)
-            }
-        }
-        .background(Color.tCard)
-        .cornerRadius(16)
-        .onAppear {
-            if selectedQuality.isEmpty { selectedQuality = qualities.first ?? "" }
         }
     }
 
@@ -219,7 +282,7 @@ struct VideoPlayerView: View {
                 .font(.system(size: 14, weight: .bold))
                 .foregroundColor(textColor)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 13)
+                .padding(.vertical, 14)
                 .background(color)
                 .cornerRadius(10)
         }
@@ -228,7 +291,6 @@ struct VideoPlayerView: View {
     private func open(scheme: String) {
         guard let url = URL(string: scheme) else { return }
         UIApplication.shared.open(url)
-        showExternalSheet = false
     }
 
     private func qualityLabel(_ q: String) -> String {

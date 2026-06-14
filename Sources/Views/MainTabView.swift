@@ -34,7 +34,6 @@ struct MainTabView: View {
         }
     }
 
-
     var body: some View {
         ZStack(alignment: .bottom) {
             Color.tDark.ignoresSafeArea()
@@ -59,8 +58,6 @@ struct MainTabView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                // ✨ CORRECTION POSITION : 
-                // La mini-bar est maintenant DANS la pile, juste au-dessus des onglets !
                 if playerMode != nil && !playerVisible && qualityLinks != nil {
                     miniBar
                         .zIndex(99)
@@ -88,6 +85,7 @@ struct MainTabView: View {
         ZStack(alignment: .top) {
             Color.tDark.ignoresSafeArea()
             VStack(spacing: 0) {
+                // Header (Fixé en haut)
                 HStack(spacing: 12) {
                     Button(store.t("reduce")) { withAnimation { playerVisible = false } }
                         .font(.system(size: 15, weight: .bold))
@@ -115,34 +113,33 @@ struct MainTabView: View {
                 .padding(.top, 16) 
                 .padding(.bottom, 12)
                 .background(Color.tCard)
-                .overlay(Divider().background(Color.tBorder), alignment: .bottom)
-
-                ScrollView {
+                
+                // ✨ CORRECTION FROSTY : Le VideoPlayerView gère tout le reste de l'écran
+                if loading {
+                    Spacer()
                     VStack(spacing: 16) {
-                        if loading {
-                            VStack(spacing: 16) {
-                                ProgressView().tint(.tPrimary).scaleEffect(1.4)
-                                Text(store.t("loading_vod")).foregroundColor(.tWarning).fontWeight(.semibold)
-                            }
-                            .frame(maxWidth: .infinity).padding(.vertical, 60)
-                        } else if let err = errorMsg {
-                            VStack(spacing: 20) {
-                                Text(err).foregroundColor(.tDanger).fontWeight(.semibold).multilineTextAlignment(.center)
-                                Button(store.t("back")) { stopPlayer() }
-                                    .foregroundColor(.white).fontWeight(.bold)
-                                    .padding(.horizontal, 24).padding(.vertical, 12)
-                                    .background(Color.tSurface).cornerRadius(10)
-                            }
-                            .frame(maxWidth: .infinity).padding(.vertical, 60)
-                        } else if let links = qualityLinks {
-                            VideoPlayerView(
-                                qualityLinks: links,
-                                vodId: { if case .vod(let id, _, _, _) = playerMode { return id }; return nil }()
-                            )
-                            infoBox
-                        }
+                        ProgressView().tint(.tPrimary).scaleEffect(1.4)
+                        Text(store.t("loading_vod")).foregroundColor(.tWarning).fontWeight(.semibold)
                     }
-                    .padding(16)
+                    Spacer()
+                } else if let err = errorMsg {
+                    Spacer()
+                    VStack(spacing: 20) {
+                        Text(err).foregroundColor(.tDanger).fontWeight(.semibold).multilineTextAlignment(.center)
+                        Button(store.t("back")) { stopPlayer() }
+                            .foregroundColor(.white).fontWeight(.bold)
+                            .padding(.horizontal, 24).padding(.vertical, 12)
+                            .background(Color.tSurface).cornerRadius(10)
+                    }
+                    Spacer()
+                } else if let links = qualityLinks {
+                    VideoPlayerView(
+                        qualityLinks: links,
+                        vodId: { if case .vod(let id, _, _, _) = playerMode { return id }; return nil }(),
+                        channelName: { if case .live(let ch) = playerMode { return ch }; return nil }()
+                    ) {
+                        infoBox // On passe la boîte d'infos pour qu'elle s'affiche dans les options
+                    }
                 }
             }
         }
@@ -169,6 +166,7 @@ struct MainTabView: View {
             .padding(16)
             .background(Color.tCard)
             .cornerRadius(12)
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.tBorder, lineWidth: 1))
         }
     }
 
@@ -191,7 +189,7 @@ struct MainTabView: View {
                     .foregroundColor(.tMuted)
                     .font(.system(size: 16, weight: .bold))
                     .frame(width: 32, height: 32)
-                    .contentShape(Rectangle()) // Rend toute la zone cliquable
+                    .contentShape(Rectangle()) 
             }
         }
         .padding(.horizontal, 16).padding(.vertical, 10)
@@ -199,7 +197,7 @@ struct MainTabView: View {
         .cornerRadius(12)
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.tPrimary.opacity(0.4), lineWidth: 1))
         .padding(.horizontal, 12)
-        .padding(.bottom, 8) // ✨ Seulement 8 pixels de marge pour qu'elle touche presque le menu
+        .padding(.bottom, 8)
         .onTapGesture { withAnimation { playerVisible = true } }
     }
 
@@ -254,7 +252,6 @@ struct MainTabView: View {
     }
 
     private func stopPlayer() {
-        // ✨ CORRECTION AUDIO : On diffuse un message à toute l'app pour couper l'AVPlayer
         NotificationCenter.default.post(name: NSNotification.Name("ForceStopVideo"), object: nil)
 
         withAnimation {

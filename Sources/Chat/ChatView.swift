@@ -11,7 +11,7 @@ struct ChatView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // ── Status bar ───────────────────────────────────────────
+            // ── Status bar ─────────────────────────────────────────
             HStack(spacing: 6) {
                 Circle()
                     .fill(chat.isConnected ? Color.tSuccess : Color.tDanger)
@@ -29,39 +29,43 @@ struct ChatView: View {
             .background(Color.tCard)
             .overlay(Divider().background(Color.tBorder), alignment: .bottom)
 
-            // ── Messages ─────────────────────────────────────────────
-            ZStack(alignment: .bottomTrailing) {
-                ScrollViewReader { proxy in
-                    ScrollView {
-                        LazyVStack(alignment: .leading, spacing: 0) {
-                            ForEach(chat.messages.reversed()) { msg in
-                                ChatMessageRow(message: msg)
-                                    .id(msg.id)
+            // ── Messages ───────────────────────────────────────────
+            // GeometryReader ici pour avoir la largeur exacte du conteneur
+            GeometryReader { geo in
+                ZStack(alignment: .bottomTrailing) {
+                    ScrollViewReader { proxy in
+                        ScrollView {
+                            LazyVStack(alignment: .leading, spacing: 0) {
+                                ForEach(chat.messages.reversed()) { msg in
+                                    ChatMessageRow(message: msg, availableWidth: geo.size.width)
+                                        .id(msg.id)
+                                }
+                            }
+                            // ✅ Force le LazyVStack à la largeur exacte
+                            .frame(width: geo.size.width, alignment: .leading)
+                            .padding(.vertical, 6)
+                        }
+                        .onChange(of: chat.messages.first?.id) { newId in
+                            guard autoScroll, let id = newId else { return }
+                            withAnimation(.linear(duration: 0.1)) {
+                                proxy.scrollTo(id, anchor: .bottom)
                             }
                         }
-                        .padding(.vertical, 6)
                     }
-                    // iOS 16 compat onChange
-                    .onChange(of: chat.messages.first?.id) { newId in
-                        guard autoScroll, let id = newId else { return }
-                        withAnimation(.linear(duration: 0.1)) {
-                            proxy.scrollTo(id, anchor: .bottom)
-                        }
-                    }
-                }
 
-                if !autoScroll {
-                    Button { autoScroll = true } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "arrow.down")
-                            Text("Suivre le chat").font(.system(size: 11, weight: .bold))
+                    if !autoScroll {
+                        Button { autoScroll = true } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "arrow.down")
+                                Text("Suivre le chat").font(.system(size: 11, weight: .bold))
+                            }
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 10).padding(.vertical, 6)
+                            .background(Color.tPrimary)
+                            .cornerRadius(20)
                         }
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 10).padding(.vertical, 6)
-                        .background(Color.tPrimary)
-                        .cornerRadius(20)
+                        .padding(10)
                     }
-                    .padding(10)
                 }
             }
         }
@@ -83,9 +87,11 @@ struct ChatView: View {
 // MARK: – Single Message Row
 struct ChatMessageRow: View {
     let message: ChatMessage
+    let availableWidth: CGFloat  // ✅ Largeur explicite passée depuis le parent
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
+            // Reply indicator
             if let reply = message.replyTo {
                 HStack(spacing: 4) {
                     Rectangle().fill(Color.tMuted).frame(width: 2)
@@ -97,17 +103,22 @@ struct ChatMessageRow: View {
                 .padding(.leading, 12)
             }
 
+            // Message content
             HStack(alignment: .top, spacing: 0) {
                 if message.isHighlight {
                     Rectangle().fill(Color.tWarning).frame(width: 3)
                 }
-                WrappingHStack(message: message)
+                // ✅ Largeur explicite = largeur container - padding horizontal
+                WrappingHStack(message: message,
+                               availableWidth: availableWidth - 24)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 4)
             }
+            // ✅ Frame explicite = largeur exacte du container
+            .frame(width: availableWidth, alignment: .leading)
         }
-        // ✅ FIX: frame maxWidth + alignment .leading sur le conteneur
-        .frame(maxWidth: .infinity, alignment: .leading)
+        // ✅ Frame explicite sur le VStack aussi
+        .frame(width: availableWidth, alignment: .leading)
         .background(message.isHighlight ? Color.tWarning.opacity(0.08) : Color.clear)
     }
 }
@@ -115,11 +126,12 @@ struct ChatMessageRow: View {
 // MARK: – Wrapping HStack
 struct WrappingHStack: View {
     let message: ChatMessage
+    let availableWidth: CGFloat  // ✅ Largeur explicite
 
     var body: some View {
         let blocks = buildBlocks()
 
-        MessageFlowLayout(spacing: 4, lineSpacing: 4) {
+        MessageFlowLayout(spacing: 4, lineSpacing: 4, width: availableWidth) {
             ForEach(message.badges) { badge in
                 AsyncImage(url: URL(string: badge.url)) { phase in
                     if let img = phase.image {
@@ -150,8 +162,8 @@ struct WrappingHStack: View {
                 }
             }
         }
-        // ✅ FIX: frame maxWidth + alignment .leading sur le flow lui-même
-        .frame(maxWidth: .infinity, alignment: .leading)
+        // ✅ Frame explicite = largeur exacte sans ambiguïté
+        .frame(width: availableWidth, alignment: .leading)
     }
 
     private func buildBlocks() -> [TokenBlock] {
@@ -164,61 +176,58 @@ struct TokenBlock: Identifiable {
     let content: MessageToken
 }
 
-// MARK: – Native Message Layout Algorithm
+// MARK: – Flow Layout (Layout protocol)
 struct MessageFlowLayout: Layout {
     var spacing: CGFloat
     var lineSpacing: CGFloat
+    var width: CGFloat  // ✅ Largeur connue à l'avance
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let width = proposal.width ?? UIScreen.main.bounds.width
-        let clampWidth = (width <= 0 || width > 10000) ? UIScreen.main.bounds.width : width
-        return computeLayout(width: clampWidth, subviews: subviews).size
+        computeLayout(width: width, subviews: subviews).size
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        let layout = computeLayout(width: bounds.width, subviews: subviews)
+        let layout = computeLayout(width: width, subviews: subviews)
         for (index, subview) in subviews.enumerated() {
-            let point = layout.positions[index]
+            let pos = layout.positions[index]
             let subSize = subview.sizeThatFits(.unspecified)
-            // ✅ FIX: centrage vertical par ligne, ancrage à bounds.minX (gauche absolue)
-            let yOffset = (layout.lineHeights[index] - subSize.height) / 2
+            // Centrage vertical par ligne, ancrage top-left strict
+            let yOffset = max(0, (layout.lineHeights[index] - subSize.height) / 2)
             subview.place(
-                at: CGPoint(x: bounds.minX + point.x, y: bounds.minY + point.y + yOffset),
-                anchor: .topLeading,   // ✅ ancre .topLeading = toujours aligné à gauche
+                at: CGPoint(x: bounds.minX + pos.x, y: bounds.minY + pos.y + yOffset),
+                anchor: .topLeading,  // ✅ Toujours ancré au coin supérieur gauche
                 proposal: .unspecified
             )
         }
     }
 
-    private func computeLayout(width: CGFloat, subviews: Subviews) -> (size: CGSize, positions: [CGPoint], lineHeights: [CGFloat]) {
+    private func computeLayout(width: CGFloat, subviews: Subviews)
+        -> (size: CGSize, positions: [CGPoint], lineHeights: [CGFloat])
+    {
+        let safeWidth = max(width, 1)
         var currentX: CGFloat = 0
         var currentY: CGFloat = 0
         var maxLineHeight: CGFloat = 0
-
         var positions: [CGPoint] = []
         var lineHeights: [CGFloat] = Array(repeating: 0, count: subviews.count)
-        var lineStartIndex = 0
+        var lineStart = 0
 
-        for (index, subview) in subviews.enumerated() {
-            let size = subview.sizeThatFits(.unspecified)
-
-            if currentX > 0 && currentX + size.width > width {
-                for j in lineStartIndex..<index { lineHeights[j] = maxLineHeight }
+        for (i, sub) in subviews.enumerated() {
+            let size = sub.sizeThatFits(.unspecified)
+            if currentX > 0 && currentX + size.width > safeWidth {
+                for j in lineStart..<i { lineHeights[j] = maxLineHeight }
                 currentX = 0
                 currentY += maxLineHeight + lineSpacing
                 maxLineHeight = 0
-                lineStartIndex = index
+                lineStart = i
             }
-
             positions.append(CGPoint(x: currentX, y: currentY))
             maxLineHeight = max(maxLineHeight, size.height)
             currentX += size.width + spacing
         }
+        for j in lineStart..<subviews.count { lineHeights[j] = maxLineHeight }
 
-        for j in lineStartIndex..<subviews.count { lineHeights[j] = maxLineHeight }
-
-        // ✅ Retourne width complet pour que la vue occupe 100% de la largeur → pas de centrage possible
-        return (CGSize(width: width, height: currentY + maxLineHeight), positions, lineHeights)
+        return (CGSize(width: safeWidth, height: currentY + maxLineHeight), positions, lineHeights)
     }
 }
 
@@ -232,7 +241,7 @@ struct CachedEmoteImage: View {
             if let img = phase.image {
                 img.resizable().interpolation(.medium).scaledToFit()
             } else if phase.error != nil {
-                Text(name).font(.system(size: 13)).foregroundColor(.tMuted)
+                Text(name).font(.system(size: 11)).foregroundColor(.tMuted)
             } else {
                 Color.clear.frame(width: 24, height: 24)
             }

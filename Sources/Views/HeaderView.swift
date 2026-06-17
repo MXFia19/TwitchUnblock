@@ -5,6 +5,12 @@ struct HeaderView: View {
 
     private var langCycle: [Lang] { Lang.allCases }
 
+    private var safeTop: CGFloat {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first?.windows.first(where: { $0.isKeyWindow })?.safeAreaInsets.top ?? 47
+    }
+
     private func cycleLang() {
         let idx = langCycle.firstIndex(of: store.lang) ?? 0
         store.lang = langCycle[(idx + 1) % langCycle.count]
@@ -18,7 +24,7 @@ struct HeaderView: View {
                     .font(.system(size: 15, weight: .heavy))
                     .foregroundColor(.tText)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.5) // Sécurité si le texte est long
+                    .minimumScaleFactor(0.5)
             }
             Spacer()
 
@@ -42,8 +48,7 @@ struct HeaderView: View {
             }
         }
         .padding(.horizontal, 16)
-        // ✨ Le fix est ici : on a remplacé safeAreaTop par un padding natif standard
-        .padding(.top, 8) 
+        .padding(.top, safeTop + 6)   // ✅ Safe area dynamique + marge
         .padding(.bottom, 12)
         .background(Color.tCard)
         .overlay(Divider().background(Color.tBorder), alignment: .bottom)

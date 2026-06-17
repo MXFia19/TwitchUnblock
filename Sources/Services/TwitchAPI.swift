@@ -165,7 +165,7 @@ func getLive(channelName: String) async -> LiveData {
     let q = """
     query { user(login: "\(login)") {
         profileImageURL(width: 70)
-        stream { title game { name } previewImageURL(width: 320, height: 180) }
+        stream { title game { name } previewImageURL(width: 320, height: 180) viewersCount createdAt }
     }}
     """
     async let streamTask = twitchGQL(q)
@@ -188,6 +188,16 @@ func getLive(channelName: String) async -> LiveData {
     let title     = stream["title"] as? String ?? ""
     let game      = (stream["game"] as? [String: Any])?["name"] as? String ?? ""
     let thumbnail = stream["previewImageURL"] as? String ?? ""
+    let viewerCount = stream["viewersCount"] as? Int ?? 0
+
+    // Parse startedAt ISO8601
+    var startedAt: Date? = nil
+    if let createdAtStr = stream["createdAt"] as? String {
+        let df = ISO8601DateFormatter()
+        df.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        startedAt = df.date(from: createdAtStr) ?? ISO8601DateFormatter().date(from: createdAtStr)
+    }
+
     var links: QualityLinks = [:]
 
     // ✨ RÉCUPÉRATION DU CHOIX DE L'UTILISATEUR
@@ -265,7 +275,7 @@ func getLive(channelName: String) async -> LiveData {
         }
     }
 
-    return LiveData(title: title, game: game, thumbnail: thumbnail, avatar: avatar, links: links)
+    return LiveData(title: title, game: game, thumbnail: thumbnail, avatar: avatar, links: links, viewerCount: viewerCount, startedAt: startedAt)
 }
 
 // MARK: – getChannelVideos

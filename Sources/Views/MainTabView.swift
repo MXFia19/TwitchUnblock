@@ -17,17 +17,24 @@ struct MainTabView: View {
     @State private var currentChannelName: String? = nil
     @State private var currentChannelId: String? = nil
 
+    // ── Live stats ────────────────────────────────────────────────────────
+    @State private var liveViewerCount: Int = 0
+    @State private var liveStartedAt: Date? = nil
+    @State private var liveUptimeText: String = ""
+    @State private var refreshTimer: Timer? = nil
+    @State private var uptimeTimer: Timer? = nil
+
     enum TabName: String, CaseIterable {
         case discovery, streamer, direct, settings
         var icon: String {
-            switch self { case .discovery: return "🌟"; case .streamer: return "👤"; case .direct: return "🔗"; case .settings: return "⚙️" }
+            switch self { case .discovery: "🌟"; case .streamer: "👤"; case .direct: "🔗"; case .settings: "⚙️" }
         }
         func label(_ store: AppStore) -> String {
             switch self {
-            case .discovery: return store.t("tab_discovery")
-            case .streamer:  return store.t("tab_streamer")
-            case .direct:    return store.t("tab_direct")
-            case .settings:  return store.t("settings")
+            case .discovery: store.t("tab_discovery")
+            case .streamer:  store.t("tab_streamer")
+            case .direct:    store.t("tab_direct")
+            case .settings:  store.t("settings")
             }
         }
     }
@@ -56,8 +63,7 @@ struct MainTabView: View {
 
                 CustomTabBar(activeTab: $activeTab)
             }
-            // ✨ CORRECTION BARRE DU HAUT : On ignore la Safe Area seulement en bas !
-            .ignoresSafeArea(edges: .bottom) 
+            .ignoresSafeArea() // le VStack part de y=0 ; Header et TabBar gèrent leur propre inset
 
             // ── Mini bar (player réduit) ──────────────────────────────
             if playerMode != nil && !playerVisible && qualityLinks != nil {
@@ -149,7 +155,7 @@ struct MainTabView: View {
             VStack(alignment: .leading, spacing: 0) {
                 // ── Info row ─────────────────────────────────────────
                 HStack(alignment: .top, spacing: 12) {
-                    VStack(alignment: .leading, spacing: 4) {
+                    VStack(alignment: .leading, spacing: 6) {
                         Text(statusTitle)
                             .font(.system(size: 15, weight: .bold))
                             .foregroundColor(.white)
@@ -159,10 +165,36 @@ struct MainTabView: View {
                                 .foregroundColor(.tPrimary)
                         }
                         if case .live = mode {
-                            Text(store.t("live_badge"))
-                                .font(.system(size: 11, weight: .bold)).foregroundColor(.white)
-                                .padding(.horizontal, 8).padding(.vertical, 3)
-                                .background(Color.tLive).cornerRadius(4)
+                            HStack(spacing: 8) {
+                                // Badge EN DIRECT
+                                Text(store.t("live_badge"))
+                                    .font(.system(size: 11, weight: .bold))
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 8).padding(.vertical, 3)
+                                    .background(Color.tLive).cornerRadius(4)
+
+                                // Viewers
+                                if liveViewerCount > 0 {
+                                    HStack(spacing: 3) {
+                                        Image(systemName: "eye.fill")
+                                            .font(.system(size: 10))
+                                        Text(formatViewers(liveViewerCount))
+                                            .font(.system(size: 12, weight: .semibold))
+                                    }
+                                    .foregroundColor(.tMuted)
+                                }
+
+                                // Uptime
+                                if !liveUptimeText.isEmpty {
+                                    HStack(spacing: 3) {
+                                        Image(systemName: "clock.fill")
+                                            .font(.system(size: 10))
+                                        Text(liveUptimeText)
+                                            .font(.system(size: 12, weight: .semibold))
+                                    }
+                                    .foregroundColor(.tMuted)
+                                }
+                            }
                         }
                     }
                     Spacer()
@@ -204,6 +236,7 @@ struct MainTabView: View {
         }
     }
 
+    // Helper pour éviter l'expression trop complexe dans miniBar
     private var miniBarPrefix: String {
         guard let mode = playerMode else { return "▶️ " }
         if case .live = mode { return "🔴 " }
@@ -245,8 +278,9 @@ struct MainTabView: View {
         loading = true
         errorMsg = nil
         qualityLinks = nil
-        showChat = false
+        showChat = false   // reset chat on new playback
 
+        // Store channel name for chat
         if case .live(let channel) = mode {
             currentChannelName = channel.lowercased()
         } else {
@@ -254,7 +288,6 @@ struct MainTabView: View {
             currentChannelId = nil
         }
 
-        // ✨ CORRECTION : Il manquait une accolade fermante } ici pour la Task !
         Task {
             switch mode {
             case .vod(let id, let title, _, _):
@@ -274,27 +307,72 @@ struct MainTabView: View {
                     await MainActor.run { errorMsg = err; loading = false }
                 } else if let links = data.links, !links.isEmpty {
                     await MainActor.run {
-                        qualityLinks       = links
-                        statusTitle        = data.title.isEmpty ? channel : data.title
-                        loading            = false
+                        qualityLinks    = links
+                        statusTitle     = data.title.isEmpty ? channel : data.title
+                        liveViewerCount = data.viewerCount
+                        liveStartedAt   = data.startedAt
+                        loading         = false
+                        startLiveTimers(channel: channel)
                     }
                 } else {
                     await MainActor.run { errorMsg = "Stream indisponible"; loading = false }
                 }
             }
-        }
-    }
+        }  // fin Task
+    }  // fin startPlayback
 
     private func stopPlayer() {
+        stopLiveTimers()
         showChat = false
         currentChannelName = nil
         currentChannelId   = nil
+        liveViewerCount    = 0
+        liveStartedAt      = nil
+        liveUptimeText     = ""
         withAnimation {
             playerVisible = false
             playerMode    = nil
             qualityLinks  = nil
             statusTitle   = ""
         }
+    }
+
+    // MARK: – Live timers
+    private func startLiveTimers(channel: String) {
+        stopLiveTimers()
+
+        // Uptime: update every second
+        updateUptime()
+        uptimeTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
+            updateUptime()
+        }
+
+        // Viewers: refresh every 30 seconds
+        refreshTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { _ in
+            Task {
+                let data = await getLive(channelName: channel)
+                await MainActor.run {
+                    if data.viewerCount > 0 { liveViewerCount = data.viewerCount }
+                    if let s = data.startedAt { liveStartedAt = s }
+                }
+            }
+        }
+    }
+
+    private func stopLiveTimers() {
+        refreshTimer?.invalidate(); refreshTimer = nil
+        uptimeTimer?.invalidate();  uptimeTimer  = nil
+    }
+
+    private func updateUptime() {
+        guard let start = liveStartedAt else { return }
+        let elapsed = Int(Date().timeIntervalSince(start))
+        let h = elapsed / 3600
+        let m = (elapsed % 3600) / 60
+        let s = elapsed % 60
+        liveUptimeText = h > 0
+            ? String(format: "%d:%02d:%02d", h, m, s)
+            : String(format: "%d:%02d", m, s)
     }
 
     private var modeTitle: String {

@@ -9,6 +9,8 @@ struct LiveData {
     var thumbnail: String
     var avatar: String?
     var links: QualityLinks?
+    var viewerCount: Int = 0
+    var startedAt: Date? = nil
     var error: String?
 }
 

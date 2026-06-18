@@ -14,8 +14,14 @@ final class ChatService: NSObject, ObservableObject {
     private let session = URLSession(configuration: .default)
     private var channelName = ""
     private var pingTimer: Timer?
-    private var connectionTimeoutTask: Task<Void, Never>? // ← timeout anti-blocage
+    private var connectionTimeoutTask: Task<Void, Never>?
     private let maxMessages = 200
+
+    // ── Infos du compte connecté (remplies via GLOBALUSERSTATE / USERSTATE) ──
+    private var localLogin       = ""
+    private var localDisplayName = ""
+    private var localColor       = Color(hex: "9146ff")
+    private var localBadges: [TwitchBadge] = []
 
     // MARK: – Connect
     func connect(channel: String, token: String? = nil, login: String? = nil) {
@@ -27,7 +33,7 @@ final class ChatService: NSObject, ObservableObject {
         webSocketTask = session.webSocketTask(with: url)
         webSocketTask?.resume()
 
-        // ── Timeout 10 s : si le serveur ne répond pas (001), fallback anonyme
+        // Timeout 10 s — si 001 jamais reçu, fallback anonyme
         connectionTimeoutTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 10_000_000_000)
             guard let self, !Task.isCancelled, !self.isConnected else { return }
@@ -42,6 +48,7 @@ final class ChatService: NSObject, ObservableObject {
                 await send("PASS oauth:\(token)")
                 await send("NICK \(login.lowercased())")
                 isAuthenticated = true
+                localLogin = login.lowercased()
                 logger.info("CHAT", "Auth IRC → \(login.lowercased())")
             } else {
                 await send("NICK justinfan\(Int.random(in: 10000...99999))")
@@ -66,17 +73,18 @@ final class ChatService: NSObject, ObservableObject {
         pingTimer = nil
         webSocketTask?.cancel(with: .normalClosure, reason: nil)
         webSocketTask = nil
-        isConnected    = false
+        isConnected     = false
         isAuthenticated = false
+        localLogin       = ""
+        localDisplayName = ""
+        localBadges      = []
         logger.info("CHAT", "IRC déconnecté")
     }
 
-    // MARK: – Reconnect anonymously (fallback après échec d'auth)
+    // MARK: – Fallback anonyme
     private func reconnectAnonymously() async {
-        connectionTimeoutTask?.cancel()
-        connectionTimeoutTask = nil
-        pingTimer?.invalidate()
-        pingTimer = nil
+        connectionTimeoutTask?.cancel(); connectionTimeoutTask = nil
+        pingTimer?.invalidate();         pingTimer = nil
         webSocketTask?.cancel(with: .normalClosure, reason: nil)
         webSocketTask = nil
         isAuthenticated = false
@@ -94,11 +102,10 @@ final class ChatService: NSObject, ObservableObject {
         pingTimer = Timer.scheduledTimer(withTimeInterval: 240, repeats: true) { [weak self] _ in
             Task { await self?.send("PING :tmi.twitch.tv") }
         }
-
         await receive()
     }
 
-    // MARK: – Send a message to the channel
+    // MARK: – Send message
     func sendMessage(_ text: String) async {
         let sanitized = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !sanitized.isEmpty,
@@ -106,11 +113,34 @@ final class ChatService: NSObject, ObservableObject {
               isAuthenticated,
               isConnected else {
             logger.warn("CHAT", "sendMessage bloqué",
-                        "auth:\(isAuthenticated) connected:\(isConnected) len:\(text.count)")
+                        "auth:\(isAuthenticated) connected:\(isConnected)")
             return
         }
+
+        // 1 — Envoi IRC
         await send("PRIVMSG #\(channelName) :\(sanitized)")
         logger.info("CHAT", "Message envoyé → #\(channelName)", String(sanitized.prefix(80)))
+
+        // 2 — Ajout local immédiat
+        // Twitch n'échoue PAS notre propre PRIVMSG ; on l'insère nous-mêmes.
+        let tokens = await tokenizeText(sanitized, channelId: channelId)
+        let localMsg = ChatMessage(
+            id: "local-\(UUID().uuidString)",
+            userId: localLogin,
+            userName: localLogin,
+            displayName: localDisplayName.isEmpty ? localLogin : localDisplayName,
+            color: localColor,
+            badges: localBadges,
+            tokens: tokens,
+            timestamp: Date(),
+            isAction: false,
+            isHighlight: false,
+            replyTo: nil
+        )
+        messages.insert(localMsg, at: 0)
+        if messages.count > maxMessages {
+            messages = Array(messages.prefix(maxMessages))
+        }
     }
 
     // MARK: – Send raw IRC
@@ -149,26 +179,55 @@ final class ChatService: NSObject, ObservableObject {
         for line in lines {
             guard let irc = IRCParser.parse(line) else { continue }
             switch irc.command {
+
             case "001":
                 isConnected = true
-                connectionTimeoutTask?.cancel()   // ← connexion réussie, on annule le timeout
+                connectionTimeoutTask?.cancel()
                 connectionTimeoutTask = nil
                 logger.success("CHAT", "IRC connecté à #\(channelName)")
+
             case "PING":
                 await send("PONG :tmi.twitch.tv")
+
             case "PRIVMSG":
                 await handlePrivmsg(irc)
+
+            case "GLOBALUSERSTATE":
+                // Reçu juste après l'auth — couleur et display-name globaux
+                handleUserInfo(irc)
+
+            case "USERSTATE":
+                // Reçu après JOIN et après chaque PRIVMSG envoyé — badges du canal
+                handleUserInfo(irc)
+                if let badges = irc.tags["badges"] {
+                    localBadges = parseBadges(badges)
+                }
+
             case "NOTICE":
                 await handleNotice(irc)
+
             case "CLEARCHAT":
                 await handleClearChat(irc)
+
             case "CLEARMSG":
                 await handleClearMsg(irc)
-            case "USERSTATE", "GLOBALUSERSTATE", "ROOMSTATE", "USERNOTICE":
+
+            case "ROOMSTATE":
                 break
+
             default:
                 break
             }
+        }
+    }
+
+    // MARK: – Mise à jour des infos locales depuis USERSTATE / GLOBALUSERSTATE
+    private func handleUserInfo(_ irc: IRCMessage) {
+        if let name = irc.tags["display-name"], !name.isEmpty {
+            localDisplayName = name
+        }
+        if let hex = irc.tags["color"], !hex.isEmpty {
+            localColor = Color(hex: hex.trimmingCharacters(in: CharacterSet(charactersIn: "#")))
         }
     }
 
@@ -230,30 +289,26 @@ final class ChatService: NSObject, ObservableObject {
         guard let text = irc.text else { return }
         let msgId = irc.tags["msg-id"] ?? ""
 
-        // ── Échec d'authentification IRC → fallback anonyme ──────────────
+        // Échec d'auth → fallback anonyme
         if msgId == "login_authentication_failed"
             || text.lowercased().contains("login authentication failed") {
-            logger.warn("CHAT",
-                        "Auth IRC rejetée — token sans scope chat:read",
-                        "Reconnexion en mode anonyme")
+            logger.warn("CHAT", "Auth IRC rejetée — token sans scope chat:read",
+                        "Passage en mode anonyme")
             isAuthenticated = false
             await reconnectAnonymously()
-            // Injecter un message système pour informer l'utilisateur
             let sysMsg = ChatMessage(
                 id: UUID().uuidString,
                 userId: "system", userName: "system",
                 displayName: "⚠️ Chat",
-                color: Color(hex: "fbbf24"),
-                badges: [],
-                tokens: [.text("Reconnecté en lecture seule. Pour écrire, déconnecte-toi et reconnecte-toi via Paramètres.")],
-                timestamp: Date(),
-                isAction: false, isHighlight: false, replyTo: nil
+                color: Color(hex: "fbbf24"), badges: [],
+                tokens: [.text("Reconnecté en lecture seule. Déconnecte-toi et reconnecte-toi pour écrire.")],
+                timestamp: Date(), isAction: false, isHighlight: false, replyTo: nil
             )
             messages.insert(sysMsg, at: 0)
             return
         }
 
-        // ── Erreurs de modération / chat ─────────────────────────────────
+        // Erreurs chat (ban, timeout, sub-only…)
         let chatErrorIds: Set<String> = [
             "msg_banned", "msg_timedout", "msg_subsonly", "msg_followersonly",
             "msg_verified_email", "msg_emotesonly", "msg_slowmode",
@@ -265,11 +320,9 @@ final class ChatService: NSObject, ObservableObject {
                 id: UUID().uuidString,
                 userId: "system", userName: "system",
                 displayName: "⚠️ Système",
-                color: Color(hex: "fbbf24"),
-                badges: [],
+                color: Color(hex: "fbbf24"), badges: [],
                 tokens: [.text(text)],
-                timestamp: Date(),
-                isAction: false, isHighlight: false, replyTo: nil
+                timestamp: Date(), isAction: false, isHighlight: false, replyTo: nil
             )
             messages.insert(sysMsg, at: 0)
         }

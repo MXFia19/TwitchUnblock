@@ -4,7 +4,7 @@ struct MainTabView: View {
     @EnvironmentObject private var store: AppStore
     @State private var activeTab: TabName = .discovery
 
-    // ── Player state ─────────────────────────────────────────────────────
+    // ── Player state ──────────────────────────────────────────────────────
     @State private var playerMode: PlayerMode? = nil
     @State private var qualityLinks: QualityLinks? = nil
     @State private var playerVisible = false
@@ -12,12 +12,12 @@ struct MainTabView: View {
     @State private var errorMsg: String? = nil
     @State private var statusTitle = ""
 
-    // ── Chat state ───────────────────────────────────────────────────────
+    // ── Chat state ────────────────────────────────────────────────────────
     @State private var showChat = false
     @State private var currentChannelName: String? = nil
     @State private var currentChannelId: String? = nil
 
-    // ── Live stats ────────────────────────────────────────────────────────
+    // ── Live stats ─────────────────────────────────────────────────────────
     @State private var liveViewerCount: Int = 0
     @State private var liveStartedAt: Date? = nil
     @State private var liveUptimeText: String = ""
@@ -63,7 +63,7 @@ struct MainTabView: View {
 
                 CustomTabBar(activeTab: $activeTab)
             }
-            .ignoresSafeArea() // le VStack part de y=0 ; Header et TabBar gèrent leur propre inset
+            .ignoresSafeArea()
 
             // ── Mini bar (player réduit) ──────────────────────────────
             if playerMode != nil && !playerVisible && qualityLinks != nil {
@@ -100,9 +100,7 @@ struct MainTabView: View {
                         .lineLimit(1)
                         .frame(maxWidth: .infinity, alignment: .leading)
 
-                    Button {
-                        stopPlayer()
-                    } label: {
+                    Button { stopPlayer() } label: {
                         Text("✕")
                             .foregroundColor(.tMuted)
                             .font(.system(size: 14, weight: .bold))
@@ -139,7 +137,6 @@ struct MainTabView: View {
                                 qualityLinks: links,
                                 vodId: { if case .vod(let id, _, _, _) = playerMode { return id }; return nil }()
                             )
-                            // Info box
                             infoBox
                         }
                     }
@@ -153,6 +150,7 @@ struct MainTabView: View {
     private var infoBox: some View {
         if let mode = playerMode {
             VStack(alignment: .leading, spacing: 0) {
+
                 // ── Info row ─────────────────────────────────────────
                 HStack(alignment: .top, spacing: 12) {
                     VStack(alignment: .leading, spacing: 6) {
@@ -166,29 +164,24 @@ struct MainTabView: View {
                         }
                         if case .live = mode {
                             HStack(spacing: 8) {
-                                // Badge EN DIRECT
                                 Text(store.t("live_badge"))
                                     .font(.system(size: 11, weight: .bold))
                                     .foregroundColor(.white)
                                     .padding(.horizontal, 8).padding(.vertical, 3)
                                     .background(Color.tLive).cornerRadius(4)
 
-                                // Viewers
                                 if liveViewerCount > 0 {
                                     HStack(spacing: 3) {
-                                        Image(systemName: "eye.fill")
-                                            .font(.system(size: 10))
+                                        Image(systemName: "eye.fill").font(.system(size: 10))
                                         Text(formatViewers(liveViewerCount))
                                             .font(.system(size: 12, weight: .semibold))
                                     }
                                     .foregroundColor(.tMuted)
                                 }
 
-                                // Uptime
                                 if !liveUptimeText.isEmpty {
                                     HStack(spacing: 3) {
-                                        Image(systemName: "clock.fill")
-                                            .font(.system(size: 10))
+                                        Image(systemName: "clock.fill").font(.system(size: 10))
                                         Text(liveUptimeText)
                                             .font(.system(size: 12, weight: .semibold))
                                     }
@@ -198,7 +191,7 @@ struct MainTabView: View {
                         }
                     }
                     Spacer()
-                    // Chat toggle (live only)
+                    // Bouton Chat (live uniquement)
                     if case .live = mode, let channel = currentChannelName {
                         Button {
                             withAnimation(.spring(response: 0.35)) { showChat.toggle() }
@@ -206,8 +199,7 @@ struct MainTabView: View {
                         } label: {
                             HStack(spacing: 5) {
                                 Image(systemName: showChat ? "bubble.left.fill" : "bubble.left")
-                                Text("Chat")
-                                    .font(.system(size: 13, weight: .bold))
+                                Text("Chat").font(.system(size: 13, weight: .bold))
                             }
                             .foregroundColor(showChat ? .white : .tPrimary)
                             .padding(.horizontal, 12).padding(.vertical, 8)
@@ -226,9 +218,11 @@ struct MainTabView: View {
                     ChatView(
                         channelName: channel,
                         channelId: currentChannelId,
-                        token: store.twitchToken
+                        token: store.twitchToken,
+                        login: store.twitchLogin          // ← login passé pour l'envoi
                     )
-                    .frame(height: 340)
+                    // Hauteur plus grande pour inclure la barre d'envoi quand auth
+                    .frame(height: store.twitchLogin != nil ? 400 : 340)
                     .cornerRadius(12)
                     .padding(.top, 8)
                 }
@@ -236,7 +230,6 @@ struct MainTabView: View {
         }
     }
 
-    // Helper pour éviter l'expression trop complexe dans miniBar
     private var miniBarPrefix: String {
         guard let mode = playerMode else { return "▶️ " }
         if case .live = mode { return "🔴 " }
@@ -278,14 +271,13 @@ struct MainTabView: View {
         loading = true
         errorMsg = nil
         qualityLinks = nil
-        showChat = false   // reset chat on new playback
+        showChat = false
 
-        // Store channel name for chat
         if case .live(let channel) = mode {
             currentChannelName = channel.lowercased()
         } else {
             currentChannelName = nil
-            currentChannelId = nil
+            currentChannelId   = nil
         }
 
         Task {
@@ -301,6 +293,7 @@ struct MainTabView: View {
                         loading      = false
                     }
                 }
+
             case .live(let channel):
                 let data = await getLive(channelName: channel)
                 if let err = data.error, err != "offline" {
@@ -318,12 +311,12 @@ struct MainTabView: View {
                     await MainActor.run { errorMsg = "Stream indisponible"; loading = false }
                 }
             }
-        }  // fin Task
-    }  // fin startPlayback
+        }
+    }
 
     private func stopPlayer() {
         stopLiveTimers()
-        showChat = false
+        showChat           = false
         currentChannelName = nil
         currentChannelId   = nil
         liveViewerCount    = 0
@@ -340,14 +333,8 @@ struct MainTabView: View {
     // MARK: – Live timers
     private func startLiveTimers(channel: String) {
         stopLiveTimers()
-
-        // Uptime: update every second
         updateUptime()
-        uptimeTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
-            updateUptime()
-        }
-
-        // Viewers: refresh every 30 seconds
+        uptimeTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in updateUptime() }
         refreshTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { _ in
             Task {
                 let data = await getLive(channelName: channel)
@@ -367,9 +354,7 @@ struct MainTabView: View {
     private func updateUptime() {
         guard let start = liveStartedAt else { return }
         let elapsed = Int(Date().timeIntervalSince(start))
-        let h = elapsed / 3600
-        let m = (elapsed % 3600) / 60
-        let s = elapsed % 60
+        let h = elapsed / 3600, m = (elapsed % 3600) / 60, s = elapsed % 60
         liveUptimeText = h > 0
             ? String(format: "%d:%02d:%02d", h, m, s)
             : String(format: "%d:%02d", m, s)

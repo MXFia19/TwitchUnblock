@@ -15,7 +15,10 @@ final class TwitchAuthManager: NSObject, ASWebAuthenticationPresentationContextP
             .init(name: "client_id",     value: kHelixClientID),
             .init(name: "redirect_uri",  value: kRedirectURI),
             .init(name: "response_type", value: "token"),
-            .init(name: "scope",         value: "user:read:follows"),
+            // chat:read  → se connecter en IRC avec son vrai compte
+            // chat:edit  → envoyer des messages
+            // user:read:follows → accès aux chaînes suivies (déjà présent)
+            .init(name: "scope",         value: "user:read:follows chat:read chat:edit"),
             .init(name: "force_verify",  value: "false"),
         ]
         guard let authURL = comps.url else { return nil }
@@ -29,9 +32,10 @@ final class TwitchAuthManager: NSObject, ASWebAuthenticationPresentationContextP
                       let url = callbackURL,
                       let fragment = url.fragment,
                       let tokenRange = fragment.range(of: "access_token=") else {
-                    // Fallback: parse from the redirect page URL
                     if let url = callbackURL,
-                       let token = url.absoluteString.components(separatedBy: "access_token=").last?.components(separatedBy: "&").first {
+                       let token = url.absoluteString
+                           .components(separatedBy: "access_token=").last?
+                           .components(separatedBy: "&").first {
                         continuation.resume(returning: token)
                     } else {
                         continuation.resume(returning: nil)

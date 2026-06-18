@@ -6,7 +6,8 @@ import SwiftUI
 final class ChatService: NSObject, ObservableObject {
 
     @Published var messages: [ChatMessage] = []
-    @Published var isConnected = false
+    @Published var isConnected    = false
+    @Published var isAuthenticated = false   // ← vrai quand connecté avec un vrai compte
     @Published var channelId: String? = nil
 
     private var webSocketTask: URLSessionWebSocketTask?
@@ -16,7 +17,10 @@ final class ChatService: NSObject, ObservableObject {
     private let maxMessages = 200
 
     // MARK: – Connect
-    func connect(channel: String, token: String? = nil) {
+    /// - Parameters:
+    ///   - token: OAuth token (oauth:xxx). Nil → connexion anonyme justinfan.
+    ///   - login: Login Twitch lowercase (ex: "squeezie"). Requis pour envoyer des messages.
+    func connect(channel: String, token: String? = nil, login: String? = nil) {
         disconnect()
         channelName = channel.lowercased()
         logger.info("CHAT", "Connexion IRC → #\(channelName)")
@@ -26,19 +30,26 @@ final class ChatService: NSObject, ObservableObject {
         webSocketTask?.resume()
 
         Task {
-            // Capability requests
+            // Capabilities Twitch
             await send("CAP REQ :twitch.tv/tags twitch.tv/commands twitch.tv/membership")
-            if let token = token {
+
+            // Auth : on utilise le vrai login si disponible, sinon justinfan anonyme
+            if let token = token, let login = login, !login.isEmpty {
                 await send("PASS oauth:\(token)")
-                await send("NICK justinfan\(Int.random(in: 10000...99999))")
+                await send("NICK \(login.lowercased())")
+                isAuthenticated = true
+                logger.success("CHAT", "Connecté en tant que \(login.lowercased())")
             } else {
                 await send("NICK justinfan\(Int.random(in: 10000...99999))")
+                isAuthenticated = false
+                logger.info("CHAT", "Connecté en mode anonyme (justinfan)")
             }
+
             await send("JOIN #\(channelName)")
             await receive()
         }
 
-        // Ping every 4 min to keep alive
+        // Ping toutes les 4 min pour maintenir la connexion
         pingTimer = Timer.scheduledTimer(withTimeInterval: 240, repeats: true) { [weak self] _ in
             Task { await self?.send("PING :tmi.twitch.tv") }
         }
@@ -50,11 +61,26 @@ final class ChatService: NSObject, ObservableObject {
         pingTimer = nil
         webSocketTask?.cancel(with: .normalClosure, reason: nil)
         webSocketTask = nil
-        isConnected = false
+        isConnected    = false
+        isAuthenticated = false
         logger.info("CHAT", "IRC déconnecté")
     }
 
-    // MARK: – Send
+    // MARK: – Send a message to the channel
+    func sendMessage(_ text: String) async {
+        let sanitized = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !sanitized.isEmpty,
+              sanitized.count <= 500,
+              isAuthenticated,
+              isConnected else {
+            logger.warn("CHAT", "sendMessage bloqué", "auth:\(isAuthenticated) connected:\(isConnected) len:\(text.count)")
+            return
+        }
+        await send("PRIVMSG #\(channelName) :\(sanitized)")
+        logger.info("CHAT", "Message envoyé → #\(channelName)", String(sanitized.prefix(80)))
+    }
+
+    // MARK: – Send raw IRC line
     private func send(_ text: String) async {
         guard let task = webSocketTask else { return }
         do {
@@ -78,7 +104,6 @@ final class ChatService: NSObject, ObservableObject {
                 }
             @unknown default: break
             }
-            // Continue loop
             if webSocketTask != nil { await receive() }
         } catch {
             if isConnected {
@@ -88,7 +113,7 @@ final class ChatService: NSObject, ObservableObject {
         }
     }
 
-    // MARK: – Handle raw lines
+    // MARK: – Handle raw IRC lines
     private func handleRaw(_ text: String) async {
         let lines = text.components(separatedBy: "\r\n").filter { !$0.isEmpty }
         for line in lines {
@@ -101,11 +126,13 @@ final class ChatService: NSObject, ObservableObject {
                 await send("PONG :tmi.twitch.tv")
             case "PRIVMSG":
                 await handlePrivmsg(irc)
+            case "NOTICE":
+                await handleNotice(irc)
             case "CLEARCHAT":
                 await handleClearChat(irc)
             case "CLEARMSG":
                 await handleClearMsg(irc)
-            case "USERSTATE", "ROOMSTATE", "NOTICE", "USERNOTICE":
+            case "USERSTATE", "GLOBALUSERSTATE", "ROOMSTATE", "USERNOTICE":
                 break
             default:
                 break
@@ -117,18 +144,15 @@ final class ChatService: NSObject, ObservableObject {
     private func handlePrivmsg(_ irc: IRCMessage) async {
         guard var text = irc.text else { return }
 
-        // /me action
         var isAction = false
         if text.hasPrefix("\u{0001}ACTION ") && text.hasSuffix("\u{0001}") {
             text = String(text.dropFirst(8).dropLast(1))
             isAction = true
         }
 
-        // User color
         let hexColor = irc.color.isEmpty ? "9146ff" : irc.color.trimmingCharacters(in: CharacterSet(charactersIn: "#"))
         let userColor = Color(hex: hexColor)
 
-        // Twitch emotes from IRC tag
         let emoteRanges = IRCParser.parseEmoteRanges(raw: irc.emotesRaw, text: text)
         var twitchEmotesByRange: [Range<String.Index>: TwitchEmote] = [:]
         for (emoteId, range) in emoteRanges {
@@ -143,10 +167,7 @@ final class ChatService: NSObject, ObservableObject {
             twitchEmotesByRange[range] = emote
         }
 
-        // Tokenize: split text into text+emote tokens
         let tokens = await tokenize(text: text, twitchRanges: twitchEmotesByRange, channelId: channelId)
-
-        // Highlight: mentioned ?
         let isHighlight = irc.tags["msg-id"] == "highlighted-message"
 
         let message = ChatMessage(
@@ -169,6 +190,34 @@ final class ChatService: NSObject, ObservableObject {
         }
     }
 
+    // MARK: – NOTICE (ban, timeout, sub-only…)
+    private func handleNotice(_ irc: IRCMessage) async {
+        guard let msgId = irc.tags["msg-id"], let text = irc.text else { return }
+        let chatErrorIds: Set<String> = [
+            "msg_banned", "msg_timedout", "msg_subsonly", "msg_followersonly",
+            "msg_verified_email", "msg_emotesonly", "msg_slowmode", "msg_duplicate",
+            "no_permission", "unrecognized_cmd"
+        ]
+        if chatErrorIds.contains(msgId) {
+            logger.warn("CHAT", "NOTICE \(msgId)", text)
+            // On injecte le message d'erreur comme système dans le chat
+            let sysMsg = ChatMessage(
+                id: UUID().uuidString,
+                userId: "system",
+                userName: "system",
+                displayName: "⚠️ Système",
+                color: Color(hex: "fbbf24"),
+                badges: [],
+                tokens: [.text(text)],
+                timestamp: Date(),
+                isAction: false,
+                isHighlight: false,
+                replyTo: nil
+            )
+            messages.insert(sysMsg, at: 0)
+        }
+    }
+
     // MARK: – Tokenizer
     private func tokenize(
         text: String,
@@ -177,50 +226,34 @@ final class ChatService: NSObject, ObservableObject {
     ) async -> [MessageToken] {
         var tokens: [MessageToken] = []
         var currentIndex = text.startIndex
-
-        // Sort ranges
         let sortedRanges = twitchRanges.keys.sorted { $0.lowerBound < $1.lowerBound }
 
         for range in sortedRanges {
             guard range.lowerBound >= currentIndex else { continue }
-
-            // Text before emote
             if range.lowerBound > currentIndex {
                 let segment = String(text[currentIndex..<range.lowerBound])
                 tokens += await tokenizeText(segment, channelId: channelId)
             }
-            // Emote token
-            if let emote = twitchRanges[range] {
-                tokens.append(.emote(emote))
-            }
+            if let emote = twitchRanges[range] { tokens.append(.emote(emote)) }
             currentIndex = range.upperBound
         }
 
-        // Remaining text
         if currentIndex < text.endIndex {
-            let rest = String(text[currentIndex...])
-            tokens += await tokenizeText(rest, channelId: channelId)
+            tokens += await tokenizeText(String(text[currentIndex...]), channelId: channelId)
         }
-
         return tokens
     }
 
-    // ✨ CORRECTION TOKENIZER : Oblige à séparer mot par mot pour que le Layout iOS 16 puisse retourner à la ligne !
     private func tokenizeText(_ segment: String, channelId: String?) async -> [MessageToken] {
         var tokens: [MessageToken] = []
-        let words = segment.components(separatedBy: " ")
-
-        for word in words {
+        for word in segment.components(separatedBy: " ") {
             guard !word.isEmpty else { continue }
-            
             if word.hasPrefix("@") && word.count > 1 {
                 tokens.append(.mention(String(word.dropFirst())))
-                continue
-            }
-            if let emote = await EmoteService.shared.resolve(name: word, channelId: channelId) {
+            } else if let emote = await EmoteService.shared.resolve(name: word, channelId: channelId) {
                 tokens.append(.emote(emote))
             } else {
-                tokens.append(.text(word)) // Ajoute chaque mot séparément !
+                tokens.append(.text(word))
             }
         }
         return tokens
@@ -232,11 +265,8 @@ final class ChatService: NSObject, ObservableObject {
         return raw.components(separatedBy: ",").compactMap { part in
             let kv = part.components(separatedBy: "/")
             guard kv.count == 2 else { return nil }
-            let name = kv[0]
-            let version = kv[1]
-            // Standard Twitch badge URL (best effort without API call)
-            let url = "https://static-cdn.jtvnw.net/badges/v1/\(name)/\(version)/2"
-            return TwitchBadge(id: "\(name)/\(version)", url: url)
+            return TwitchBadge(id: "\(kv[0])/\(kv[1])",
+                               url: "https://static-cdn.jtvnw.net/badges/v1/\(kv[0])/\(kv[1])/2")
         }
     }
 

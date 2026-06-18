@@ -17,6 +17,14 @@ final class AppStore: ObservableObject {
     }
     @Published var twitchUserId: String?
 
+    /// Login IRC (ex: "squeezie") — indispensable pour envoyer des messages en chat
+    @Published var twitchLogin: String? {
+        didSet {
+            if let l = twitchLogin { UserDefaults.standard.set(l, forKey: "twitch_login") }
+            else { UserDefaults.standard.removeObject(forKey: "twitch_login") }
+        }
+    }
+
     // MARK: – Proxy
     @Published var useProxy: Bool = true {
         didSet { UserDefaults.standard.set(useProxy, forKey: "twitch_use_proxy") }
@@ -35,6 +43,7 @@ final class AppStore: ObservableObject {
         let ud = UserDefaults.standard
         if let l = ud.string(forKey: "lang"), let parsed = Lang(rawValue: l) { lang = parsed }
         twitchToken = ud.string(forKey: "twitch_token")
+        twitchLogin = ud.string(forKey: "twitch_login")
         useProxy = ud.object(forKey: "twitch_use_proxy") as? Bool ?? false
         if let data = ud.data(forKey: "twitch_vod_history"),
            let decoded = try? JSONDecoder().decode([HistoryItem].self, from: data) {
@@ -51,8 +60,9 @@ final class AppStore: ObservableObject {
 
     // MARK: – Auth
     func logout() {
-        twitchToken = nil
+        twitchToken  = nil
         twitchUserId = nil
+        twitchLogin  = nil   // ← nettoyage complet
     }
 
     // MARK: – History management

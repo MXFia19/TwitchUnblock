@@ -29,9 +29,7 @@ struct DiscoveryView: View {
                     .padding(.top, 8)
 
                     Spacer()
-
                     loginPrompt
-
                     Spacer()
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -49,11 +47,9 @@ struct DiscoveryView: View {
                         loggedInContent
                     }
                 }
-                .padding(.top, 1) // Hack SwiftUI : Annule le grand espace noir de la Safe Area
+                .padding(.top, 1)
                 .background(Color.tDark)
-                .refreshable { 
-                    await refresh() 
-                }
+                .refreshable { await refresh() }
             }
         }
         .onAppear {
@@ -67,16 +63,14 @@ struct DiscoveryView: View {
         }
     }
 
-    // MARK: – Login state
+    // MARK: – Login prompt
     @ViewBuilder private var loginPrompt: some View {
         VStack(spacing: 20) {
             Text(store.t("login_prompt"))
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(Color(hex: "e0ccff"))
                 .multilineTextAlignment(.center)
-            Button {
-                Task { await handleLogin() }
-            } label: {
+            Button { Task { await handleLogin() } } label: {
                 Text(store.t("btn_login_twitch"))
                     .font(.system(size: 16, weight: .bold))
                     .foregroundColor(.white)
@@ -91,11 +85,10 @@ struct DiscoveryView: View {
         .padding(.horizontal, 16)
     }
 
-    // MARK: – Logged-in state
+    // MARK: – Logged-in content
     @ViewBuilder private var loggedInContent: some View {
         VStack(alignment: .leading, spacing: 0) {
 
-            // ── Followed channels
             Text(store.t("followed_channels"))
                 .font(.system(size: 16, weight: .bold)).foregroundColor(.tPurple)
                 .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 12)
@@ -117,7 +110,6 @@ struct DiscoveryView: View {
                 .padding(.horizontal, 16)
             }
 
-            // ── Top streams header
             HStack {
                 Text(store.t("top_streams"))
                     .font(.system(size: 16, weight: .bold)).foregroundColor(.tPurple)
@@ -168,16 +160,15 @@ struct DiscoveryView: View {
 
     private func loadFollowedStreams(isRefresh: Bool = false) async {
         guard let token = store.twitchToken else { return }
-        
-        // On n'affiche le gros loader que si la liste est vide (pas pendant un simple refresh)
-        if followedStreams.isEmpty {
-            loadingFollowed = true
-        }
+
+        if followedStreams.isEmpty { loadingFollowed = true }
         errorFollowed = nil
 
         do {
             let currentUserId: String
-            if let existingId = store.twitchUserId, !existingId.isEmpty {
+
+            // On re-fetch si le userId OU le login est absent (cas de mise à jour de l'app)
+            if let existingId = store.twitchUserId, !existingId.isEmpty, store.twitchLogin != nil {
                 currentUserId = existingId
             } else {
                 guard let user = await getTwitchUser(token: token) else {
@@ -185,59 +176,47 @@ struct DiscoveryView: View {
                     loadingFollowed = false
                     return
                 }
-                currentUserId = user.id
+                currentUserId    = user.id
                 store.twitchUserId = user.id
+                store.twitchLogin  = user.login   // ← sauvegarde du login pour IRC
                 await store.pullFromCloud(userId: user.id)
+                logger.authLogin(user: user.displayName)
             }
 
             followedStreams = try await getFollowedStreams(token: token, userId: currentUserId)
-            
+
         } catch is CancellationError {
-            // Si SwiftUI annule la tâche (scroll trop rapide par ex.), on ignore sans planter
             return
         } catch {
             errorFollowed = store.t("err_loading")
-            let errorDesc = error.localizedDescription.lowercased()
-            if errorDesc.contains("token") || errorDesc.contains("401") || errorDesc.contains("unauthorized") {
+            let desc = error.localizedDescription.lowercased()
+            if desc.contains("token") || desc.contains("401") || desc.contains("unauthorized") {
                 store.logout()
             }
         }
         loadingFollowed = false
     }
 
-        private func loadTopStreams(_ l: TopLang, isRefresh: Bool = false) async {
+    private func loadTopStreams(_ l: TopLang, isRefresh: Bool = false) async {
         guard let token = store.twitchToken else { return }
-        
-        // On n'affiche le loader que si la liste est vide et qu'on ne fait pas un pull-to-refresh
-        if topStreams.isEmpty && !isRefresh {
-            loadingTop = true
-        }
-        
+        if topStreams.isEmpty && !isRefresh { loadingTop = true }
         do {
-            let fetchedStreams = try await getTopStreams(token: token, lang: l == .fr ? "fr" : nil)
-            // On met à jour la liste uniquement si Twitch nous a bien renvoyé des streams
-            if !fetchedStreams.isEmpty {
-                topStreams = fetchedStreams
-            }
+            let fetched = try await getTopStreams(token: token, lang: l == .fr ? "fr" : nil)
+            if !fetched.isEmpty { topStreams = fetched }
         } catch is CancellationError {
-            // Ignorer l'annulation
             return
         } catch {
-            // S'il y a une erreur réseau, on ne vide SURTOUT PAS la liste existante
-            print("Erreur de rafraîchissement des top streams")
+            print("Erreur top streams : \(error)")
         }
         loadingTop = false
     }
-
 
     private func loadAll(isRefresh: Bool = false) async {
         await loadFollowedStreams(isRefresh: isRefresh)
         await loadTopStreams(topLang, isRefresh: isRefresh)
     }
 
-    private func refresh() async {
-        await loadAll(isRefresh: true)
-    }
+    private func refresh() async { await loadAll(isRefresh: true) }
 }
 
 extension DiscoveryView.TopLang: Hashable {}

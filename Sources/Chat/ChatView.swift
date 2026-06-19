@@ -5,17 +5,16 @@ struct ChatView: View {
     let channelName: String
     let channelId: String?
     let token: String?
-    let login: String?          // ← login Twitch pour l'envoi de messages
+    let login: String?
 
     @StateObject private var chat = ChatService()
-    @State private var autoScroll  = true
-    @State private var messageText = ""
+    @State private var autoScroll    = true
+    @State private var messageText   = ""
+    @State private var showEmotePicker = false
     @FocusState private var isInputFocused: Bool
 
-    // L'utilisateur peut envoyer des messages s'il est authentifié
     private var canSendMessages: Bool { token != nil && login != nil }
 
-    // Le bouton Send est actif seulement quand la connexion est établie et le champ non vide
     private var canSend: Bool {
         chat.isConnected && chat.isAuthenticated &&
         !messageText.trimmingCharacters(in: .whitespaces).isEmpty &&
@@ -34,7 +33,6 @@ struct ChatView: View {
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundColor(.tMuted)
                 Spacer()
-                // Badge "Tu peux écrire" si auth
                 if chat.isAuthenticated, let l = login {
                     Text("✏️ @\(l)")
                         .font(.system(size: 10, weight: .bold))
@@ -49,45 +47,65 @@ struct ChatView: View {
             .background(Color.tCard)
             .overlay(Divider().background(Color.tBorder), alignment: .bottom)
 
-            // ── Messages ────────────────────────────────────────────
-            GeometryReader { geo in
-                ZStack(alignment: .bottomTrailing) {
-                    ScrollViewReader { proxy in
-                        ScrollView {
-                            LazyVStack(alignment: .leading, spacing: 0) {
-                                ForEach(chat.messages.reversed()) { msg in
-                                    ChatMessageRow(message: msg, availableWidth: geo.size.width)
-                                        .id(msg.id)
+            // ── Zone principale : messages OU picker ────────────────
+            if showEmotePicker && canSendMessages {
+
+                // Picker remplace la zone messages (comme un clavier emoji)
+                EmotePickerView(channelId: channelId) { emote in
+                    insertEmote(emote)
+                }
+                .transition(.asymmetric(
+                    insertion: .move(edge: .bottom).combined(with: .opacity),
+                    removal:   .move(edge: .bottom).combined(with: .opacity)
+                ))
+
+            } else {
+
+                // Messages
+                GeometryReader { geo in
+                    ZStack(alignment: .bottomTrailing) {
+                        ScrollViewReader { proxy in
+                            ScrollView {
+                                LazyVStack(alignment: .leading, spacing: 0) {
+                                    ForEach(chat.messages.reversed()) { msg in
+                                        ChatMessageRow(message: msg,
+                                                       availableWidth: geo.size.width)
+                                            .id(msg.id)
+                                    }
+                                }
+                                .frame(width: geo.size.width, alignment: .leading)
+                                .padding(.vertical, 6)
+                            }
+                            .onChange(of: chat.messages.first?.id) { newId in
+                                guard autoScroll, let id = newId else { return }
+                                withAnimation(.linear(duration: 0.1)) {
+                                    proxy.scrollTo(id, anchor: .bottom)
                                 }
                             }
-                            .frame(width: geo.size.width, alignment: .leading)
-                            .padding(.vertical, 6)
                         }
-                        .onChange(of: chat.messages.first?.id) { newId in
-                            guard autoScroll, let id = newId else { return }
-                            withAnimation(.linear(duration: 0.1)) {
-                                proxy.scrollTo(id, anchor: .bottom)
-                            }
-                        }
-                    }
 
-                    if !autoScroll {
-                        Button { autoScroll = true } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: "arrow.down")
-                                Text("Suivre").font(.system(size: 11, weight: .bold))
+                        if !autoScroll {
+                            Button { autoScroll = true } label: {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "arrow.down")
+                                    Text("Suivre").font(.system(size: 11, weight: .bold))
+                                }
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 10).padding(.vertical, 6)
+                                .background(Color.tPrimary)
+                                .cornerRadius(20)
                             }
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 10).padding(.vertical, 6)
-                            .background(Color.tPrimary)
-                            .cornerRadius(20)
+                            .padding(10)
                         }
-                        .padding(10)
                     }
                 }
+                .transition(.asymmetric(
+                    insertion: .move(edge: .top).combined(with: .opacity),
+                    removal:   .move(edge: .top).combined(with: .opacity)
+                ))
             }
 
-            // ── Barre d'envoi (uniquement si connecté avec un compte) ──
+            // ── Barre d'envoi ───────────────────────────────────────
             if canSendMessages {
                 inputBar
             }
@@ -103,7 +121,9 @@ struct ChatView: View {
                 chat.connect(channel: channelName, token: token, login: login)
             }
         }
-        .onDisappear { chat.disconnect() }
+        .onDisappear {
+            chat.disconnect()
+        }
     }
 
     // MARK: – Input bar
@@ -113,9 +133,28 @@ struct ChatView: View {
             Divider().background(Color.tBorder)
 
             VStack(spacing: 4) {
-                HStack(spacing: 8) {
+                HStack(spacing: 6) {
+
+                    // ── Bouton emoji / clavier ──────────────────────
+                    Button {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                            if showEmotePicker {
+                                showEmotePicker = false
+                            } else {
+                                isInputFocused = false  // ferme le clavier
+                                showEmotePicker = true
+                            }
+                        }
+                    } label: {
+                        Image(systemName: showEmotePicker ? "keyboard" : "face.smiling")
+                            .font(.system(size: 20))
+                            .foregroundColor(showEmotePicker ? .tPrimary : .tMuted)
+                            .frame(width: 36, height: 44)
+                    }
+
+                    // ── Champ texte ─────────────────────────────────
                     TextField(
-                        chat.isConnected ? "Envoyer un message..." : "Connexion en cours…",
+                        chat.isConnected ? "Envoyer un message…" : "Connexion en cours…",
                         text: $messageText
                     )
                     .focused($isInputFocused)
@@ -125,6 +164,14 @@ struct ChatView: View {
                     .submitLabel(.send)
                     .onSubmit { sendMessage() }
                     .disabled(!chat.isConnected || !chat.isAuthenticated)
+                    .onChange(of: isInputFocused) { focused in
+                        // Ouvrir le clavier ferme le picker
+                        if focused && showEmotePicker {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                showEmotePicker = false
+                            }
+                        }
+                    }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 10)
                     .background(Color.tSurface)
@@ -134,7 +181,7 @@ struct ChatView: View {
                             .stroke(isInputFocused ? Color.tPrimary : Color.tBorder, lineWidth: 1)
                     )
 
-                    // Bouton envoi
+                    // ── Bouton envoyer ──────────────────────────────
                     Button(action: sendMessage) {
                         Image(systemName: "paperplane.fill")
                             .font(.system(size: 15, weight: .bold))
@@ -146,7 +193,7 @@ struct ChatView: View {
                     .disabled(!canSend)
                 }
 
-                // Compteur de caractères (affiché > 400)
+                // Compteur de caractères (> 400)
                 if messageText.count > 400 {
                     HStack {
                         Spacer()
@@ -163,13 +210,23 @@ struct ChatView: View {
         }
     }
 
-    // MARK: – Send action
+    // MARK: – Actions
     private func sendMessage() {
         let trimmed = messageText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, trimmed.count <= 500 else { return }
         messageText = ""
-        autoScroll  = true   // on se remet en bas pour voir son message
+        autoScroll  = true
         Task { await chat.sendMessage(trimmed) }
+    }
+
+    private func insertEmote(_ emote: TwitchEmote) {
+        let text = messageText
+        if text.isEmpty || text.hasSuffix(" ") {
+            messageText = text + emote.name + " "
+        } else {
+            messageText = text + " " + emote.name + " "
+        }
+        // Pas de fermeture auto : l'utilisateur peut enchaîner plusieurs emotes
     }
 }
 
@@ -287,7 +344,7 @@ struct MessageFlowLayout: Layout {
     {
         let safeWidth = max(width, 1)
         var currentX: CGFloat = 0, currentY: CGFloat = 0, maxLineHeight: CGFloat = 0
-        var positions: [CGPoint] = []
+        var positions:   [CGPoint] = []
         var lineHeights: [CGFloat] = Array(repeating: 0, count: subviews.count)
         var lineStart = 0
 

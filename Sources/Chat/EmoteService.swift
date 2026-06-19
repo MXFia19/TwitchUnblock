@@ -5,19 +5,15 @@ actor EmoteService {
     static let shared = EmoteService()
     private init() {}
 
-    // Global emote maps: name → TwitchEmote
     private var globalBTTV: [String: TwitchEmote] = [:]
     private var globalFFZ:  [String: TwitchEmote] = [:]
     private var global7TV:  [String: TwitchEmote] = [:]
 
-    // Per-channel: channelId → name → TwitchEmote
     private var channelBTTV: [String: [String: TwitchEmote]] = [:]
     private var channelFFZ:  [String: [String: TwitchEmote]] = [:]
     private var channel7TV:  [String: [String: TwitchEmote]] = [:]
 
-    // Twitch emotes from chat tags: id → TwitchEmote
     private var twitchById: [String: TwitchEmote] = [:]
-
     private var loadedChannels: Set<String> = []
 
     // MARK: – Load globals once
@@ -57,7 +53,7 @@ actor EmoteService {
         }
     }
 
-    // MARK: – Resolve emote by name (channel-first priority)
+    // MARK: – Resolve emote by name (channel-first)
     func resolve(name: String, channelId: String?) -> TwitchEmote? {
         if let cid = channelId {
             if let e = channelBTTV[cid]?[name] { return e }
@@ -70,8 +66,35 @@ actor EmoteService {
         return nil
     }
 
-    // MARK: – Resolve by Twitch emote ID (from IRC tag)
     func resolveById(_ id: String) -> TwitchEmote? { twitchById[id] }
+
+    // MARK: – Grouped emotes for the picker
+    /// Retourne les emotes groupées par source, prêtes pour le picker.
+    /// Canal en premier (le plus pertinent), puis globals par source.
+    func groupedEmotes(channelId: String?) -> [(label: String, emotes: [TwitchEmote])] {
+        var groups: [(label: String, emotes: [TwitchEmote])] = []
+
+        // ── Emotes du canal (7TV + BTTV + FFZ combinés) ────────────
+        if let cid = channelId {
+            var canal: [TwitchEmote] = []
+            canal += Array((channel7TV[cid] ?? [:]).values)
+            canal += Array((channelBTTV[cid] ?? [:]).values)
+            canal += Array((channelFFZ[cid] ?? [:]).values)
+            canal.sort { $0.name.lowercased() < $1.name.lowercased() }
+            if !canal.isEmpty { groups.append(("⭐ Canal", canal)) }
+        }
+
+        // ── Globaux par source ──────────────────────────────────────
+        let g7tv  = Array(global7TV.values).sorted  { $0.name.lowercased() < $1.name.lowercased() }
+        let gBttv = Array(globalBTTV.values).sorted { $0.name.lowercased() < $1.name.lowercased() }
+        let gFfz  = Array(globalFFZ.values).sorted  { $0.name.lowercased() < $1.name.lowercased() }
+
+        if !g7tv.isEmpty  { groups.append(("7TV",  g7tv))  }
+        if !gBttv.isEmpty { groups.append(("BTTV", gBttv)) }
+        if !gFfz.isEmpty  { groups.append(("FFZ",  gFfz))  }
+
+        return groups
+    }
 
     // ─────────────────────────────────────────────────────────────────────
     // MARK: – BTTV
@@ -79,9 +102,7 @@ actor EmoteService {
         guard let url = URL(string: "https://api.betterttv.net/3/cached/emotes/global"),
               let (data, _) = try? await URLSession.shared.data(from: url),
               let arr = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { return }
-        for obj in arr {
-            if let e = bttvEmote(obj) { globalBTTV[e.name] = e }
-        }
+        for obj in arr { if let e = bttvEmote(obj) { globalBTTV[e.name] = e } }
     }
 
     private func loadBTTVChannel(channelId: String) async {
@@ -98,11 +119,9 @@ actor EmoteService {
     }
 
     private func bttvEmote(_ obj: [String: Any]) -> TwitchEmote? {
-        guard let id   = obj["id"]   as? String,
-              let name = obj["code"] as? String else { return nil }
+        guard let id = obj["id"] as? String, let name = obj["code"] as? String else { return nil }
         return TwitchEmote(id: id, name: name,
-                           url: "https://cdn.betterttv.net/emote/\(id)/2x",
-                           source: .bttv)
+                           url: "https://cdn.betterttv.net/emote/\(id)/2x", source: .bttv)
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -136,7 +155,7 @@ actor EmoteService {
     private func ffzEmote(_ obj: [String: Any]) -> TwitchEmote? {
         guard let id   = obj["id"] as? Int,
               let name = obj["name"] as? String,
-              let urls = (obj["urls"] as? [String: Any]),
+              let urls = obj["urls"] as? [String: Any],
               let url  = (urls["2"] ?? urls["1"]) as? String else { return nil }
         let fullURL = url.hasPrefix("//") ? "https:\(url)" : url
         return TwitchEmote(id: "\(id)", name: name, url: fullURL, source: .ffz)
@@ -168,7 +187,6 @@ actor EmoteService {
               let name = obj["name"] as? String,
               let data = obj["data"] as? [String: Any],
               let host = (data["host"] as? [String: Any])?["url"] as? String else { return nil }
-        let url = "https:\(host)/2x.webp"
-        return TwitchEmote(id: id, name: name, url: url, source: .seventv)
+        return TwitchEmote(id: id, name: name, url: "https:\(host)/2x.webp", source: .seventv)
     }
 }

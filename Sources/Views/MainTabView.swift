@@ -4,7 +4,7 @@ struct MainTabView: View {
     @EnvironmentObject private var store: AppStore
     @State private var activeTab: TabName = .discovery
 
-    // ── Player state ──────────────────────────────────────────────────────
+    // ── Player state ─────────────────────────────────────────────────────
     @State private var playerMode: PlayerMode? = nil
     @State private var qualityLinks: QualityLinks? = nil
     @State private var playerVisible = false
@@ -12,12 +12,12 @@ struct MainTabView: View {
     @State private var errorMsg: String? = nil
     @State private var statusTitle = ""
 
-    // ── Chat state ────────────────────────────────────────────────────────
+    // ── Chat state ───────────────────────────────────────────────────────
     @State private var showChat = false
     @State private var currentChannelName: String? = nil
     @State private var currentChannelId: String? = nil
 
-    // ── Live stats ─────────────────────────────────────────────────────────
+    // ── Live stats ────────────────────────────────────────────────────────
     @State private var liveViewerCount: Int = 0
     @State private var liveStartedAt: Date? = nil
     @State private var liveUptimeText: String = ""
@@ -88,7 +88,7 @@ struct MainTabView: View {
         ZStack(alignment: .top) {
             Color.tDark.ignoresSafeArea()
             VStack(spacing: 0) {
-                // Header
+                // ── Header ──────────────────────────────────────────────
                 HStack(spacing: 12) {
                     Button(store.t("reduce")) { withAnimation { playerVisible = false } }
                         .font(.system(size: 15, weight: .bold))
@@ -110,32 +110,46 @@ struct MainTabView: View {
                     }
                 }
                 .padding(.horizontal, 16)
-                .padding(.top, 52)
+                // ✅ FIX : le ZStack place déjà la VStack sous la safe area —
+                //    52pt était une sur-compensation qui créait le vide noir.
+                //    6pt suffit comme marge visuelle.
+                .padding(.top, 6)
                 .padding(.bottom, 12)
                 .background(Color.tCard)
                 .overlay(Divider().background(Color.tBorder), alignment: .bottom)
 
+                // ── Contenu scrollable ───────────────────────────────────
                 ScrollView {
                     VStack(spacing: 16) {
                         if loading {
                             VStack(spacing: 16) {
                                 ProgressView().tint(.tPrimary).scaleEffect(1.4)
-                                Text(store.t("loading_vod")).foregroundColor(.tWarning).fontWeight(.semibold)
+                                Text(store.t("loading_vod"))
+                                    .foregroundColor(.tWarning)
+                                    .fontWeight(.semibold)
                             }
                             .frame(maxWidth: .infinity).padding(.vertical, 60)
+
                         } else if let err = errorMsg {
                             VStack(spacing: 20) {
-                                Text(err).foregroundColor(.tDanger).fontWeight(.semibold).multilineTextAlignment(.center)
+                                Text(err)
+                                    .foregroundColor(.tDanger)
+                                    .fontWeight(.semibold)
+                                    .multilineTextAlignment(.center)
                                 Button(store.t("back")) { stopPlayer() }
                                     .foregroundColor(.white).fontWeight(.bold)
                                     .padding(.horizontal, 24).padding(.vertical, 12)
                                     .background(Color.tSurface).cornerRadius(10)
                             }
                             .frame(maxWidth: .infinity).padding(.vertical, 60)
+
                         } else if let links = qualityLinks {
                             VideoPlayerView(
                                 qualityLinks: links,
-                                vodId: { if case .vod(let id, _, _, _) = playerMode { return id }; return nil }()
+                                vodId: {
+                                    if case .vod(let id, _, _, _) = playerMode { return id }
+                                    return nil
+                                }()
                             )
                             infoBox
                         }
@@ -146,6 +160,7 @@ struct MainTabView: View {
         }
     }
 
+    // MARK: – Info box
     @ViewBuilder
     private var infoBox: some View {
         if let mode = playerMode {
@@ -191,6 +206,7 @@ struct MainTabView: View {
                         }
                     }
                     Spacer()
+
                     // Bouton Chat (live uniquement)
                     if case .live = mode, let channel = currentChannelName {
                         Button {
@@ -219,9 +235,8 @@ struct MainTabView: View {
                         channelName: channel,
                         channelId: currentChannelId,
                         token: store.twitchToken,
-                        login: store.twitchLogin          // ← login passé pour l'envoi
+                        login: store.twitchLogin
                     )
-                    // Hauteur plus grande pour inclure la barre d'envoi quand auth
                     .frame(height: store.twitchLogin != nil ? 400 : 340)
                     .cornerRadius(12)
                     .padding(.top, 8)
@@ -266,12 +281,12 @@ struct MainTabView: View {
     }
 
     private func startPlayback(_ mode: PlayerMode) {
-        playerMode = mode
+        playerMode    = mode
         playerVisible = true
-        loading = true
-        errorMsg = nil
-        qualityLinks = nil
-        showChat = false
+        loading       = true
+        errorMsg      = nil
+        qualityLinks  = nil
+        showChat      = false
 
         if case .live(let channel) = mode {
             currentChannelName = channel.lowercased()

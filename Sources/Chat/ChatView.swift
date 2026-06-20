@@ -107,9 +107,17 @@ struct ChatView: View {
         .background(Color.tDark)
         .onAppear {
             Task {
+                // Emotes
                 await EmoteService.shared.loadGlobals()
                 if let cid = channelId {
                     await EmoteService.shared.loadChannel(channelId: cid, channelName: channelName)
+                }
+                // Badges (Helix API — URLs réelles pour sub perso, bits, etc.)
+                if let tok = token {
+                    await BadgeService.shared.loadGlobal(token: tok)
+                    if let cid = channelId {
+                        await BadgeService.shared.loadChannel(channelId: cid, token: tok)
+                    }
                 }
                 chat.channelId = channelId
                 chat.connect(channel: channelName, token: token, login: login)

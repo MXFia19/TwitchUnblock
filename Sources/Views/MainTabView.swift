@@ -44,19 +44,14 @@ struct MainTabView: View {
             Color.tDark.ignoresSafeArea()
 
             VStack(spacing: 0) {
-                HeaderView()
-                    .zIndex(10)
+                HeaderView().zIndex(10)
 
                 Group {
                     switch activeTab {
-                    case .discovery:
-                        DiscoveryView(onPlayStream: playLive, onPlayVod: playVod)
-                    case .streamer:
-                        StreamerView(onPlayVod: playVod, onPlayLive: playLive)
-                    case .direct:
-                        DirectView(onPlayVod: playVod)
-                    case .settings:
-                        SettingsView()
+                    case .discovery: DiscoveryView(onPlayStream: playLive, onPlayVod: playVod)
+                    case .streamer:  StreamerView(onPlayVod: playVod, onPlayLive: playLive)
+                    case .direct:    DirectView(onPlayVod: playVod)
+                    case .settings:  SettingsView()
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -65,10 +60,9 @@ struct MainTabView: View {
             }
             .ignoresSafeArea()
 
-            // ── Mini bar (player réduit) ──────────────────────────────
+            // ── Mini bar ──────────────────────────────────────────────
             if playerMode != nil && !playerVisible && qualityLinks != nil {
-                miniBar
-                    .zIndex(99)
+                miniBar.zIndex(99)
             }
 
             // ── Player overlay ────────────────────────────────────────
@@ -82,13 +76,15 @@ struct MainTabView: View {
         }
     }
 
-    // MARK: – Player Overlay
+    // MARK: – Player Overlay (non scrollable)
     @ViewBuilder
     private var playerOverlay: some View {
         ZStack(alignment: .top) {
             Color.tDark.ignoresSafeArea()
+
             VStack(spacing: 0) {
-                // ── Header ──────────────────────────────────────────────
+
+                // ── Header fixe ─────────────────────────────────────
                 HStack(spacing: 12) {
                     Button(store.t("reduce")) { withAnimation { playerVisible = false } }
                         .font(.system(size: 15, weight: .bold))
@@ -110,141 +106,226 @@ struct MainTabView: View {
                     }
                 }
                 .padding(.horizontal, 16)
-                // ✅ FIX : le ZStack place déjà la VStack sous la safe area —
-                //    52pt était une sur-compensation qui créait le vide noir.
-                //    6pt suffit comme marge visuelle.
                 .padding(.top, 6)
                 .padding(.bottom, 12)
                 .background(Color.tCard)
                 .overlay(Divider().background(Color.tBorder), alignment: .bottom)
 
-                // ── Contenu scrollable ───────────────────────────────────
-                ScrollView {
+                // ── Contenu ──────────────────────────────────────────
+                if loading {
+                    Spacer()
                     VStack(spacing: 16) {
-                        if loading {
-                            VStack(spacing: 16) {
-                                ProgressView().tint(.tPrimary).scaleEffect(1.4)
-                                Text(store.t("loading_vod"))
-                                    .foregroundColor(.tWarning)
-                                    .fontWeight(.semibold)
-                            }
-                            .frame(maxWidth: .infinity).padding(.vertical, 60)
-
-                        } else if let err = errorMsg {
-                            VStack(spacing: 20) {
-                                Text(err)
-                                    .foregroundColor(.tDanger)
-                                    .fontWeight(.semibold)
-                                    .multilineTextAlignment(.center)
-                                Button(store.t("back")) { stopPlayer() }
-                                    .foregroundColor(.white).fontWeight(.bold)
-                                    .padding(.horizontal, 24).padding(.vertical, 12)
-                                    .background(Color.tSurface).cornerRadius(10)
-                            }
-                            .frame(maxWidth: .infinity).padding(.vertical, 60)
-
-                        } else if let links = qualityLinks {
-                            VideoPlayerView(
-                                qualityLinks: links,
-                                vodId: {
-                                    if case .vod(let id, _, _, _) = playerMode { return id }
-                                    return nil
-                                }()
-                            )
-                            infoBox
-                        }
-                    }
-                    .padding(16)
-                }
-            }
-        }
-    }
-
-    // MARK: – Info box
-    @ViewBuilder
-    private var infoBox: some View {
-        if let mode = playerMode {
-            VStack(alignment: .leading, spacing: 0) {
-
-                // ── Info row ─────────────────────────────────────────
-                HStack(alignment: .top, spacing: 12) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(statusTitle)
-                            .font(.system(size: 15, weight: .bold))
-                            .foregroundColor(.white)
-                        if case .vod(_, _, _, let streamer) = mode, let s = streamer {
-                            Text("par \(s)")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundColor(.tPrimary)
-                        }
-                        if case .live = mode {
-                            HStack(spacing: 8) {
-                                Text(store.t("live_badge"))
-                                    .font(.system(size: 11, weight: .bold))
-                                    .foregroundColor(.white)
-                                    .padding(.horizontal, 8).padding(.vertical, 3)
-                                    .background(Color.tLive).cornerRadius(4)
-
-                                if liveViewerCount > 0 {
-                                    HStack(spacing: 3) {
-                                        Image(systemName: "eye.fill").font(.system(size: 10))
-                                        Text(formatViewers(liveViewerCount))
-                                            .font(.system(size: 12, weight: .semibold))
-                                    }
-                                    .foregroundColor(.tMuted)
-                                }
-
-                                if !liveUptimeText.isEmpty {
-                                    HStack(spacing: 3) {
-                                        Image(systemName: "clock.fill").font(.system(size: 10))
-                                        Text(liveUptimeText)
-                                            .font(.system(size: 12, weight: .semibold))
-                                    }
-                                    .foregroundColor(.tMuted)
-                                }
-                            }
-                        }
+                        ProgressView().tint(.tPrimary).scaleEffect(1.4)
+                        Text(store.t("loading_vod"))
+                            .foregroundColor(.tWarning).fontWeight(.semibold)
                     }
                     Spacer()
 
-                    // Bouton Chat (live uniquement)
-                    if case .live = mode, let channel = currentChannelName {
-                        Button {
-                            withAnimation(.spring(response: 0.35)) { showChat.toggle() }
-                            logger.info("CHAT", showChat ? "Chat ouvert" : "Chat fermé", channel)
-                        } label: {
-                            HStack(spacing: 5) {
-                                Image(systemName: showChat ? "bubble.left.fill" : "bubble.left")
-                                Text("Chat").font(.system(size: 13, weight: .bold))
-                            }
-                            .foregroundColor(showChat ? .white : .tPrimary)
-                            .padding(.horizontal, 12).padding(.vertical, 8)
-                            .background(showChat ? Color.tPrimary : Color.tPrimary.opacity(0.15))
-                            .cornerRadius(10)
-                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.tPrimary, lineWidth: 1))
-                        }
+                } else if let err = errorMsg {
+                    Spacer()
+                    VStack(spacing: 20) {
+                        Text(err)
+                            .foregroundColor(.tDanger).fontWeight(.semibold)
+                            .multilineTextAlignment(.center)
+                        Button(store.t("back")) { stopPlayer() }
+                            .foregroundColor(.white).fontWeight(.bold)
+                            .padding(.horizontal, 24).padding(.vertical, 12)
+                            .background(Color.tSurface).cornerRadius(10)
                     }
-                }
-                .padding(16)
-                .background(Color.tCard)
-                .cornerRadius(12)
+                    .padding(.horizontal, 24)
+                    Spacer()
 
-                // ── Chat panel ───────────────────────────────────────
-                if showChat, let channel = currentChannelName {
-                    ChatView(
-                        channelName: channel,
-                        channelId: currentChannelId,
-                        token: store.twitchToken,
-                        login: store.twitchLogin
+                } else if let links = qualityLinks {
+
+                    // Vidéo fixe 16:9 (ne scrolle jamais)
+                    VideoPlayerView(
+                        qualityLinks: links,
+                        vodId: {
+                            if case .vod(let id, _, _, _) = playerMode { return id }
+                            return nil
+                        }()
                     )
-                    .frame(height: store.twitchLogin != nil ? 400 : 340)
-                    .cornerRadius(12)
-                    .padding(.top, 8)
+                    .padding(.horizontal, 12)
+                    .padding(.top, 12)
+
+                    if showChat, let channel = currentChannelName {
+                        // ── Mode chat : barre compacte + chat plein écran ─
+                        compactInfoBar
+                            .transition(.opacity)
+
+                        ChatView(
+                            channelName: channel,
+                            channelId: currentChannelId,
+                            token: store.twitchToken,
+                            login: store.twitchLogin
+                        )
+                        .frame(maxHeight: .infinity)  // prend tout l'espace restant
+                        .cornerRadius(12)
+                        .padding(.horizontal, 12)
+                        .padding(.bottom, 12)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+
+                    } else {
+                        // ── Mode normal : infobox + spacer ───────────────
+                        fullInfoBox
+                            .padding(.horizontal, 12)
+                            .padding(.top, 12)
+                            .transition(.opacity)
+
+                        Spacer()
+                    }
                 }
             }
         }
     }
 
+    // MARK: – Barre compacte (titre + viewers + bouton fermer chat)
+    @ViewBuilder
+    private var compactInfoBar: some View {
+        if let mode = playerMode {
+            HStack(spacing: 10) {
+                // Titre + infos live condensés
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(statusTitle)
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+
+                    if case .live = mode {
+                        HStack(spacing: 6) {
+                            Text(store.t("live_badge"))
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 6).padding(.vertical, 2)
+                                .background(Color.tLive).cornerRadius(3)
+
+                            if liveViewerCount > 0 {
+                                HStack(spacing: 3) {
+                                    Image(systemName: "eye.fill").font(.system(size: 9))
+                                    Text(formatViewers(liveViewerCount))
+                                        .font(.system(size: 11, weight: .semibold))
+                                }
+                                .foregroundColor(.tMuted)
+                            }
+
+                            if !liveUptimeText.isEmpty {
+                                HStack(spacing: 3) {
+                                    Image(systemName: "clock.fill").font(.system(size: 9))
+                                    Text(liveUptimeText)
+                                        .font(.system(size: 11, weight: .semibold))
+                                }
+                                .foregroundColor(.tMuted)
+                            }
+                        }
+                    } else if case .vod(_, _, _, let streamer) = mode, let s = streamer {
+                        Text("par \(s)")
+                            .font(.system(size: 11))
+                            .foregroundColor(.tMuted)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                // Bouton fermer le chat
+                Button {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                        showChat = false
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 11, weight: .bold))
+                        Text("Chat")
+                            .font(.system(size: 12, weight: .bold))
+                    }
+                    .foregroundColor(.tPrimary)
+                    .padding(.horizontal, 10).padding(.vertical, 7)
+                    .background(Color.tPrimary.opacity(0.15))
+                    .cornerRadius(8)
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.tPrimary, lineWidth: 1))
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(Color.tCard)
+            .cornerRadius(10)
+            .padding(.horizontal, 12)
+            .padding(.top, 8)
+        }
+    }
+
+    // MARK: – Info box complète (quand chat fermé)
+    @ViewBuilder
+    private var fullInfoBox: some View {
+        if let mode = playerMode {
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(statusTitle)
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundColor(.white)
+
+                    if case .vod(_, _, _, let streamer) = mode, let s = streamer {
+                        Text("par \(s)")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(.tPrimary)
+                    }
+
+                    if case .live = mode {
+                        HStack(spacing: 8) {
+                            Text(store.t("live_badge"))
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 8).padding(.vertical, 3)
+                                .background(Color.tLive).cornerRadius(4)
+
+                            if liveViewerCount > 0 {
+                                HStack(spacing: 3) {
+                                    Image(systemName: "eye.fill").font(.system(size: 10))
+                                    Text(formatViewers(liveViewerCount))
+                                        .font(.system(size: 12, weight: .semibold))
+                                }
+                                .foregroundColor(.tMuted)
+                            }
+
+                            if !liveUptimeText.isEmpty {
+                                HStack(spacing: 3) {
+                                    Image(systemName: "clock.fill").font(.system(size: 10))
+                                    Text(liveUptimeText)
+                                        .font(.system(size: 12, weight: .semibold))
+                                }
+                                .foregroundColor(.tMuted)
+                            }
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                // Bouton ouvrir le chat (live uniquement)
+                if case .live = mode, let channel = currentChannelName {
+                    Button {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                            showChat = true
+                        }
+                        logger.info("CHAT", "Chat ouvert", channel)
+                    } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: "bubble.left.fill")
+                            Text("Chat").font(.system(size: 13, weight: .bold))
+                        }
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 12).padding(.vertical, 8)
+                        .background(Color.tPrimary)
+                        .cornerRadius(10)
+                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.tPrimary, lineWidth: 1))
+                    }
+                }
+            }
+            .padding(16)
+            .background(Color.tCard)
+            .cornerRadius(12)
+        }
+    }
+
+    // MARK: – Mini bar
     private var miniBarPrefix: String {
         guard let mode = playerMode else { return "▶️ " }
         if case .live = mode { return "🔴 " }
@@ -349,7 +430,7 @@ struct MainTabView: View {
     private func startLiveTimers(channel: String) {
         stopLiveTimers()
         updateUptime()
-        uptimeTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in updateUptime() }
+        uptimeTimer  = Timer.scheduledTimer(withTimeInterval: 1,  repeats: true) { _ in updateUptime() }
         refreshTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { _ in
             Task {
                 let data = await getLive(channelName: channel)

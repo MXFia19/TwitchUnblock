@@ -5,7 +5,7 @@ import SwiftUI
 struct TwitchEmote: Identifiable, Hashable {
     let id: String
     let name: String
-    let url: String  // CDN URL 2x
+    let url: String
     var source: EmoteSource = .twitch
 }
 
@@ -44,9 +44,11 @@ struct ChatMessage: Identifiable {
     let badges: [TwitchBadge]
     let tokens: [MessageToken]
     let timestamp: Date
-    var isAction: Bool = false   // /me messages
+    var isAction: Bool = false
     var isHighlight: Bool = false
-    var replyTo: String? = nil
+    var isFirstMessage: Bool = false   // ← tag Twitch "first-msg=1"
+    var replyTo: String? = nil         // display name de l'auteur du message parent
+    var replyBody: String? = nil       // ← corps du message parent (reply-parent-msg-body)
 }
 
 // MARK: – IRC raw
@@ -67,4 +69,12 @@ struct IRCMessage {
     var emotesRaw: String { tags["emotes"] ?? "" }
     var isReply: Bool { tags["reply-parent-msg-id"] != nil }
     var replyUser: String? { tags["reply-parent-display-name"] }
+
+    /// Corps du message auquel on répond (Twitch échappe les espaces en \s)
+    var replyParentBody: String? {
+        tags["reply-parent-msg-body"]?
+            .replacingOccurrences(of: "\\s", with: " ")
+            .replacingOccurrences(of: "\\:", with: ";")
+            .replacingOccurrences(of: "\\\\", with: "\\")
+    }
 }

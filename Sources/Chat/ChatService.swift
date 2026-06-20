@@ -17,7 +17,7 @@ final class ChatService: NSObject, ObservableObject {
     private var connectionTimeoutTask: Task<Void, Never>?
     private let maxMessages = 200
 
-    // Infos du compte connecté (remplies via GLOBALUSERSTATE / USERSTATE)
+    // Infos du compte connecté (GLOBALUSERSTATE / USERSTATE)
     private var localLogin       = ""
     private var localDisplayName = ""
     private var localColor       = Color(hex: "9146ff")
@@ -51,7 +51,6 @@ final class ChatService: NSObject, ObservableObject {
             } else {
                 await send("NICK justinfan\(Int.random(in: 10000...99999))")
                 isAuthenticated = false
-                logger.info("CHAT", "Connexion anonyme justinfan")
             }
             await send("JOIN #\(channelName)")
             await receive()
@@ -101,22 +100,14 @@ final class ChatService: NSObject, ObservableObject {
         await send("PRIVMSG #\(channelName) :\(sanitized)")
         logger.info("CHAT", "Message envoyé → #\(channelName)", String(sanitized.prefix(80)))
 
-        // Insertion locale immédiate (Twitch n'échoue pas notre propre PRIVMSG)
         let tokens = await tokenizeText(sanitized, channelId: channelId)
         let localMsg = ChatMessage(
             id: "local-\(UUID().uuidString)",
-            userId: localLogin,
-            userName: localLogin,
+            userId: localLogin, userName: localLogin,
             displayName: localDisplayName.isEmpty ? localLogin : localDisplayName,
-            color: localColor,
-            badges: localBadges,
-            tokens: tokens,
-            timestamp: Date(),
-            isAction: false,
-            isHighlight: false,
-            isFirstMessage: false,
-            replyTo: nil,
-            replyBody: nil
+            color: localColor, badges: localBadges, tokens: tokens,
+            timestamp: Date(), isAction: false, isHighlight: false,
+            isFirstMessage: false, replyTo: nil, replyBody: nil
         )
         messages.insert(localMsg, at: 0)
         if messages.count > maxMessages { messages = Array(messages.prefix(maxMessages)) }
@@ -167,7 +158,10 @@ final class ChatService: NSObject, ObservableObject {
                 handleUserInfo(irc)
             case "USERSTATE":
                 handleUserInfo(irc)
-                if let badges = irc.tags["badges"] { localBadges = parseBadges(badges) }
+                if let raw = irc.tags["badges"] {
+                    // ← badges résolu via BadgeService (URLs Helix réelles)
+                    localBadges = await parseBadges(raw, channelId: channelId)
+                }
             case "NOTICE":
                 await handleNotice(irc)
             case "CLEARCHAT":
@@ -200,7 +194,6 @@ final class ChatService: NSObject, ObservableObject {
         let hexColor = irc.color.isEmpty
             ? "9146ff"
             : irc.color.trimmingCharacters(in: CharacterSet(charactersIn: "#"))
-        let userColor = Color(hex: hexColor)
 
         let emoteRanges = IRCParser.parseEmoteRanges(raw: irc.emotesRaw, text: text)
         var twitchEmotesByRange: [Range<String.Index>: TwitchEmote] = [:]
@@ -217,28 +210,42 @@ final class ChatService: NSObject, ObservableObject {
 
         let tokens = await tokenize(text: text, twitchRanges: twitchEmotesByRange, channelId: channelId)
 
-        // ── Nouveaux champs ──────────────────────────────────────────
-        let isFirstMessage = irc.tags["first-msg"] == "1"
-        let replyBody      = irc.replyParentBody   // nil si pas une réponse
-
         let message = ChatMessage(
             id: irc.msgId,
             userId: irc.userId,
             userName: irc.tags["login"] ?? "",
             displayName: irc.displayName,
-            color: userColor,
-            badges: parseBadges(irc.badgesRaw),
+            color: Color(hex: hexColor),
+            // ← badges résolus via BadgeService
+            badges: await parseBadges(irc.badgesRaw, channelId: channelId),
             tokens: tokens,
             timestamp: Date(),
             isAction: isAction,
             isHighlight: irc.tags["msg-id"] == "highlighted-message",
-            isFirstMessage: isFirstMessage,
+            isFirstMessage: irc.tags["first-msg"] == "1",
             replyTo: irc.replyUser,
-            replyBody: replyBody
+            replyBody: irc.replyParentBody
         )
 
         messages.insert(message, at: 0)
         if messages.count > maxMessages { messages = Array(messages.prefix(maxMessages)) }
+    }
+
+    // MARK: – Badge parsing (async → BadgeService)
+    /// Résout chaque badge via BadgeService pour obtenir l'URL Helix réelle.
+    /// Fallback automatique vers CDN statique si les badges ne sont pas encore chargés.
+    private func parseBadges(_ raw: String, channelId: String?) async -> [TwitchBadge] {
+        guard !raw.isEmpty else { return [] }
+        var result: [TwitchBadge] = []
+        for part in raw.components(separatedBy: ",") {
+            let kv = part.components(separatedBy: "/")
+            guard kv.count == 2 else { continue }
+            let id  = "\(kv[0])/\(kv[1])"
+            let url = await BadgeService.shared.resolve(badgeId: id, channelId: channelId)
+            guard !url.isEmpty else { continue }
+            result.append(TwitchBadge(id: id, url: url))
+        }
+        return result
     }
 
     // MARK: – NOTICE
@@ -251,7 +258,7 @@ final class ChatService: NSObject, ObservableObject {
             logger.warn("CHAT", "Auth IRC rejetée", "Passage en mode anonyme")
             isAuthenticated = false
             await reconnectAnonymously()
-            insertSystemMessage("Reconnecté en lecture seule. Déconnecte-toi et reconnecte-toi pour écrire.")
+            insertSystemMessage("Reconnecté en lecture seule. Reconnecte-toi via Paramètres.")
             return
         }
 
@@ -267,17 +274,15 @@ final class ChatService: NSObject, ObservableObject {
     }
 
     private func insertSystemMessage(_ text: String) {
-        let msg = ChatMessage(
+        messages.insert(ChatMessage(
             id: UUID().uuidString,
             userId: "system", userName: "system",
             displayName: "⚠️ Système",
             color: Color(hex: "fbbf24"), badges: [],
-            tokens: [.text(text)],
-            timestamp: Date(),
+            tokens: [.text(text)], timestamp: Date(),
             isAction: false, isHighlight: false,
             isFirstMessage: false, replyTo: nil, replyBody: nil
-        )
-        messages.insert(msg, at: 0)
+        ), at: 0)
     }
 
     // MARK: – Tokenizer
@@ -293,7 +298,8 @@ final class ChatService: NSObject, ObservableObject {
         for range in sortedRanges {
             guard range.lowerBound >= currentIndex else { continue }
             if range.lowerBound > currentIndex {
-                tokens += await tokenizeText(String(text[currentIndex..<range.lowerBound]), channelId: channelId)
+                tokens += await tokenizeText(String(text[currentIndex..<range.lowerBound]),
+                                             channelId: channelId)
             }
             if let emote = twitchRanges[range] { tokens.append(.emote(emote)) }
             currentIndex = range.upperBound
@@ -319,22 +325,10 @@ final class ChatService: NSObject, ObservableObject {
         return tokens
     }
 
-    // MARK: – Badge parsing
-    private func parseBadges(_ raw: String) -> [TwitchBadge] {
-        guard !raw.isEmpty else { return [] }
-        return raw.components(separatedBy: ",").compactMap { part in
-            let kv = part.components(separatedBy: "/")
-            guard kv.count == 2 else { return nil }
-            return TwitchBadge(id: "\(kv[0])/\(kv[1])",
-                               url: "https://static-cdn.jtvnw.net/badges/v1/\(kv[0])/\(kv[1])/2")
-        }
-    }
-
     // MARK: – Moderation
     private func handleClearChat(_ irc: IRCMessage) async {
         if let target = irc.params.last, !target.hasPrefix("#") {
             messages.removeAll { $0.userName == target }
-            logger.warn("CHAT", "Messages supprimés pour \(target)")
         } else {
             messages.removeAll()
             logger.warn("CHAT", "Chat effacé par un modérateur")

@@ -8,6 +8,7 @@ struct LiveData {
     var game: String
     var thumbnail: String
     var avatar: String?
+    var userId: String?          // ← NEW : ID Twitch du canal (pour charger les emotes)
     var links: QualityLinks?
     var viewerCount: Int = 0
     var startedAt: Date? = nil

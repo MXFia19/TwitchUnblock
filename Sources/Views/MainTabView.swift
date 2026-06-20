@@ -15,7 +15,7 @@ struct MainTabView: View {
     // ── Chat state ───────────────────────────────────────────────────────
     @State private var showChat = false
     @State private var currentChannelName: String? = nil
-    @State private var currentChannelId: String? = nil
+    @State private var currentChannelId: String? = nil   // ← branché sur data.userId
 
     // ── Live stats ────────────────────────────────────────────────────────
     @State private var liveViewerCount: Int = 0
@@ -137,7 +137,7 @@ struct MainTabView: View {
 
                 } else if let links = qualityLinks {
 
-                    // Vidéo fixe 16:9 (ne scrolle jamais)
+                    // Vidéo fixe 16:9
                     VideoPlayerView(
                         qualityLinks: links,
                         vodId: {
@@ -149,24 +149,24 @@ struct MainTabView: View {
                     .padding(.top, 12)
 
                     if showChat, let channel = currentChannelName {
-                        // ── Mode chat : barre compacte + chat plein écran ─
+                        // ── Mode chat ouvert ─────────────────────────
                         compactInfoBar
                             .transition(.opacity)
 
                         ChatView(
                             channelName: channel,
-                            channelId: currentChannelId,
+                            channelId: currentChannelId,   // ← userId Twitch du canal
                             token: store.twitchToken,
                             login: store.twitchLogin
                         )
-                        .frame(maxHeight: .infinity)  // prend tout l'espace restant
+                        .frame(maxHeight: .infinity)
                         .cornerRadius(12)
                         .padding(.horizontal, 12)
                         .padding(.bottom, 12)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
 
                     } else {
-                        // ── Mode normal : infobox + spacer ───────────────
+                        // ── Mode normal ──────────────────────────────
                         fullInfoBox
                             .padding(.horizontal, 12)
                             .padding(.top, 12)
@@ -179,12 +179,11 @@ struct MainTabView: View {
         }
     }
 
-    // MARK: – Barre compacte (titre + viewers + bouton fermer chat)
+    // MARK: – Barre compacte (chat ouvert)
     @ViewBuilder
     private var compactInfoBar: some View {
         if let mode = playerMode {
             HStack(spacing: 10) {
-                // Titre + infos live condensés
                 VStack(alignment: .leading, spacing: 2) {
                     Text(statusTitle)
                         .font(.system(size: 13, weight: .bold))
@@ -225,17 +224,14 @@ struct MainTabView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-                // Bouton fermer le chat
                 Button {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
                         showChat = false
                     }
                 } label: {
                     HStack(spacing: 4) {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 11, weight: .bold))
-                        Text("Chat")
-                            .font(.system(size: 12, weight: .bold))
+                        Image(systemName: "xmark").font(.system(size: 11, weight: .bold))
+                        Text("Chat").font(.system(size: 12, weight: .bold))
                     }
                     .foregroundColor(.tPrimary)
                     .padding(.horizontal, 10).padding(.vertical, 7)
@@ -253,7 +249,7 @@ struct MainTabView: View {
         }
     }
 
-    // MARK: – Info box complète (quand chat fermé)
+    // MARK: – Info box complète (chat fermé)
     @ViewBuilder
     private var fullInfoBox: some View {
         if let mode = playerMode {
@@ -299,13 +295,11 @@ struct MainTabView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-                // Bouton ouvrir le chat (live uniquement)
-                if case .live = mode, let channel = currentChannelName {
+                if case .live = mode, currentChannelName != nil {
                     Button {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
                             showChat = true
                         }
-                        logger.info("CHAT", "Chat ouvert", channel)
                     } label: {
                         HStack(spacing: 5) {
                             Image(systemName: "bubble.left.fill")
@@ -315,7 +309,6 @@ struct MainTabView: View {
                         .padding(.horizontal, 12).padding(.vertical, 8)
                         .background(Color.tPrimary)
                         .cornerRadius(10)
-                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.tPrimary, lineWidth: 1))
                     }
                 }
             }
@@ -354,7 +347,8 @@ struct MainTabView: View {
     }
 
     // MARK: – Playback
-    private func playVod(_ id: String, _ title: String? = nil, _ thumb: String? = nil, _ streamer: String? = nil) {
+    private func playVod(_ id: String, _ title: String? = nil,
+                         _ thumb: String? = nil, _ streamer: String? = nil) {
         startPlayback(.vod(id: id, title: title, thumb: thumb, streamer: streamer))
     }
     private func playLive(_ channel: String) {
@@ -371,6 +365,7 @@ struct MainTabView: View {
 
         if case .live(let channel) = mode {
             currentChannelName = channel.lowercased()
+            currentChannelId   = nil   // reset — sera rempli après getLive
         } else {
             currentChannelName = nil
             currentChannelId   = nil
@@ -396,11 +391,12 @@ struct MainTabView: View {
                     await MainActor.run { errorMsg = err; loading = false }
                 } else if let links = data.links, !links.isEmpty {
                     await MainActor.run {
-                        qualityLinks    = links
-                        statusTitle     = data.title.isEmpty ? channel : data.title
-                        liveViewerCount = data.viewerCount
-                        liveStartedAt   = data.startedAt
-                        loading         = false
+                        qualityLinks      = links
+                        statusTitle       = data.title.isEmpty ? channel : data.title
+                        liveViewerCount   = data.viewerCount
+                        liveStartedAt     = data.startedAt
+                        currentChannelId  = data.userId   // ← userId Twitch → emotes canal
+                        loading           = false
                         startLiveTimers(channel: channel)
                     }
                 } else {
@@ -435,8 +431,8 @@ struct MainTabView: View {
             Task {
                 let data = await getLive(channelName: channel)
                 await MainActor.run {
-                    if data.viewerCount > 0 { liveViewerCount = data.viewerCount }
-                    if let s = data.startedAt { liveStartedAt = s }
+                    if data.viewerCount > 0  { liveViewerCount = data.viewerCount }
+                    if let s = data.startedAt { liveStartedAt  = s }
                 }
             }
         }

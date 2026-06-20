@@ -162,8 +162,10 @@ func getLive(channelName: String) async -> LiveData {
     let login = channelName.trimmingCharacters(in: .whitespaces).lowercased()
     logger.info("LIVE", "Lancement stream \"\(login)\"")
 
+    // ← id ajouté à la query pour récupérer le userId Twitch du canal
     let q = """
     query { user(login: "\(login)") {
+        id
         profileImageURL(width: 70)
         stream { title game { name } previewImageURL(width: 320, height: 180) viewersCount createdAt }
     }}
@@ -180,17 +182,19 @@ func getLive(channelName: String) async -> LiveData {
     }
 
     let avatar = user["profileImageURL"] as? String
+    let userId = user["id"] as? String   // ← récupéré ici
+
     guard let stream = user["stream"] as? [String: Any] else {
         logger.warn("LIVE", "\"\(login)\" est hors ligne")
-        return LiveData(title: "Hors ligne", game: "", thumbnail: "", avatar: avatar, error: "offline")
+        return LiveData(title: "Hors ligne", game: "", thumbnail: "", avatar: avatar,
+                        userId: userId, error: "offline")
     }
 
-    let title     = stream["title"] as? String ?? ""
-    let game      = (stream["game"] as? [String: Any])?["name"] as? String ?? ""
-    let thumbnail = stream["previewImageURL"] as? String ?? ""
+    let title       = stream["title"] as? String ?? ""
+    let game        = (stream["game"] as? [String: Any])?["name"] as? String ?? ""
+    let thumbnail   = stream["previewImageURL"] as? String ?? ""
     let viewerCount = stream["viewersCount"] as? Int ?? 0
 
-    // Parse startedAt ISO8601
     var startedAt: Date? = nil
     if let createdAtStr = stream["createdAt"] as? String {
         let df = ISO8601DateFormatter()
@@ -200,88 +204,88 @@ func getLive(channelName: String) async -> LiveData {
 
     var links: QualityLinks = [:]
 
-    // ✨ RÉCUPÉRATION DU CHOIX DE L'UTILISATEUR
     let sourcePref = UserDefaults.standard.string(forKey: "liveSource") ?? "auto"
     logger.info("LIVE", "Source sélectionnée : \(sourcePref.uppercased())")
 
-    // ✨ 1 - TENTATIVE LUMINOUS
+    // 1 - Luminous
     if sourcePref == "auto" || sourcePref == "luminous" {
         logger.info("LIVE", "Tentative Luminous (Sans Pub)...")
         var lumComps = URLComponents(string: "https://as.luminous.dev/live/\(login)")!
         lumComps.queryItems = [
-            .init(name: "allow_source", value: "true"),
+            .init(name: "allow_source",    value: "true"),
             .init(name: "allow_audio_only", value: "true"),
-            .init(name: "fast_bread", value: "true")
+            .init(name: "fast_bread",      value: "true")
         ]
-        
         if let lumUrl = lumComps.url {
             var req = URLRequest(url: lumUrl)
             requestHeaders.forEach { req.setValue($1, forHTTPHeaderField: $0) }
-            
             do {
                 let (data, resp) = try await URLSession.shared.data(for: req)
                 if let httpResp = resp as? HTTPURLResponse {
-                    if httpResp.statusCode == 200 {
-                        if let body = String(data: data, encoding: .utf8) {
-                            links = parseM3U8(body, baseURL: lumUrl)
-                            if !links.isEmpty {
-                                logger.success("LIVE", "✅ Luminous OK (Aucune Pub) : \(links.count) qualités")
-                            }
+                    if httpResp.statusCode == 200, let body = String(data: data, encoding: .utf8) {
+                        links = parseM3U8(body, baseURL: lumUrl)
+                        if !links.isEmpty {
+                            logger.success("LIVE", "✅ Luminous OK : \(links.count) qualités")
                         }
                     } else {
-                        logger.warn("LIVE", "⚠️ Luminous a échoué (Erreur \(httpResp.statusCode)).")
+                        logger.warn("LIVE", "⚠️ Luminous échec (\(httpResp.statusCode))")
                     }
                 }
             } catch {
-                logger.error("LIVE", "❌ Erreur réseau avec Luminous (\(error.localizedDescription)).")
+                logger.error("LIVE", "❌ Erreur Luminous", error.localizedDescription)
             }
         }
     }
 
-    // ✨ 2 - FALLBACK OFFICIEL TWITCH (Avec pub)
+    // 2 - Officiel Twitch
     if links.isEmpty && (sourcePref == "auto" || sourcePref == "twitch") {
         if let token = token {
-            logger.info("LIVE", "Tentative sur le serveur officiel Twitch...")
+            logger.info("LIVE", "Tentative Twitch officiel...")
             var comps = URLComponents(string: "https://usher.ttvnw.net/api/channel/hls/\(login).m3u8")!
             comps.queryItems = [
-                .init(name: "allow_source",               value: "true"),
-                .init(name: "allow_audio_only",            value: "true"),
-                .init(name: "allow_spectre",               value: "true"),
-                .init(name: "player_backend",              value: "mediaplayer"),
-                .init(name: "playlist_include_framerate",  value: "true"),
-                .init(name: "segment_preference",          value: "4"),
-                .init(name: "sig",                         value: token.signature),
-                .init(name: "token",                       value: token.value),
+                .init(name: "allow_source",              value: "true"),
+                .init(name: "allow_audio_only",           value: "true"),
+                .init(name: "allow_spectre",              value: "true"),
+                .init(name: "player_backend",             value: "mediaplayer"),
+                .init(name: "playlist_include_framerate", value: "true"),
+                .init(name: "segment_preference",         value: "4"),
+                .init(name: "sig",                        value: token.signature),
+                .init(name: "token",                      value: token.value),
             ]
             if let url = comps.url,
                let (data, resp) = try? await URLSession.shared.data(from: url),
                (resp as? HTTPURLResponse)?.statusCode == 200,
                let body = String(data: data, encoding: .utf8) {
                 links = parseM3U8(body, baseURL: url)
-                logger.success("LIVE", "✅ Serveur Officiel Twitch OK : \(links.count) qualités HLS")
+                logger.success("LIVE", "✅ Twitch officiel : \(links.count) qualités")
             }
         }
     }
 
-    // ✨ 3 - FALLBACK FINAL CLOUDFLARE WORKER
+    // 3 - Cloudflare Worker
     if links.isEmpty && (sourcePref == "auto" || sourcePref == "cloudflare") {
-        logger.info("LIVE", "Tentative sur le Cloudflare Proxy...")
+        logger.info("LIVE", "Tentative Cloudflare Worker...")
         if let url = URL(string: "\(kAPIURL)/api/get-live?name=\(login)&proxy=false"),
            let (data, _) = try? await URLSession.shared.data(from: url),
            let json2 = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
            let fbLinks = json2["links"] as? QualityLinks {
             links = fbLinks
-            logger.success("LIVE", "✅ Fallback Cloudflare Worker OK : \(links.count) qualités")
+            logger.success("LIVE", "✅ Cloudflare Worker : \(links.count) qualités")
         }
     }
 
-    return LiveData(title: title, game: game, thumbnail: thumbnail, avatar: avatar, links: links, viewerCount: viewerCount, startedAt: startedAt)
+    if let uid = userId {
+        logger.success("LIVE", "userId récupéré : \(uid) → emotes canal disponibles")
+    }
+
+    return LiveData(title: title, game: game, thumbnail: thumbnail, avatar: avatar,
+                    userId: userId, links: links, viewerCount: viewerCount, startedAt: startedAt)
 }
 
 // MARK: – getChannelVideos
 func getChannelVideos(channelName: String, cursor: String? = nil) async -> (videos: [VodData], avatar: String?, error: String?, cursor: String?) {
     logger.info("VIDEOS", "Chargement VODs de \"\(channelName)\"\(cursor != nil ? " (Page suivante)" : "")")
-    
+
     let afterCursor = cursor != nil ? ", after: \"\(cursor!)\"" : ""
     let q = """
     query {
@@ -294,21 +298,21 @@ func getChannelVideos(channelName: String, cursor: String? = nil) async -> (vide
         }
     }
     """
-    
+
     guard let json = try? await twitchGQL(q) as? [String: Any],
           let data = json["data"] as? [String: Any],
           let user = data["user"] as? [String: Any] else {
         logger.error("VIDEOS", "Streamer \"\(channelName)\" introuvable")
         return (videos: [], avatar: nil, error: "Streamer introuvable", cursor: nil)
     }
-    
-    let avatar = user["profileImageURL"] as? String
+
+    let avatar     = user["profileImageURL"] as? String
     let videosDict = user["videos"] as? [String: Any]
-    let edges  = (videosDict?["edges"] as? [[String: Any]]) ?? []
-    
+    let edges      = (videosDict?["edges"] as? [[String: Any]]) ?? []
+
     let videos: [VodData] = edges.compactMap { e in
-        guard let node = e["node"] as? [String: Any],
-              let id   = node["id"] as? String,
+        guard let node  = e["node"] as? [String: Any],
+              let id    = node["id"] as? String,
               let title = node["title"] as? String else { return nil }
         return VodData(
             id: id, title: title,
@@ -317,11 +321,11 @@ func getChannelVideos(channelName: String, cursor: String? = nil) async -> (vide
             lengthSeconds: node["lengthSeconds"] as? Int ?? 0
         )
     }
-    
-    let pageInfo = videosDict?["pageInfo"] as? [String: Any]
+
+    let pageInfo    = videosDict?["pageInfo"] as? [String: Any]
     let hasNextPage = pageInfo?["hasNextPage"] as? Bool ?? false
-    let nextCursor = hasNextPage ? (edges.last?["cursor"] as? String) : nil
-    
+    let nextCursor  = hasNextPage ? (edges.last?["cursor"] as? String) : nil
+
     logger.success("VIDEOS", "\(videos.count) VODs trouvées pour \"\(channelName)\"")
     return (videos: videos, avatar: avatar, error: nil, cursor: nextCursor)
 }
@@ -391,9 +395,11 @@ func searchUsersGQL(_ query: String) async -> [AutocompleteSuggestion] {
           let data = json["data"] as? [String: Any],
           let edges = (data["searchUsers"] as? [String: Any])?["edges"] as? [[String: Any]] else { return [] }
     return edges.compactMap { e in
-        guard let node = e["node"] as? [String: Any],
+        guard let node  = e["node"] as? [String: Any],
               let login = node["login"] as? String else { return nil }
-        return AutocompleteSuggestion(login: login, name: node["displayName"] as? String ?? login, avatar: node["profileImageURL"] as? String)
+        return AutocompleteSuggestion(login: login,
+                                      name: node["displayName"] as? String ?? login,
+                                      avatar: node["profileImageURL"] as? String)
     }
 }
 
@@ -401,7 +407,7 @@ func getVodMetaGQL(_ vodId: String) async -> VodMeta? {
     let q = "query { video(id: \"\(vodId)\") { title owner { displayName } previewThumbnailURL(height: 180, width: 320) } }"
     guard let json = try? await twitchGQL(q) as? [String: Any],
           let data = json["data"] as? [String: Any],
-          let v = data["video"] as? [String: Any],
+          let v    = data["video"] as? [String: Any],
           let title = v["title"] as? String else { return nil }
     return VodMeta(
         title: title,
@@ -434,8 +440,8 @@ func getTimeSince(publishedAt: String, lengthSeconds: Int, store: AppStore) -> S
     let diff = Date().timeIntervalSince(endDate)
     guard diff > 0 else { return "" }
     let days = Int(diff / 86400), hours = Int(diff / 3600), minutes = Int(diff / 60)
-    if days > 0    { return "\(days) \(store.t("day"))" }
-    if hours > 0   { return "\(hours) \(store.t("hour"))" }
+    if days > 0   { return "\(days) \(store.t("day"))" }
+    if hours > 0  { return "\(hours) \(store.t("hour"))" }
     return "\(minutes) \(store.t("min"))"
 }
 

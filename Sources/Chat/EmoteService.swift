@@ -9,11 +9,12 @@ actor EmoteService {
     private var globalFFZ:  [String: TwitchEmote] = [:]
     private var global7TV:  [String: TwitchEmote] = [:]
 
+    // Toutes les sources de canal sont maintenant indexées par channelId (cohérent)
     private var channelBTTV: [String: [String: TwitchEmote]] = [:]
-    private var channelFFZ:  [String: [String: TwitchEmote]] = [:]
+    private var channelFFZ:  [String: [String: TwitchEmote]] = [:]   // clé = channelId (fix!)
     private var channel7TV:  [String: [String: TwitchEmote]] = [:]
 
-    private var twitchById: [String: TwitchEmote] = [:]
+    private var twitchById:     [String: TwitchEmote] = [:]
     private var loadedChannels: Set<String> = []
 
     // MARK: – Load globals once
@@ -33,13 +34,17 @@ actor EmoteService {
         loadedChannels.insert(channelId)
         await withTaskGroup(of: Void.self) { group in
             group.addTask { await self.loadBTTVChannel(channelId: channelId) }
-            group.addTask { await self.loadFFZChannel(channelName: channelName) }
+            // FFZ reçoit maintenant les deux : channelId pour stocker, channelName pour l'API
+            group.addTask { await self.loadFFZChannel(channelId: channelId, channelName: channelName) }
             group.addTask { await self.load7TVChannel(channelId: channelId) }
         }
         let total = (channelBTTV[channelId]?.count ?? 0)
                   + (channelFFZ[channelId]?.count ?? 0)
                   + (channel7TV[channelId]?.count ?? 0)
-        logger.success("EMOTES", "Emotes canal \(channelName) chargées", "\(total) emotes")
+        logger.success("EMOTES", "Emotes canal \(channelName) chargées",
+                       "BTTV:\(channelBTTV[channelId]?.count ?? 0) " +
+                       "FFZ:\(channelFFZ[channelId]?.count ?? 0) " +
+                       "7TV:\(channel7TV[channelId]?.count ?? 0) — total:\(total)")
     }
 
     // MARK: – Register Twitch emote from chat tag
@@ -53,11 +58,11 @@ actor EmoteService {
         }
     }
 
-    // MARK: – Resolve emote by name (channel-first)
+    // MARK: – Resolve emote by name (channel-first, toutes les sources par channelId)
     func resolve(name: String, channelId: String?) -> TwitchEmote? {
         if let cid = channelId {
             if let e = channelBTTV[cid]?[name] { return e }
-            if let e = channelFFZ[cid]?[name]  { return e }
+            if let e = channelFFZ[cid]?[name]  { return e }   // fix : clé = channelId
             if let e = channel7TV[cid]?[name]  { return e }
         }
         if let e = globalBTTV[name] { return e }
@@ -69,22 +74,22 @@ actor EmoteService {
     func resolveById(_ id: String) -> TwitchEmote? { twitchById[id] }
 
     // MARK: – Grouped emotes for the picker
-    /// Retourne les emotes groupées par source, prêtes pour le picker.
-    /// Canal en premier (le plus pertinent), puis globals par source.
     func groupedEmotes(channelId: String?) -> [(label: String, emotes: [TwitchEmote])] {
         var groups: [(label: String, emotes: [TwitchEmote])] = []
 
-        // ── Emotes du canal (7TV + BTTV + FFZ combinés) ────────────
+        // ── Emotes du canal (toutes sources) ────────────────────────
         if let cid = channelId {
             var canal: [TwitchEmote] = []
-            canal += Array((channel7TV[cid] ?? [:]).values)
+            canal += Array((channel7TV[cid]  ?? [:]).values)
             canal += Array((channelBTTV[cid] ?? [:]).values)
-            canal += Array((channelFFZ[cid] ?? [:]).values)
+            canal += Array((channelFFZ[cid]  ?? [:]).values)   // fix : clé = channelId
             canal.sort { $0.name.lowercased() < $1.name.lowercased() }
-            if !canal.isEmpty { groups.append(("⭐ Canal", canal)) }
+            if !canal.isEmpty {
+                groups.append(("⭐ Canal", canal))
+            }
         }
 
-        // ── Globaux par source ──────────────────────────────────────
+        // ── Globaux par source ───────────────────────────────────────
         let g7tv  = Array(global7TV.values).sorted  { $0.name.lowercased() < $1.name.lowercased() }
         let gBttv = Array(globalBTTV.values).sorted { $0.name.lowercased() < $1.name.lowercased() }
         let gFfz  = Array(globalFFZ.values).sorted  { $0.name.lowercased() < $1.name.lowercased() }
@@ -138,7 +143,8 @@ actor EmoteService {
         }
     }
 
-    private func loadFFZChannel(channelName: String) async {
+    // Fix : stockage par channelId (API appellée avec channelName)
+    private func loadFFZChannel(channelId: String, channelName: String) async {
         guard let url = URL(string: "https://api.frankerfacez.com/v1/room/\(channelName)"),
               let (data, _) = try? await URLSession.shared.data(from: url),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -149,7 +155,7 @@ actor EmoteService {
                   let emoticons = setObj["emoticons"] as? [[String: Any]] else { continue }
             for obj in emoticons { if let e = ffzEmote(obj) { map[e.name] = e } }
         }
-        channelFFZ[channelName] = map
+        channelFFZ[channelId] = map   // ← stocké par channelId, pas channelName
     }
 
     private func ffzEmote(_ obj: [String: Any]) -> TwitchEmote? {

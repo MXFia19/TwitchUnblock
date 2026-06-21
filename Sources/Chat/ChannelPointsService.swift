@@ -13,7 +13,6 @@ struct ChannelReward: Identifiable, Equatable {
     let prompt: String?
     let backgroundColor: String
     let imageURL: String?
-
     var canRedeem: Bool { isEnabled && isInStock && !isPaused }
 }
 
@@ -30,10 +29,8 @@ final class ChannelPointsService: ObservableObject {
     private var channelId    = ""
     private var channelLogin = ""
     private var token        = ""
-
     private var balanceTimer: Timer? = nil
     private var claimTimer:   Timer? = nil
-
     private let balancePollInterval: TimeInterval = 60
     private let claimPollInterval:   TimeInterval = 10
 
@@ -46,9 +43,7 @@ final class ChannelPointsService: ObservableObject {
         self.channelLogin = channelLogin
         self.channelId    = channelId
         self.token        = token
-
-        logger.info("POINTS", "Initialisation canal \(channelLogin)",
-                    "channelId: \(channelId)")
+        logger.info("POINTS", "Initialisation canal \(channelLogin)", "channelId: \(channelId)")
         isLoading = true; errorMsg = nil
 
         let start = Date()
@@ -59,21 +54,18 @@ final class ChannelPointsService: ObservableObject {
 
         rewards = r.sorted { $0.cost < $1.cost }
 
-        if let b {
-            balance        = b.balance
-            pendingClaimId = b.claimId
-            logger.success("POINTS", "Balance récupérée",
-                           "\(formatted(b.balance)) pts · coffre: \(b.claimId != nil ? "OUI 🎁" : "non") · \(elapsed)")
-        } else {
-            logger.warn("POINTS", "Balance non disponible", "voir erreurs GQL ci-dessus (\(elapsed))")
-        }
+        // ✅ balance = 0 si null (nouveau viewer sans historique de points)
+        balance        = b?.balance  ?? 0
+        pendingClaimId = b?.claimId
+        logger.success("POINTS", "Chargement terminé (\(elapsed))",
+                       "\(formatted(balance)) pts · \(rewards.count) récompenses · coffre: \(pendingClaimId != nil ? "OUI 🎁" : "non")")
 
-        if r.isEmpty {
-            logger.warn("POINTS", "Aucune récompense", "canal sans custom rewards ou points désactivés")
-        } else {
-            let preview = r.prefix(3).map { "\($0.title) (\(formatted($0.cost)))" }.joined(separator: ", ")
-            logger.success("POINTS", "\(r.count) récompenses chargées",
-                           preview + (r.count > 3 ? " +\(r.count - 3) autres" : ""))
+        if b == nil {
+            logger.warn("POINTS", "Balance non récupérée",
+                        "0 pts par défaut (viewer sans historique ou feature non activée)")
+        }
+        if rewards.isEmpty {
+            logger.info("POINTS", "Aucune récompense", "canal sans custom rewards configurées")
         }
 
         isLoading = false
@@ -84,14 +76,11 @@ final class ChannelPointsService: ObservableObject {
     private func startPolling() {
         stopPolling()
         logger.debug("POINTS", "Polling démarré",
-                     "balance: \(Int(balancePollInterval))s · claim: \(Int(claimPollInterval))s")
-
-        balanceTimer = Timer.scheduledTimer(withTimeInterval: balancePollInterval,
-                                            repeats: true) { [weak self] _ in
+                     "balance toutes les \(Int(balancePollInterval))s · claim toutes les \(Int(claimPollInterval))s")
+        balanceTimer = Timer.scheduledTimer(withTimeInterval: balancePollInterval, repeats: true) { [weak self] _ in
             Task { await self?.refreshBalance() }
         }
-        claimTimer = Timer.scheduledTimer(withTimeInterval: claimPollInterval,
-                                           repeats: true) { [weak self] _ in
+        claimTimer = Timer.scheduledTimer(withTimeInterval: claimPollInterval, repeats: true) { [weak self] _ in
             Task { await self?.checkForBonus() }
         }
     }
@@ -104,51 +93,40 @@ final class ChannelPointsService: ObservableObject {
         claimTimer?.invalidate();   claimTimer   = nil
     }
 
-    // MARK: – Refresh balance (polling 60s)
+    // MARK: – Refresh balance (60s)
     private func refreshBalance() async {
         logger.debug("POINTS", "Refresh balance…", "canal: \(channelLogin)")
-        guard let b = await fetchBalance() else {
-            logger.warn("POINTS", "Refresh balance échoué", "GQL sans résultat")
-            return
-        }
-        let delta = b.balance - balance
+        let b = await fetchBalance()
+        let newBalance = b?.balance ?? balance  // garde l'ancienne valeur si null
+
+        let delta = newBalance - balance
         if delta > 0 {
             logger.success("POINTS", "Points passifs gagnés",
-                           "+\(delta) pts · total: \(formatted(b.balance))")
-            balance = b.balance
+                           "+\(delta) pts · total: \(formatted(newBalance))")
+            balance = newBalance
             withAnimation { lastBalanceChange = delta }
             try? await Task.sleep(nanoseconds: 3_000_000_000)
             withAnimation { lastBalanceChange = 0 }
         } else if delta < 0 {
             logger.warn("POINTS", "Balance diminuée hors-app",
-                        "\(formatted(balance)) → \(formatted(b.balance)) (\(delta) pts)")
-            balance = b.balance
+                        "\(formatted(balance)) → \(formatted(newBalance)) (\(delta) pts)")
+            balance = newBalance
         } else {
             logger.debug("POINTS", "Balance inchangée", "\(formatted(balance)) pts")
         }
-        if pendingClaimId == nil, let cid = b.claimId {
+        if pendingClaimId == nil, let cid = b?.claimId {
             pendingClaimId = cid
-            logger.success("POINTS", "🎁 Coffre détecté via refresh balance",
-                           "claimId: \(cid.prefix(8))…")
+            logger.success("POINTS", "🎁 Coffre détecté via refresh", "claimId: \(cid.prefix(8))…")
         }
     }
 
-    // MARK: – Check bonus (polling 10s, requête légère)
+    // MARK: – Check bonus (10s)
     private func checkForBonus() async {
         guard pendingClaimId == nil else { return }
-        logger.debug("POINTS", "Check coffre…", "canal: \(channelLogin)")
-
-        // ✅ FIX : channel(name:).self.communityPoints (pas currentUser.communityPoints(channelID:))
         let query = """
-        {
-          channel(name: "\(channelLogin)") {
-            self {
-              communityPoints {
-                availableClaim { id }
-              }
-            }
-          }
-        }
+        { channel(name: "\(channelLogin)") {
+            self { communityPoints { availableClaim { id } } }
+        } }
         """
         guard let json    = try? await gql(query, tag: "checkBonus") as? [String: Any],
               let data    = json["data"]                              as? [String: Any],
@@ -174,29 +152,19 @@ final class ChannelPointsService: ObservableObject {
             return
         }
         logger.info("POINTS", "Réclamation du coffre…",
-                    "claimId: \(claimId.prefix(8))… · canal: \(channelLogin)")
-
+                    "claimId: \(claimId.prefix(8))… · channelId: \(channelId)")
         let mutation = """
-        mutation {
-          claimCommunityPoints(input: {
-            claimID:   "\(claimId)"
-            channelID: "\(channelId)"
-          }) {
-            currentPoints
-            error { code }
-          }
-        }
+        mutation { claimCommunityPoints(input: {
+            claimID: "\(claimId)" channelID: "\(channelId)"
+        }) { currentPoints error { code } } }
         """
         guard let json  = try? await gql(mutation, tag: "claimBonus") as? [String: Any],
               let data  = json["data"]                                 as? [String: Any],
               let claim = data["claimCommunityPoints"]                 as? [String: Any]
-        else {
-            logger.error("POINTS", "Claim coffre échoué", "réponse GQL invalide")
-            return
-        }
-        if let err  = claim["error"] as? [String: Any],
-           let code = err["code"]    as? String {
-            logger.error("POINTS", "Claim coffre refusé par Twitch", "code: \(code)")
+        else { logger.error("POINTS", "Claim coffre échoué", "réponse GQL invalide"); return }
+
+        if let err = claim["error"] as? [String: Any], let code = err["code"] as? String {
+            logger.error("POINTS", "Claim refusé par Twitch", "code: \(code)")
             pendingClaimId = nil; return
         }
         if let pts = claim["currentPoints"] as? Int {
@@ -217,42 +185,31 @@ final class ChannelPointsService: ObservableObject {
                     "coût: \(formatted(reward.cost)) · balance: \(formatted(balance))")
         guard balance >= reward.cost else {
             let missing = reward.cost - balance
-            logger.warn("POINTS", "Rachat refusé (local)",
+            logger.warn("POINTS", "Rachat refusé (solde insuffisant)",
                         "manque \(formatted(missing)) pts pour « \(reward.title) »")
             errorMsg = "Il te manque \(formatted(missing)) pts"
             return false
         }
         var extra = ""
         if let txt = userInput, !txt.isEmpty {
-            let safe = txt
-                .replacingOccurrences(of: "\\", with: "\\\\")
-                .replacingOccurrences(of: "\"",  with: "\\\"")
+            let safe = txt.replacingOccurrences(of: "\\", with: "\\\\")
+                          .replacingOccurrences(of: "\"",  with: "\\\"")
             extra = ", userInput: \"\(safe)\""
             logger.debug("POINTS", "Input utilisateur", "\"\(txt.prefix(60))\"")
         }
         let mutation = """
-        mutation {
-          redeemCommunityPoints(input: {
-            channelID: "\(channelId)"
-            rewardID:  "\(reward.id)"
-            \(extra)
-          }) {
-            reward     { id title cost }
-            redemption { id }
-            error      { code }
-          }
-        }
+        mutation { redeemCommunityPoints(input: {
+            channelID: "\(channelId)" rewardID: "\(reward.id)" \(extra)
+        }) { reward { id title cost } redemption { id } error { code } } }
         """
         guard let json   = try? await gql(mutation, tag: "redeem(\(reward.title))") as? [String: Any],
               let data   = json["data"]                                               as? [String: Any],
               let result = data["redeemCommunityPoints"]                              as? [String: Any]
         else {
-            logger.error("POINTS", "Rachat réseau échoué",
-                         "GQL invalide pour « \(reward.title) »")
+            logger.error("POINTS", "Rachat réseau échoué", "GQL invalide pour « \(reward.title) »")
             errorMsg = "Erreur réseau"; return false
         }
-        if let err  = result["error"] as? [String: Any],
-           let code = err["code"]     as? String {
+        if let err = result["error"] as? [String: Any], let code = err["code"] as? String {
             let label = redeemErrorLabel(code)
             logger.warn("POINTS", "Rachat refusé par Twitch",
                         "« \(reward.title) » · code: \(code) · \(label)")
@@ -266,47 +223,59 @@ final class ChannelPointsService: ObservableObject {
     }
 
     // MARK: – Fetch rewards
-    // ✅ FIX : channel(name:) au lieu de community(login:)
     private func fetchRewards() async -> [ChannelReward] {
         logger.debug("POINTS", "fetchRewards → channel(name:\(channelLogin))", nil)
         let query = """
-        {
-          channel(name: "\(channelLogin)") {
+        { channel(name: "\(channelLogin)") {
             communityPointsSettings {
-              isEnabled
-              customRewards {
-                id title cost
-                isEnabled isPaused isInStock
-                isUserInputRequired prompt backgroundColor
-                image        { url2x }
-                defaultImage { url2x }
-              }
+                isEnabled
+                customRewards {
+                    id title cost
+                    isEnabled isPaused isInStock
+                    isUserInputRequired prompt backgroundColor
+                    image { url2x } defaultImage { url2x }
+                }
             }
-          }
-        }
+        } }
         """
-        guard let json     = try? await gql(query, tag: "fetchRewards") as? [String: Any],
-              let data     = json["data"]                                as? [String: Any],
-              let channel  = data["channel"]                             as? [String: Any],
-              let settings = channel["communityPointsSettings"]          as? [String: Any]
+        guard let json    = try? await gql(query, tag: "fetchRewards") as? [String: Any],
+              let data    = json["data"]                                as? [String: Any],
+              let channel = data["channel"]                             as? [String: Any]
         else {
-            logger.error("POINTS", "fetchRewards : parsing GQL échoué",
-                         "channel ou communityPointsSettings absent")
+            logger.error("POINTS", "fetchRewards : réponse GQL invalide", "channel absent")
             return []
         }
+
+        // ── Debug brut ─────────────────────────────────────────────
+        logger.debug("POINTS", "fetchRewards : clés channel",
+                     channel.keys.sorted().joined(separator: ", "))
+
+        guard let settings = channel["communityPointsSettings"] as? [String: Any] else {
+            logger.warn("POINTS", "communityPointsSettings absent",
+                        "le canal n'a peut-être pas de points activés")
+            return []
+        }
+
+        logger.debug("POINTS", "communityPointsSettings reçu",
+                     "isEnabled: \(settings["isEnabled"] ?? "nil")")
+
         guard settings["isEnabled"] as? Bool == true else {
             logger.warn("POINTS", "Points de chaîne désactivés", "canal: \(channelLogin)")
             return []
         }
         guard let raw = settings["customRewards"] as? [[String: Any]] else {
-            logger.warn("POINTS", "customRewards absent", "champ manquant dans la réponse")
+            logger.warn("POINTS", "customRewards null ou absent", "aucune récompense dans la réponse")
             return []
         }
+
+        logger.debug("POINTS", "customRewards brut", "\(raw.count) entrées")
+
         let parsed: [ChannelReward] = raw.compactMap { r in
             guard let id    = r["id"]    as? String,
                   let title = r["title"] as? String,
                   let cost  = r["cost"]  as? Int else {
-                logger.debug("POINTS", "Récompense ignorée", "champs id/title/cost manquants")
+                logger.debug("POINTS", "Entrée reward ignorée",
+                             "id/title/cost manquant: \(r.keys.joined(separator: ","))")
                 return nil
             }
             return ChannelReward(
@@ -322,30 +291,35 @@ final class ChannelPointsService: ObservableObject {
                        ?? (r["defaultImage"] as? [String: Any])?["url2x"] as? String
             )
         }
-        .filter { $0.isEnabled }
 
-        let paused  = parsed.filter {  $0.isPaused  }.count
-        let noStock = parsed.filter { !$0.isInStock }.count
+        let active  = parsed.filter {  $0.isEnabled && !$0.isPaused }
+        let paused  = parsed.filter {  $0.isPaused  }
+        let noStock = parsed.filter { !$0.isInStock }
+
         logger.debug("POINTS", "Récompenses parsées",
-                     "\(parsed.count) actives · \(paused) en pause · \(noStock) rupture de stock")
-        return parsed
+                     "\(active.count) actives · \(paused.count) en pause · \(noStock.count) rupture de stock")
+
+        let filtered = parsed.filter { $0.isEnabled }
+        if filtered.isEmpty && !raw.isEmpty {
+            logger.warn("POINTS", "Toutes les récompenses sont désactivées/en pause",
+                        "\(raw.count) entrées ignorées")
+        }
+        return filtered
     }
 
     // MARK: – Fetch balance + claim
-    // ✅ FIX : channel(name:).self.communityPoints (pas currentUser.communityPoints(channelID:))
+    // ✅ communityPoints null → balance = 0 (viewer sans historique = normal)
     private func fetchBalance() async -> (balance: Int, claimId: String?)? {
         logger.debug("POINTS", "fetchBalance → channel(name:\(channelLogin)).self", nil)
         let query = """
-        {
-          channel(name: "\(channelLogin)") {
+        { channel(name: "\(channelLogin)") {
             self {
-              communityPoints {
-                balance
-                availableClaim { id }
-              }
+                communityPoints {
+                    balance
+                    availableClaim { id }
+                }
             }
-          }
-        }
+        } }
         """
         guard let json    = try? await gql(query, tag: "fetchBalance") as? [String: Any],
               let data    = json["data"]                                as? [String: Any],
@@ -354,19 +328,35 @@ final class ChannelPointsService: ObservableObject {
             logger.error("POINTS", "fetchBalance : réponse GQL invalide", nil)
             return nil
         }
+
+        // ── Debug brut ─────────────────────────────────────────────
+        logger.debug("POINTS", "fetchBalance : clés channel",
+                     channel.keys.sorted().joined(separator: ", "))
+
         guard let selfObj = channel["self"] as? [String: Any] else {
-            logger.warn("POINTS", "fetchBalance : channel.self null",
-                        "utilisateur non connecté ou token invalide")
+            logger.warn("POINTS", "channel.self null",
+                        "utilisateur non authentifié ou token insuffisant")
             return nil
         }
-        guard let pts = selfObj["communityPoints"] as? [String: Any],
-              let bal = pts["balance"]              as? Int
-        else {
-            logger.warn("POINTS", "fetchBalance : communityPoints ou balance null",
-                        "feature non activée sur ce canal ?")
-            return nil
+
+        logger.debug("POINTS", "channel.self clés",
+                     selfObj.keys.sorted().joined(separator: ", "))
+
+        // ✅ communityPoints peut être null si le viewer n'a jamais regardé ce canal
+        let pts = selfObj["communityPoints"] as? [String: Any]
+
+        if pts == nil {
+            logger.info("POINTS", "communityPoints null",
+                        "viewer sans historique sur ce canal → balance = 0")
+        } else {
+            logger.debug("POINTS", "communityPoints clés",
+                         (pts?.keys.sorted() ?? []).joined(separator: ", "))
         }
-        let claimId = (pts["availableClaim"] as? [String: Any])?["id"] as? String
+
+        // ✅ balance = 0 par défaut si null (pas une erreur)
+        let bal     = pts?["balance"] as? Int ?? 0
+        let claimId = (pts?["availableClaim"] as? [String: Any])?["id"] as? String
+
         logger.debug("POINTS", "Balance parsée",
                      "\(formatted(bal)) pts · claim: \(claimId != nil ? "OUI" : "non")")
         return (bal, claimId)
@@ -375,9 +365,7 @@ final class ChannelPointsService: ObservableObject {
     // MARK: – GQL authentifié
     private func gql(_ query: String, tag: String) async throws -> Any {
         logger.debug("POINTS/GQL", "→ \(tag)", nil)
-        guard let url = URL(string: "https://gql.twitch.tv/gql") else {
-            throw URLError(.badURL)
-        }
+        guard let url = URL(string: "https://gql.twitch.tv/gql") else { throw URLError(.badURL) }
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
         req.setValue(kGQLClientID,       forHTTPHeaderField: "Client-ID")
@@ -395,7 +383,6 @@ final class ChannelPointsService: ObservableObject {
             throw URLError(.badServerResponse)
         }
 
-        // Log des erreurs GQL dans la payload (status 200 mais errors:[])
         if let json   = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
            let errors = json["errors"] as? [[String: Any]], !errors.isEmpty {
             let msgs = errors.compactMap { $0["message"] as? String }.joined(separator: " · ")
@@ -410,8 +397,7 @@ final class ChannelPointsService: ObservableObject {
     // MARK: – Helpers
     func formatted(_ n: Int) -> String {
         let f = NumberFormatter()
-        f.numberStyle       = .decimal
-        f.groupingSeparator = " "
+        f.numberStyle = .decimal; f.groupingSeparator = " "
         return f.string(from: NSNumber(value: n)) ?? "\(n)"
     }
 

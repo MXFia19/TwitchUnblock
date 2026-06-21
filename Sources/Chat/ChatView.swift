@@ -7,10 +7,13 @@ struct ChatView: View {
     let token: String?
     let login: String?
 
-    @StateObject private var chat = ChatService()
-    @State private var autoScroll      = true
-    @State private var messageText     = ""
-    @State private var showEmotePicker = false
+    @StateObject private var chat          = ChatService()
+    @StateObject private var pointsService = ChannelPointsService()
+
+    @State private var autoScroll       = true
+    @State private var messageText      = ""
+    @State private var showEmotePicker  = false
+    @State private var showPointsSheet  = false
     @FocusState private var isInputFocused: Bool
 
     private var canSendMessages: Bool { token != nil && login != nil }
@@ -46,7 +49,7 @@ struct ChatView: View {
             .background(Color.tCard)
             .overlay(Divider().background(Color.tBorder), alignment: .bottom)
 
-            // ── Zone principale : messages OU picker ────────────────
+            // ── Zone principale : messages OU emote picker ──────────
             if showEmotePicker && canSendMessages {
                 EmotePickerView(channelId: channelId) { emote in
                     insertEmote(emote)
@@ -105,6 +108,12 @@ struct ChatView: View {
             if canSendMessages { inputBar }
         }
         .background(Color.tDark)
+        // ── Sheet Points de chaîne ───────────────────────────────────
+        .sheet(isPresented: $showPointsSheet) {
+            ChannelPointsSheet(service: pointsService)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.hidden)  // on gère le nôtre
+        }
         .onAppear {
             Task {
                 // Emotes
@@ -112,18 +121,29 @@ struct ChatView: View {
                 if let cid = channelId {
                     await EmoteService.shared.loadChannel(channelId: cid, channelName: channelName)
                 }
-                // Badges (Helix API — URLs réelles pour sub perso, bits, etc.)
+                // Badges
                 if let tok = token {
                     await BadgeService.shared.loadGlobal(token: tok)
                     if let cid = channelId {
                         await BadgeService.shared.loadChannel(channelId: cid, token: tok)
                     }
                 }
+                // Points de chaîne (si auth + channelId disponibles)
+                if let tok = token, let cid = channelId {
+                    await pointsService.load(
+                        channelLogin: channelName,
+                        channelId: cid,
+                        token: tok
+                    )
+                }
                 chat.channelId = channelId
                 chat.connect(channel: channelName, token: token, login: login)
             }
         }
-        .onDisappear { chat.disconnect() }
+        .onDisappear {
+            chat.disconnect()
+            pointsService.stopPolling()   // arrête le polling quand le chat se ferme
+        }
     }
 
     // MARK: – Input bar
@@ -131,8 +151,17 @@ struct ChatView: View {
     private var inputBar: some View {
         VStack(spacing: 0) {
             Divider().background(Color.tBorder)
+
             VStack(spacing: 4) {
                 HStack(spacing: 6) {
+
+                    // ── 🎁 Bouton Points de chaîne ──────────────────
+                    ChannelPointsButton(service: pointsService) {
+                        showEmotePicker = false
+                        showPointsSheet = true
+                    }
+
+                    // ── 😊 Bouton emote picker ───────────────────────
                     Button {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                             if showEmotePicker {
@@ -146,9 +175,10 @@ struct ChatView: View {
                         Image(systemName: showEmotePicker ? "keyboard" : "face.smiling")
                             .font(.system(size: 20))
                             .foregroundColor(showEmotePicker ? .tPrimary : .tMuted)
-                            .frame(width: 36, height: 44)
+                            .frame(width: 32, height: 44)
                     }
 
+                    // ── Champ texte ─────────────────────────────────
                     TextField(
                         chat.isConnected ? "Envoyer un message…" : "Connexion en cours…",
                         text: $messageText
@@ -173,6 +203,7 @@ struct ChatView: View {
                     .overlay(RoundedRectangle(cornerRadius: 10)
                         .stroke(isInputFocused ? Color.tPrimary : Color.tBorder, lineWidth: 1))
 
+                    // ── Bouton envoyer ──────────────────────────────
                     Button(action: sendMessage) {
                         Image(systemName: "paperplane.fill")
                             .font(.system(size: 15, weight: .bold))
@@ -219,9 +250,7 @@ struct ChatMessageRow: View {
     let availableWidth: CGFloat
 
     private static let timeFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateFormat = "HH:mm"
-        return f
+        let f = DateFormatter(); f.dateFormat = "HH:mm"; return f
     }()
 
     private var timeString: String {
@@ -234,36 +263,25 @@ struct ChatMessageRow: View {
             // ── ✦ Premier message ────────────────────────────────────
             if message.isFirstMessage {
                 HStack(spacing: 5) {
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 10, weight: .bold))
-                    Text("Premier message")
-                        .font(.system(size: 11, weight: .semibold))
+                    Image(systemName: "sparkles").font(.system(size: 10, weight: .bold))
+                    Text("Premier message").font(.system(size: 11, weight: .semibold))
                 }
                 .foregroundColor(.tPurple)
                 .padding(.horizontal, 12)
-                .padding(.top, 6)
-                .padding(.bottom, 4)
+                .padding(.top, 6).padding(.bottom, 4)
                 .frame(width: availableWidth, alignment: .leading)
             }
 
             // ── Réponse avec prévisualisation ─────────────────────
             if let replyUser = message.replyTo {
                 HStack(spacing: 0) {
-                    // Barre verticale colorée
-                    Color.tPrimary.opacity(0.5)
-                        .frame(width: 2)
-                        .padding(.leading, 12)
-
+                    Color.tPrimary.opacity(0.5).frame(width: 2).padding(.leading, 12)
                     HStack(spacing: 5) {
                         Image(systemName: "arrowshape.turn.up.left.fill")
                             .font(.system(size: 9))
                             .foregroundColor(.tMuted)
-
-                        // "@user: corps du message" en une seule ligne tronquée
                         (
-                            Text("@\(replyUser)")
-                                .fontWeight(.bold)
-                                .foregroundColor(.tMuted)
+                            Text("@\(replyUser)").fontWeight(.bold).foregroundColor(.tMuted)
                             + Text(message.replyBody.map { ": \($0)" } ?? "")
                                 .foregroundColor(.tMuted.opacity(0.75))
                         )
@@ -271,11 +289,9 @@ struct ChatMessageRow: View {
                         .lineLimit(1)
                     }
                     .padding(.leading, 8)
-
                     Spacer()
                 }
-                .padding(.top, 5)
-                .padding(.bottom, 3)
+                .padding(.top, 5).padding(.bottom, 3)
                 .frame(width: availableWidth, alignment: .leading)
             }
 
@@ -296,139 +312,107 @@ struct ChatMessageRow: View {
         }
         .frame(width: availableWidth, alignment: .leading)
         .background(
-            message.isHighlight     ? Color.tWarning.opacity(0.08) :
-            message.isFirstMessage  ? Color.tPrimary.opacity(0.05) :
-                                      Color.clear
+            message.isHighlight    ? Color.tWarning.opacity(0.08) :
+            message.isFirstMessage ? Color.tPrimary.opacity(0.05) :
+                                     Color.clear
         )
     }
 }
 
-// MARK: – Wrapping HStack (flow layout)
+// MARK: – Wrapping HStack
 struct WrappingHStack: View {
     let message: ChatMessage
-    let timeString: String          // ← passé depuis ChatMessageRow (1 formatter partagé)
+    let timeString: String
     let availableWidth: CGFloat
 
     var body: some View {
-        let blocks = buildBlocks()
+        let blocks = message.tokens.enumerated().map { idx, t in TokenBlock(id: idx, content: t) }
 
         MessageFlowLayout(spacing: 4, lineSpacing: 4, width: availableWidth) {
 
-            // ── Heure ─────────────────────────────────────────────
             Text(timeString)
                 .font(.system(size: 11))
                 .foregroundColor(.tMuted)
 
-            // ── Badges ────────────────────────────────────────────
             ForEach(message.badges) { badge in
                 AsyncImage(url: URL(string: badge.url)) { phase in
-                    if let img = phase.image {
-                        img.resizable().interpolation(.medium).scaledToFit()
-                    } else {
-                        Color.clear.frame(width: 16)
-                    }
+                    if let img = phase.image { img.resizable().interpolation(.medium).scaledToFit() }
+                    else { Color.clear.frame(width: 16) }
                 }
                 .frame(width: 16, height: 16)
             }
 
-            // ── Nom d'utilisateur ─────────────────────────────────
             Text(message.displayName + ":")
                 .font(.system(size: 13, weight: .bold))
                 .foregroundColor(message.color)
 
-            // ── Tokens ────────────────────────────────────────────
             ForEach(blocks) { block in
                 switch block.content {
                 case .text(let t):
-                    Text(t)
-                        .font(.system(size: 13))
+                    Text(t).font(.system(size: 13))
                         .foregroundColor(message.isAction ? message.color : .tText)
                 case .emote(let e):
                     CachedEmoteImage(url: e.url, name: e.name)
                 case .mention(let m):
-                    Text("@\(m)")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(.tPrimary)
+                    Text("@\(m)").font(.system(size: 13, weight: .semibold)).foregroundColor(.tPrimary)
                 }
             }
         }
         .frame(width: availableWidth, alignment: .leading)
     }
-
-    private func buildBlocks() -> [TokenBlock] {
-        message.tokens.enumerated().map { idx, token in TokenBlock(id: idx, content: token) }
-    }
 }
 
 struct TokenBlock: Identifiable {
-    let id: Int
-    let content: MessageToken
+    let id: Int; let content: MessageToken
 }
 
-// MARK: – Flow Layout (Layout protocol, iOS 16+)
+// MARK: – Flow Layout
 struct MessageFlowLayout: Layout {
-    var spacing: CGFloat
-    var lineSpacing: CGFloat
-    var width: CGFloat
+    var spacing, lineSpacing, width: CGFloat
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        computeLayout(width: width, subviews: subviews).size
+        computeLayout(subviews: subviews).size
     }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize,
-                       subviews: Subviews, cache: inout ()) {
-        let layout = computeLayout(width: width, subviews: subviews)
-        for (index, subview) in subviews.enumerated() {
-            let pos     = layout.positions[index]
-            let subSize = subview.sizeThatFits(.unspecified)
-            let yOffset = max(0, (layout.lineHeights[index] - subSize.height) / 2)
-            subview.place(
-                at: CGPoint(x: bounds.minX + pos.x, y: bounds.minY + pos.y + yOffset),
-                anchor: .topLeading,
-                proposal: .unspecified
-            )
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let layout = computeLayout(subviews: subviews)
+        for (i, sub) in subviews.enumerated() {
+            let pos = layout.positions[i]
+            let sz  = sub.sizeThatFits(.unspecified)
+            let dy  = max(0, (layout.lineHeights[i] - sz.height) / 2)
+            sub.place(at: CGPoint(x: bounds.minX + pos.x, y: bounds.minY + pos.y + dy),
+                      anchor: .topLeading, proposal: .unspecified)
         }
     }
-
-    private func computeLayout(width: CGFloat, subviews: Subviews)
+    private func computeLayout(subviews: Subviews)
         -> (size: CGSize, positions: [CGPoint], lineHeights: [CGFloat])
     {
-        let safeWidth = max(width, 1)
-        var currentX: CGFloat = 0, currentY: CGFloat = 0, maxLineH: CGFloat = 0
-        var positions:   [CGPoint] = []
-        var lineHeights: [CGFloat] = Array(repeating: 0, count: subviews.count)
-        var lineStart = 0
-
-        for (i, sub) in subviews.enumerated() {
-            let size = sub.sizeThatFits(.unspecified)
-            if currentX > 0 && currentX + size.width > safeWidth {
-                for j in lineStart..<i { lineHeights[j] = maxLineH }
-                currentX = 0; currentY += maxLineH + lineSpacing
-                maxLineH = 0; lineStart = i
+        let W = max(width, 1)
+        var cx: CGFloat = 0, cy: CGFloat = 0, mh: CGFloat = 0
+        var pos: [CGPoint] = []
+        var lh:  [CGFloat] = Array(repeating: 0, count: subviews.count)
+        var ls = 0
+        for (i, s) in subviews.enumerated() {
+            let sz = s.sizeThatFits(.unspecified)
+            if cx > 0 && cx + sz.width > W {
+                for j in ls..<i { lh[j] = mh }
+                cx = 0; cy += mh + lineSpacing; mh = 0; ls = i
             }
-            positions.append(CGPoint(x: currentX, y: currentY))
-            maxLineH = max(maxLineH, size.height)
-            currentX += size.width + spacing
+            pos.append(CGPoint(x: cx, y: cy))
+            mh = max(mh, sz.height); cx += sz.width + spacing
         }
-        for j in lineStart..<subviews.count { lineHeights[j] = maxLineH }
-        return (CGSize(width: safeWidth, height: currentY + maxLineH), positions, lineHeights)
+        for j in ls..<subviews.count { lh[j] = mh }
+        return (CGSize(width: W, height: cy + mh), pos, lh)
     }
 }
 
 // MARK: – Cached Emote Image
 struct CachedEmoteImage: View {
-    let url: String
-    let name: String
-
+    let url: String; let name: String
     var body: some View {
         AsyncImage(url: URL(string: url)) { phase in
-            if let img = phase.image {
-                img.resizable().interpolation(.medium).scaledToFit()
-            } else if phase.error != nil {
-                Text(name).font(.system(size: 11)).foregroundColor(.tMuted)
-            } else {
-                Color.clear.frame(width: 24, height: 24)
-            }
+            if let img = phase.image { img.resizable().interpolation(.medium).scaledToFit() }
+            else if phase.error != nil { Text(name).font(.system(size: 11)).foregroundColor(.tMuted) }
+            else { Color.clear.frame(width: 24, height: 24) }
         }
         .frame(height: 24)
     }

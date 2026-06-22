@@ -35,15 +35,24 @@ final class ChannelPointsService: ObservableObject {
     private let claimPollInterval:   TimeInterval = 10
 
     // MARK: – Load
-    func load(channelLogin: String, channelId: String, token: String) async {
+    func load(channelLogin: String, channelId: String, token: String, userLogin: String? = nil) async {
         guard !token.isEmpty, !channelId.isEmpty else {
-            logger.warn("POINTS", "Chargement annulé", "token vide ou channelId manquant")
+            logger.warn("POINTS", "Chargement annulé",
+                        "token ou channelId manquant — utilisateur non connecté ?")
             return
         }
         self.channelLogin = channelLogin
         self.channelId    = channelId
         self.token        = token
-        logger.info("POINTS", "Initialisation canal \(channelLogin)", "channelId: \(channelId)")
+
+        // ✅ Confirmation explicite du compte utilisé pour TOUTES les requêtes de points
+        if let login = userLogin {
+            logger.info("POINTS", "Requêtes effectuées en tant que @\(login)",
+                        "canal: \(channelLogin) · token: \(String(token.prefix(8)))…")
+        } else {
+            logger.info("POINTS", "Initialisation canal \(channelLogin)",
+                        "channelId: \(channelId) · token: \(String(token.prefix(8)))…")
+        }
         isLoading = true; errorMsg = nil
 
         let start = Date()

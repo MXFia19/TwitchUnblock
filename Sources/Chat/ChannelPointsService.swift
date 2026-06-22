@@ -317,15 +317,19 @@ final class ChannelPointsService: ObservableObject {
     }
 
     // MARK: – Fetch balance + claim
-    // ✅ communityPoints null → balance = 0 (viewer sans historique = normal)
     private func fetchBalance() async -> (balance: Int, claimId: String?)? {
-        logger.debug("POINTS", "fetchBalance → channel(name:\(channelLogin)).self", nil)
+        logger.debug("POINTS", "fetchBalance → channel(name:\\(channelLogin)).self", nil)
+
+        // On essaie plusieurs noms de champs car le schéma GQL de Twitch varie
         let query = """
-        { channel(name: "\(channelLogin)") {
+        { channel(name: "\\(channelLogin)") {
             self {
                 communityPoints {
                     balance
+                    availablePoints
+                    earnedTotal
                     availableClaim { id }
+                    lastViewedContent { id contentType }
                 }
             }
         } }
@@ -338,7 +342,6 @@ final class ChannelPointsService: ObservableObject {
             return nil
         }
 
-        // ── Debug brut ─────────────────────────────────────────────
         logger.debug("POINTS", "fetchBalance : clés channel",
                      channel.keys.sorted().joined(separator: ", "))
 
@@ -351,23 +354,40 @@ final class ChannelPointsService: ObservableObject {
         logger.debug("POINTS", "channel.self clés",
                      selfObj.keys.sorted().joined(separator: ", "))
 
-        // ✅ communityPoints peut être null si le viewer n'a jamais regardé ce canal
-        let pts = selfObj["communityPoints"] as? [String: Any]
-
-        if pts == nil {
-            logger.info("POINTS", "communityPoints null",
-                        "viewer sans historique sur ce canal → balance = 0")
-        } else {
-            logger.debug("POINTS", "communityPoints clés",
-                         (pts?.keys.sorted() ?? []).joined(separator: ", "))
+        // ── Log du JSON brut pour voir ce que Twitch renvoie réellement ──
+        if let rawData = try? JSONSerialization.data(withJSONObject: selfObj),
+           let rawStr  = String(data: rawData, encoding: .utf8) {
+            logger.debug("POINTS", "channel.self JSON brut", String(rawStr.prefix(400)))
         }
 
-        // ✅ balance = 0 par défaut si null (pas une erreur)
-        let bal     = pts?["balance"] as? Int ?? 0
-        let claimId = (pts?["availableClaim"] as? [String: Any])?["id"] as? String
+        guard let pts = selfObj["communityPoints"] as? [String: Any] else {
+            logger.warn("POINTS", "communityPoints null dans channel.self",
+                        "Twitch renvoie null — problème de scope ou de token")
+            return (0, nil)
+        }
 
-        logger.debug("POINTS", "Balance parsée",
-                     "\(formatted(bal)) pts · claim: \(claimId != nil ? "OUI" : "non")")
+        // ── Log brut de communityPoints ───────────────────────────
+        if let rawData = try? JSONSerialization.data(withJSONObject: pts),
+           let rawStr  = String(data: rawData, encoding: .utf8) {
+            logger.debug("POINTS", "communityPoints JSON brut", rawStr)
+        }
+
+        // Tente plusieurs noms de champs car le schéma change selon la version
+        let bal = pts["balance"]        as? Int
+               ?? pts["availablePoints"] as? Int
+               ?? pts["earnedTotal"]     as? Int
+               ?? 0
+
+        let claimId = (pts["availableClaim"] as? [String: Any])?["id"] as? String
+
+        if bal == 0 && pts["balance"] == nil {
+            logger.warn("POINTS", "Champ 'balance' absent de communityPoints",
+                        "champs disponibles: \\(pts.keys.sorted().joined(separator: ", "))")
+        } else {
+            logger.debug("POINTS", "Balance parsée",
+                         "\\(formatted(bal)) pts · champ utilisé: \\(pts["balance"] != nil ? "balance" : pts["availablePoints"] != nil ? "availablePoints" : "earnedTotal") · claim: \\(claimId != nil ? "OUI" : "non")")
+        }
+
         return (bal, claimId)
     }
 

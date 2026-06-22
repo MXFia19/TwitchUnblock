@@ -318,11 +318,11 @@ final class ChannelPointsService: ObservableObject {
 
     // MARK: – Fetch balance + claim
     private func fetchBalance() async -> (balance: Int, claimId: String?)? {
-        logger.debug("POINTS", "fetchBalance → channel(name:\\(channelLogin)).self", nil)
+        logger.debug("POINTS", "fetchBalance → channel(name:\(channelLogin)).self", nil)
 
-        // On essaie plusieurs noms de champs car le schéma GQL de Twitch varie
+        // ✨ CORRECTION : Retrait des doubles slashs qui cassaient la variable channelLogin
         let query = """
-        { channel(name: "\\(channelLogin)") {
+        { channel(name: "\(channelLogin)") {
             self {
                 communityPoints {
                     balance
@@ -380,12 +380,16 @@ final class ChannelPointsService: ObservableObject {
 
         let claimId = (pts["availableClaim"] as? [String: Any])?["id"] as? String
 
+        // ✨ CORRECTION : Sortir le code Swift des chaînes d'interpolation (Lignes 384 à 388)
         if bal == 0 && pts["balance"] == nil {
+            let champsStr = pts.keys.sorted().joined(separator: ", ")
             logger.warn("POINTS", "Champ 'balance' absent de communityPoints",
-                        "champs disponibles: \\(pts.keys.sorted().joined(separator: ", "))")
+                        "champs disponibles: \(champsStr)")
         } else {
+            let champUtilise = pts["balance"] != nil ? "balance" : (pts["availablePoints"] != nil ? "availablePoints" : "earnedTotal")
+            let claimStr = claimId != nil ? "OUI" : "non"
             logger.debug("POINTS", "Balance parsée",
-                         "\\(formatted(bal)) pts · champ utilisé: \\(pts["balance"] != nil ? "balance" : pts["availablePoints"] != nil ? "availablePoints" : "earnedTotal") · claim: \\(claimId != nil ? "OUI" : "non")")
+                         "\(formatted(bal)) pts · champ utilisé: \(champUtilise) · claim: \(claimStr)")
         }
 
         return (bal, claimId)

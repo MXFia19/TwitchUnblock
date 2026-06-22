@@ -132,8 +132,9 @@ struct ChatView: View {
                 if let tok = token, let cid = channelId {
                     await pointsService.load(
                         channelLogin: channelName,
-                        channelId: cid,
-                        token: tok
+                        channelId:   cid,
+                        token:       tok,
+                        userLogin:   login   // ← compte connecté, confirmé dans les logs
                     )
                 }
                 chat.channelId = channelId

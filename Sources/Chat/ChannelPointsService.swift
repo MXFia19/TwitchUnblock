@@ -47,7 +47,7 @@ final class ChannelPointsService: ObservableObject {
         self.token        = token
 
         logger.info("POINTS", "Chargement canal \(channelLogin)",
-                    "compte: @\(userLogin ?? "?") · token: \(String(token.prefix(8)))…")
+                    "compte: @\(userLogin ?? "?") · token: \(String(token.prefix(8)))… · auth: OAuth")
 
         isLoading = true; errorMsg = nil
         let start = Date()
@@ -339,7 +339,7 @@ final class ChannelPointsService: ObservableObject {
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
         req.setValue(kGQLClientID,       forHTTPHeaderField: "Client-ID")
-        req.setValue("Bearer \(token)",  forHTTPHeaderField: "Authorization")
+        req.setValue("OAuth \(token)",   forHTTPHeaderField: "Authorization")  // GQL Twitch utilise OAuth, pas Bearer (Bearer = Helix REST uniquement)
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try JSONSerialization.data(withJSONObject: ["query": query])
 

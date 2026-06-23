@@ -6,6 +6,9 @@ struct SettingsView: View {
     @State private var showLogs        = false
     @State private var showLogoutAlert = false
     @State private var showClearAlert  = false
+    
+    // Ajout d'une variable d'état pour l'édition manuelle du token
+    @State private var manualToken: String = ""
 
     private var vodCount:     Int { store.history.filter { $0.type == .vod }.count }
     private var channelCount: Int { store.history.filter { $0.type == .channel }.count }
@@ -188,34 +191,53 @@ struct SettingsView: View {
                     VStack(alignment: .leading, spacing: 12) {
                         label("🔬", "DEBUG — Points de chaîne")
 
-                        Text("Copie le token ou la commande curl pour tester le GQL manuellement.")
+                        Text("Saisis un nouveau token OAuth ou utilise celui existant pour tester le GQL manuellement.")
                             .font(.system(size: 12))
                             .foregroundColor(.tMuted)
                             .fixedSize(horizontal: false, vertical: true)
+                        
+                        // Éditeur de Token
+                        HStack(spacing: 8) {
+                            SecureField("OAuth Token (ex: a1b2c3...)", text: $manualToken)
+                                .font(.system(size: 12, design: .monospaced))
+                                .padding(10)
+                                .background(Color.tSurface)
+                                .cornerRadius(8)
+                                .textInputAutocapitalization(.never)
+                                .autocorrectionDisabled(true)
+                            
+                            Button {
+                                store.twitchToken = manualToken.isEmpty ? nil : manualToken
+                                UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                            } label: {
+                                Text("Sauver")
+                                    .font(.system(size: 12, weight: .bold))
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 12).padding(.vertical, 10)
+                                    .background(Color.tPrimary)
+                                    .cornerRadius(8)
+                            }
+                        }
 
-                        if let token = store.twitchToken {
-                            // Token masqué + bouton copier
-                            HStack(spacing: 8) {
-                                Text(token.prefix(12) + "…" + token.suffix(4))
-                                    .font(.system(size: 12, design: .monospaced))
-                                    .foregroundColor(.tPurple)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                Button {
-                                    UIPasteboard.general.string = token
-                                } label: {
-                                    Label("Copier token", systemImage: "doc.on.doc")
+                        if let token = store.twitchToken, !token.isEmpty {
+                            // Bouton pour copier le token actuel si besoin
+                            Button {
+                                UIPasteboard.general.string = token
+                            } label: {
+                                HStack {
+                                    Text("Copier le token actuel")
                                         .font(.system(size: 12, weight: .semibold))
                                         .foregroundColor(.tPrimary)
-                                        .padding(.horizontal, 10).padding(.vertical, 6)
-                                        .background(Color.tPrimary.opacity(0.15))
-                                        .cornerRadius(8)
+                                    Spacer()
+                                    Image(systemName: "doc.on.doc")
+                                        .foregroundColor(.tPrimary)
                                 }
+                                .padding(.horizontal, 10).padding(.vertical, 8)
+                                .background(Color.tPrimary.opacity(0.15))
+                                .cornerRadius(8)
                             }
-                            .padding(10)
-                            .background(Color.tSurface)
-                            .cornerRadius(8)
 
-                            // Bouton test direct depuis l'app → résultat dans les Logs
+                            // Bouton test direct depuis l'app
                             Button {
                                 Task {
                                     logger.info("DEBUG/GQL", "Test communityPoints…", "OAuth + kGQLClientID · canal: samueletienne")
@@ -261,9 +283,6 @@ struct SettingsView: View {
                                     .background(Color.tSurface)
                                     .cornerRadius(8)
                             }
-                        } else {
-                            Text("Connecte-toi d'abord à Twitch.")
-                                .font(.system(size: 13)).foregroundColor(.tMuted)
                         }
                     }
                 }
@@ -273,12 +292,17 @@ struct SettingsView: View {
             .padding(.horizontal, 12)
         }
         .background(Color.tDark)
+        .onAppear {
+            // Initialiser le champ texte avec le token actuel au chargement
+            manualToken = store.twitchToken ?? ""
+        }
         // ── Alerts ──────────────────────────────────────────────────
         .alert(store.t("btn_logout"), isPresented: $showLogoutAlert) {
             Button(store.t("cancel"), role: .cancel) {}
             Button(store.t("btn_logout"), role: .destructive) {
                 logger.authLogout()
                 store.logout()
+                manualToken = "" // Vider le champ lors de la déconnexion
             }
         } message: {
             Text(store.t("confirm_logout"))

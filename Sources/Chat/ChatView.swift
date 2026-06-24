@@ -7,6 +7,7 @@ struct ChatView: View {
     let token: String?
     let login: String?
 
+    @EnvironmentObject private var store: AppStore
     @StateObject private var chat          = ChatService()
     @StateObject private var pointsService = ChannelPointsService()
 
@@ -14,6 +15,7 @@ struct ChatView: View {
     @State private var messageText      = ""
     @State private var showEmotePicker  = false
     @State private var showPointsSheet  = false
+    @State private var isReauthing      = false   // évite les re-auth en double
     @FocusState private var isInputFocused: Bool
 
     private var canSendMessages: Bool { token != nil && login != nil }
@@ -108,43 +110,101 @@ struct ChatView: View {
             if canSendMessages { inputBar }
         }
         .background(Color.tDark)
-        // ── Sheet Points de chaîne ───────────────────────────────────
+        // ── Sheet points ─────────────────────────────────────────────
         .sheet(isPresented: $showPointsSheet) {
             ChannelPointsSheet(service: pointsService)
                 .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.hidden)  // on gère le nôtre
+                .presentationDragIndicator(.hidden)
         }
-        .onAppear {
+        // ── Re-auth automatique quand le token expire (401) ──────────
+        // iOS 16+: onChange avec closure à 1 paramètre
+        .onChange(of: pointsService.needsReauth) { needsReauth in
+            guard needsReauth, !isReauthing else { return }
+            Task { await handleTokenRefresh() }
+        }
+        // ── Re-auth si le token change dans le store (ex: login manuel) ─
+        .onChange(of: store.twitchToken) { newToken in
+            guard let tok = newToken, let cid = channelId else { return }
             Task {
-                // Emotes
-                await EmoteService.shared.loadGlobals()
-                if let cid = channelId {
-                    await EmoteService.shared.loadChannel(channelId: cid, channelName: channelName)
-                }
-                // Badges
-                if let tok = token {
-                    await BadgeService.shared.loadGlobal(token: tok)
-                    if let cid = channelId {
-                        await BadgeService.shared.loadChannel(channelId: cid, token: tok)
-                    }
-                }
-                // Points de chaîne (si auth + channelId disponibles)
-                if let tok = token, let cid = channelId {
-                    await pointsService.load(
-                        channelLogin: channelName,
-                        channelId:   cid,
-                        token:       tok,
-                        userLogin:   login   // ← compte connecté, confirmé dans les logs
-                    )
-                }
-                chat.channelId = channelId
-                chat.connect(channel: channelName, token: token, login: login)
+                await pointsService.load(
+                    channelLogin: channelName,
+                    channelId:   cid,
+                    token:       tok,
+                    userLogin:   store.twitchLogin
+                )
+                // Reconnecte aussi le chat IRC avec le nouveau token
+                chat.connect(channel: channelName, token: tok, login: store.twitchLogin)
             }
         }
+        .onAppear { Task { await setupChat() } }
         .onDisappear {
             chat.disconnect()
-            pointsService.stopPolling()   // arrête le polling quand le chat se ferme
+            pointsService.stopPolling()
         }
+    }
+
+    // MARK: – Setup initial
+    private func setupChat() async {
+        // Emotes
+        await EmoteService.shared.loadGlobals()
+        if let cid = channelId {
+            await EmoteService.shared.loadChannel(channelId: cid, channelName: channelName)
+        }
+        // Badges
+        if let tok = token {
+            await BadgeService.shared.loadGlobal(token: tok)
+            if let cid = channelId {
+                await BadgeService.shared.loadChannel(channelId: cid, token: tok)
+            }
+        }
+        // Points de chaîne
+        if let tok = token, let cid = channelId {
+            await pointsService.load(
+                channelLogin: channelName,
+                channelId:   cid,
+                token:       tok,
+                userLogin:   login
+            )
+        }
+        // IRC
+        chat.channelId = channelId
+        chat.connect(channel: channelName, token: token, login: login)
+    }
+
+    // MARK: – Re-auth automatique (token expiré)
+    // Utilise force_verify: false → silencieux si déjà connecté dans Safari
+    private func handleTokenRefresh() async {
+        guard !isReauthing else { return }
+        isReauthing = true
+
+        logger.info("AUTH", "Re-auth automatique…",
+                    "token expiré détecté par ChannelPointsService")
+
+        guard let newToken = await TwitchAuthManager.shared.login() else {
+            logger.warn("AUTH", "Re-auth annulée ou échouée", nil)
+            isReauthing = false
+            return
+        }
+
+        // Sauvegarder le nouveau token dans le store (partagé dans toute l'app)
+        store.twitchToken = newToken
+        logger.success("AUTH", "Token rafraîchi automatiquement ✅",
+                       String(newToken.prefix(8)) + "…")
+
+        // Récupérer le login si absent
+        if store.twitchLogin == nil {
+            if let user = await getTwitchUser(token: newToken) {
+                store.twitchUserId = user.id
+                store.twitchLogin  = user.login
+            }
+        }
+
+        // Recharger les points avec le nouveau token
+        if let cid = channelId {
+            await pointsService.updateToken(newToken)
+        }
+
+        isReauthing = false
     }
 
     // MARK: – Input bar
@@ -152,17 +212,16 @@ struct ChatView: View {
     private var inputBar: some View {
         VStack(spacing: 0) {
             Divider().background(Color.tBorder)
-
             VStack(spacing: 4) {
                 HStack(spacing: 6) {
 
-                    // ── 🎁 Bouton Points de chaîne ──────────────────
+                    // 🎁 Points de chaîne
                     ChannelPointsButton(service: pointsService) {
                         showEmotePicker = false
                         showPointsSheet = true
                     }
 
-                    // ── 😊 Bouton emote picker ───────────────────────
+                    // 😊 Emote picker
                     Button {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                             if showEmotePicker {
@@ -179,7 +238,7 @@ struct ChatView: View {
                             .frame(width: 32, height: 44)
                     }
 
-                    // ── Champ texte ─────────────────────────────────
+                    // Champ texte
                     TextField(
                         chat.isConnected ? "Envoyer un message…" : "Connexion en cours…",
                         text: $messageText
@@ -204,7 +263,7 @@ struct ChatView: View {
                     .overlay(RoundedRectangle(cornerRadius: 10)
                         .stroke(isInputFocused ? Color.tPrimary : Color.tBorder, lineWidth: 1))
 
-                    // ── Bouton envoyer ──────────────────────────────
+                    // Bouton envoyer
                     Button(action: sendMessage) {
                         Image(systemName: "paperplane.fill")
                             .font(.system(size: 15, weight: .bold))
@@ -234,8 +293,7 @@ struct ChatView: View {
     private func sendMessage() {
         let trimmed = messageText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, trimmed.count <= 500 else { return }
-        messageText = ""
-        autoScroll  = true
+        messageText = ""; autoScroll = true
         Task { await chat.sendMessage(trimmed) }
     }
 
@@ -253,41 +311,35 @@ struct ChatMessageRow: View {
     private static let timeFormatter: DateFormatter = {
         let f = DateFormatter(); f.dateFormat = "HH:mm"; return f
     }()
-
-    private var timeString: String {
-        Self.timeFormatter.string(from: message.timestamp)
-    }
+    private var timeString: String { Self.timeFormatter.string(from: message.timestamp) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
 
-            // ── ✦ Premier message ────────────────────────────────────
+            // ✦ Premier message
             if message.isFirstMessage {
                 HStack(spacing: 5) {
                     Image(systemName: "sparkles").font(.system(size: 10, weight: .bold))
                     Text("Premier message").font(.system(size: 11, weight: .semibold))
                 }
                 .foregroundColor(.tPurple)
-                .padding(.horizontal, 12)
-                .padding(.top, 6).padding(.bottom, 4)
+                .padding(.horizontal, 12).padding(.top, 6).padding(.bottom, 4)
                 .frame(width: availableWidth, alignment: .leading)
             }
 
-            // ── Réponse avec prévisualisation ─────────────────────
+            // Réponse
             if let replyUser = message.replyTo {
                 HStack(spacing: 0) {
                     Color.tPrimary.opacity(0.5).frame(width: 2).padding(.leading, 12)
                     HStack(spacing: 5) {
                         Image(systemName: "arrowshape.turn.up.left.fill")
-                            .font(.system(size: 9))
-                            .foregroundColor(.tMuted)
+                            .font(.system(size: 9)).foregroundColor(.tMuted)
                         (
                             Text("@\(replyUser)").fontWeight(.bold).foregroundColor(.tMuted)
                             + Text(message.replyBody.map { ": \($0)" } ?? "")
                                 .foregroundColor(.tMuted.opacity(0.75))
                         )
-                        .font(.system(size: 11))
-                        .lineLimit(1)
+                        .font(.system(size: 11)).lineLimit(1)
                     }
                     .padding(.leading, 8)
                     Spacer()
@@ -296,18 +348,12 @@ struct ChatMessageRow: View {
                 .frame(width: availableWidth, alignment: .leading)
             }
 
-            // ── Message principal ────────────────────────────────────
+            // Message principal
             HStack(alignment: .top, spacing: 0) {
-                if message.isHighlight {
-                    Rectangle().fill(Color.tWarning).frame(width: 3)
-                }
-                WrappingHStack(
-                    message: message,
-                    timeString: timeString,
-                    availableWidth: availableWidth - 24
-                )
-                .padding(.horizontal, 12)
-                .padding(.vertical, 4)
+                if message.isHighlight { Rectangle().fill(Color.tWarning).frame(width: 3) }
+                WrappingHStack(message: message, timeString: timeString,
+                               availableWidth: availableWidth - 24)
+                    .padding(.horizontal, 12).padding(.vertical, 4)
             }
             .frame(width: availableWidth, alignment: .leading)
         }
@@ -327,13 +373,10 @@ struct WrappingHStack: View {
     let availableWidth: CGFloat
 
     var body: some View {
-        let blocks = message.tokens.enumerated().map { idx, t in TokenBlock(id: idx, content: t) }
+        let blocks = message.tokens.enumerated().map { i, t in TokenBlock(id: i, content: t) }
 
         MessageFlowLayout(spacing: 4, lineSpacing: 4, width: availableWidth) {
-
-            Text(timeString)
-                .font(.system(size: 11))
-                .foregroundColor(.tMuted)
+            Text(timeString).font(.system(size: 11)).foregroundColor(.tMuted)
 
             ForEach(message.badges) { badge in
                 AsyncImage(url: URL(string: badge.url)) { phase in
@@ -344,8 +387,7 @@ struct WrappingHStack: View {
             }
 
             Text(message.displayName + ":")
-                .font(.system(size: 13, weight: .bold))
-                .foregroundColor(message.color)
+                .font(.system(size: 13, weight: .bold)).foregroundColor(message.color)
 
             ForEach(blocks) { block in
                 switch block.content {
@@ -370,16 +412,14 @@ struct TokenBlock: Identifiable {
 // MARK: – Flow Layout
 struct MessageFlowLayout: Layout {
     var spacing, lineSpacing, width: CGFloat
-
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         computeLayout(subviews: subviews).size
     }
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        let layout = computeLayout(subviews: subviews)
+        let l = computeLayout(subviews: subviews)
         for (i, sub) in subviews.enumerated() {
-            let pos = layout.positions[i]
-            let sz  = sub.sizeThatFits(.unspecified)
-            let dy  = max(0, (layout.lineHeights[i] - sz.height) / 2)
+            let pos = l.positions[i]; let sz = sub.sizeThatFits(.unspecified)
+            let dy  = max(0, (l.lineHeights[i] - sz.height) / 2)
             sub.place(at: CGPoint(x: bounds.minX + pos.x, y: bounds.minY + pos.y + dy),
                       anchor: .topLeading, proposal: .unspecified)
         }
@@ -389,8 +429,7 @@ struct MessageFlowLayout: Layout {
     {
         let W = max(width, 1)
         var cx: CGFloat = 0, cy: CGFloat = 0, mh: CGFloat = 0
-        var pos: [CGPoint] = []
-        var lh:  [CGFloat] = Array(repeating: 0, count: subviews.count)
+        var pos: [CGPoint] = []; var lh: [CGFloat] = Array(repeating: 0, count: subviews.count)
         var ls = 0
         for (i, s) in subviews.enumerated() {
             let sz = s.sizeThatFits(.unspecified)
@@ -398,8 +437,7 @@ struct MessageFlowLayout: Layout {
                 for j in ls..<i { lh[j] = mh }
                 cx = 0; cy += mh + lineSpacing; mh = 0; ls = i
             }
-            pos.append(CGPoint(x: cx, y: cy))
-            mh = max(mh, sz.height); cx += sz.width + spacing
+            pos.append(CGPoint(x: cx, y: cy)); mh = max(mh, sz.height); cx += sz.width + spacing
         }
         for j in ls..<subviews.count { lh[j] = mh }
         return (CGSize(width: W, height: cy + mh), pos, lh)

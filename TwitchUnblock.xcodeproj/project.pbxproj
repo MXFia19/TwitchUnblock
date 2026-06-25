@@ -9,21 +9,31 @@
 /* Begin PBXBuildFile section */
 		04FCDB202E603900F3F6F851 /* DiscoveryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62441E2FB2E5B07DA4D5032D /* DiscoveryView.swift */; };
 		078078FA722B47A807E0F925 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EAD30576E7812AE64060648 /* SettingsView.swift */; };
+		097788E47664C3C33BB97133 /* BadgeService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3482CB00CD2C07764D7CD075 /* BadgeService.swift */; };
 		19B88D53238B78686AF8EE88 /* DirectView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFB24F29BE22FDD203E0CFAA /* DirectView.swift */; };
+		29135BC8070EEEA31E9493B0 /* ChatService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13FC551F0B550705F6FF3527 /* ChatService.swift */; };
+		31E3D65EA012E2FD590C7917 /* EmotePickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17EA958D0FB1B93A04A2EB6B /* EmotePickerView.swift */; };
 		3D81283BF99F04C29F48E955 /* InputComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94557FBF8DF39FB5C3865942 /* InputComponents.swift */; };
+		492E0C040293384FABC5C993 /* IRCParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1260831E8B5534E2B6EE7EE6 /* IRCParser.swift */; };
 		5084B198D69FF1028FD635C8 /* StreamerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E9FE89DC7EE2BB2B3637622 /* StreamerView.swift */; };
 		5EA268212581394E068C20FD /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = B339DF13235FEB2BC24CEDAB /* Models.swift */; };
 		6D0F24635D9C822BC184B4B9 /* AppStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C54B6B8DCF51794B81AC032A /* AppStore.swift */; };
 		6D505580F566C3943BAD4C59 /* HistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 544F4F7421AE3A2BD3370473 /* HistoryView.swift */; };
+		728787CFA61FD29A5E03C13C /* ChannelPointsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58E911FA62E40DDEAB943715 /* ChannelPointsService.swift */; };
 		8321794B0F9D98980ACA44B0 /* SafeAreaHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7B5F3DA98DACC75D9D54220 /* SafeAreaHelper.swift */; };
 		87CF92D7D6B3AD724A675772 /* HeaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C060A43ED78BB224F843091E /* HeaderView.swift */; };
+		880D16DAF6443AD396FD3E31 /* ChatModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B9472C29C9819B53E6AAD07 /* ChatModels.swift */; };
 		94F9BBE52CEE52D2802C9B92 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54FF8C839D65509CEB278053 /* AppDelegate.swift */; };
+		9E5E0D34CD0741CD7402B9DE /* EmoteService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 548FB2FE9A9B90A72838860E /* EmoteService.swift */; };
 		B77B9364A54FB3BAED2E0400 /* Constants.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9B2A74432A2A816F0EE9A88 /* Constants.swift */; };
 		C1D5B1CE86C7413CD782B56F /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = EDE3A68BD5C055F451372723 /* LaunchScreen.storyboard */; };
 		C73406CC8EA0F23BC99AAA72 /* CardViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB33D547E9E314352430D2F4 /* CardViews.swift */; };
 		C7BCB3C9C78F0C82A1976120 /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDEFC0FACBEFDE0A963FB6AC /* MainTabView.swift */; };
 		CC30D4DF1C45AB7572DDE340 /* VideoPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB5EDBBD61057D83E8C1AC98 /* VideoPlayerView.swift */; };
+		D097731146E20748E646002F /* TwitchWebAuthManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E0E26972292BD9EFE9DF3CD /* TwitchWebAuthManager.swift */; };
 		D13DDBAE8766013B5FB880B2 /* Logger.swift in Sources */ = {isa = PBXBuildFile; fileRef = B76E55725CAE99A27B56079F /* Logger.swift */; };
+		DCF82A23CBD836BD20ECAA04 /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A3B68DBA923D3E5EE078FB5 /* ChatView.swift */; };
+		E931D7CDE446FD4E807F35D4 /* ChannelPointsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECE2C60425ED23D33C372404 /* ChannelPointsView.swift */; };
 		EA7E5EEC07D12BA14A2C0E24 /* LogsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6847D4BC109BE3EF39305BAE /* LogsView.swift */; };
 		EF232E8782A55C8A0EF97788 /* TwitchAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE0D6A34353CB132004E58E4 /* TwitchAPI.swift */; };
 		F11686BF3332124E63E5C023 /* TwitchAuthManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D69AFE73EE80CF32C64F4E9 /* TwitchAuthManager.swift */; };
@@ -31,12 +41,21 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		1260831E8B5534E2B6EE7EE6 /* IRCParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IRCParser.swift; sourceTree = "<group>"; };
+		13FC551F0B550705F6FF3527 /* ChatService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatService.swift; sourceTree = "<group>"; };
+		17EA958D0FB1B93A04A2EB6B /* EmotePickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmotePickerView.swift; sourceTree = "<group>"; };
+		3482CB00CD2C07764D7CD075 /* BadgeService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BadgeService.swift; sourceTree = "<group>"; };
+		3B9472C29C9819B53E6AAD07 /* ChatModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatModels.swift; sourceTree = "<group>"; };
 		4E9FE89DC7EE2BB2B3637622 /* StreamerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamerView.swift; sourceTree = "<group>"; };
 		544F4F7421AE3A2BD3370473 /* HistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryView.swift; sourceTree = "<group>"; };
+		548FB2FE9A9B90A72838860E /* EmoteService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmoteService.swift; sourceTree = "<group>"; };
 		54FF8C839D65509CEB278053 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		58E911FA62E40DDEAB943715 /* ChannelPointsService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChannelPointsService.swift; sourceTree = "<group>"; };
 		62441E2FB2E5B07DA4D5032D /* DiscoveryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoveryView.swift; sourceTree = "<group>"; };
 		6487332C60EFE90AADF06EFB /* TwitchUnblock.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = TwitchUnblock.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		6847D4BC109BE3EF39305BAE /* LogsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogsView.swift; sourceTree = "<group>"; };
+		7A3B68DBA923D3E5EE078FB5 /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
+		8E0E26972292BD9EFE9DF3CD /* TwitchWebAuthManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TwitchWebAuthManager.swift; sourceTree = "<group>"; };
 		8EAD30576E7812AE64060648 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		94557FBF8DF39FB5C3865942 /* InputComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputComponents.swift; sourceTree = "<group>"; };
 		9D69AFE73EE80CF32C64F4E9 /* TwitchAuthManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TwitchAuthManager.swift; sourceTree = "<group>"; };
@@ -51,6 +70,7 @@
 		DDEFC0FACBEFDE0A963FB6AC /* MainTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
 		E9B2A74432A2A816F0EE9A88 /* Constants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Constants.swift; sourceTree = "<group>"; };
 		EB5EDBBD61057D83E8C1AC98 /* VideoPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoPlayerView.swift; sourceTree = "<group>"; };
+		ECE2C60425ED23D33C372404 /* ChannelPointsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChannelPointsView.swift; sourceTree = "<group>"; };
 		EDE3A68BD5C055F451372723 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
 		FB33D547E9E314352430D2F4 /* CardViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CardViews.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -82,6 +102,20 @@
 			path = Components;
 			sourceTree = "<group>";
 		};
+		642A828A5C3779C0A5DA49A2 /* Chat */ = {
+			isa = PBXGroup;
+			children = (
+				3482CB00CD2C07764D7CD075 /* BadgeService.swift */,
+				58E911FA62E40DDEAB943715 /* ChannelPointsService.swift */,
+				3B9472C29C9819B53E6AAD07 /* ChatModels.swift */,
+				13FC551F0B550705F6FF3527 /* ChatService.swift */,
+				7A3B68DBA923D3E5EE078FB5 /* ChatView.swift */,
+				548FB2FE9A9B90A72838860E /* EmoteService.swift */,
+				1260831E8B5534E2B6EE7EE6 /* IRCParser.swift */,
+			);
+			path = Chat;
+			sourceTree = "<group>";
+		};
 		8989CE1F8FCC4FA958259898 = {
 			isa = PBXGroup;
 			children = (
@@ -94,6 +128,7 @@
 			isa = PBXGroup;
 			children = (
 				9D69AFE73EE80CF32C64F4E9 /* TwitchAuthManager.swift */,
+				8E0E26972292BD9EFE9DF3CD /* TwitchWebAuthManager.swift */,
 			);
 			path = Auth;
 			sourceTree = "<group>";
@@ -104,11 +139,13 @@
 				54FF8C839D65509CEB278053 /* AppDelegate.swift */,
 				C54B6B8DCF51794B81AC032A /* AppStore.swift */,
 				E9B2A74432A2A816F0EE9A88 /* Constants.swift */,
+				17EA958D0FB1B93A04A2EB6B /* EmotePickerView.swift */,
 				EDE3A68BD5C055F451372723 /* LaunchScreen.storyboard */,
 				B339DF13235FEB2BC24CEDAB /* Models.swift */,
 				A7B5F3DA98DACC75D9D54220 /* SafeAreaHelper.swift */,
 				BE31F15D2FF2EFBB0C34B911 /* TwitchUnblockApp.swift */,
 				A3E88B3E87498C1D3FD06A95 /* Auth */,
+				642A828A5C3779C0A5DA49A2 /* Chat */,
 				11DFE4DD504EBA53430AE0DE /* Services */,
 				ECE4F6F6FF61E4E25B0B642A /* Views */,
 			);
@@ -118,6 +155,7 @@
 		E0A07F4DA06570B329273024 /* Screens */ = {
 			isa = PBXGroup;
 			children = (
+				ECE2C60425ED23D33C372404 /* ChannelPointsView.swift */,
 				BFB24F29BE22FDD203E0CFAA /* DirectView.swift */,
 				62441E2FB2E5B07DA4D5032D /* DiscoveryView.swift */,
 				544F4F7421AE3A2BD3370473 /* HistoryView.swift */,
@@ -221,12 +259,21 @@
 			files = (
 				94F9BBE52CEE52D2802C9B92 /* AppDelegate.swift in Sources */,
 				6D0F24635D9C822BC184B4B9 /* AppStore.swift in Sources */,
+				097788E47664C3C33BB97133 /* BadgeService.swift in Sources */,
 				C73406CC8EA0F23BC99AAA72 /* CardViews.swift in Sources */,
+				728787CFA61FD29A5E03C13C /* ChannelPointsService.swift in Sources */,
+				E931D7CDE446FD4E807F35D4 /* ChannelPointsView.swift in Sources */,
+				880D16DAF6443AD396FD3E31 /* ChatModels.swift in Sources */,
+				29135BC8070EEEA31E9493B0 /* ChatService.swift in Sources */,
+				DCF82A23CBD836BD20ECAA04 /* ChatView.swift in Sources */,
 				B77B9364A54FB3BAED2E0400 /* Constants.swift in Sources */,
 				19B88D53238B78686AF8EE88 /* DirectView.swift in Sources */,
 				04FCDB202E603900F3F6F851 /* DiscoveryView.swift in Sources */,
+				31E3D65EA012E2FD590C7917 /* EmotePickerView.swift in Sources */,
+				9E5E0D34CD0741CD7402B9DE /* EmoteService.swift in Sources */,
 				87CF92D7D6B3AD724A675772 /* HeaderView.swift in Sources */,
 				6D505580F566C3943BAD4C59 /* HistoryView.swift in Sources */,
+				492E0C040293384FABC5C993 /* IRCParser.swift in Sources */,
 				3D81283BF99F04C29F48E955 /* InputComponents.swift in Sources */,
 				D13DDBAE8766013B5FB880B2 /* Logger.swift in Sources */,
 				EA7E5EEC07D12BA14A2C0E24 /* LogsView.swift in Sources */,
@@ -238,6 +285,7 @@
 				EF232E8782A55C8A0EF97788 /* TwitchAPI.swift in Sources */,
 				F11686BF3332124E63E5C023 /* TwitchAuthManager.swift in Sources */,
 				F2D70CB1167B10596A567A71 /* TwitchUnblockApp.swift in Sources */,
+				D097731146E20748E646002F /* TwitchWebAuthManager.swift in Sources */,
 				CC30D4DF1C45AB7572DDE340 /* VideoPlayerView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

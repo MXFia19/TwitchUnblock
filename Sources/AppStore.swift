@@ -17,6 +17,16 @@ final class AppStore: ObservableObject {
     }
     @Published var twitchUserId: String?
 
+    /// Token de session web (cookie `auth-token` de twitch.tv).
+    /// Distinct de `twitchToken` (OAuth/Helix) : indispensable pour l'API GQL
+    /// « community points » (solde, coffres, rachats), qui rejette les tokens OAuth custom.
+    @Published var twitchWebToken: String? {
+        didSet {
+            if let t = twitchWebToken { UserDefaults.standard.set(t, forKey: "twitch_web_token") }
+            else { UserDefaults.standard.removeObject(forKey: "twitch_web_token") }
+        }
+    }
+
     /// Login IRC (ex: "squeezie") — indispensable pour envoyer des messages en chat
     @Published var twitchLogin: String? {
         didSet {
@@ -43,6 +53,7 @@ final class AppStore: ObservableObject {
         let ud = UserDefaults.standard
         if let l = ud.string(forKey: "lang"), let parsed = Lang(rawValue: l) { lang = parsed }
         twitchToken = ud.string(forKey: "twitch_token")
+        twitchWebToken = ud.string(forKey: "twitch_web_token")
         twitchLogin = ud.string(forKey: "twitch_login")
         useProxy = ud.object(forKey: "twitch_use_proxy") as? Bool ?? false
         if let data = ud.data(forKey: "twitch_vod_history"),
@@ -60,9 +71,10 @@ final class AppStore: ObservableObject {
 
     // MARK: – Auth
     func logout() {
-        twitchToken  = nil
-        twitchUserId = nil
-        twitchLogin  = nil   // ← nettoyage complet
+        twitchToken    = nil
+        twitchWebToken = nil
+        twitchUserId   = nil
+        twitchLogin    = nil   // ← nettoyage complet
     }
 
     // MARK: – History management

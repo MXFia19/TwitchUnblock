@@ -57,6 +57,7 @@ struct ChannelPointsButton: View {
 // MARK: – Sheet principale
 struct ChannelPointsSheet: View {
     @ObservedObject var service: ChannelPointsService
+    var onConnect: () -> Void = {}
     @Environment(\.dismiss) private var dismiss
 
     @State private var rewardForInput: ChannelReward? = nil   // récompense nécessitant du texte
@@ -87,8 +88,8 @@ struct ChannelPointsSheet: View {
 
                 Spacer()
 
-                // Balance
-                if !service.isLoading {
+                // Balance (masquée tant que le compte n'est pas connecté pour les points)
+                if !service.isLoading && !service.needsWebLogin {
                     HStack(spacing: 4) {
                         Image(systemName: "crown.fill")
                             .font(.system(size: 11, weight: .bold))
@@ -129,6 +130,44 @@ struct ChannelPointsSheet: View {
             }
 
             Divider().background(Color.tBorder)
+
+            // ── Bandeau connexion (token web manquant/expiré) ────────
+            if service.needsWebLogin {
+                VStack(spacing: 10) {
+                    HStack(spacing: 10) {
+                        Image(systemName: "lock.circle.fill")
+                            .font(.system(size: 22))
+                            .foregroundColor(.tPrimary)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Connecte ton compte Twitch")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundColor(.tText)
+                            Text("Nécessaire pour afficher ton solde et réclamer les coffres.")
+                                .font(.system(size: 11))
+                                .foregroundColor(.tMuted)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    Button(action: onConnect) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "person.crop.circle.badge.checkmark")
+                            Text("Se connecter").font(.system(size: 14, weight: .bold))
+                        }
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(Color.tPrimary)
+                        .cornerRadius(12)
+                    }
+                }
+                .padding(14)
+                .background(Color.tCard)
+                .cornerRadius(14)
+                .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.tBorder, lineWidth: 1))
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+            }
 
             // ── Contenu ──────────────────────────────────────────────
             if service.isLoading {

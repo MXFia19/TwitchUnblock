@@ -25,7 +25,7 @@ final class ChannelPointsService: ObservableObject {
     @Published var errorMsg: String? = nil
     @Published var pendingClaimId: String? = nil
     @Published var lastBalanceChange: Int = 0
-    @Published var needsReauth = false   // observé par ChatView pour déclencher le re-login
+    @Published var needsWebLogin = false   // true = token web absent/invalide → login WKWebView requis
 
     private var channelId    = ""
     private var channelLogin = ""
@@ -38,29 +38,39 @@ final class ChannelPointsService: ObservableObject {
     // MARK: – Load
     func load(channelLogin: String, channelId: String, token: String,
               userLogin: String? = nil) async {
-        guard !token.isEmpty, !channelId.isEmpty else {
-            logger.warn("POINTS", "Chargement annulé", "token ou channelId manquant")
+        guard !channelId.isEmpty else {
+            logger.warn("POINTS", "Chargement annulé", "channelId manquant")
             return
         }
         self.channelLogin = channelLogin
         self.channelId    = channelId
         self.token        = token
-        needsReauth       = false
-
-        logger.info("POINTS", "Chargement canal \(channelLogin)",
-                    "compte: @\(userLogin ?? "?") · token: \(String(token.prefix(8)))… · auth: OAuth")
+        needsWebLogin     = false
+        stopPolling()
 
         isLoading = true; errorMsg = nil
         let start = Date()
 
-        // fetchRewards = public (pas d'auth)
-        // fetchBalance = privé (OAuth requis)
-        async let rewardsTask = fetchRewards()
-        async let balanceTask = fetchBalance()
-        let (r, b) = await (rewardsTask, balanceTask)
+        // Les récompenses sont publiques → toujours récupérables, même sans token web.
+        let r = await fetchRewards()
+        rewards = r.sorted { $0.cost < $1.cost }
+
+        // Le solde est privé → nécessite le token de session web (cookie auth-token).
+        guard !token.isEmpty else {
+            balance = 0; pendingClaimId = nil
+            needsWebLogin = true
+            isLoading = false
+            logger.info("POINTS", "Token web absent",
+                        "\(rewards.count) récompenses affichées · solde indisponible (connexion requise)")
+            return
+        }
+
+        logger.info("POINTS", "Chargement canal \(channelLogin)",
+                    "compte: @\(userLogin ?? "?") · token web: \(String(token.prefix(8)))…")
+
+        let b = await fetchBalance()
         let elapsed = String(format: "%.0f ms", Date().timeIntervalSince(start) * 1000)
 
-        rewards        = r.sorted { $0.cost < $1.cost }
         balance        = b.balance
         pendingClaimId = b.claimId
 
@@ -71,8 +81,9 @@ final class ChannelPointsService: ObservableObject {
         if rewards.isEmpty {
             logger.info("POINTS", "Aucune récompense", "canal sans custom rewards")
         }
+        // On ne lance le polling que si le token web est toujours valide.
+        if !needsWebLogin { startPolling() }
         isLoading = false
-        startPolling()
     }
 
     // MARK: – Polling
@@ -294,9 +305,9 @@ final class ChannelPointsService: ObservableObject {
         return try await makeGQLRequest(query, tag: tag, withAuth: false)
     }
 
-    // MARK: – GQL authentifié (avec Authorization: OAuth — pour les données privées)
-    // ✅ OAuth confirmé fonctionnel sur IMG_0373 (balance: 9317)
-    // ❌ Bearer → communityPoints null (pas d'erreur mais données vides)
+    // MARK: – GQL authentifié (Authorization: OAuth <token web> — données privées)
+    // ✅ Token de session web (cookie auth-token) → communityPoints renvoyé correctement
+    // ❌ Token OAuth custom (Helix) → communityPoints null (Client-ID incompatible avec GQL)
     private func gqlAuth(_ query: String, tag: String) async throws -> Any {
         return try await makeGQLRequest(query, tag: tag, withAuth: true)
     }
@@ -322,10 +333,10 @@ final class ChannelPointsService: ObservableObject {
 
         guard status == 200 else {
             if status == 401 && withAuth {
-                logger.warn("POINTS/GQL", "401 — token incompatible avec GQL Twitch",
+                logger.warn("POINTS/GQL", "401 — token web expiré ou invalide",
                             "tag: \(tag) · token: \(String(token.prefix(8)))… · \(ms)")
                 stopPolling()
-                needsReauth = true   // déclenche le re-login dans ChatView
+                needsWebLogin = true   // affiche le bouton de re-login dans la sheet points
             } else {
                 logger.error("POINTS/GQL", "HTTP \(status) — \(tag)", ms)
             }

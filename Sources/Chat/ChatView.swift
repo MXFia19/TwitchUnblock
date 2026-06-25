@@ -15,8 +15,8 @@ struct ChatView: View {
     @State private var messageText      = ""
     @State private var showEmotePicker  = false
     @State private var showPointsSheet  = false
-    @State private var isReauthing      = false
-    @State private var reauthAttempts   = 0   // évite les boucles infinies
+    @State private var showWebLogin     = false
+    @State private var webLoginClear    = false   // true = re-login forcé (token web expiré)
     @FocusState private var isInputFocused: Bool
 
     private var canSendMessages: Bool { token != nil && login != nil }
@@ -113,37 +113,50 @@ struct ChatView: View {
         .background(Color.tDark)
         // ── Sheet points ─────────────────────────────────────────────
         .sheet(isPresented: $showPointsSheet) {
-            ChannelPointsSheet(service: pointsService)
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.hidden)
-        }
-        // ── Re-auth quand le service détecte un 401 ──────────────────
-        .onChange(of: pointsService.needsReauth) { needsReauth in
-            guard needsReauth, !isReauthing, reauthAttempts < 2 else {
-                if reauthAttempts >= 2 {
-                    logger.error("AUTH", "Impossible de rafraîchir le token après 2 tentatives",
-                                 "Reconnecte-toi manuellement via Paramètres")
+            ChannelPointsSheet(service: pointsService) {
+                // L'utilisateur demande à connecter son compte pour les points.
+                webLoginClear   = pointsService.needsWebLogin && store.twitchWebToken != nil
+                showPointsSheet = false
+                // Délai : éviter le conflit « fermeture + ouverture » de sheets simultanées.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                    showWebLogin = true
                 }
-                return
             }
-            Task { await handleTokenRefresh() }
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.hidden)
         }
-        // ── Quand le token change dans le store (après re-auth) ───────
-        // Un seul endroit qui recharge les points — pas d'appel double
-        .onChange(of: store.twitchToken) { newToken in
-            guard let tok = newToken, let cid = channelId else { return }
-            logger.info("POINTS", "Token mis à jour → rechargement",
-                        String(tok.prefix(8)) + "…")
+        // ── Login web Twitch (capture du cookie auth-token) ──────────
+        .sheet(isPresented: $showWebLogin) {
+            TwitchWebLoginSheet(
+                clearSession: webLoginClear,
+                onComplete: { webToken, webLogin in
+                    showWebLogin = false
+                    if store.twitchLogin == nil, let l = webLogin { store.twitchLogin = l }
+                    store.twitchWebToken = webToken   // → déclenche onChange ci-dessous
+                },
+                onCancel: { showWebLogin = false }
+            )
+        }
+        // ── Token web mis à jour → recharge les points ───────────────
+        .onChange(of: store.twitchWebToken) { newWebToken in
+            guard let cid = channelId else { return }
+            logger.info("POINTS", "Token web mis à jour → rechargement points",
+                        String((newWebToken ?? "").prefix(8)) + "…")
             Task {
                 await pointsService.load(
                     channelLogin: channelName,
                     channelId:   cid,
-                    token:       tok,
-                    userLogin:   store.twitchLogin   // login déjà mis à jour avant le token
+                    token:       newWebToken ?? "",
+                    userLogin:   store.twitchLogin
                 )
-                // Re-connecter IRC avec le nouveau token
-                chat.connect(channel: channelName, token: tok, login: store.twitchLogin)
             }
+        }
+        // ── Token OAuth mis à jour → reconnecte uniquement l'IRC ──────
+        .onChange(of: store.twitchToken) { newToken in
+            guard let tok = newToken else { return }
+            logger.info("CHAT", "Token OAuth mis à jour → reconnexion IRC",
+                        String(tok.prefix(8)) + "…")
+            chat.connect(channel: channelName, token: tok, login: store.twitchLogin)
         }
         .onAppear { Task { await setupChat() } }
         .onDisappear {
@@ -164,63 +177,18 @@ struct ChatView: View {
                 await BadgeService.shared.loadChannel(channelId: cid, token: tok)
             }
         }
-        if let tok = token, let cid = channelId {
+        // Points : on utilise le token de session web (cookie auth-token), pas l'OAuth.
+        // Si absent, load() affiche quand même les récompenses et signale needsWebLogin.
+        if let cid = channelId {
             await pointsService.load(
                 channelLogin: channelName,
                 channelId:   cid,
-                token:       tok,
+                token:       store.twitchWebToken ?? "",
                 userLogin:   login
             )
         }
         chat.channelId = channelId
         chat.connect(channel: channelName, token: token, login: login)
-    }
-
-    // MARK: – Re-auth automatique
-    // Stratégie :
-    //   Tentative 1 (reauthAttempts=0) → force_verify: false (silencieux)
-    //   Tentative 2 (reauthAttempts=1) → force_verify: true  (re-login visible)
-    // Après 2 échecs → message d'erreur, l'utilisateur doit se reconnecter manuellement
-    private func handleTokenRefresh() async {
-        guard !isReauthing else { return }
-        isReauthing = true
-        reauthAttempts += 1
-
-        let forceVerify = reauthAttempts > 1
-        logger.info("AUTH",
-                    "Re-auth automatique (tentative \(reauthAttempts)/2)",
-                    forceVerify ? "force_verify: true (re-login visible)" : "force_verify: false (silencieux)")
-
-        guard let newToken = await TwitchAuthManager.shared.login(forceVerify: forceVerify) else {
-            logger.warn("AUTH", "Re-auth annulée ou échouée",
-                        "tentative \(reauthAttempts)")
-            isReauthing = false
-            return
-        }
-
-        // ── 1. Récupérer le login AVANT de mettre à jour le token ────
-        //    (évite l'état partiel où twitchToken est mis à jour mais twitchLogin est encore nil)
-        var userLogin = store.twitchLogin
-        if userLogin == nil {
-            if let user = await getTwitchUser(token: newToken) {
-                userLogin = user.login
-                store.twitchUserId = user.id
-                // Définit le login d'abord (pas de onChange dessus dans ChatView)
-                store.twitchLogin = userLogin
-            }
-        }
-
-        logger.success("AUTH", "Nouveau token obtenu (tentative \(reauthAttempts))",
-                       String(newToken.prefix(8)) + "… · @\(userLogin ?? "?")")
-
-        // ── 2. Mettre à jour le token → déclenche onChange(store.twitchToken) ──
-        //    onChange est le seul endroit qui recharge les points (pas d'appel double)
-        store.twitchToken = newToken
-
-        // ── 3. Réinitialiser le flag pour permettre de futurs re-auths ──
-        isReauthing = false
-        // NOTE : reauthAttempts n'est pas réinitialisé ici pour éviter les boucles
-        // Il se réinitialise à la prochaine session (nouvelle instance de ChatView)
     }
 
     // MARK: – Input bar

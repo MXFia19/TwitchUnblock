@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>TwitchUnblock Auth</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { background: #0e0e10; color: #efeff1; font-family: sans-serif;
+           display: flex; align-items: center; justify-content: center;
+           height: 100vh; margin: 0; text-align: center; }
+    .box { padding: 20px; }
+    .icon { font-size: 48px; margin-bottom: 16px; }
+    p { color: #888; font-size: 14px; }
+  </style>
+</head>
+<body>
+<div class="box">
+  <div class="icon">🟣</div>
+  <h2 id="status">Connexion en cours...</h2>
+  <p id="sub">Retourne dans l'application</p>
+</div>
+<script>
+  // Récupérer le token depuis le fragment (#access_token=...)
+  const hash = window.location.hash || window.location.search;
+  const tokenMatch = hash.match(/access_token=([^&]+)/);
+
+  if (tokenMatch) {
+    const token = tokenMatch[1];
+
+    // Rediriger vers le deep link de l'app avec le token
+    const deepLink = 'twitchunblock://auth?access_token=' + token;
+    window.location.href = deepLink;
+
+    document.getElementById('status').textContent = '✅ Connecté !';
+    document.getElementById('sub').textContent = 'Retourne dans TwitchUnblock';
+  } else {
+    const errorMatch = hash.match(/error=([^&]+)/);
+    const error = errorMatch ? decodeURIComponent(errorMatch[1]) : 'Inconnu';
+    document.getElementById('status').textContent = '❌ Erreur';
+    document.getElementById('sub').textContent = 'Erreur: ' + error;
+  }
+</script>
+</body>
+</html>

@@ -160,7 +160,7 @@ struct DiscoveryView: View {
 
     private func loadFollowedStreams(isRefresh: Bool = false) async {
         guard let token = store.twitchToken else { return }
-
+        // On n'affiche le gros loader que si la liste est vide (pas pendant un simple refresh)
         if followedStreams.isEmpty { loadingFollowed = true }
         errorFollowed = nil
 
@@ -186,6 +186,7 @@ struct DiscoveryView: View {
             followedStreams = try await getFollowedStreams(token: token, userId: currentUserId)
 
         } catch is CancellationError {
+            // Si SwiftUI annule la tâche (scroll trop rapide par ex.), on ignore sans planter
             return
         } catch {
             errorFollowed = store.t("err_loading")
@@ -199,13 +200,16 @@ struct DiscoveryView: View {
 
     private func loadTopStreams(_ l: TopLang, isRefresh: Bool = false) async {
         guard let token = store.twitchToken else { return }
+        // On n'affiche le loader que si la liste est vide et qu'on ne fait pas un pull-to-refresh
         if topStreams.isEmpty && !isRefresh { loadingTop = true }
         do {
             let fetched = try await getTopStreams(token: token, lang: l == .fr ? "fr" : nil)
+            // On met à jour la liste uniquement si Twitch nous a bien renvoyé des streams
             if !fetched.isEmpty { topStreams = fetched }
         } catch is CancellationError {
             return
         } catch {
+            // S'il y a une erreur réseau, on ne vide SURTOUT PAS la liste existante
             print("Erreur top streams : \(error)")
         }
         loadingTop = false

@@ -24,7 +24,7 @@ struct HeaderView: View {
                     .font(.system(size: 15, weight: .heavy))
                     .foregroundColor(.tText)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.5)
+                    .minimumScaleFactor(0.5) // Sécurité si le texte est long
             }
             Spacer()
 
@@ -48,7 +48,7 @@ struct HeaderView: View {
             }
         }
         .padding(.horizontal, 16)
-        .padding(.top, safeTop + 6)   // ✅ Safe area dynamique + marge
+        .padding(.top, safeTop + 6)   // ✅ Safe area dynamique (MainTabView ignore la safe area)
         .padding(.bottom, 12)
         .background(Color.tCard)
         .overlay(Divider().background(Color.tBorder), alignment: .bottom)

@@ -25,14 +25,15 @@ struct MainTabView: View {
     @State private var uptimeTimer: Timer? = nil
 
     enum TabName: String, CaseIterable {
-        case discovery, streamer, direct, settings
+        case discovery, streamer, history, direct, settings
         var icon: String {
-            switch self { case .discovery: "🌟"; case .streamer: "👤"; case .direct: "🔗"; case .settings: "⚙️" }
+            switch self { case .discovery: "🌟"; case .streamer: "👤"; case .history: "🕒"; case .direct: "🔗"; case .settings: "⚙️" }
         }
         func label(_ store: AppStore) -> String {
             switch self {
             case .discovery: store.t("tab_discovery")
             case .streamer:  store.t("tab_streamer")
+            case .history:   store.t("tab_history")
             case .direct:    store.t("tab_direct")
             case .settings:  store.t("settings")
             }
@@ -50,6 +51,7 @@ struct MainTabView: View {
                     switch activeTab {
                     case .discovery: DiscoveryView(onPlayStream: playLive, onPlayVod: playVod)
                     case .streamer:  StreamerView(onPlayVod: playVod, onPlayLive: playLive)
+                    case .history:   HistoryView(onPlayVod: playVod)
                     case .direct:    DirectView(onPlayVod: playVod)
                     case .settings:  SettingsView()
                     }

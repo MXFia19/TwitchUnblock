@@ -164,7 +164,9 @@ private let translations: [Lang: [String: String]] = [
         "points_by": "par",
         "err_not_enough": "Pas assez de points", "err_reward_not_found": "Récompense introuvable",
         "err_points_disabled": "Points désactivés", "err_already_claimed": "Déjà réclamé",
-        "err_cooldown": "Attends un peu"
+        "err_cooldown": "Attends un peu",
+        "err_properties_mismatch": "Récompense modifiée, réessaie",
+        "err_stream_offline": "Le stream n'est pas en direct"
     ],
     .en: [
         "title": "Watch Twitch No Sub",
@@ -239,7 +241,9 @@ private let translations: [Lang: [String: String]] = [
         "points_by": "by",
         "err_not_enough": "Not enough points", "err_reward_not_found": "Reward not found",
         "err_points_disabled": "Points disabled", "err_already_claimed": "Already claimed",
-        "err_cooldown": "Wait a moment"
+        "err_cooldown": "Wait a moment",
+        "err_properties_mismatch": "Reward changed, try again",
+        "err_stream_offline": "Stream is not live"
     ],
     .es: [
         "title": "Ver Twitch sin Sub",
@@ -314,7 +318,9 @@ private let translations: [Lang: [String: String]] = [
         "points_by": "por",
         "err_not_enough": "No tienes suficientes puntos", "err_reward_not_found": "Recompensa no encontrada",
         "err_points_disabled": "Puntos desactivados", "err_already_claimed": "Ya reclamado",
-        "err_cooldown": "Espera un poco"
+        "err_cooldown": "Espera un poco",
+        "err_properties_mismatch": "Recompensa modificada, reinténtalo",
+        "err_stream_offline": "El stream no está en directo"
     ],
 ]
 

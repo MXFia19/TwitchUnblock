@@ -196,18 +196,23 @@ final class ChannelPointsService: ObservableObject {
             errorMsg = "\(t("points_missing")) \(formatted(missing)) \(t("points_unit"))"; return false
         }
         // Le vrai champ GQL Twitch est `redeemCommunityPointsCustomReward`.
-        // `prompt` transporte le texte saisi par le viewer (rewards avec input requis).
+        // ⚠️ Anti-triche `PROPERTIES_MISMATCH` : cost + title + prompt doivent
+        // correspondre EXACTEMENT à la config serveur de la récompense.
+        //   - reward SANS saisie → prompt = celui de la récompense (null si vide)
+        //   - reward AVEC saisie requise → prompt = texte saisi par le viewer
         func gqlEscape(_ s: String) -> String {
             s.replacingOccurrences(of: "\\", with: "\\\\")
              .replacingOccurrences(of: "\"", with: "\\\"")
              .replacingOccurrences(of: "\n", with: " ")
         }
-        let txId       = UUID().uuidString
-        let safeTitle  = gqlEscape(reward.title)
-        let safePrompt = gqlEscape(userInput ?? "")
+        let txId      = UUID().uuidString
+        let safeTitle = gqlEscape(reward.title)
+        let promptText = reward.isUserInputRequired ? (userInput ?? "") : (reward.prompt ?? "")
+        let promptField = promptText.isEmpty ? "prompt: null"
+                                             : "prompt: \"\(gqlEscape(promptText))\""
         let mutation = """
         mutation { redeemCommunityPointsCustomReward(input: {
-            channelID: "\(channelId)", cost: \(reward.cost), prompt: "\(safePrompt)",
+            channelID: "\(channelId)", cost: \(reward.cost), \(promptField),
             rewardID: "\(reward.id)", title: "\(safeTitle)", transactionID: "\(txId)"
         }) { redemption { id } error { code } } }
         """
@@ -373,14 +378,16 @@ final class ChannelPointsService: ObservableObject {
     func t(_ key: String) -> String { translate(key, lang) }
 
     private func redeemErrorLabel(_ code: String) -> String {
-        switch code {
-        case "NOT_ENOUGH_POINTS":       return t("err_not_enough")
-        case "REWARD_NOT_FOUND":        return t("err_reward_not_found")
-        case "CHANNEL_POINTS_DISABLED": return t("err_points_disabled")
-        case "REWARD_NOT_IN_STOCK":     return t("points_out_of_stock")
-        case "ALREADY_CLAIMED":         return t("err_already_claimed")
-        case "ON_COOLDOWN":             return t("err_cooldown")
-        default:                         return "\(t("points_error")) : \(code)"
+        switch code.uppercased() {
+        case "NOT_ENOUGH_POINTS":        return t("err_not_enough")
+        case "REWARD_NOT_FOUND", "NOT_FOUND": return t("err_reward_not_found")
+        case "CHANNEL_POINTS_DISABLED", "DISABLED": return t("err_points_disabled")
+        case "REWARD_NOT_IN_STOCK", "OUT_OF_STOCK": return t("points_out_of_stock")
+        case "ALREADY_CLAIMED":          return t("err_already_claimed")
+        case "ON_COOLDOWN", "GLOBAL_COOLDOWN": return t("err_cooldown")
+        case "PROPERTIES_MISMATCH":      return t("err_properties_mismatch")
+        case "STREAM_NOT_LIVE":          return t("err_stream_offline")
+        default:                          return "\(t("points_error")) : \(code)"
         }
     }
 }

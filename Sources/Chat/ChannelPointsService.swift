@@ -25,7 +25,7 @@ final class ChannelPointsService: ObservableObject {
     @Published var errorMsg: String? = nil
     @Published var pendingClaimId: String? = nil
     @Published var lastBalanceChange: Int = 0
-    @Published var needsReauth = false   // ← déclenche le re-auth dans la vue parent
+    @Published var needsReauth = false   // observé par ChatView pour déclencher le re-login
 
     private var channelId    = ""
     private var channelLogin = ""
@@ -53,6 +53,8 @@ final class ChannelPointsService: ObservableObject {
         isLoading = true; errorMsg = nil
         let start = Date()
 
+        // fetchRewards = public (pas d'auth)
+        // fetchBalance = privé (OAuth requis)
         async let rewardsTask = fetchRewards()
         async let balanceTask = fetchBalance()
         let (r, b) = await (rewardsTask, balanceTask)
@@ -71,15 +73,6 @@ final class ChannelPointsService: ObservableObject {
         }
         isLoading = false
         startPolling()
-    }
-
-    // Appelé par la vue après un re-auth réussi
-    func updateToken(_ newToken: String) async {
-        guard !newToken.isEmpty else { return }
-        logger.success("POINTS", "Token mis à jour",
-                       "\(String(newToken.prefix(8)))… → rechargement des points")
-        await load(channelLogin: channelLogin, channelId: channelId,
-                   token: newToken)
     }
 
     // MARK: – Polling
@@ -137,13 +130,13 @@ final class ChannelPointsService: ObservableObject {
             self { communityPoints { availableClaim { id } } }
         } }
         """
-        guard let json    = try? await gql(query, tag: "checkBonus") as? [String: Any],
-              let data    = json["data"]                              as? [String: Any],
-              let channel = data["channel"]                           as? [String: Any],
-              let selfObj = channel["self"]                           as? [String: Any],
-              let pts     = selfObj["communityPoints"]                as? [String: Any],
-              let claim   = pts["availableClaim"]                     as? [String: Any],
-              let cid     = claim["id"]                               as? String
+        guard let json    = try? await gqlAuth(query, tag: "checkBonus") as? [String: Any],
+              let data    = json["data"]                                   as? [String: Any],
+              let channel = data["channel"]                                as? [String: Any],
+              let selfObj = channel["self"]                                as? [String: Any],
+              let pts     = selfObj["communityPoints"]                     as? [String: Any],
+              let claim   = pts["availableClaim"]                          as? [String: Any],
+              let cid     = claim["id"]                                    as? String
         else {
             logger.debug("POINTS", "Pas de coffre disponible", nil)
             return
@@ -162,10 +155,10 @@ final class ChannelPointsService: ObservableObject {
             claimID: "\(claimId)" channelID: "\(channelId)"
         }) { currentPoints error { code } } }
         """
-        guard let json  = try? await gql(mutation, tag: "claimBonus") as? [String: Any],
-              let data  = json["data"]                                 as? [String: Any],
-              let claim = data["claimCommunityPoints"]                 as? [String: Any]
-        else { logger.error("POINTS", "Claim coffre échoué", "réponse GQL invalide"); return }
+        guard let json  = try? await gqlAuth(mutation, tag: "claimBonus") as? [String: Any],
+              let data  = json["data"]                                     as? [String: Any],
+              let claim = data["claimCommunityPoints"]                     as? [String: Any]
+        else { logger.error("POINTS", "Claim coffre échoué", nil); return }
 
         if let err = claim["error"] as? [String: Any], let code = err["code"] as? String {
             logger.error("POINTS", "Claim refusé", "code: \(code)")
@@ -202,9 +195,9 @@ final class ChannelPointsService: ObservableObject {
             channelID: "\(channelId)" rewardID: "\(reward.id)" \(extra)
         }) { reward { id title cost } redemption { id } error { code } } }
         """
-        guard let json   = try? await gql(mutation, tag: "redeem") as? [String: Any],
-              let data   = json["data"]                              as? [String: Any],
-              let result = data["redeemCommunityPoints"]             as? [String: Any]
+        guard let json   = try? await gqlAuth(mutation, tag: "redeem") as? [String: Any],
+              let data   = json["data"]                                   as? [String: Any],
+              let result = data["redeemCommunityPoints"]                  as? [String: Any]
         else { logger.error("POINTS", "Rachat réseau échoué", nil); errorMsg = "Erreur réseau"; return false }
 
         if let err = result["error"] as? [String: Any], let code = err["code"] as? String {
@@ -218,7 +211,7 @@ final class ChannelPointsService: ObservableObject {
         return true
     }
 
-    // MARK: – Fetch rewards
+    // MARK: – Fetch rewards (SANS auth — données publiques)
     private func fetchRewards() async -> [ChannelReward] {
         logger.debug("POINTS", "fetchRewards → channel(name:\(channelLogin))", nil)
         let query = """
@@ -233,19 +226,19 @@ final class ChannelPointsService: ObservableObject {
             }
         } }
         """
-        guard let json     = try? await gql(query, tag: "fetchRewards") as? [String: Any],
-              let data     = json["data"]                                as? [String: Any],
-              let channel  = data["channel"]                             as? [String: Any],
-              let settings = channel["communityPointsSettings"]          as? [String: Any]
+        // ✅ Pas d'Authorization ici — données publiques, pas de 401 possible
+        guard let json     = try? await gqlPublic(query, tag: "fetchRewards") as? [String: Any],
+              let data     = json["data"]                                      as? [String: Any],
+              let channel  = data["channel"]                                   as? [String: Any],
+              let settings = channel["communityPointsSettings"]                as? [String: Any]
         else { logger.warn("POINTS", "fetchRewards : parsing échoué", nil); return [] }
 
         guard settings["isEnabled"] as? Bool == true else {
-            logger.info("POINTS", "Points désactivés sur ce canal", nil); return []
+            logger.info("POINTS", "Points désactivés", nil); return []
         }
         guard let raw = settings["customRewards"] as? [[String: Any]] else {
             logger.info("POINTS", "Aucune custom reward", nil); return []
         }
-
         let parsed: [ChannelReward] = raw.compactMap { r in
             guard let id    = r["id"]    as? String,
                   let title = r["title"] as? String,
@@ -263,13 +256,12 @@ final class ChannelPointsService: ObservableObject {
                        ?? (r["defaultImage"] as? [String: Any])?["url2x"] as? String
             )
         }.filter { $0.isEnabled }
-
         logger.debug("POINTS", "Récompenses parsées",
                      "\(parsed.count) actives · \(parsed.filter { $0.isPaused }.count) en pause")
         return parsed
     }
 
-    // MARK: – Fetch balance
+    // MARK: – Fetch balance (AVEC auth OAuth)
     private func fetchBalance() async -> (balance: Int, claimId: String?) {
         logger.debug("POINTS", "fetchBalance → channel(name:\(channelLogin)).self", nil)
         let query = """
@@ -277,17 +269,17 @@ final class ChannelPointsService: ObservableObject {
             self { communityPoints { balance availableClaim { id } } }
         } }
         """
-        guard let json    = try? await gql(query, tag: "fetchBalance") as? [String: Any],
-              let data    = json["data"]                                as? [String: Any],
-              let channel = data["channel"]                             as? [String: Any],
-              let selfObj = channel["self"]                             as? [String: Any]
+        guard let json    = try? await gqlAuth(query, tag: "fetchBalance") as? [String: Any],
+              let data    = json["data"]                                    as? [String: Any],
+              let channel = data["channel"]                                 as? [String: Any],
+              let selfObj = channel["self"]                                 as? [String: Any]
         else {
             logger.warn("POINTS", "fetchBalance : parsing échoué", nil)
             return (0, nil)
         }
         guard let pts = selfObj["communityPoints"] as? [String: Any] else {
-            logger.info("POINTS", "Aucun historique de points sur ce canal",
-                        "communityPoints null → balance = 0 (normal, premier visionnage)")
+            logger.info("POINTS", "communityPoints null — premier visionnage ou token incompatible",
+                        "balance = 0")
             return (0, nil)
         }
         let bal     = pts["balance"] as? Int ?? 0
@@ -297,16 +289,30 @@ final class ChannelPointsService: ObservableObject {
         return (bal, claimId)
     }
 
-    // MARK: – GQL (OAuth + kGQLClientID — format confirmé fonctionnel)
-    private func gql(_ query: String, tag: String) async throws -> Any {
-        logger.debug("POINTS/GQL", "→ \(tag)", nil)
+    // MARK: – GQL public (sans Authorization — pour les données publiques)
+    private func gqlPublic(_ query: String, tag: String) async throws -> Any {
+        return try await makeGQLRequest(query, tag: tag, withAuth: false)
+    }
+
+    // MARK: – GQL authentifié (avec Authorization: OAuth — pour les données privées)
+    // ✅ OAuth confirmé fonctionnel sur IMG_0373 (balance: 9317)
+    // ❌ Bearer → communityPoints null (pas d'erreur mais données vides)
+    private func gqlAuth(_ query: String, tag: String) async throws -> Any {
+        return try await makeGQLRequest(query, tag: tag, withAuth: true)
+    }
+
+    private func makeGQLRequest(_ query: String, tag: String,
+                                 withAuth: Bool) async throws -> Any {
+        logger.debug("POINTS/GQL", "→ \(tag)", withAuth ? "OAuth" : "public")
         guard let url = URL(string: "https://gql.twitch.tv/gql") else { throw URLError(.badURL) }
+
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
         req.setValue(kGQLClientID,       forHTTPHeaderField: "Client-ID")
-        // ✅ OAuth (pas Bearer) — confirmé fonctionnel par les tests
-        req.setValue("OAuth \(token)",   forHTTPHeaderField: "Authorization")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        if withAuth {
+            req.setValue("OAuth \(token)", forHTTPHeaderField: "Authorization")
+        }
         req.httpBody = try JSONSerialization.data(withJSONObject: ["query": query])
 
         let start = Date()
@@ -315,12 +321,11 @@ final class ChannelPointsService: ObservableObject {
         let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
 
         guard status == 200 else {
-            if status == 401 {
-                // ── Token expiré → déclenche le re-auth automatique ──────────
-                logger.warn("POINTS/GQL", "Token expiré (401) — re-auth automatique…",
-                            "tag: \(tag) · \(ms)")
+            if status == 401 && withAuth {
+                logger.warn("POINTS/GQL", "401 — token incompatible avec GQL Twitch",
+                            "tag: \(tag) · token: \(String(token.prefix(8)))… · \(ms)")
                 stopPolling()
-                needsReauth = true   // ← la vue parent observe ce flag
+                needsReauth = true   // déclenche le re-login dans ChatView
             } else {
                 logger.error("POINTS/GQL", "HTTP \(status) — \(tag)", ms)
             }

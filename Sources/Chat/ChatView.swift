@@ -15,7 +15,8 @@ struct ChatView: View {
     @State private var messageText      = ""
     @State private var showEmotePicker  = false
     @State private var showPointsSheet  = false
-    @State private var isReauthing      = false   // évite les re-auth en double
+    @State private var isReauthing      = false
+    @State private var reauthAttempts   = 0   // évite les boucles infinies
     @FocusState private var isInputFocused: Bool
 
     private var canSendMessages: Bool { token != nil && login != nil }
@@ -51,7 +52,7 @@ struct ChatView: View {
             .background(Color.tCard)
             .overlay(Divider().background(Color.tBorder), alignment: .bottom)
 
-            // ── Zone principale : messages OU emote picker ──────────
+            // ── Zone principale ─────────────────────────────────────
             if showEmotePicker && canSendMessages {
                 EmotePickerView(channelId: channelId) { emote in
                     insertEmote(emote)
@@ -116,23 +117,31 @@ struct ChatView: View {
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.hidden)
         }
-        // ── Re-auth automatique quand le token expire (401) ──────────
-        // iOS 16+: onChange avec closure à 1 paramètre
+        // ── Re-auth quand le service détecte un 401 ──────────────────
         .onChange(of: pointsService.needsReauth) { needsReauth in
-            guard needsReauth, !isReauthing else { return }
+            guard needsReauth, !isReauthing, reauthAttempts < 2 else {
+                if reauthAttempts >= 2 {
+                    logger.error("AUTH", "Impossible de rafraîchir le token après 2 tentatives",
+                                 "Reconnecte-toi manuellement via Paramètres")
+                }
+                return
+            }
             Task { await handleTokenRefresh() }
         }
-        // ── Re-auth si le token change dans le store (ex: login manuel) ─
+        // ── Quand le token change dans le store (après re-auth) ───────
+        // Un seul endroit qui recharge les points — pas d'appel double
         .onChange(of: store.twitchToken) { newToken in
             guard let tok = newToken, let cid = channelId else { return }
+            logger.info("POINTS", "Token mis à jour → rechargement",
+                        String(tok.prefix(8)) + "…")
             Task {
                 await pointsService.load(
                     channelLogin: channelName,
                     channelId:   cid,
                     token:       tok,
-                    userLogin:   store.twitchLogin
+                    userLogin:   store.twitchLogin   // login déjà mis à jour avant le token
                 )
-                // Reconnecte aussi le chat IRC avec le nouveau token
+                // Re-connecter IRC avec le nouveau token
                 chat.connect(channel: channelName, token: tok, login: store.twitchLogin)
             }
         }
@@ -145,19 +154,16 @@ struct ChatView: View {
 
     // MARK: – Setup initial
     private func setupChat() async {
-        // Emotes
         await EmoteService.shared.loadGlobals()
         if let cid = channelId {
             await EmoteService.shared.loadChannel(channelId: cid, channelName: channelName)
         }
-        // Badges
         if let tok = token {
             await BadgeService.shared.loadGlobal(token: tok)
             if let cid = channelId {
                 await BadgeService.shared.loadChannel(channelId: cid, token: tok)
             }
         }
-        // Points de chaîne
         if let tok = token, let cid = channelId {
             await pointsService.load(
                 channelLogin: channelName,
@@ -166,45 +172,55 @@ struct ChatView: View {
                 userLogin:   login
             )
         }
-        // IRC
         chat.channelId = channelId
         chat.connect(channel: channelName, token: token, login: login)
     }
 
-    // MARK: – Re-auth automatique (token expiré)
-    // Utilise force_verify: false → silencieux si déjà connecté dans Safari
+    // MARK: – Re-auth automatique
+    // Stratégie :
+    //   Tentative 1 (reauthAttempts=0) → force_verify: false (silencieux)
+    //   Tentative 2 (reauthAttempts=1) → force_verify: true  (re-login visible)
+    // Après 2 échecs → message d'erreur, l'utilisateur doit se reconnecter manuellement
     private func handleTokenRefresh() async {
         guard !isReauthing else { return }
         isReauthing = true
+        reauthAttempts += 1
 
-        logger.info("AUTH", "Re-auth automatique…",
-                    "token expiré détecté par ChannelPointsService")
+        let forceVerify = reauthAttempts > 1
+        logger.info("AUTH",
+                    "Re-auth automatique (tentative \(reauthAttempts)/2)",
+                    forceVerify ? "force_verify: true (re-login visible)" : "force_verify: false (silencieux)")
 
-        guard let newToken = await TwitchAuthManager.shared.login() else {
-            logger.warn("AUTH", "Re-auth annulée ou échouée", nil)
+        guard let newToken = await TwitchAuthManager.shared.login(forceVerify: forceVerify) else {
+            logger.warn("AUTH", "Re-auth annulée ou échouée",
+                        "tentative \(reauthAttempts)")
             isReauthing = false
             return
         }
 
-        // Sauvegarder le nouveau token dans le store (partagé dans toute l'app)
-        store.twitchToken = newToken
-        logger.success("AUTH", "Token rafraîchi automatiquement ✅",
-                       String(newToken.prefix(8)) + "…")
-
-        // Récupérer le login si absent
-        if store.twitchLogin == nil {
+        // ── 1. Récupérer le login AVANT de mettre à jour le token ────
+        //    (évite l'état partiel où twitchToken est mis à jour mais twitchLogin est encore nil)
+        var userLogin = store.twitchLogin
+        if userLogin == nil {
             if let user = await getTwitchUser(token: newToken) {
+                userLogin = user.login
                 store.twitchUserId = user.id
-                store.twitchLogin  = user.login
+                // Définit le login d'abord (pas de onChange dessus dans ChatView)
+                store.twitchLogin = userLogin
             }
         }
 
-        // Recharger les points avec le nouveau token
-        if let cid = channelId {
-            await pointsService.updateToken(newToken)
-        }
+        logger.success("AUTH", "Nouveau token obtenu (tentative \(reauthAttempts))",
+                       String(newToken.prefix(8)) + "… · @\(userLogin ?? "?")")
 
+        // ── 2. Mettre à jour le token → déclenche onChange(store.twitchToken) ──
+        //    onChange est le seul endroit qui recharge les points (pas d'appel double)
+        store.twitchToken = newToken
+
+        // ── 3. Réinitialiser le flag pour permettre de futurs re-auths ──
         isReauthing = false
+        // NOTE : reauthAttempts n'est pas réinitialisé ici pour éviter les boucles
+        // Il se réinitialise à la prochaine session (nouvelle instance de ChatView)
     }
 
     // MARK: – Input bar
@@ -316,7 +332,6 @@ struct ChatMessageRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
 
-            // ✦ Premier message
             if message.isFirstMessage {
                 HStack(spacing: 5) {
                     Image(systemName: "sparkles").font(.system(size: 10, weight: .bold))
@@ -327,7 +342,6 @@ struct ChatMessageRow: View {
                 .frame(width: availableWidth, alignment: .leading)
             }
 
-            // Réponse
             if let replyUser = message.replyTo {
                 HStack(spacing: 0) {
                     Color.tPrimary.opacity(0.5).frame(width: 2).padding(.leading, 12)
@@ -348,7 +362,6 @@ struct ChatMessageRow: View {
                 .frame(width: availableWidth, alignment: .leading)
             }
 
-            // Message principal
             HStack(alignment: .top, spacing: 0) {
                 if message.isHighlight { Rectangle().fill(Color.tWarning).frame(width: 3) }
                 WrappingHStack(message: message, timeString: timeString,
@@ -374,10 +387,8 @@ struct WrappingHStack: View {
 
     var body: some View {
         let blocks = message.tokens.enumerated().map { i, t in TokenBlock(id: i, content: t) }
-
         MessageFlowLayout(spacing: 4, lineSpacing: 4, width: availableWidth) {
             Text(timeString).font(.system(size: 11)).foregroundColor(.tMuted)
-
             ForEach(message.badges) { badge in
                 AsyncImage(url: URL(string: badge.url)) { phase in
                     if let img = phase.image { img.resizable().interpolation(.medium).scaledToFit() }
@@ -385,17 +396,14 @@ struct WrappingHStack: View {
                 }
                 .frame(width: 16, height: 16)
             }
-
             Text(message.displayName + ":")
                 .font(.system(size: 13, weight: .bold)).foregroundColor(message.color)
-
             ForEach(blocks) { block in
                 switch block.content {
                 case .text(let t):
                     Text(t).font(.system(size: 13))
                         .foregroundColor(message.isAction ? message.color : .tText)
-                case .emote(let e):
-                    CachedEmoteImage(url: e.url, name: e.name)
+                case .emote(let e): CachedEmoteImage(url: e.url, name: e.name)
                 case .mention(let m):
                     Text("@\(m)").font(.system(size: 13, weight: .semibold)).foregroundColor(.tPrimary)
                 }
@@ -405,42 +413,30 @@ struct WrappingHStack: View {
     }
 }
 
-struct TokenBlock: Identifiable {
-    let id: Int; let content: MessageToken
-}
+struct TokenBlock: Identifiable { let id: Int; let content: MessageToken }
 
 // MARK: – Flow Layout
 struct MessageFlowLayout: Layout {
     var spacing, lineSpacing, width: CGFloat
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        computeLayout(subviews: subviews).size
-    }
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize { computeLayout(subviews).size }
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        let l = computeLayout(subviews: subviews)
+        let l = computeLayout(subviews)
         for (i, sub) in subviews.enumerated() {
-            let pos = l.positions[i]; let sz = sub.sizeThatFits(.unspecified)
-            let dy  = max(0, (l.lineHeights[i] - sz.height) / 2)
-            sub.place(at: CGPoint(x: bounds.minX + pos.x, y: bounds.minY + pos.y + dy),
+            let p = l.positions[i]; let sz = sub.sizeThatFits(.unspecified)
+            sub.place(at: CGPoint(x: bounds.minX + p.x, y: bounds.minY + p.y + max(0,(l.lineHeights[i]-sz.height)/2)),
                       anchor: .topLeading, proposal: .unspecified)
         }
     }
-    private func computeLayout(subviews: Subviews)
-        -> (size: CGSize, positions: [CGPoint], lineHeights: [CGFloat])
-    {
-        let W = max(width, 1)
-        var cx: CGFloat = 0, cy: CGFloat = 0, mh: CGFloat = 0
-        var pos: [CGPoint] = []; var lh: [CGFloat] = Array(repeating: 0, count: subviews.count)
-        var ls = 0
-        for (i, s) in subviews.enumerated() {
-            let sz = s.sizeThatFits(.unspecified)
-            if cx > 0 && cx + sz.width > W {
-                for j in ls..<i { lh[j] = mh }
-                cx = 0; cy += mh + lineSpacing; mh = 0; ls = i
-            }
-            pos.append(CGPoint(x: cx, y: cy)); mh = max(mh, sz.height); cx += sz.width + spacing
+    private func computeLayout(_ subviews: Subviews) -> (size: CGSize, positions: [CGPoint], lineHeights: [CGFloat]) {
+        let W = max(width,1); var cx: CGFloat=0, cy: CGFloat=0, mh: CGFloat=0
+        var pos=[CGPoint](); var lh=[CGFloat](repeating:0,count:subviews.count); var ls=0
+        for (i,s) in subviews.enumerated() {
+            let sz=s.sizeThatFits(.unspecified)
+            if cx>0 && cx+sz.width>W { for j in ls..<i {lh[j]=mh}; cx=0; cy+=mh+lineSpacing; mh=0; ls=i }
+            pos.append(CGPoint(x:cx,y:cy)); mh=max(mh,sz.height); cx+=sz.width+spacing
         }
-        for j in ls..<subviews.count { lh[j] = mh }
-        return (CGSize(width: W, height: cy + mh), pos, lh)
+        for j in ls..<subviews.count {lh[j]=mh}
+        return (CGSize(width:W,height:cy+mh),pos,lh)
     }
 }
 
@@ -450,8 +446,8 @@ struct CachedEmoteImage: View {
     var body: some View {
         AsyncImage(url: URL(string: url)) { phase in
             if let img = phase.image { img.resizable().interpolation(.medium).scaledToFit() }
-            else if phase.error != nil { Text(name).font(.system(size: 11)).foregroundColor(.tMuted) }
-            else { Color.clear.frame(width: 24, height: 24) }
+            else if phase.error != nil { Text(name).font(.system(size:11)).foregroundColor(.tMuted) }
+            else { Color.clear.frame(width:24,height:24) }
         }
         .frame(height: 24)
     }

@@ -145,7 +145,8 @@ struct MainTabView: View {
                         vodId: {
                             if case .vod(let id, _, _, _) = playerMode { return id }
                             return nil
-                        }()
+                        }(),
+                        compact: showChat   // chat ouvert → masque Source/lien, place au chat
                     )
                     .padding(.horizontal, 12)
                     .padding(.top, 12)
@@ -219,7 +220,7 @@ struct MainTabView: View {
                             }
                         }
                     } else if case .vod(_, _, _, let streamer) = mode, let s = streamer {
-                        Text("par \(s)")
+                        Text("\(store.t("points_by")) \(s)")
                             .font(.system(size: 11))
                             .foregroundColor(.tMuted)
                     }
@@ -262,7 +263,7 @@ struct MainTabView: View {
                         .foregroundColor(.white)
 
                     if case .vod(_, _, _, let streamer) = mode, let s = streamer {
-                        Text("par \(s)")
+                        Text("\(store.t("points_by")) \(s)")
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundColor(.tPrimary)
                     }
@@ -402,7 +403,7 @@ struct MainTabView: View {
                         startLiveTimers(channel: channel)
                     }
                 } else {
-                    await MainActor.run { errorMsg = "Stream indisponible"; loading = false }
+                    await MainActor.run { errorMsg = store.t("offline_msg"); loading = false }
                 }
             }
         }

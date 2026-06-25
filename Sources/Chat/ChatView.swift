@@ -34,7 +34,7 @@ struct ChatView: View {
                 Circle()
                     .fill(chat.isConnected ? Color.tSuccess : Color.tDanger)
                     .frame(width: 6, height: 6)
-                Text(chat.isConnected ? "Chat connecté" : "Connexion...")
+                Text(chat.isConnected ? store.t("chat_connected") : store.t("chat_connecting"))
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundColor(.tMuted)
                 Spacer()
@@ -90,7 +90,7 @@ struct ChatView: View {
                             Button { autoScroll = true } label: {
                                 HStack(spacing: 4) {
                                     Image(systemName: "arrow.down")
-                                    Text("Suivre").font(.system(size: 11, weight: .bold))
+                                    Text(store.t("chat_follow")).font(.system(size: 11, weight: .bold))
                                 }
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 10).padding(.vertical, 6)
@@ -224,7 +224,7 @@ struct ChatView: View {
 
                     // Champ texte
                     TextField(
-                        chat.isConnected ? "Envoyer un message…" : "Connexion en cours…",
+                        chat.isConnected ? store.t("chat_send_ph") : store.t("chat_connecting_ph"),
                         text: $messageText
                     )
                     .focused($isInputFocused)
@@ -291,6 +291,7 @@ struct ChatView: View {
 struct ChatMessageRow: View {
     let message: ChatMessage
     let availableWidth: CGFloat
+    @EnvironmentObject private var store: AppStore
 
     private static let timeFormatter: DateFormatter = {
         let f = DateFormatter(); f.dateFormat = "HH:mm"; return f
@@ -303,7 +304,7 @@ struct ChatMessageRow: View {
             if message.isFirstMessage {
                 HStack(spacing: 5) {
                     Image(systemName: "sparkles").font(.system(size: 10, weight: .bold))
-                    Text("Premier message").font(.system(size: 11, weight: .semibold))
+                    Text(store.t("chat_first_message")).font(.system(size: 11, weight: .semibold))
                 }
                 .foregroundColor(.tPurple)
                 .padding(.horizontal, 12).padding(.top, 6).padding(.bottom, 4)

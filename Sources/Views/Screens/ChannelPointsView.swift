@@ -7,7 +7,7 @@ struct ChannelPointsButton: View {
 
     var body: some View {
         Button(action: onTap) {
-            ZStack(alignment: .topTrailing) {
+            ZStack {
                 // Fond : vert si bonus dispo, violet sinon
                 Circle()
                     .fill(service.pendingClaimId != nil ? Color.tSuccess : Color(hex: "1f1f23"))
@@ -21,16 +21,18 @@ struct ChannelPointsButton: View {
                             ? Color.tSuccess.opacity(0.6) : .clear,
                             radius: 6)
 
+                // Couronne parfaitement centrée dans le cercle
                 Image(systemName: "crown.fill")
                     .font(.system(size: 16, weight: .bold))
                     .foregroundColor(service.pendingClaimId != nil ? .white : .tPrimary)
-
-                // Point blanc si bonus disponible
+            }
+            // Point blanc (bonus dispo) en haut-droite, sans décentrer la couronne
+            .overlay(alignment: .topTrailing) {
                 if service.pendingClaimId != nil {
                     Circle()
                         .fill(Color.white)
                         .frame(width: 9, height: 9)
-                        .offset(x: 2, y: -2)
+                        .offset(x: 1, y: -1)
                 }
             }
             .overlay(alignment: .top) {
@@ -58,6 +60,7 @@ struct ChannelPointsButton: View {
 struct ChannelPointsSheet: View {
     @ObservedObject var service: ChannelPointsService
     var onConnect: () -> Void = {}
+    @EnvironmentObject private var store: AppStore
     @Environment(\.dismiss) private var dismiss
 
     @State private var rewardForInput: ChannelReward? = nil   // récompense nécessitant du texte
@@ -82,7 +85,7 @@ struct ChannelPointsSheet: View {
                     .font(.system(size: 18, weight: .bold))
                     .foregroundColor(.tPrimary)
 
-                Text("Points de chaîne")
+                Text(store.t("points_title"))
                     .font(.system(size: 17, weight: .heavy))
                     .foregroundColor(.tText)
 
@@ -139,10 +142,10 @@ struct ChannelPointsSheet: View {
                             .font(.system(size: 22))
                             .foregroundColor(.tPrimary)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Connecte ton compte Twitch")
+                            Text(store.t("points_connect_title"))
                                 .font(.system(size: 14, weight: .bold))
                                 .foregroundColor(.tText)
-                            Text("Nécessaire pour afficher ton solde et réclamer les coffres.")
+                            Text(store.t("points_connect_desc"))
                                 .font(.system(size: 11))
                                 .foregroundColor(.tMuted)
                                 .fixedSize(horizontal: false, vertical: true)
@@ -152,7 +155,7 @@ struct ChannelPointsSheet: View {
                     Button(action: onConnect) {
                         HStack(spacing: 8) {
                             Image(systemName: "person.crop.circle.badge.checkmark")
-                            Text("Se connecter").font(.system(size: 14, weight: .bold))
+                            Text(store.t("points_connect_btn")).font(.system(size: 14, weight: .bold))
                         }
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
@@ -174,7 +177,7 @@ struct ChannelPointsSheet: View {
                 Spacer()
                 VStack(spacing: 12) {
                     ProgressView().tint(.tPrimary).scaleEffect(1.2)
-                    Text("Chargement des récompenses…")
+                    Text(store.t("points_loading"))
                         .font(.system(size: 13))
                         .foregroundColor(.tMuted)
                 }
@@ -186,7 +189,7 @@ struct ChannelPointsSheet: View {
                     Image(systemName: "crown")
                         .font(.system(size: 40))
                         .foregroundColor(.tMuted)
-                    Text("Aucune récompense disponible")
+                    Text(store.t("points_none"))
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(.tMuted)
                 }
@@ -202,7 +205,7 @@ struct ChannelPointsSheet: View {
                                 Task {
                                     await service.claimBonus()
                                     withAnimation {
-                                        redeemResult = .success("Bonus réclamé ! 🎉")
+                                        redeemResult = .success(store.t("points_bonus_claimed"))
                                     }
                                     try? await Task.sleep(nanoseconds: 2_500_000_000)
                                     withAnimation { redeemResult = nil }
@@ -211,7 +214,7 @@ struct ChannelPointsSheet: View {
                                 HStack(spacing: 10) {
                                     Image(systemName: "gift.fill")
                                         .font(.system(size: 18))
-                                    Text("Réclamer le bonus")
+                                    Text(store.t("points_claim_bonus"))
                                         .font(.system(size: 15, weight: .bold))
                                     Spacer()
                                     Image(systemName: "chevron.right")
@@ -267,8 +270,8 @@ struct ChannelPointsSheet: View {
                     rewardForInput = nil
                     withAnimation {
                         redeemResult = ok
-                            ? .success("« \(reward.title) » réclamé ✓")
-                            : .failure(service.errorMsg ?? "Erreur")
+                            ? .success("« \(reward.title) » " + store.t("points_redeemed"))
+                            : .failure(service.errorMsg ?? store.t("points_error"))
                     }
                     try? await Task.sleep(nanoseconds: 3_000_000_000)
                     withAnimation { redeemResult = nil }
@@ -287,6 +290,7 @@ private struct RewardRow: View {
     let onResult:  (ChannelPointsSheet.RedeemResult) -> Void
     let onNeedsInput: () -> Void
 
+    @EnvironmentObject private var store: AppStore
     @State private var localRedeeming = false
 
     var body: some View {
@@ -327,11 +331,11 @@ private struct RewardRow: View {
                 }
 
                 if !reward.isInStock {
-                    Text("Rupture de stock")
+                    Text(store.t("points_out_of_stock"))
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundColor(.tDanger)
                 } else if reward.isPaused {
-                    Text("En pause")
+                    Text(store.t("points_paused"))
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundColor(.tWarning)
                 }
@@ -358,8 +362,8 @@ private struct RewardRow: View {
                                 let ok = await service.redeem(reward: reward)
                                 localRedeeming = false
                                 onResult(ok
-                                    ? .success("« \(reward.title) » réclamé ✓")
-                                    : .failure(service.errorMsg ?? "Erreur")
+                                    ? .success("« \(reward.title) » " + store.t("points_redeemed"))
+                                    : .failure(service.errorMsg ?? store.t("points_error"))
                                 )
                             }
                         }
@@ -368,7 +372,7 @@ private struct RewardRow: View {
                             if localRedeeming {
                                 ProgressView().tint(.white).scaleEffect(0.7)
                             } else {
-                                Text(canAfford ? "Racheter" : "Insuff.")
+                                Text(canAfford ? store.t("points_redeem") : store.t("points_insufficient"))
                                     .font(.system(size: 11, weight: .bold))
                             }
                         }
@@ -404,6 +408,7 @@ private struct UserInputSheet: View {
     @Binding var isRedeeming: Bool
     let onConfirm: () -> Void
 
+    @EnvironmentObject private var store: AppStore
     @FocusState private var focused: Bool
     @Environment(\.dismiss) private var dismiss
 
@@ -436,14 +441,14 @@ private struct UserInputSheet: View {
             HStack(spacing: 4) {
                 Image(systemName: "crown.fill")
                     .font(.system(size: 13, weight: .bold))
-                Text("\(reward.cost) points")
+                Text("\(reward.cost) \(store.t("points_unit"))")
                     .font(.system(size: 14, weight: .bold))
             }
             .foregroundColor(.tPrimary)
             .padding(.top, 10)
 
             // Champ texte
-            TextField("Votre message…", text: $userInput, axis: .vertical)
+            TextField(store.t("points_input_ph"), text: $userInput, axis: .vertical)
                 .focused($focused)
                 .foregroundColor(.tText)
                 .padding(12)
@@ -456,7 +461,7 @@ private struct UserInputSheet: View {
 
             // Boutons
             HStack(spacing: 12) {
-                Button("Annuler") { dismiss() }
+                Button(store.t("cancel")) { dismiss() }
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundColor(.tMuted)
                     .frame(maxWidth: .infinity).padding(.vertical, 14)
@@ -470,7 +475,7 @@ private struct UserInputSheet: View {
                         if isRedeeming {
                             ProgressView().tint(.white)
                         } else {
-                            Text("Racheter")
+                            Text(store.t("points_redeem"))
                                 .font(.system(size: 15, weight: .bold))
                         }
                     }

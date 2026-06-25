@@ -143,7 +143,28 @@ private let translations: [Lang: [String: String]] = [
         "source_twitch": "Twitch Officiel",
         "source_twitch_sub": "Avec publicités",
         "source_cloudflare": "Cloudflare Worker",
-        "source_cloudflare_sub": "Proxy personnel"
+        "source_cloudflare_sub": "Proxy personnel",
+
+        // Chat & Points
+        "chat_connected": "Chat connecté", "chat_connecting": "Connexion...",
+        "chat_send_ph": "Envoyer un message…", "chat_connecting_ph": "Connexion en cours…",
+        "chat_follow": "Suivre", "chat_first_message": "Premier message",
+        "points_title": "Points de chaîne",
+        "points_connect_title": "Connecte ton compte Twitch",
+        "points_connect_desc": "Nécessaire pour afficher ton solde et réclamer les coffres.",
+        "points_connect_btn": "Se connecter",
+        "points_loading": "Chargement des récompenses…",
+        "points_none": "Aucune récompense disponible",
+        "points_claim_bonus": "Réclamer le bonus", "points_bonus_claimed": "Bonus réclamé ! 🎉",
+        "points_redeem": "Racheter", "points_insufficient": "Insuff.",
+        "points_out_of_stock": "Rupture de stock", "points_paused": "En pause",
+        "points_input_ph": "Votre message…", "points_unit": "pts",
+        "points_redeemed": "réclamé ✓", "points_error": "Erreur",
+        "points_network_error": "Erreur réseau", "points_missing": "Il te manque",
+        "points_by": "par",
+        "err_not_enough": "Pas assez de points", "err_reward_not_found": "Récompense introuvable",
+        "err_points_disabled": "Points désactivés", "err_already_claimed": "Déjà réclamé",
+        "err_cooldown": "Attends un peu"
     ],
     .en: [
         "title": "Watch Twitch No Sub",
@@ -197,7 +218,28 @@ private let translations: [Lang: [String: String]] = [
         "source_twitch": "Official Twitch",
         "source_twitch_sub": "With ads",
         "source_cloudflare": "Cloudflare Worker",
-        "source_cloudflare_sub": "Personal proxy"
+        "source_cloudflare_sub": "Personal proxy",
+
+        // Chat & Points
+        "chat_connected": "Chat connected", "chat_connecting": "Connecting...",
+        "chat_send_ph": "Send a message…", "chat_connecting_ph": "Connecting…",
+        "chat_follow": "Follow", "chat_first_message": "First message",
+        "points_title": "Channel Points",
+        "points_connect_title": "Connect your Twitch account",
+        "points_connect_desc": "Required to show your balance and claim chests.",
+        "points_connect_btn": "Log in",
+        "points_loading": "Loading rewards…",
+        "points_none": "No rewards available",
+        "points_claim_bonus": "Claim bonus", "points_bonus_claimed": "Bonus claimed! 🎉",
+        "points_redeem": "Redeem", "points_insufficient": "Low",
+        "points_out_of_stock": "Out of stock", "points_paused": "Paused",
+        "points_input_ph": "Your message…", "points_unit": "pts",
+        "points_redeemed": "redeemed ✓", "points_error": "Error",
+        "points_network_error": "Network error", "points_missing": "You need",
+        "points_by": "by",
+        "err_not_enough": "Not enough points", "err_reward_not_found": "Reward not found",
+        "err_points_disabled": "Points disabled", "err_already_claimed": "Already claimed",
+        "err_cooldown": "Wait a moment"
     ],
     .es: [
         "title": "Ver Twitch sin Sub",
@@ -251,7 +293,28 @@ private let translations: [Lang: [String: String]] = [
         "source_twitch": "Twitch Oficial",
         "source_twitch_sub": "Con anuncios",
         "source_cloudflare": "Cloudflare Worker",
-        "source_cloudflare_sub": "Proxy personal"
+        "source_cloudflare_sub": "Proxy personal",
+
+        // Chat & Points
+        "chat_connected": "Chat conectado", "chat_connecting": "Conectando...",
+        "chat_send_ph": "Enviar un mensaje…", "chat_connecting_ph": "Conectando…",
+        "chat_follow": "Seguir", "chat_first_message": "Primer mensaje",
+        "points_title": "Puntos del canal",
+        "points_connect_title": "Conecta tu cuenta de Twitch",
+        "points_connect_desc": "Necesario para ver tu saldo y reclamar cofres.",
+        "points_connect_btn": "Iniciar sesión",
+        "points_loading": "Cargando recompensas…",
+        "points_none": "Sin recompensas disponibles",
+        "points_claim_bonus": "Reclamar bono", "points_bonus_claimed": "¡Bono reclamado! 🎉",
+        "points_redeem": "Canjear", "points_insufficient": "Insuf.",
+        "points_out_of_stock": "Agotado", "points_paused": "En pausa",
+        "points_input_ph": "Tu mensaje…", "points_unit": "pts",
+        "points_redeemed": "canjeado ✓", "points_error": "Error",
+        "points_network_error": "Error de red", "points_missing": "Te faltan",
+        "points_by": "por",
+        "err_not_enough": "No tienes suficientes puntos", "err_reward_not_found": "Recompensa no encontrada",
+        "err_points_disabled": "Puntos desactivados", "err_already_claimed": "Ya reclamado",
+        "err_cooldown": "Espera un poco"
     ],
 ]
 

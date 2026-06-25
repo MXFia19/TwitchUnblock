@@ -83,6 +83,9 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
 struct VideoPlayerView: View {
     let qualityLinks: QualityLinks
     let vodId: String?
+    /// Mode compact (chat ouvert) : masque la barre Source / le lien pour laisser
+    /// un maximum de place au chat. Seul le lecteur reste visible.
+    var compact: Bool = false
 
     @EnvironmentObject private var store: AppStore
     @State private var selectedQuality: String = ""
@@ -109,6 +112,8 @@ struct VideoPlayerView: View {
                 .background(Color.black)
             }
 
+            // En mode compact (chat ouvert) on n'affiche que le lecteur.
+            if !compact {
             // ── Options bar ─────────────────────────────────────────
             HStack(spacing: 8) {
                 Button {
@@ -204,6 +209,7 @@ struct VideoPlayerView: View {
                     .cornerRadius(8)
                     .padding([.horizontal, .bottom], 12)
             }
+            } // fin if !compact
         }
         .background(Color.tCard)
         .cornerRadius(16)

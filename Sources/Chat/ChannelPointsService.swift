@@ -193,23 +193,28 @@ final class ChannelPointsService: ObservableObject {
         guard balance >= reward.cost else {
             let missing = reward.cost - balance
             logger.warn("POINTS", "Solde insuffisant", "manque \(formatted(missing)) pts")
-            errorMsg = "Il te manque \(formatted(missing)) pts"; return false
+            errorMsg = "\(t("points_missing")) \(formatted(missing)) \(t("points_unit"))"; return false
         }
-        var extra = ""
-        if let txt = userInput, !txt.isEmpty {
-            let safe = txt.replacingOccurrences(of: "\\", with: "\\\\")
-                          .replacingOccurrences(of: "\"",  with: "\\\"")
-            extra = ", userInput: \"\(safe)\""
+        // Le vrai champ GQL Twitch est `redeemCommunityPointsCustomReward`.
+        // `prompt` transporte le texte saisi par le viewer (rewards avec input requis).
+        func gqlEscape(_ s: String) -> String {
+            s.replacingOccurrences(of: "\\", with: "\\\\")
+             .replacingOccurrences(of: "\"", with: "\\\"")
+             .replacingOccurrences(of: "\n", with: " ")
         }
+        let txId       = UUID().uuidString
+        let safeTitle  = gqlEscape(reward.title)
+        let safePrompt = gqlEscape(userInput ?? "")
         let mutation = """
-        mutation { redeemCommunityPoints(input: {
-            channelID: "\(channelId)" rewardID: "\(reward.id)" \(extra)
-        }) { reward { id title cost } redemption { id } error { code } } }
+        mutation { redeemCommunityPointsCustomReward(input: {
+            channelID: "\(channelId)", cost: \(reward.cost), prompt: "\(safePrompt)",
+            rewardID: "\(reward.id)", title: "\(safeTitle)", transactionID: "\(txId)"
+        }) { redemption { id } error { code } } }
         """
         guard let json   = try? await gqlAuth(mutation, tag: "redeem") as? [String: Any],
               let data   = json["data"]                                   as? [String: Any],
-              let result = data["redeemCommunityPoints"]                  as? [String: Any]
-        else { logger.error("POINTS", "Rachat réseau échoué", nil); errorMsg = "Erreur réseau"; return false }
+              let result = data["redeemCommunityPointsCustomReward"]      as? [String: Any]
+        else { logger.error("POINTS", "Rachat réseau échoué", nil); errorMsg = t("points_network_error"); return false }
 
         if let err = result["error"] as? [String: Any], let code = err["code"] as? String {
             logger.warn("POINTS", "Rachat refusé", "\(code)")
@@ -361,15 +366,21 @@ final class ChannelPointsService: ObservableObject {
         return f.string(from: NSNumber(value: n)) ?? "\(n)"
     }
 
+    /// Traduction côté service (pas de View) : lit la langue depuis UserDefaults.
+    private var lang: Lang {
+        Lang(rawValue: UserDefaults.standard.string(forKey: "lang") ?? "fr") ?? .fr
+    }
+    func t(_ key: String) -> String { translate(key, lang) }
+
     private func redeemErrorLabel(_ code: String) -> String {
         switch code {
-        case "NOT_ENOUGH_POINTS":       return "Pas assez de points"
-        case "REWARD_NOT_FOUND":        return "Récompense introuvable"
-        case "CHANNEL_POINTS_DISABLED": return "Points désactivés"
-        case "REWARD_NOT_IN_STOCK":     return "Rupture de stock"
-        case "ALREADY_CLAIMED":         return "Déjà réclamé"
-        case "ON_COOLDOWN":             return "Attends un peu"
-        default:                         return "Erreur : \(code)"
+        case "NOT_ENOUGH_POINTS":       return t("err_not_enough")
+        case "REWARD_NOT_FOUND":        return t("err_reward_not_found")
+        case "CHANNEL_POINTS_DISABLED": return t("err_points_disabled")
+        case "REWARD_NOT_IN_STOCK":     return t("points_out_of_stock")
+        case "ALREADY_CLAIMED":         return t("err_already_claimed")
+        case "ON_COOLDOWN":             return t("err_cooldown")
+        default:                         return "\(t("points_error")) : \(code)"
         }
     }
 }

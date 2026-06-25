@@ -6,9 +6,6 @@ struct SettingsView: View {
     @State private var showLogs        = false
     @State private var showLogoutAlert = false
     @State private var showClearAlert  = false
-    
-    // Ajout d'une variable d'état pour l'édition manuelle du token
-    @State private var manualToken: String = ""
 
     private var vodCount:     Int { store.history.filter { $0.type == .vod }.count }
     private var channelCount: Int { store.history.filter { $0.type == .channel }.count }
@@ -186,67 +183,50 @@ struct SettingsView: View {
                     }
                 }
 
+
                 // ── DEBUG Points (temporaire) ─────────────────────────
                 settingCard {
                     VStack(alignment: .leading, spacing: 12) {
                         label("🔬", "DEBUG — Points de chaîne")
 
-                        Text("Saisis un nouveau token OAuth ou utilise celui existant pour tester le GQL manuellement.")
+                        Text("Copie le token ou la commande curl pour tester le GQL manuellement.")
                             .font(.system(size: 12))
                             .foregroundColor(.tMuted)
                             .fixedSize(horizontal: false, vertical: true)
-                        
-                        // Éditeur de Token
-                        HStack(spacing: 8) {
-                            SecureField("OAuth Token (ex: a1b2c3...)", text: $manualToken)
-                                .font(.system(size: 12, design: .monospaced))
-                                .padding(10)
-                                .background(Color.tSurface)
-                                .cornerRadius(8)
-                                .textInputAutocapitalization(.never)
-                                .autocorrectionDisabled(true)
-                            
-                            Button {
-                                store.twitchToken = manualToken.isEmpty ? nil : manualToken
-                                UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-                            } label: {
-                                Text("Sauver")
-                                    .font(.system(size: 12, weight: .bold))
-                                    .foregroundColor(.white)
-                                    .padding(.horizontal, 12).padding(.vertical, 10)
-                                    .background(Color.tPrimary)
-                                    .cornerRadius(8)
-                            }
-                        }
 
-                        if let token = store.twitchToken, !token.isEmpty {
-                            // Bouton pour copier le token actuel si besoin
-                            Button {
-                                UIPasteboard.general.string = token
-                            } label: {
-                                HStack {
-                                    Text("Copier le token actuel")
+                        if let token = store.twitchToken {
+                            // Token masqué + bouton copier
+                            HStack(spacing: 8) {
+                                Text(token.prefix(12) + "…" + token.suffix(4))
+                                    .font(.system(size: 12, design: .monospaced))
+                                    .foregroundColor(.tPurple)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                Button {
+                                    UIPasteboard.general.string = token
+                                } label: {
+                                    Label("Copier token", systemImage: "doc.on.doc")
                                         .font(.system(size: 12, weight: .semibold))
                                         .foregroundColor(.tPrimary)
-                                    Spacer()
-                                    Image(systemName: "doc.on.doc")
-                                        .foregroundColor(.tPrimary)
+                                        .padding(.horizontal, 10).padding(.vertical, 6)
+                                        .background(Color.tPrimary.opacity(0.15))
+                                        .cornerRadius(8)
                                 }
-                                .padding(.horizontal, 10).padding(.vertical, 8)
-                                .background(Color.tPrimary.opacity(0.15))
-                                .cornerRadius(8)
                             }
+                            .padding(10)
+                            .background(Color.tSurface)
+                            .cornerRadius(8)
 
-                            // Bouton test direct depuis l'app
+                            // Bouton test direct depuis l'app → résultat dans les Logs
                             Button {
                                 Task {
-                                    logger.info("DEBUG/GQL", "Test communityPoints…", "OAuth + kGQLClientID · canal: samueletienne")
+                                    logger.info("DEBUG/GQL", "Test communityPoints…",
+                                                "OAuth + kGQLClientID · canal: samueletienne")
                                     guard let url = URL(string: "https://gql.twitch.tv/gql") else { return }
                                     var req = URLRequest(url: url)
                                     req.httpMethod = "POST"
                                     req.setValue("kimne78kx3ncx6brgo4mv6wki5h1ko", forHTTPHeaderField: "Client-ID")
-                                    req.setValue("OAuth \(token)", forHTTPHeaderField: "Authorization")
-                                    req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                                    req.setValue("OAuth \(token)",                  forHTTPHeaderField: "Authorization")
+                                    req.setValue("application/json",                forHTTPHeaderField: "Content-Type")
                                     req.httpBody = try? JSONSerialization.data(withJSONObject: [
                                         "query": "{ channel(name: \"samueletienne\") { self { communityPoints { balance availableClaim { id } } } } }"
                                     ])
@@ -271,9 +251,9 @@ struct SettingsView: View {
                             }
 
                             // Commande curl pour test Mac
+                            let curlCmd = "curl -s -X POST https://gql.twitch.tv/gql -H \"Client-ID: kimne78kx3ncx6brgo4mv6wki5h1ko\" -H \"Authorization: OAuth \(token)\" -H \"Content-Type: application/json\" -d \'{\"query\":\"{ channel(name: \\\\\\\\\"\"samueletienne\"\\\\\\\\\") { self { communityPoints { balance } } } }\"}\'"
                             Button {
-                                let curlStr = "curl -s -X POST https://gql.twitch.tv/gql -H \"Client-ID: kimne78kx3ncx6brgo4mv6wki5h1ko\" -H \"Authorization: OAuth \(token)\" -H \"Content-Type: application/json\" -d '{\"query\":\"{ channel(name: \\\"samueletienne\\\") { self { communityPoints { balance } } } }\"}'"
-                                UIPasteboard.general.string = curlStr
+                                UIPasteboard.general.string = "curl -s -X POST https://gql.twitch.tv/gql -H \"Client-ID: kimne78kx3ncx6brgo4mv6wki5h1ko\" -H \"Authorization: OAuth \(token)\" -H \"Content-Type: application/json\" -d '{\"query\":\"{ channel(name: \\\"samueletienne\\\") { self { communityPoints { balance } } } }\"}\'"
                             } label: {
                                 Label("Copier commande curl (Mac Terminal)", systemImage: "terminal")
                                     .font(.system(size: 12, weight: .semibold))
@@ -283,6 +263,9 @@ struct SettingsView: View {
                                     .background(Color.tSurface)
                                     .cornerRadius(8)
                             }
+                        } else {
+                            Text("Connecte-toi d'abord à Twitch.")
+                                .font(.system(size: 13)).foregroundColor(.tMuted)
                         }
                     }
                 }
@@ -292,17 +275,12 @@ struct SettingsView: View {
             .padding(.horizontal, 12)
         }
         .background(Color.tDark)
-        .onAppear {
-            // Initialiser le champ texte avec le token actuel au chargement
-            manualToken = store.twitchToken ?? ""
-        }
         // ── Alerts ──────────────────────────────────────────────────
         .alert(store.t("btn_logout"), isPresented: $showLogoutAlert) {
             Button(store.t("cancel"), role: .cancel) {}
             Button(store.t("btn_logout"), role: .destructive) {
                 logger.authLogout()
                 store.logout()
-                manualToken = "" // Vider le champ lors de la déconnexion
             }
         } message: {
             Text(store.t("confirm_logout"))

@@ -75,6 +75,31 @@ struct SettingsView: View {
                     }
                 }
 
+                // ── Auto-claim coffres ──────────────────────────────
+                settingCard {
+                    VStack(alignment: .leading, spacing: 8) {
+                        label("🎁", store.t("auto_claim"))
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(store.t("auto_claim"))
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundColor(.tText)
+                                Text(store.t("auto_claim_sub"))
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.tMuted)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            Spacer()
+                            Toggle("", isOn: $store.autoClaimChest)
+                                .labelsHidden()
+                                .tint(.tPrimary)
+                                .onChange(of: store.autoClaimChest) { val in
+                                    logger.settingChanged("Auto-claim coffres", value: val ? "activé" : "désactivé")
+                                }
+                        }
+                    }
+                }
+
                 // ── Compte Twitch ───────────────────────────────────
                 settingCard {
                     VStack(alignment: .leading, spacing: 12) {

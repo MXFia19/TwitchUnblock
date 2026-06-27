@@ -50,7 +50,13 @@ final class ChannelPointsService: ObservableObject {
     // MARK: – Anti-spam claim
     /// Coffres dont le claim a échoué → on ne réessaie pas en boucle (évite le spam).
     private var failedClaims: Set<String> = []
-    /// Device-Id persistant (cohérence des requêtes GQL).
+
+    // MARK: – Client-Integrity (token minté via WebView éphémère, réutilisé ~1h en natif)
+    private var integrityTok:    String? = nil
+    private var integrityDevice: String  = ""
+    private var integrityExpiry: Date    = .distantPast
+
+    /// Device-Id persistant (cohérence des requêtes GQL de lecture).
     private var deviceId: String {
         if let d = UserDefaults.standard.string(forKey: "twitch_device_id") { return d }
         let chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
@@ -302,11 +308,13 @@ final class ChannelPointsService: ObservableObject {
     func claimBonus() async {
         guard let claimId = pendingClaimId else { return }
         logger.info("POINTS", "Réclamation du coffre…", "claimId: \(claimId.prefix(8))…")
-        // Claim via la WebView en persisted query (identique au client web) — integrity Kasada auto.
-        guard let json  = await TwitchWebGQL.shared.runPersisted(
-                              operationName: "ClaimCommunityPoints",
-                              variables: ["input": ["channelID": channelId, "claimID": claimId]],
-                              sha256: Self.claimQueryHash, token: token, tag: "claimBonus"),
+        // Claim en NATIF avec le token integrity (persisted query identique au client web).
+        let body: [[String: Any]] = [[
+            "operationName": "ClaimCommunityPoints",
+            "variables":     ["input": ["channelID": channelId, "claimID": claimId]],
+            "extensions":    ["persistedQuery": ["version": 1, "sha256Hash": Self.claimQueryHash]]
+        ]]
+        guard let json  = await nativeMutation(body: body, tag: "claimBonus"),
               let data  = json["data"]                  as? [String: Any],
               let claim = data["claimCommunityPoints"]  as? [String: Any]
         else {
@@ -366,8 +374,8 @@ final class ChannelPointsService: ObservableObject {
             rewardID: "\(reward.id)", title: "\(safeTitle)", transactionID: "\(txId)"
         }) { redemption { id } error { code } } }
         """
-        // Rachat exécuté via la WebView (integrity Kasada auto).
-        guard let json   = await TwitchWebGQL.shared.run(mutation, token: token, tag: "redeem"),
+        // Rachat en NATIF avec le token integrity.
+        guard let json   = await nativeMutation(body: ["query": mutation], tag: "redeem"),
               let data   = json["data"]                              as? [String: Any],
               let result = data["redeemCommunityPointsCustomReward"] as? [String: Any]
         else { logger.error("POINTS", "Rachat réseau échoué", nil); errorMsg = t("points_network_error"); return false }
@@ -515,6 +523,60 @@ final class ChannelPointsService: ObservableObject {
         }
 
         return try JSONSerialization.jsonObject(with: data)
+    }
+
+    // MARK: – Mutations integrity (claim / redeem) — token minté via WebView, requête native
+    /// Garantit un token Client-Integrity valide (le génère via WebView éphémère si besoin).
+    private func validIntegrity() async -> Bool {
+        if let _ = integrityTok, integrityExpiry > Date().addingTimeInterval(60), !integrityDevice.isEmpty {
+            return true
+        }
+        logger.info("POINTS", "Renouvellement du token integrity…", "WebView éphémère ~quelques s")
+        guard let mint = await TwitchWebGQL.shared.mintIntegrity(token: token) else {
+            logger.warn("POINTS", "Token integrity indisponible", "claim/redeem impossible pour l'instant")
+            return false
+        }
+        integrityTok    = mint.token
+        integrityDevice = mint.deviceId.isEmpty ? deviceId : mint.deviceId
+        integrityExpiry = mint.expiry
+        return true
+    }
+
+    /// Exécute une mutation EN NATIF avec le token Client-Integrity (pas de WebView).
+    /// `body` = l'objet JSON GQL (persisted query en tableau, ou {query: ...}).
+    private func nativeMutation(body: Any, tag: String) async -> [String: Any]? {
+        guard await validIntegrity(), let it = integrityTok else { return nil }
+        guard let url = URL(string: "https://gql.twitch.tv/gql") else { return nil }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue(kGQLClientID,                forHTTPHeaderField: "Client-ID")
+        req.setValue("OAuth \(token)",            forHTTPHeaderField: "Authorization")
+        req.setValue(integrityDevice,             forHTTPHeaderField: "X-Device-Id")
+        req.setValue(it,                          forHTTPHeaderField: "Client-Integrity")
+        req.setValue(Self.webUA,                  forHTTPHeaderField: "User-Agent")
+        req.setValue("text/plain;charset=UTF-8",  forHTTPHeaderField: "Content-Type")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: body)
+
+        logger.debug("POINTS/GQL", "→ \(tag) (natif + integrity)", nil)
+        guard let (data, resp) = try? await URLSession.shared.data(for: req),
+              (resp as? HTTPURLResponse)?.statusCode == 200,
+              let obj = try? JSONSerialization.jsonObject(with: data) else {
+            logger.warn("POINTS/GQL", "\(tag) : requête échouée", nil)
+            return nil
+        }
+        // Réponse : objet pour {query}, tableau pour persisted query.
+        let json = (obj as? [[String: Any]])?.first ?? (obj as? [String: Any])
+        if let errors = json?["errors"] as? [[String: Any]], !errors.isEmpty {
+            let msgs = errors.compactMap { $0["message"] as? String }.joined(separator: " · ")
+            logger.warn("POINTS/GQL", "Erreurs GQL dans \(tag)", msgs)
+            // Token integrity probablement expiré → on l'invalide pour re-mint au prochain coup.
+            if msgs.lowercased().contains("integrity") {
+                integrityTok = nil; integrityExpiry = .distantPast
+            }
+        } else {
+            logger.debug("POINTS/GQL", "← \(tag) OK (natif)", nil)
+        }
+        return json
     }
 
     // MARK: – Helpers

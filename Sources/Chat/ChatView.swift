@@ -159,6 +159,7 @@ struct ChatView: View {
                         String(tok.prefix(8)) + "…")
             chat.connect(channel: channelName, token: tok, login: store.twitchLogin)
         }
+        .onChange(of: store.autoClaimChest) { pointsService.autoClaim = $0 }
         .onAppear { Task { await setupChat() } }
         .onDisappear {
             chat.disconnect()
@@ -178,6 +179,7 @@ struct ChatView: View {
                 await BadgeService.shared.loadChannel(channelId: cid, token: tok)
             }
         }
+        pointsService.autoClaim = store.autoClaimChest
         // Points : on utilise le token de session web (cookie auth-token), pas l'OAuth.
         // Si absent, load() affiche quand même les récompenses et signale needsWebLogin.
         if let cid = channelId {

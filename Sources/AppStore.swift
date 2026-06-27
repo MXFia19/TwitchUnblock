@@ -40,6 +40,12 @@ final class AppStore: ObservableObject {
         didSet { UserDefaults.standard.set(useProxy, forKey: "twitch_use_proxy") }
     }
 
+    // MARK: – Points
+    /// Réclamer automatiquement les coffres bonus dès qu'ils sont disponibles.
+    @Published var autoClaimChest: Bool = true {
+        didSet { UserDefaults.standard.set(autoClaimChest, forKey: "auto_claim_chest") }
+    }
+
     // MARK: – History
     @Published var history: [HistoryItem] = [] {
         didSet { persistHistory() }
@@ -56,6 +62,7 @@ final class AppStore: ObservableObject {
         twitchWebToken = ud.string(forKey: "twitch_web_token")
         twitchLogin = ud.string(forKey: "twitch_login")
         useProxy = ud.object(forKey: "twitch_use_proxy") as? Bool ?? false
+        autoClaimChest = ud.object(forKey: "auto_claim_chest") as? Bool ?? true
         if let data = ud.data(forKey: "twitch_vod_history"),
            let decoded = try? JSONDecoder().decode([HistoryItem].self, from: data) {
             history = decoded

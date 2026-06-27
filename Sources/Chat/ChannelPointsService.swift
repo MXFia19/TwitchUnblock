@@ -47,12 +47,10 @@ final class ChannelPointsService: ObservableObject {
     /// Réclame automatiquement les coffres bonus dès qu'ils apparaissent.
     var autoClaim = true
 
-    // MARK: – Client-Integrity (anti-bot Twitch, requis pour claim/redeem)
-    private var integrityToken:  String? = nil
-    private var integrityExpiry: Date = .distantPast
+    // MARK: – Anti-spam claim
     /// Coffres dont le claim a échoué → on ne réessaie pas en boucle (évite le spam).
     private var failedClaims: Set<String> = []
-    /// Device-Id persistant (doit rester stable entre integrity et requêtes).
+    /// Device-Id persistant (cohérence des requêtes GQL).
     private var deviceId: String {
         if let d = UserDefaults.standard.string(forKey: "twitch_device_id") { return d }
         let chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
@@ -306,11 +304,12 @@ final class ChannelPointsService: ObservableObject {
             claimID: "\(claimId)" channelID: "\(channelId)"
         }) { currentPoints error { code } } }
         """
-        guard let json  = try? await gqlAuth(mutation, tag: "claimBonus", integrity: true) as? [String: Any],
-              let data  = json["data"]                                     as? [String: Any],
-              let claim = data["claimCommunityPoints"]                     as? [String: Any]
+        // Claim exécuté via la WebView (integrity Kasada auto) — sinon "failed integrity check".
+        guard let json  = await TwitchWebGQL.shared.run(mutation, token: token, tag: "claimBonus"),
+              let data  = json["data"]                  as? [String: Any],
+              let claim = data["claimCommunityPoints"]  as? [String: Any]
         else {
-            // Échec (réseau / integrity) → on mémorise pour ne pas spammer ce coffre.
+            // Échec → on mémorise pour ne pas spammer ce coffre.
             logger.error("POINTS", "Claim coffre échoué", nil)
             failedClaims.insert(claimId); pendingClaimId = nil; return
         }
@@ -360,9 +359,10 @@ final class ChannelPointsService: ObservableObject {
             rewardID: "\(reward.id)", title: "\(safeTitle)", transactionID: "\(txId)"
         }) { redemption { id } error { code } } }
         """
-        guard let json   = try? await gqlAuth(mutation, tag: "redeem", integrity: true) as? [String: Any],
-              let data   = json["data"]                                   as? [String: Any],
-              let result = data["redeemCommunityPointsCustomReward"]      as? [String: Any]
+        // Rachat exécuté via la WebView (integrity Kasada auto).
+        guard let json   = await TwitchWebGQL.shared.run(mutation, token: token, tag: "redeem"),
+              let data   = json["data"]                              as? [String: Any],
+              let result = data["redeemCommunityPointsCustomReward"] as? [String: Any]
         else { logger.error("POINTS", "Rachat réseau échoué", nil); errorMsg = t("points_network_error"); return false }
 
         if let err = result["error"] as? [String: Any], let code = err["code"] as? String {
@@ -462,44 +462,12 @@ final class ChannelPointsService: ObservableObject {
     // MARK: – GQL authentifié (Authorization: OAuth <token web> — données privées)
     // ✅ Token de session web (cookie auth-token) → communityPoints renvoyé correctement
     // ❌ Token OAuth custom (Helix) → communityPoints null (Client-ID incompatible avec GQL)
-    // `integrity: true` → attache le header Client-Integrity (requis pour claim/redeem).
-    private func gqlAuth(_ query: String, tag: String, integrity: Bool = false) async throws -> Any {
-        return try await makeGQLRequest(query, tag: tag, withAuth: true, integrity: integrity)
-    }
-
-    /// Récupère (et met en cache) un token Client-Integrity Twitch.
-    private func ensureIntegrity() async -> String? {
-        if let tok = integrityToken, integrityExpiry > Date().addingTimeInterval(60) { return tok }
-        guard let url = URL(string: "https://gql.twitch.tv/integrity") else { return nil }
-        var req = URLRequest(url: url)
-        req.httpMethod = "POST"
-        req.setValue(kGQLClientID,        forHTTPHeaderField: "Client-ID")
-        req.setValue("OAuth \(token)",    forHTTPHeaderField: "Authorization")
-        req.setValue(deviceId,            forHTTPHeaderField: "X-Device-Id")
-        req.setValue(Self.webUA,          forHTTPHeaderField: "User-Agent")
-        req.setValue("application/json",  forHTTPHeaderField: "Content-Type")
-        req.httpBody = Data("{}".utf8)
-        guard let (data, resp) = try? await URLSession.shared.data(for: req),
-              (resp as? HTTPURLResponse)?.statusCode == 200,
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let tok  = json["token"] as? String else {
-            logger.warn("POINTS/INTEGRITY", "Token integrity indisponible",
-                        "claim/redeem risque d'échouer")
-            return nil
-        }
-        integrityToken = tok
-        if let expMs = json["expiration"] as? Double {
-            integrityExpiry = Date(timeIntervalSince1970: expMs / 1000)
-        } else {
-            integrityExpiry = Date().addingTimeInterval(600)
-        }
-        logger.success("POINTS/INTEGRITY", "Token integrity obtenu",
-                       "expire dans \(Int(integrityExpiry.timeIntervalSinceNow))s")
-        return tok
+    private func gqlAuth(_ query: String, tag: String) async throws -> Any {
+        return try await makeGQLRequest(query, tag: tag, withAuth: true)
     }
 
     private func makeGQLRequest(_ query: String, tag: String,
-                                 withAuth: Bool, integrity: Bool = false) async throws -> Any {
+                                 withAuth: Bool) async throws -> Any {
         logger.debug("POINTS/GQL", "→ \(tag)", withAuth ? "OAuth" : "public")
         guard let url = URL(string: "https://gql.twitch.tv/gql") else { throw URLError(.badURL) }
 
@@ -511,9 +479,6 @@ final class ChannelPointsService: ObservableObject {
         req.setValue(Self.webUA,         forHTTPHeaderField: "User-Agent")
         if withAuth {
             req.setValue("OAuth \(token)", forHTTPHeaderField: "Authorization")
-        }
-        if integrity, let it = await ensureIntegrity() {
-            req.setValue(it, forHTTPHeaderField: "Client-Integrity")
         }
         req.httpBody = try JSONSerialization.data(withJSONObject: ["query": query])
 

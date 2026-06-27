@@ -172,6 +172,11 @@ struct ChannelPointsSheet: View {
                 .padding(.vertical, 12)
             }
 
+            // ── Bouton "Réclamer le bonus" (indépendant des récompenses) ─
+            if service.pendingClaimId != nil && !service.isLoading {
+                claimBonusButton
+            }
+
             // ── Contenu ──────────────────────────────────────────────
             if service.isLoading {
                 Spacer()
@@ -198,37 +203,6 @@ struct ChannelPointsSheet: View {
             } else {
                 ScrollView {
                     VStack(spacing: 0) {
-
-                        // ── Bouton "Réclamer le bonus" ────────────────
-                        if service.pendingClaimId != nil {
-                            Button {
-                                Task {
-                                    await service.claimBonus()
-                                    withAnimation {
-                                        redeemResult = .success(store.t("points_bonus_claimed"))
-                                    }
-                                    try? await Task.sleep(nanoseconds: 2_500_000_000)
-                                    withAnimation { redeemResult = nil }
-                                }
-                            } label: {
-                                HStack(spacing: 10) {
-                                    Image(systemName: "gift.fill")
-                                        .font(.system(size: 18))
-                                    Text(store.t("points_claim_bonus"))
-                                        .font(.system(size: 15, weight: .bold))
-                                    Spacer()
-                                    Image(systemName: "chevron.right")
-                                        .font(.system(size: 13))
-                                        .foregroundColor(.white.opacity(0.7))
-                                }
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 16).padding(.vertical, 14)
-                                .background(Color.tSuccess)
-                                .cornerRadius(12)
-                            }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 12)
-                        }
 
                         // ── Liste des récompenses ─────────────────────
                         LazyVStack(spacing: 1) {
@@ -278,6 +252,36 @@ struct ChannelPointsSheet: View {
                 }
             }
         }
+    }
+
+    // MARK: – Bouton "Réclamer le bonus" (coffre)
+    @ViewBuilder
+    private var claimBonusButton: some View {
+        Button {
+            Task {
+                await service.claimBonus()
+                withAnimation { redeemResult = .success(store.t("points_bonus_claimed")) }
+                try? await Task.sleep(nanoseconds: 2_500_000_000)
+                withAnimation { redeemResult = nil }
+            }
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "gift.fill")
+                    .font(.system(size: 18))
+                Text(store.t("points_claim_bonus"))
+                    .font(.system(size: 15, weight: .bold))
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13))
+                    .foregroundColor(.white.opacity(0.7))
+            }
+            .foregroundColor(.white)
+            .padding(.horizontal, 16).padding(.vertical, 14)
+            .background(Color.tSuccess)
+            .cornerRadius(12)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
     }
 }
 

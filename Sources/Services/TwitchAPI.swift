@@ -282,6 +282,26 @@ func getLive(channelName: String) async -> LiveData {
                     userId: userId, links: links, viewerCount: viewerCount, startedAt: startedAt)
 }
 
+// MARK: – getStreamStats (rafraîchissement LÉGER viewers/uptime, sans re-fetch des liens)
+func getStreamStats(channelName: String) async -> (viewerCount: Int, startedAt: Date?) {
+    let login = channelName.trimmingCharacters(in: .whitespaces).lowercased()
+    let q = "query { user(login: \"\(login)\") { stream { viewersCount createdAt } } }"
+    guard let json   = try? await twitchGQL(q) as? [String: Any],
+          let data   = json["data"]   as? [String: Any],
+          let user   = data["user"]   as? [String: Any],
+          let stream = user["stream"] as? [String: Any] else {
+        return (0, nil)
+    }
+    let viewerCount = stream["viewersCount"] as? Int ?? 0
+    var startedAt: Date? = nil
+    if let createdAtStr = stream["createdAt"] as? String {
+        let df = ISO8601DateFormatter()
+        df.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        startedAt = df.date(from: createdAtStr) ?? ISO8601DateFormatter().date(from: createdAtStr)
+    }
+    return (viewerCount, startedAt)
+}
+
 // MARK: – getChannelVideos
 func getChannelVideos(channelName: String, cursor: String? = nil) async -> (videos: [VodData], avatar: String?, error: String?, cursor: String?) {
     logger.info("VIDEOS", "Chargement VODs de \"\(channelName)\"\(cursor != nil ? " (Page suivante)" : "")")

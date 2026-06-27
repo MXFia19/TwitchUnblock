@@ -47,6 +47,20 @@ final class ChannelPointsService: ObservableObject {
     /// Réclame automatiquement les coffres bonus dès qu'ils apparaissent.
     var autoClaim = true
 
+    // MARK: – Client-Integrity (anti-bot Twitch, requis pour claim/redeem)
+    private var integrityToken:  String? = nil
+    private var integrityExpiry: Date = .distantPast
+    /// Coffres dont le claim a échoué → on ne réessaie pas en boucle (évite le spam).
+    private var failedClaims: Set<String> = []
+    /// Device-Id persistant (doit rester stable entre integrity et requêtes).
+    private var deviceId: String {
+        if let d = UserDefaults.standard.string(forKey: "twitch_device_id") { return d }
+        let chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+        let d = String((0..<32).map { _ in chars.randomElement()! })
+        UserDefaults.standard.set(d, forKey: "twitch_device_id")
+        return d
+    }
+
     // MARK: – Load
     func load(channelLogin: String, channelId: String, token: String,
               userLogin: String? = nil, viewerId: String? = nil) async {
@@ -144,7 +158,7 @@ final class ChannelPointsService: ObservableObject {
         } else {
             logger.debug("POINTS", "Balance inchangée", "\(formatted(balance)) pts")
         }
-        if pendingClaimId == nil, let cid = b.claimId {
+        if pendingClaimId == nil, let cid = b.claimId, !failedClaims.contains(cid) {
             pendingClaimId = cid
             logger.success("POINTS", "🎁 Coffre détecté", "claimId: \(cid.prefix(8))…")
             if autoClaim { await claimBonus() }
@@ -165,7 +179,8 @@ final class ChannelPointsService: ObservableObject {
               let selfObj = channel["self"]                                as? [String: Any],
               let pts     = selfObj["communityPoints"]                     as? [String: Any],
               let claim   = pts["availableClaim"]                          as? [String: Any],
-              let cid     = claim["id"]                                    as? String
+              let cid     = claim["id"]                                    as? String,
+              !failedClaims.contains(cid)
         else {
             logger.debug("POINTS", "Pas de coffre disponible", nil)
             return
@@ -291,14 +306,18 @@ final class ChannelPointsService: ObservableObject {
             claimID: "\(claimId)" channelID: "\(channelId)"
         }) { currentPoints error { code } } }
         """
-        guard let json  = try? await gqlAuth(mutation, tag: "claimBonus") as? [String: Any],
+        guard let json  = try? await gqlAuth(mutation, tag: "claimBonus", integrity: true) as? [String: Any],
               let data  = json["data"]                                     as? [String: Any],
               let claim = data["claimCommunityPoints"]                     as? [String: Any]
-        else { logger.error("POINTS", "Claim coffre échoué", nil); return }
+        else {
+            // Échec (réseau / integrity) → on mémorise pour ne pas spammer ce coffre.
+            logger.error("POINTS", "Claim coffre échoué", nil)
+            failedClaims.insert(claimId); pendingClaimId = nil; return
+        }
 
         if let err = claim["error"] as? [String: Any], let code = err["code"] as? String {
             logger.error("POINTS", "Claim refusé", "code: \(code)")
-            pendingClaimId = nil; return
+            failedClaims.insert(claimId); pendingClaimId = nil; return
         }
         if let pts = claim["currentPoints"] as? Int {
             let gained = pts - balance
@@ -341,7 +360,7 @@ final class ChannelPointsService: ObservableObject {
             rewardID: "\(reward.id)", title: "\(safeTitle)", transactionID: "\(txId)"
         }) { redemption { id } error { code } } }
         """
-        guard let json   = try? await gqlAuth(mutation, tag: "redeem") as? [String: Any],
+        guard let json   = try? await gqlAuth(mutation, tag: "redeem", integrity: true) as? [String: Any],
               let data   = json["data"]                                   as? [String: Any],
               let result = data["redeemCommunityPointsCustomReward"]      as? [String: Any]
         else { logger.error("POINTS", "Rachat réseau échoué", nil); errorMsg = t("points_network_error"); return false }
@@ -443,12 +462,44 @@ final class ChannelPointsService: ObservableObject {
     // MARK: – GQL authentifié (Authorization: OAuth <token web> — données privées)
     // ✅ Token de session web (cookie auth-token) → communityPoints renvoyé correctement
     // ❌ Token OAuth custom (Helix) → communityPoints null (Client-ID incompatible avec GQL)
-    private func gqlAuth(_ query: String, tag: String) async throws -> Any {
-        return try await makeGQLRequest(query, tag: tag, withAuth: true)
+    // `integrity: true` → attache le header Client-Integrity (requis pour claim/redeem).
+    private func gqlAuth(_ query: String, tag: String, integrity: Bool = false) async throws -> Any {
+        return try await makeGQLRequest(query, tag: tag, withAuth: true, integrity: integrity)
+    }
+
+    /// Récupère (et met en cache) un token Client-Integrity Twitch.
+    private func ensureIntegrity() async -> String? {
+        if let tok = integrityToken, integrityExpiry > Date().addingTimeInterval(60) { return tok }
+        guard let url = URL(string: "https://gql.twitch.tv/integrity") else { return nil }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue(kGQLClientID,        forHTTPHeaderField: "Client-ID")
+        req.setValue("OAuth \(token)",    forHTTPHeaderField: "Authorization")
+        req.setValue(deviceId,            forHTTPHeaderField: "X-Device-Id")
+        req.setValue(Self.webUA,          forHTTPHeaderField: "User-Agent")
+        req.setValue("application/json",  forHTTPHeaderField: "Content-Type")
+        req.httpBody = Data("{}".utf8)
+        guard let (data, resp) = try? await URLSession.shared.data(for: req),
+              (resp as? HTTPURLResponse)?.statusCode == 200,
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let tok  = json["token"] as? String else {
+            logger.warn("POINTS/INTEGRITY", "Token integrity indisponible",
+                        "claim/redeem risque d'échouer")
+            return nil
+        }
+        integrityToken = tok
+        if let expMs = json["expiration"] as? Double {
+            integrityExpiry = Date(timeIntervalSince1970: expMs / 1000)
+        } else {
+            integrityExpiry = Date().addingTimeInterval(600)
+        }
+        logger.success("POINTS/INTEGRITY", "Token integrity obtenu",
+                       "expire dans \(Int(integrityExpiry.timeIntervalSinceNow))s")
+        return tok
     }
 
     private func makeGQLRequest(_ query: String, tag: String,
-                                 withAuth: Bool) async throws -> Any {
+                                 withAuth: Bool, integrity: Bool = false) async throws -> Any {
         logger.debug("POINTS/GQL", "→ \(tag)", withAuth ? "OAuth" : "public")
         guard let url = URL(string: "https://gql.twitch.tv/gql") else { throw URLError(.badURL) }
 
@@ -456,8 +507,13 @@ final class ChannelPointsService: ObservableObject {
         req.httpMethod = "POST"
         req.setValue(kGQLClientID,       forHTTPHeaderField: "Client-ID")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue(deviceId,           forHTTPHeaderField: "X-Device-Id")
+        req.setValue(Self.webUA,         forHTTPHeaderField: "User-Agent")
         if withAuth {
             req.setValue("OAuth \(token)", forHTTPHeaderField: "Authorization")
+        }
+        if integrity, let it = await ensureIntegrity() {
+            req.setValue(it, forHTTPHeaderField: "Client-Integrity")
         }
         req.httpBody = try JSONSerialization.data(withJSONObject: ["query": query])
 

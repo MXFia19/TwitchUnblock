@@ -432,10 +432,12 @@ struct MainTabView: View {
         uptimeTimer  = Timer.scheduledTimer(withTimeInterval: 1,  repeats: true) { _ in updateUptime() }
         refreshTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { _ in
             Task {
-                let data = await getLive(channelName: channel)
+                // Rafraîchissement LÉGER : ne re-fetch PAS les liens du stream,
+                // juste le nombre de viewers et l'uptime.
+                let stats = await getStreamStats(channelName: channel)
                 await MainActor.run {
-                    if data.viewerCount > 0  { liveViewerCount = data.viewerCount }
-                    if let s = data.startedAt { liveStartedAt  = s }
+                    if stats.viewerCount > 0  { liveViewerCount = stats.viewerCount }
+                    if let s = stats.startedAt { liveStartedAt  = s }
                 }
             }
         }

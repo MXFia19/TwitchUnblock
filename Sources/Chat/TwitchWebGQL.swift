@@ -96,14 +96,19 @@ final class TwitchWebGQL: NSObject, WKNavigationDelegate {
         await waitReady()
         guard let wv = webView else { return nil }
 
+        // On lit le device-id (cookie unique_id) de la page : le token integrity de
+        // Kasada y est lié, donc il DOIT figurer dans la requête sinon mismatch.
         let jsBody = """
+        const did = (document.cookie.match(/unique_id=([^;]+)/) || [])[1];
+        const headers = {
+            'Content-Type': 'text/plain;charset=UTF-8',
+            'Client-ID': clientId,
+            'Authorization': 'OAuth ' + token
+        };
+        if (did) headers['X-Device-Id'] = did;
         const r = await fetch('https://gql.twitch.tv/gql', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'text/plain;charset=UTF-8',
-                'Client-ID': clientId,
-                'Authorization': 'OAuth ' + token
-            },
+            headers: headers,
             body: bodyString
         });
         return await r.text();

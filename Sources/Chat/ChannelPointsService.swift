@@ -296,16 +296,17 @@ final class ChannelPointsService: ObservableObject {
     }
 
     // MARK: – Claim bonus
+    // Hash de la persisted query `ClaimCommunityPoints` (capturé sur le client web).
+    private static let claimQueryHash = "46aaeebe02c99afdf4fc97c7c0cba964124bf6b0af229395f1f6d1feed05b3d0"
+
     func claimBonus() async {
         guard let claimId = pendingClaimId else { return }
         logger.info("POINTS", "Réclamation du coffre…", "claimId: \(claimId.prefix(8))…")
-        let mutation = """
-        mutation { claimCommunityPoints(input: {
-            claimID: "\(claimId)" channelID: "\(channelId)"
-        }) { currentPoints error { code } } }
-        """
-        // Claim exécuté via la WebView (integrity Kasada auto) — sinon "failed integrity check".
-        guard let json  = await TwitchWebGQL.shared.run(mutation, token: token, tag: "claimBonus"),
+        // Claim via la WebView en persisted query (identique au client web) — integrity Kasada auto.
+        guard let json  = await TwitchWebGQL.shared.runPersisted(
+                              operationName: "ClaimCommunityPoints",
+                              variables: ["input": ["channelID": channelId, "claimID": claimId]],
+                              sha256: Self.claimQueryHash, token: token, tag: "claimBonus"),
               let data  = json["data"]                  as? [String: Any],
               let claim = data["claimCommunityPoints"]  as? [String: Any]
         else {
@@ -318,13 +319,19 @@ final class ChannelPointsService: ObservableObject {
             logger.error("POINTS", "Claim refusé", "code: \(code)")
             failedClaims.insert(claimId); pendingClaimId = nil; return
         }
+        // Pas d'erreur → succès. Le selection-set de la persisted query ne renvoie pas
+        // toujours `currentPoints` : on nettoie le coffre et on rafraîchit le solde.
+        pendingClaimId = nil
         if let pts = claim["currentPoints"] as? Int {
             let gained = pts - balance
             logger.success("POINTS", "🎉 Coffre réclamé !", "+\(gained) pts · total: \(formatted(pts))")
-            balance = pts; pendingClaimId = nil
+            balance = pts
             withAnimation { lastBalanceChange = gained }
             try? await Task.sleep(nanoseconds: 3_000_000_000)
             withAnimation { lastBalanceChange = 0 }
+        } else {
+            logger.success("POINTS", "🎉 Coffre réclamé !", "rafraîchissement du solde…")
+            await refreshBalance()
         }
     }
 

@@ -70,13 +70,33 @@ final class TwitchWebGQL: NSObject, WKNavigationDelegate {
     }
 
     // MARK: Exécution
-    /// Exécute une requête/mutation GQL DANS la page twitch.tv (headers Kasada auto).
-    /// Retourne le JSON décodé, ou nil en cas d'échec.
+    /// Mutation en query brute (ex: redeem).
     func run(_ query: String, token: String, tag: String) async -> [String: Any]? {
+        guard let data = try? JSONSerialization.data(withJSONObject: ["query": query]),
+              let bodyString = String(data: data, encoding: .utf8) else { return nil }
+        return await execute(bodyString: bodyString, token: token, tag: tag)
+    }
+
+    /// Mutation via *persisted query* (identique au client web Twitch).
+    func runPersisted(operationName: String, variables: [String: Any],
+                      sha256: String, token: String, tag: String) async -> [String: Any]? {
+        let payload: [[String: Any]] = [[
+            "operationName": operationName,
+            "variables":     variables,
+            "extensions":    ["persistedQuery": ["version": 1, "sha256Hash": sha256]]
+        ]]
+        guard let data = try? JSONSerialization.data(withJSONObject: payload),
+              let bodyString = String(data: data, encoding: .utf8) else { return nil }
+        return await execute(bodyString: bodyString, token: token, tag: tag)
+    }
+
+    /// Envoie le body GQL via `fetch()` DANS la page (headers Kasada auto-injectés).
+    /// Retourne l'objet `{data, errors}` (déballe le tableau si réponse batchée).
+    private func execute(bodyString: String, token: String, tag: String) async -> [String: Any]? {
         await waitReady()
         guard let wv = webView else { return nil }
 
-        let body = """
+        let jsBody = """
         const r = await fetch('https://gql.twitch.tv/gql', {
             method: 'POST',
             headers: {
@@ -84,22 +104,25 @@ final class TwitchWebGQL: NSObject, WKNavigationDelegate {
                 'Client-ID': clientId,
                 'Authorization': 'OAuth ' + token
             },
-            body: JSON.stringify({ query: query })
+            body: bodyString
         });
         return await r.text();
         """
         do {
             let result = try await wv.callAsyncJavaScript(
-                body,
-                arguments: ["clientId": kGQLClientID, "token": token, "query": query],
+                jsBody,
+                arguments: ["clientId": kGQLClientID, "token": token, "bodyString": bodyString],
                 contentWorld: .page
             )
             guard let text = result as? String,
                   let data = text.data(using: .utf8),
-                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                  let obj  = try? JSONSerialization.jsonObject(with: data) else {
                 logger.warn("WEBGQL", "Réponse illisible (\(tag))", nil)
                 return nil
             }
+            // Twitch renvoie un objet pour {query}, un tableau pour les persisted queries.
+            let json: [String: Any]? = (obj as? [[String: Any]])?.first ?? (obj as? [String: Any])
+            guard let json = json else { return nil }
             if let errors = json["errors"] as? [[String: Any]], !errors.isEmpty {
                 let msgs = errors.compactMap { $0["message"] as? String }.joined(separator: " · ")
                 logger.warn("WEBGQL", "Erreurs GQL (\(tag))", msgs)

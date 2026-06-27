@@ -35,9 +35,21 @@ final class ChannelPointsService: ObservableObject {
     private let balancePollInterval: TimeInterval = 60
     private let claimPollInterval:   TimeInterval = 10
 
+    // MARK: – Présence "minute-watched" (pour gagner des points passivement)
+    // Twitch ne crédite les points passifs (~10/5min) et ne génère les coffres
+    // (~15min) que s'il te considère comme spectateur. On lui envoie donc des
+    // événements minute-watched toutes les 60s, comme le client web.
+    private var viewerId    = ""
+    private var spadeURL:    String? = nil
+    private var broadcastId: String? = nil
+    private var watchTimer:  Timer? = nil
+    private let watchPollInterval: TimeInterval = 60
+    /// Réclame automatiquement les coffres bonus dès qu'ils apparaissent.
+    var autoClaim = true
+
     // MARK: – Load
     func load(channelLogin: String, channelId: String, token: String,
-              userLogin: String? = nil) async {
+              userLogin: String? = nil, viewerId: String? = nil) async {
         guard !channelId.isEmpty else {
             logger.warn("POINTS", "Chargement annulé", "channelId manquant")
             return
@@ -45,6 +57,7 @@ final class ChannelPointsService: ObservableObject {
         self.channelLogin = channelLogin
         self.channelId    = channelId
         self.token        = token
+        self.viewerId     = viewerId ?? ""
         needsWebLogin     = false
         stopPolling()
 
@@ -81,8 +94,11 @@ final class ChannelPointsService: ObservableObject {
         if rewards.isEmpty {
             logger.info("POINTS", "Aucune récompense", "canal sans custom rewards")
         }
-        // On ne lance le polling que si le token web est toujours valide.
-        if !needsWebLogin { startPolling() }
+        // On ne lance le polling et la présence que si le token web est valide.
+        if !needsWebLogin {
+            startPolling()
+            startWatchPresence()
+        }
         isLoading = false
     }
 
@@ -102,11 +118,12 @@ final class ChannelPointsService: ObservableObject {
     }
 
     func stopPolling() {
-        if balanceTimer != nil || claimTimer != nil {
+        if balanceTimer != nil || claimTimer != nil || watchTimer != nil {
             logger.debug("POINTS", "Polling arrêté", "canal: \(channelLogin)")
         }
         balanceTimer?.invalidate(); balanceTimer = nil
         claimTimer?.invalidate();   claimTimer   = nil
+        watchTimer?.invalidate();   watchTimer   = nil
     }
 
     // MARK: – Refresh balance (60s)
@@ -130,6 +147,7 @@ final class ChannelPointsService: ObservableObject {
         if pendingClaimId == nil, let cid = b.claimId {
             pendingClaimId = cid
             logger.success("POINTS", "🎁 Coffre détecté", "claimId: \(cid.prefix(8))…")
+            if autoClaim { await claimBonus() }
         }
     }
 
@@ -155,6 +173,113 @@ final class ChannelPointsService: ObservableObject {
         pendingClaimId = cid
         logger.success("POINTS", "🎁 Coffre bonus disponible !",
                        "claimId: \(cid.prefix(8))… · canal: \(channelLogin)")
+        if autoClaim { await claimBonus() }
+    }
+
+    // MARK: – Présence minute-watched
+    private static let webUA =
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 "
+        + "(KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1"
+
+    private func startWatchPresence() {
+        Task {
+            // broadcastId + spade en parallèle ; viewerId résolu si absent.
+            async let bid   = fetchBroadcastId()
+            async let spade = resolveSpadeURL()
+            if viewerId.isEmpty { viewerId = (await fetchViewerId()) ?? "" }
+            broadcastId = await bid
+            spadeURL    = await spade
+
+            guard let bcast = broadcastId, let url = spadeURL, !viewerId.isEmpty, !url.isEmpty else {
+                logger.warn("POINTS/WATCH", "Présence désactivée",
+                            "broadcast:\(broadcastId != nil) · spade:\(spadeURL != nil) · viewer:\(!viewerId.isEmpty)")
+                return
+            }
+            logger.success("POINTS/WATCH", "Présence active",
+                           "minute-watched /\(Int(watchPollInterval))s · broadcast: \(bcast.prefix(8))…")
+            await sendMinuteWatched()
+            watchTimer?.invalidate()
+            watchTimer = Timer.scheduledTimer(withTimeInterval: watchPollInterval, repeats: true) { [weak self] _ in
+                Task { await self?.sendMinuteWatched() }
+            }
+        }
+    }
+
+    /// Envoie un événement "minute-watched" à l'endpoint analytics Twitch (spade).
+    /// C'est ce qui fait que Twitch te crédite des points passifs et génère les coffres.
+    private func sendMinuteWatched() async {
+        guard let spade = spadeURL, let bcast = broadcastId,
+              let uid = Int(viewerId), let url = URL(string: spade) else { return }
+        let payload: [[String: Any]] = [[
+            "event": "minute-watched",
+            "properties": [
+                "channel_id":   channelId,
+                "broadcast_id": bcast,
+                "channel":      channelLogin,
+                "user_id":      uid,
+                "player":       "site",
+                "live":         true
+            ]
+        ]]
+        guard let data = try? JSONSerialization.data(withJSONObject: payload) else { return }
+        let b64  = data.base64EncodedString()
+        let safe = b64.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? b64
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+        req.setValue(Self.webUA, forHTTPHeaderField: "User-Agent")
+        req.httpBody = "data=\(safe)".data(using: .utf8)
+        if let (_, resp) = try? await URLSession.shared.data(for: req) {
+            let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+            logger.debug("POINTS/WATCH", "minute-watched envoyé", "HTTP \(code)")
+        } else {
+            logger.warn("POINTS/WATCH", "minute-watched échoué", "canal: \(channelLogin)")
+        }
+    }
+
+    /// Récupère l'ID du viewer connecté via le token web.
+    private func fetchViewerId() async -> String? {
+        guard let json = try? await gqlAuth("{ currentUser { id } }", tag: "viewerId") as? [String: Any],
+              let data = json["data"]        as? [String: Any],
+              let user = data["currentUser"] as? [String: Any],
+              let id   = user["id"]          as? String else { return nil }
+        return id
+    }
+
+    /// Récupère le broadcast_id du live en cours (nil si hors-ligne).
+    private func fetchBroadcastId() async -> String? {
+        let q = "{ user(login: \"\(channelLogin)\") { stream { id } } }"
+        guard let json   = try? await gqlPublic(q, tag: "broadcastId") as? [String: Any],
+              let data   = json["data"]   as? [String: Any],
+              let user   = data["user"]   as? [String: Any],
+              let stream = user["stream"] as? [String: Any],
+              let id     = stream["id"]   as? String else { return nil }
+        return id
+    }
+
+    /// Découvre l'URL "spade" (endpoint analytics) depuis la page du streamer.
+    private func resolveSpadeURL() async -> String? {
+        func body(_ urlStr: String) async -> String? {
+            guard let u = URL(string: urlStr) else { return nil }
+            var req = URLRequest(url: u)
+            req.setValue(Self.webUA, forHTTPHeaderField: "User-Agent")
+            guard let (d, _) = try? await URLSession.shared.data(for: req) else { return nil }
+            return String(data: d, encoding: .utf8)
+        }
+        func match(_ s: String, _ pattern: String) -> String? {
+            guard let re = try? NSRegularExpression(pattern: pattern),
+                  let m  = re.firstMatch(in: s, range: NSRange(s.startIndex..., in: s)),
+                  m.numberOfRanges > 1,
+                  let r  = Range(m.range(at: 1), in: s) else { return nil }
+            return String(s[r]).replacingOccurrences(of: "\\/", with: "/")
+        }
+        guard let html = await body("https://www.twitch.tv/\(channelLogin)") else { return nil }
+        // 1. spade_url parfois directement dans la page
+        if let direct = match(html, #""spade_url"\s*:\s*"(https:[^"]+)""#) { return direct }
+        // 2. sinon via le fichier settings.<hash>.js
+        guard let settingsURL = match(html, #"(https://[^"']+?/config/settings\.[A-Za-z0-9]+\.js)"#),
+              let js = await body(settingsURL) else { return nil }
+        return match(js, #""spade_url"\s*:\s*"(https:[^"]+)""#)
     }
 
     // MARK: – Claim bonus

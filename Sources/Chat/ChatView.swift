@@ -147,7 +147,8 @@ struct ChatView: View {
                     channelLogin: channelName,
                     channelId:   cid,
                     token:       newWebToken ?? "",
-                    userLogin:   store.twitchLogin
+                    userLogin:   store.twitchLogin,
+                    viewerId:    store.twitchUserId
                 )
             }
         }
@@ -184,7 +185,8 @@ struct ChatView: View {
                 channelLogin: channelName,
                 channelId:   cid,
                 token:       store.twitchWebToken ?? "",
-                userLogin:   login
+                userLogin:   login,
+                viewerId:    store.twitchUserId
             )
         }
         chat.channelId = channelId

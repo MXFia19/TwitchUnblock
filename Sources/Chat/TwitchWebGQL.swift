@@ -96,22 +96,33 @@ final class TwitchWebGQL: NSObject, WKNavigationDelegate {
         await waitReady()
         guard let wv = webView else { return nil }
 
-        // On lit le device-id (cookie unique_id) de la page : le token integrity de
-        // Kasada y est lié, donc il DOIT figurer dans la requête sinon mismatch.
+        // Flux integrity correct :
+        //  1. POST /integrity DANS la page → Kasada y ajoute les x-kpsdk-* → token valide.
+        //  2. mutation envoyée AVEC ce Client-Integrity + le device-id (cookie unique_id).
         let jsBody = """
-        const did = (document.cookie.match(/unique_id=([^;]+)/) || [])[1];
+        const did = (document.cookie.match(/unique_id=([^;]+)/) || [])[1] || '';
+        let integrity = '';
+        try {
+            const ir = await fetch('https://gql.twitch.tv/integrity', {
+                method: 'POST',
+                headers: { 'Client-ID': clientId, 'Authorization': 'OAuth ' + token, 'X-Device-Id': did }
+            });
+            const ij = await ir.json();
+            integrity = ij.token || '';
+        } catch (e) {}
         const headers = {
             'Content-Type': 'text/plain;charset=UTF-8',
             'Client-ID': clientId,
             'Authorization': 'OAuth ' + token
         };
         if (did) headers['X-Device-Id'] = did;
+        if (integrity) headers['Client-Integrity'] = integrity;
         const r = await fetch('https://gql.twitch.tv/gql', {
             method: 'POST',
             headers: headers,
             body: bodyString
         });
-        return await r.text();
+        return 'INTEGRITY:' + (integrity ? 'ok' : 'vide') + '\\n' + (await r.text());
         """
         do {
             let result = try await wv.callAsyncJavaScript(
@@ -119,8 +130,14 @@ final class TwitchWebGQL: NSObject, WKNavigationDelegate {
                 arguments: ["clientId": kGQLClientID, "token": token, "bodyString": bodyString],
                 contentWorld: .page
             )
-            guard let text = result as? String,
-                  let data = text.data(using: .utf8),
+            var text = result as? String ?? ""
+            // Préfixe diagnostic "INTEGRITY:ok|vide\n…" injecté par le JS.
+            if text.hasPrefix("INTEGRITY:"), let nl = text.firstIndex(of: "\n") {
+                let marker = String(text[text.index(text.startIndex, offsetBy: 10)..<nl])
+                logger.debug("WEBGQL", "Client-Integrity: \(marker)", tag)
+                text = String(text[text.index(after: nl)...])
+            }
+            guard let data = text.data(using: .utf8),
                   let obj  = try? JSONSerialization.jsonObject(with: data) else {
                 logger.warn("WEBGQL", "Réponse illisible (\(tag))", nil)
                 return nil

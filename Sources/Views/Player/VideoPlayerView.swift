@@ -121,7 +121,7 @@ struct VideoPlayerView: View {
 
             // ── Player ──────────────────────────────────────────────
             if let url = currentURL {
-                #if canImport(MobileVLCKit)
+                #if canImport(VLCKitSPM)
                 if store.useVLCPlayer {
                     VLCVideoPlayer(
                         url: url,

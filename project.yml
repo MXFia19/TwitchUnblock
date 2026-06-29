@@ -30,7 +30,7 @@ targets:
 
     dependencies:
       - package: MobileVLCKit
-        product: MobileVLCKit
+        product: VLCKitSPM
 
     info:
       path: Info.plist

@@ -1,6 +1,6 @@
 import SwiftUI
-#if canImport(MobileVLCKit)
-import MobileVLCKit
+#if canImport(VLCKitSPM)
+import VLCKitSPM
 
 // MARK: – Modèle VLC
 final class VLCPlayerModel: NSObject, ObservableObject, VLCMediaPlayerDelegate {

@@ -21,22 +21,22 @@
       "screenshots": [],
       "versions": [
         {
-          "version": "1.0.136",
-          "buildVersion": "136",
-          "date": "2026-06-27",
+          "version": "1.0.144",
+          "buildVersion": "144",
+          "date": "2026-06-29",
           "localizedDescription": "## Build automatique initial\n\n- Ajout du lecteur vidéo natif et PiP.\n- Ajout de l'onglet Historique.\n- Support des chaînes suivies et du Top Streams.",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/nightly-136/TwitchUnblock.ipa",
-          "size": 700083
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/nightly-144/TwitchUnblock.ipa",
+          "size": 707044
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.0.136",
-      "versionDate": "2026-06-27",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/nightly-136/TwitchUnblock.ipa",
-      "size": 700083
+      "version": "1.0.144",
+      "versionDate": "2026-06-29",
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/nightly-144/TwitchUnblock.ipa",
+      "size": 707044
     }
   ],
   "news": []

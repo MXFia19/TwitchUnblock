@@ -168,7 +168,11 @@ private let translations: [Lang: [String: String]] = [
         "err_properties_mismatch": "Récompense modifiée, réessaie",
         "err_stream_offline": "Le stream n'est pas en direct",
         "auto_claim": "Réclamer les coffres auto",
-        "auto_claim_sub": "Récupère les coffres de points dès qu'ils apparaissent."
+        "auto_claim_sub": "Récupère les coffres de points dès qu'ils apparaissent.",
+        "player_section": "Lecteur vidéo",
+        "vlc_player": "Lecteur VLC",
+        "vlc_player_sub": "Contrôles maison : double-tap ±10s, rembobinage live. (pas de PiP)",
+        "go_live": "EN DIRECT"
     ],
     .en: [
         "title": "Watch Twitch No Sub",
@@ -247,7 +251,11 @@ private let translations: [Lang: [String: String]] = [
         "err_properties_mismatch": "Reward changed, try again",
         "err_stream_offline": "Stream is not live",
         "auto_claim": "Auto-claim chests",
-        "auto_claim_sub": "Collects point chests as soon as they appear."
+        "auto_claim_sub": "Collects point chests as soon as they appear.",
+        "player_section": "Video player",
+        "vlc_player": "VLC player",
+        "vlc_player_sub": "Custom controls: double-tap ±10s, live rewind. (no PiP)",
+        "go_live": "LIVE"
     ],
     .es: [
         "title": "Ver Twitch sin Sub",
@@ -326,7 +334,11 @@ private let translations: [Lang: [String: String]] = [
         "err_properties_mismatch": "Recompensa modificada, reinténtalo",
         "err_stream_offline": "El stream no está en directo",
         "auto_claim": "Reclamar cofres auto",
-        "auto_claim_sub": "Recoge los cofres de puntos en cuanto aparecen."
+        "auto_claim_sub": "Recoge los cofres de puntos en cuanto aparecen.",
+        "player_section": "Reproductor de vídeo",
+        "vlc_player": "Reproductor VLC",
+        "vlc_player_sub": "Controles propios: doble toque ±10s, rebobinar directo. (sin PiP)",
+        "go_live": "EN VIVO"
     ],
 ]
 

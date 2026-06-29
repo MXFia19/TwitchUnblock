@@ -100,6 +100,31 @@ struct SettingsView: View {
                     }
                 }
 
+                // ── Lecteur VLC ─────────────────────────────────────
+                settingCard {
+                    VStack(alignment: .leading, spacing: 8) {
+                        label("🎬", store.t("player_section"))
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(store.t("vlc_player"))
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundColor(.tText)
+                                Text(store.t("vlc_player_sub"))
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.tMuted)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            Spacer()
+                            Toggle("", isOn: $store.useVLCPlayer)
+                                .labelsHidden()
+                                .tint(.tPrimary)
+                                .onChange(of: store.useVLCPlayer) { val in
+                                    logger.settingChanged("Lecteur VLC", value: val ? "activé" : "désactivé")
+                                }
+                        }
+                    }
+                }
+
                 // ── Compte Twitch ───────────────────────────────────
                 settingCard {
                     VStack(alignment: .leading, spacing: 12) {

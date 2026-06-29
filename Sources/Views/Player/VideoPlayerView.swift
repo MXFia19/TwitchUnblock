@@ -121,15 +121,22 @@ struct VideoPlayerView: View {
 
             // ── Player ──────────────────────────────────────────────
             if let url = currentURL {
-                NativeVideoPlayer(
-                    url: url,
-                    savedTime: vodId.map { store.getVodProgress($0) } ?? 0
-                ) { time in
-                    currentTime = time
-                    if let id = vodId { store.setVodProgress(id, time: time) }
+                #if canImport(MobileVLCKit)
+                if store.useVLCPlayer {
+                    VLCVideoPlayer(
+                        url: url,
+                        isLive: vodId == nil,
+                        savedTime: vodId.map { store.getVodProgress($0) } ?? 0
+                    ) { time in
+                        currentTime = time
+                        if let id = vodId { store.setVodProgress(id, time: time) }
+                    }
+                } else {
+                    nativePlayer(url: url)
                 }
-                .aspectRatio(16/9, contentMode: .fit)
-                .background(Color.black)
+                #else
+                nativePlayer(url: url)
+                #endif
             }
 
             // En mode compact (chat ouvert) on n'affiche que le lecteur.
@@ -236,6 +243,20 @@ struct VideoPlayerView: View {
         .onAppear {
             if selectedQuality.isEmpty { selectedQuality = qualities.first ?? "" }
         }
+    }
+
+    // Lecteur natif (AVPlayerViewController) — utilisé si VLC désactivé/indisponible.
+    @ViewBuilder
+    private func nativePlayer(url: URL) -> some View {
+        NativeVideoPlayer(
+            url: url,
+            savedTime: vodId.map { store.getVodProgress($0) } ?? 0
+        ) { time in
+            currentTime = time
+            if let id = vodId { store.setVodProgress(id, time: time) }
+        }
+        .aspectRatio(16/9, contentMode: .fit)
+        .background(Color.black)
     }
 
     @ViewBuilder

@@ -46,6 +46,12 @@ final class AppStore: ObservableObject {
         didSet { UserDefaults.standard.set(autoClaimChest, forKey: "auto_claim_chest") }
     }
 
+    // MARK: – Lecteur
+    /// Utilise le lecteur VLC (MobileVLCKit) au lieu du natif AVPlayer.
+    @Published var useVLCPlayer: Bool = false {
+        didSet { UserDefaults.standard.set(useVLCPlayer, forKey: "use_vlc_player") }
+    }
+
     // MARK: – History
     @Published var history: [HistoryItem] = [] {
         didSet { persistHistory() }
@@ -63,6 +69,7 @@ final class AppStore: ObservableObject {
         twitchLogin = ud.string(forKey: "twitch_login")
         useProxy = ud.object(forKey: "twitch_use_proxy") as? Bool ?? false
         autoClaimChest = ud.object(forKey: "auto_claim_chest") as? Bool ?? true
+        useVLCPlayer = ud.object(forKey: "use_vlc_player") as? Bool ?? false
         if let data = ud.data(forKey: "twitch_vod_history"),
            let decoded = try? JSONDecoder().decode([HistoryItem].self, from: data) {
             history = decoded

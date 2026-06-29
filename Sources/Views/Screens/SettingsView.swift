@@ -100,52 +100,6 @@ struct SettingsView: View {
                     }
                 }
 
-                // ── Lecteur vidéo ───────────────────────────────────
-                settingCard {
-                    VStack(alignment: .leading, spacing: 12) {
-                        label("🎬", store.t("player_section"))
-
-                        // Choix natif / custom
-                        HStack(spacing: 8) {
-                            ForEach(PlayerStyle.allCases) { ps in
-                                Button { store.playerStyle = ps } label: {
-                                    VStack(spacing: 3) {
-                                        Text(ps.emoji).font(.system(size: 18))
-                                        Text(ps.displayName)
-                                            .font(.system(size: 13, weight: .bold))
-                                    }
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 10)
-                                    .background(store.playerStyle == ps ? Color.tPrimary.opacity(0.2) : Color.tSurface)
-                                    .foregroundColor(store.playerStyle == ps ? .tPrimary : .tMuted)
-                                    .cornerRadius(10)
-                                    .overlay(RoundedRectangle(cornerRadius: 10)
-                                        .stroke(store.playerStyle == ps ? Color.tPrimary : Color.tBorder, lineWidth: 1))
-                                }
-                            }
-                        }
-                        Text(store.playerStyle == .custom ? store.t("player_custom_sub") : store.t("player_native_sub"))
-                            .font(.system(size: 12)).foregroundColor(.tMuted)
-                            .fixedSize(horizontal: false, vertical: true)
-
-                        // DVR (rembobiner le live) — pertinent surtout en lecteur custom
-                        Divider().background(Color.tBorder)
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(store.t("live_dvr"))
-                                    .font(.system(size: 15, weight: .semibold))
-                                    .foregroundColor(.tText)
-                                Text(store.t("live_dvr_sub"))
-                                    .font(.system(size: 12)).foregroundColor(.tMuted)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                            Spacer()
-                            Toggle("", isOn: $store.liveDVR)
-                                .labelsHidden().tint(.tPrimary)
-                        }
-                    }
-                }
-
                 // ── Compte Twitch ───────────────────────────────────
                 settingCard {
                     VStack(alignment: .leading, spacing: 12) {

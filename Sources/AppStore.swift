@@ -46,16 +46,6 @@ final class AppStore: ObservableObject {
         didSet { UserDefaults.standard.set(autoClaimChest, forKey: "auto_claim_chest") }
     }
 
-    // MARK: – Lecteur
-    /// Style du lecteur vidéo : natif (AVPlayerViewController) ou custom (contrôles maison).
-    @Published var playerStyle: PlayerStyle = .native {
-        didSet { UserDefaults.standard.set(playerStyle.rawValue, forKey: "player_style") }
-    }
-    /// Autorise le rembobinage des lives (DVR) dans la fenêtre fournie par Twitch.
-    @Published var liveDVR: Bool = true {
-        didSet { UserDefaults.standard.set(liveDVR, forKey: "live_dvr") }
-    }
-
     // MARK: – History
     @Published var history: [HistoryItem] = [] {
         didSet { persistHistory() }
@@ -73,8 +63,6 @@ final class AppStore: ObservableObject {
         twitchLogin = ud.string(forKey: "twitch_login")
         useProxy = ud.object(forKey: "twitch_use_proxy") as? Bool ?? false
         autoClaimChest = ud.object(forKey: "auto_claim_chest") as? Bool ?? true
-        if let ps = ud.string(forKey: "player_style"), let parsed = PlayerStyle(rawValue: ps) { playerStyle = parsed }
-        liveDVR = ud.object(forKey: "live_dvr") as? Bool ?? true
         if let data = ud.data(forKey: "twitch_vod_history"),
            let decoded = try? JSONDecoder().decode([HistoryItem].self, from: data) {
             history = decoded

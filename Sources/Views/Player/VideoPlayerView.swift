@@ -2,6 +2,12 @@ import SwiftUI
 import AVKit
 import AVFoundation
 
+// État plein écran partagé : permet à ChatView de ne pas couper l'IRC/les points
+// quand le lecteur passe en plein écran (ce qui déclenche un onDisappear transitoire).
+enum PlayerFullscreen {
+    static var isActive = false
+}
+
 // MARK: – AVPlayerViewController wrapper
 struct NativeVideoPlayer: UIViewControllerRepresentable {
     let url: URL
@@ -15,6 +21,7 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
         vc.allowsPictureInPicturePlayback = true
         vc.canStartPictureInPictureAutomaticallyFromInline = true
         vc.showsPlaybackControls = true
+        vc.delegate = context.coordinator
         context.coordinator.playerVC = vc
         context.coordinator.setupObserver(player: player, onProgress: onProgress)
         // Restore position
@@ -50,12 +57,25 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
-    final class Coordinator {
+    final class Coordinator: NSObject, AVPlayerViewControllerDelegate {
         weak var playerVC: AVPlayerViewController?
         private var timeObserver: Any?
         private var playerRef: AVPlayer?
 
-        init() {
+        // MARK: Plein écran — maintient PlayerFullscreen.isActive à jour
+        func playerViewController(_ playerViewController: AVPlayerViewController,
+                                  willBeginFullScreenPresentationWithAnimationCoordinator coordinator: UIViewControllerTransitionCoordinator) {
+            PlayerFullscreen.isActive = true
+        }
+        func playerViewController(_ playerViewController: AVPlayerViewController,
+                                  willEndFullScreenPresentationWithAnimationCoordinator coordinator: UIViewControllerTransitionCoordinator) {
+            coordinator.animate(alongsideTransition: nil) { _ in
+                PlayerFullscreen.isActive = false
+            }
+        }
+
+        override init() {
+            super.init()
             // Coupe instantanément le son si on reçoit le signal "ForceStopVideo" depuis la croix
             NotificationCenter.default.addObserver(forName: NSNotification.Name("ForceStopVideo"), object: nil, queue: .main) { [weak self] _ in
                 self?.playerVC?.player?.pause()

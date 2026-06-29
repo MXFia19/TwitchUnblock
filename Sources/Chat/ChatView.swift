@@ -17,6 +17,8 @@ struct ChatView: View {
     @State private var showPointsSheet  = false
     @State private var showWebLogin     = false
     @State private var webLoginClear    = false   // true = re-login forcé (token web expiré)
+    @State private var isSetup          = false   // chat/points déjà initialisés
+    @State private var teardownWork: DispatchWorkItem? = nil   // anti-rebond plein écran
     @FocusState private var isInputFocused: Bool
 
     private var canSendMessages: Bool { token != nil && login != nil }
@@ -160,10 +162,25 @@ struct ChatView: View {
             chat.connect(channel: channelName, token: tok, login: store.twitchLogin)
         }
         .onChange(of: store.autoClaimChest) { pointsService.autoClaim = $0 }
-        .onAppear { Task { await setupChat() } }
+        .onAppear {
+            // Annule un éventuel teardown différé (retour de plein écran).
+            teardownWork?.cancel(); teardownWork = nil
+            guard !isSetup else { return }   // déjà initialisé → pas de double connexion
+            isSetup = true
+            Task { await setupChat() }
+        }
         .onDisappear {
-            chat.disconnect()
-            pointsService.stopPolling()
+            // Le passage en plein écran (AVPlayerViewController) déclenche un onDisappear
+            // transitoire. On NE coupe PAS l'IRC/les points tant qu'on est en plein écran ;
+            // le délai + le flag couvrent aussi le PiP / transitions rapides.
+            let work = DispatchWorkItem {
+                guard !PlayerFullscreen.isActive else { return }   // plein écran → on garde tout actif
+                chat.disconnect()
+                pointsService.stopPolling()
+                isSetup = false
+            }
+            teardownWork = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6, execute: work)
         }
     }
 

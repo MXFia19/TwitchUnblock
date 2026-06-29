@@ -121,15 +121,27 @@ struct VideoPlayerView: View {
 
             // ── Player ──────────────────────────────────────────────
             if let url = currentURL {
-                NativeVideoPlayer(
-                    url: url,
-                    savedTime: vodId.map { store.getVodProgress($0) } ?? 0
-                ) { time in
-                    currentTime = time
-                    if let id = vodId { store.setVodProgress(id, time: time) }
+                if store.playerStyle == .custom {
+                    CustomVideoPlayer(
+                        url: url,
+                        isLive: vodId == nil,
+                        dvrEnabled: store.liveDVR,
+                        savedTime: vodId.map { store.getVodProgress($0) } ?? 0
+                    ) { time in
+                        currentTime = time
+                        if let id = vodId { store.setVodProgress(id, time: time) }
+                    }
+                } else {
+                    NativeVideoPlayer(
+                        url: url,
+                        savedTime: vodId.map { store.getVodProgress($0) } ?? 0
+                    ) { time in
+                        currentTime = time
+                        if let id = vodId { store.setVodProgress(id, time: time) }
+                    }
+                    .aspectRatio(16/9, contentMode: .fit)
+                    .background(Color.black)
                 }
-                .aspectRatio(16/9, contentMode: .fit)
-                .background(Color.black)
             }
 
             // En mode compact (chat ouvert) on n'affiche que le lecteur.

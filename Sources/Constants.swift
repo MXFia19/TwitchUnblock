@@ -89,6 +89,22 @@ enum LiveSource: String, CaseIterable, Identifiable, Codable {
     }
 }
 
+// MARK: – Player style
+enum PlayerStyle: String, CaseIterable, Identifiable, Codable {
+    case native, custom
+    var id: String { rawValue }
+    private var currentLang: Lang {
+        Lang(rawValue: UserDefaults.standard.string(forKey: "lang") ?? "fr") ?? .fr
+    }
+    var displayName: String {
+        switch self {
+        case .native: return translate("player_native", currentLang)
+        case .custom: return translate("player_custom", currentLang)
+        }
+    }
+    var emoji: String { self == .native ? "📺" : "🎛️" }
+}
+
 // MARK: – Translations
 private let translations: [Lang: [String: String]] = [
     .fr: [
@@ -168,7 +184,13 @@ private let translations: [Lang: [String: String]] = [
         "err_properties_mismatch": "Récompense modifiée, réessaie",
         "err_stream_offline": "Le stream n'est pas en direct",
         "auto_claim": "Réclamer les coffres auto",
-        "auto_claim_sub": "Récupère les coffres de points dès qu'ils apparaissent."
+        "auto_claim_sub": "Récupère les coffres de points dès qu'ils apparaissent.",
+        "player_section": "Lecteur vidéo",
+        "player_native": "Natif (iOS)", "player_custom": "Custom",
+        "player_native_sub": "Contrôles iOS, PiP & AirPlay natifs",
+        "player_custom_sub": "Contrôles maison : double-tap ±10s, rembobinage live",
+        "live_dvr": "Rembobiner le live", "live_dvr_sub": "Reculer dans un direct (lecteur custom)",
+        "go_live": "EN DIRECT"
     ],
     .en: [
         "title": "Watch Twitch No Sub",
@@ -247,7 +269,13 @@ private let translations: [Lang: [String: String]] = [
         "err_properties_mismatch": "Reward changed, try again",
         "err_stream_offline": "Stream is not live",
         "auto_claim": "Auto-claim chests",
-        "auto_claim_sub": "Collects point chests as soon as they appear."
+        "auto_claim_sub": "Collects point chests as soon as they appear.",
+        "player_section": "Video player",
+        "player_native": "Native (iOS)", "player_custom": "Custom",
+        "player_native_sub": "iOS controls, native PiP & AirPlay",
+        "player_custom_sub": "Custom controls: double-tap ±10s, live rewind",
+        "live_dvr": "Rewind live", "live_dvr_sub": "Seek back in a live stream (custom player)",
+        "go_live": "LIVE"
     ],
     .es: [
         "title": "Ver Twitch sin Sub",
@@ -326,7 +354,13 @@ private let translations: [Lang: [String: String]] = [
         "err_properties_mismatch": "Recompensa modificada, reinténtalo",
         "err_stream_offline": "El stream no está en directo",
         "auto_claim": "Reclamar cofres auto",
-        "auto_claim_sub": "Recoge los cofres de puntos en cuanto aparecen."
+        "auto_claim_sub": "Recoge los cofres de puntos en cuanto aparecen.",
+        "player_section": "Reproductor de vídeo",
+        "player_native": "Nativo (iOS)", "player_custom": "Personalizado",
+        "player_native_sub": "Controles iOS, PiP y AirPlay nativos",
+        "player_custom_sub": "Controles propios: doble toque ±10s, rebobinar directo",
+        "live_dvr": "Rebobinar directo", "live_dvr_sub": "Retroceder en un directo (reproductor personalizado)",
+        "go_live": "EN VIVO"
     ],
 ]
 

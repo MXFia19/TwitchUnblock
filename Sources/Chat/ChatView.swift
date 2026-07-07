@@ -332,6 +332,19 @@ struct ChatMessageRow: View {
                 .frame(width: availableWidth, alignment: .leading)
             }
 
+            // Bannière USERNOTICE (abonnement, série de visionnage…)
+            if let sys = message.systemMsg {
+                HStack(spacing: 6) {
+                    Image(systemName: "star.fill").font(.system(size: 10, weight: .bold))
+                    Text(sys).font(.system(size: 11, weight: .semibold))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .foregroundColor(.tWarning)
+                .padding(.horizontal, 12).padding(.top, 6)
+                .padding(.bottom, message.tokens.isEmpty ? 6 : 2)
+                .frame(width: availableWidth, alignment: .leading)
+            }
+
             if let replyUser = message.replyTo {
                 HStack(spacing: 0) {
                     Color.tPrimary.opacity(0.5).frame(width: 2).padding(.leading, 12)
@@ -352,13 +365,16 @@ struct ChatMessageRow: View {
                 .frame(width: availableWidth, alignment: .leading)
             }
 
-            HStack(alignment: .top, spacing: 0) {
-                if message.isHighlight { Rectangle().fill(Color.tWarning).frame(width: 3) }
-                WrappingHStack(message: message, timeString: timeString,
-                               availableWidth: availableWidth - 24)
-                    .padding(.horizontal, 12).padding(.vertical, 4)
+            // Ligne du message (masquée si USERNOTICE sans texte écrit)
+            if message.systemMsg == nil || !message.tokens.isEmpty {
+                HStack(alignment: .top, spacing: 0) {
+                    if message.isHighlight { Rectangle().fill(Color.tWarning).frame(width: 3) }
+                    WrappingHStack(message: message, timeString: timeString,
+                                   availableWidth: availableWidth - 24)
+                        .padding(.horizontal, 12).padding(.vertical, 4)
+                }
+                .frame(width: availableWidth, alignment: .leading)
             }
-            .frame(width: availableWidth, alignment: .leading)
         }
         .frame(width: availableWidth, alignment: .leading)
         .background(
@@ -396,10 +412,21 @@ struct WrappingHStack: View {
                 case .emote(let e): CachedEmoteImage(url: e.url, name: e.name)
                 case .mention(let m):
                     Text("@\(m)").font(.system(size: 13, weight: .semibold)).foregroundColor(.tPrimary)
+                case .link(let l):
+                    Text(l).font(.system(size: 13))
+                        .foregroundColor(.tOutplayer).underline()
+                        .lineLimit(1).truncationMode(.middle)
+                        .onTapGesture { openLink(l) }
                 }
             }
         }
         .frame(width: availableWidth, alignment: .leading)
+    }
+
+    private func openLink(_ raw: String) {
+        var s = raw
+        if s.lowercased().hasPrefix("www.") { s = "https://" + s }
+        if let url = URL(string: s) { UIApplication.shared.open(url) }
     }
 }
 
@@ -412,21 +439,26 @@ struct MessageFlowLayout: Layout {
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         let l = computeLayout(subviews)
         for (i, sub) in subviews.enumerated() {
-            let p = l.positions[i]; let sz = sub.sizeThatFits(.unspecified)
+            let p = l.positions[i]; let sz = l.sizes[i]
             sub.place(at: CGPoint(x: bounds.minX + p.x, y: bounds.minY + p.y + max(0,(l.lineHeights[i]-sz.height)/2)),
-                      anchor: .topLeading, proposal: .unspecified)
+                      anchor: .topLeading,
+                      proposal: ProposedViewSize(width: sz.width, height: sz.height))
         }
     }
-    private func computeLayout(_ subviews: Subviews) -> (size: CGSize, positions: [CGPoint], lineHeights: [CGFloat]) {
+    private func computeLayout(_ subviews: Subviews) -> (size: CGSize, positions: [CGPoint], lineHeights: [CGFloat], sizes: [CGSize]) {
         let W = max(width,1); var cx: CGFloat=0, cy: CGFloat=0, mh: CGFloat=0
-        var pos=[CGPoint](); var lh=[CGFloat](repeating:0,count:subviews.count); var ls=0
+        var pos=[CGPoint](); var sizes=[CGSize](); var lh=[CGFloat](repeating:0,count:subviews.count); var ls=0
         for (i,s) in subviews.enumerated() {
-            let sz=s.sizeThatFits(.unspecified)
+            var sz = s.sizeThatFits(.unspecified)
+            // Capé à la largeur dispo : un token trop large (URL, mot long) est
+            // re-mesuré borné pour ne jamais déborder du chat.
+            if sz.width > W { sz = s.sizeThatFits(ProposedViewSize(width: W, height: nil)) }
+            sizes.append(sz)
             if cx>0 && cx+sz.width>W { for j in ls..<i {lh[j]=mh}; cx=0; cy+=mh+lineSpacing; mh=0; ls=i }
             pos.append(CGPoint(x:cx,y:cy)); mh=max(mh,sz.height); cx+=sz.width+spacing
         }
         for j in ls..<subviews.count {lh[j]=mh}
-        return (CGSize(width:W,height:cy+mh),pos,lh)
+        return (CGSize(width:W,height:cy+mh),pos,lh,sizes)
     }
 }
 

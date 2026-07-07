@@ -36,6 +36,28 @@ extension Color {
             blue:  Double(rgb         & 0xFF) / 255
         )
     }
+
+    /// Couleur de pseudo lisible sur fond sombre : éclaircit les couleurs trop
+    /// sombres/noires (sinon un pseudo noir est illisible).
+    static func readableChat(hex: String) -> Color {
+        var h = hex.trimmingCharacters(in: .whitespacesAndNewlines)
+        if h.hasPrefix("#") { h = String(h.dropFirst()) }
+        guard h.count == 6 else { return Color(hex: hex) }
+        var rgb: UInt64 = 0
+        Scanner(string: h).scanHexInt64(&rgb)
+        var r = Double((rgb >> 16) & 0xFF) / 255
+        var g = Double((rgb >> 8)  & 0xFF) / 255
+        var b = Double(rgb         & 0xFF) / 255
+        // Luminance perçue
+        let lum = 0.299 * r + 0.587 * g + 0.114 * b
+        let minLum = 0.45
+        if lum < minLum {
+            // Mélange vers le blanc pour remonter au seuil minimal
+            let f = min(1, (minLum - lum) / minLum + 0.15)
+            r += (1 - r) * f; g += (1 - g) * f; b += (1 - b) * f
+        }
+        return Color(red: r, green: g, blue: b)
+    }
 }
 
 // MARK: – Language

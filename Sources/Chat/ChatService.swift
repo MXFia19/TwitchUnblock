@@ -154,6 +154,8 @@ final class ChatService: NSObject, ObservableObject {
                 await send("PONG :tmi.twitch.tv")
             case "PRIVMSG":
                 await handlePrivmsg(irc)
+            case "USERNOTICE":
+                await handleUsernotice(irc)
             case "GLOBALUSERSTATE":
                 handleUserInfo(irc)
             case "USERSTATE":
@@ -177,7 +179,7 @@ final class ChatService: NSObject, ObservableObject {
     private func handleUserInfo(_ irc: IRCMessage) {
         if let name = irc.tags["display-name"], !name.isEmpty { localDisplayName = name }
         if let hex  = irc.tags["color"], !hex.isEmpty {
-            localColor = Color(hex: hex.trimmingCharacters(in: CharacterSet(charactersIn: "#")))
+            localColor = Color.readableChat(hex: hex.trimmingCharacters(in: CharacterSet(charactersIn: "#")))
         }
     }
 
@@ -215,7 +217,7 @@ final class ChatService: NSObject, ObservableObject {
             userId: irc.userId,
             userName: irc.tags["login"] ?? "",
             displayName: irc.displayName,
-            color: Color(hex: hexColor),
+            color: Color.readableChat(hex: hexColor),
             // ← badges résolus via BadgeService
             badges: await parseBadges(irc.badgesRaw, channelId: channelId),
             tokens: tokens,
@@ -224,11 +226,60 @@ final class ChatService: NSObject, ObservableObject {
             isHighlight: irc.tags["msg-id"] == "highlighted-message",
             isFirstMessage: irc.tags["first-msg"] == "1",
             replyTo: irc.replyUser,
-            replyBody: irc.replyParentBody
+            replyBody: irc.replyParentBody,
+            systemMsg: nil,
+            parentMsgId: irc.replyParentMsgId,
+            threadRootId: irc.replyThreadRootId
         )
 
         messages.insert(message, at: 0)
         if messages.count > maxMessages { messages = Array(messages.prefix(maxMessages)) }
+    }
+
+    // MARK: – USERNOTICE (abonnements, séries de visionnage, raids…)
+    private func handleUsernotice(_ irc: IRCMessage) async {
+        let systemMsg = ircUnescape(irc.tags["system-msg"] ?? "")
+
+        // Message écrit par l'utilisateur (resub avec texte), optionnel.
+        var tokens: [MessageToken] = []
+        if let text = irc.text, !text.isEmpty {
+            let emoteRanges = IRCParser.parseEmoteRanges(raw: irc.emotesRaw, text: text)
+            var byRange: [Range<String.Index>: TwitchEmote] = [:]
+            for (emoteId, range) in emoteRanges {
+                let name = String(text[range])
+                byRange[range] = TwitchEmote(
+                    id: emoteId, name: name,
+                    url: "https://static-cdn.jtvnw.net/emoticons/v2/\(emoteId)/default/dark/2.0",
+                    source: .twitch)
+                await EmoteService.shared.registerTwitchEmote(id: emoteId, name: name)
+            }
+            tokens = await tokenize(text: text, twitchRanges: byRange, channelId: channelId)
+        }
+
+        guard !systemMsg.isEmpty || !tokens.isEmpty else { return }
+
+        let hexColor = irc.color.isEmpty
+            ? "9146ff"
+            : irc.color.trimmingCharacters(in: CharacterSet(charactersIn: "#"))
+
+        let message = ChatMessage(
+            id: irc.msgId,
+            userId: irc.userId,
+            userName: irc.tags["login"] ?? "",
+            displayName: irc.displayName,
+            color: Color.readableChat(hex: hexColor),
+            badges: await parseBadges(irc.badgesRaw, channelId: channelId),
+            tokens: tokens,
+            timestamp: Date(),
+            isAction: false,
+            isHighlight: true,
+            isFirstMessage: false,
+            replyTo: nil, replyBody: nil,
+            systemMsg: systemMsg.isEmpty ? nil : systemMsg
+        )
+        messages.insert(message, at: 0)
+        if messages.count > maxMessages { messages = Array(messages.prefix(maxMessages)) }
+        logger.debug("CHAT", "USERNOTICE \(irc.tags["msg-id"] ?? "")", systemMsg)
     }
 
     // MARK: – Badge parsing (async → BadgeService)
@@ -314,7 +365,10 @@ final class ChatService: NSObject, ObservableObject {
         var tokens: [MessageToken] = []
         for word in segment.components(separatedBy: " ") {
             guard !word.isEmpty else { continue }
-            if word.hasPrefix("@") && word.count > 1 {
+            let lower = word.lowercased()
+            if lower.hasPrefix("http://") || lower.hasPrefix("https://") || lower.hasPrefix("www.") {
+                tokens.append(.link(word))
+            } else if word.hasPrefix("@") && word.count > 1 {
                 tokens.append(.mention(String(word.dropFirst())))
             } else if let emote = await EmoteService.shared.resolve(name: word, channelId: channelId) {
                 tokens.append(.emote(emote))

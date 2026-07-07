@@ -359,6 +359,9 @@ struct MainTabView: View {
     }
 
     private func startPlayback(_ mode: PlayerMode) {
+        // Empêche la mise en veille pendant la lecture (utile en audio-only où
+        // l'écran ne joue pas de vidéo et s'éteindrait sinon).
+        UIApplication.shared.isIdleTimerDisabled = true
         playerMode    = mode
         playerVisible = true
         loading       = true
@@ -410,6 +413,7 @@ struct MainTabView: View {
     }
 
     private func stopPlayer() {
+        UIApplication.shared.isIdleTimerDisabled = false   // ré-autorise la veille
         stopLiveTimers()
         showChat           = false
         currentChannelName = nil

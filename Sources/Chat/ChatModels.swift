@@ -24,12 +24,14 @@ enum MessageToken: Identifiable {
     case text(String)
     case emote(TwitchEmote)
     case mention(String)
+    case link(String)
 
     var id: String {
         switch self {
         case .text(let t):    return "t_\(t.hashValue)"
         case .emote(let e):   return "e_\(e.id)"
         case .mention(let m): return "m_\(m)"
+        case .link(let l):    return "l_\(l.hashValue)"
         }
     }
 }
@@ -49,6 +51,32 @@ struct ChatMessage: Identifiable {
     var isFirstMessage: Bool = false   // ← tag Twitch "first-msg=1"
     var replyTo: String? = nil         // display name de l'auteur du message parent
     var replyBody: String? = nil       // ← corps du message parent (reply-parent-msg-body)
+    var systemMsg: String? = nil       // ← USERNOTICE (abonnement, série de visionnage…)
+    // Threading (réponses)
+    var parentMsgId: String? = nil     // reply-parent-msg-id (message auquel on répond)
+    var threadRootId: String? = nil    // reply-thread-parent-msg-id (racine du fil)
+}
+
+// MARK: – Déséchappement IRCv3 (tags system-msg, etc.)
+func ircUnescape(_ s: String) -> String {
+    var out = ""
+    var it = s.makeIterator()
+    var pending: Character? = nil
+    func next() -> Character? { pending != nil ? { let c = pending; pending = nil; return c }() : it.next() }
+    while let c = next() {
+        if c == "\\" {
+            switch next() {
+            case "s": out.append(" ")
+            case ":": out.append(";")
+            case "r": out.append("\r")
+            case "n": out.append("\n")
+            case "\\": out.append("\\")
+            case let other?: out.append(other)
+            case nil: break
+            }
+        } else { out.append(c) }
+    }
+    return out
 }
 
 // MARK: – IRC raw
@@ -69,6 +97,8 @@ struct IRCMessage {
     var emotesRaw: String { tags["emotes"] ?? "" }
     var isReply: Bool { tags["reply-parent-msg-id"] != nil }
     var replyUser: String? { tags["reply-parent-display-name"] }
+    var replyParentMsgId: String? { tags["reply-parent-msg-id"] }
+    var replyThreadRootId: String? { tags["reply-thread-parent-msg-id"] ?? tags["reply-parent-msg-id"] }
 
     /// Corps du message auquel on répond (Twitch échappe les espaces en \s)
     var replyParentBody: String? {

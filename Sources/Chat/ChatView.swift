@@ -17,6 +17,7 @@ struct ChatView: View {
     @State private var showPointsSheet  = false
     @State private var showWebLogin     = false
     @State private var webLoginClear    = false   // true = re-login forcé (token web expiré)
+    @State private var threadRoot: ChatMessage? = nil   // fil de discussion ouvert
     @State private var isSetup          = false   // chat/points déjà initialisés
     @State private var teardownWork: DispatchWorkItem? = nil   // anti-rebond plein écran
     @FocusState private var isInputFocused: Bool
@@ -75,6 +76,11 @@ struct ChatView: View {
                                             availableWidth: geo.size.width
                                         )
                                         .id(msg.id)
+                                        .contentShape(Rectangle())
+                                        .onTapGesture {
+                                            guard msg.userId != "system" else { return }
+                                            threadRoot = msg
+                                        }
                                     }
                                 }
                                 .frame(width: geo.size.width, alignment: .leading)
@@ -113,6 +119,13 @@ struct ChatView: View {
             if canSendMessages { inputBar }
         }
         .background(Color.tDark)
+        // ── Fil de discussion (répondre) ─────────────────────────────
+        .sheet(item: $threadRoot) { root in
+            ThreadSheet(root: root, chat: chat,
+                        canSend: canSendMessages,
+                        rootDisplayName: root.displayName)
+                .presentationDetents([.medium, .large])
+        }
         // ── Sheet points ─────────────────────────────────────────────
         .sheet(isPresented: $showPointsSheet) {
             ChannelPointsSheet(service: pointsService) {
@@ -472,5 +485,97 @@ struct CachedEmoteImage: View {
             else { Color.clear.frame(width:24,height:24) }
         }
         .frame(height: 24)
+    }
+}
+
+// MARK: – Fil de discussion (thread + réponse)
+struct ThreadSheet: View {
+    let root: ChatMessage
+    @ObservedObject var chat: ChatService
+    let canSend: Bool
+    let rootDisplayName: String
+
+    @EnvironmentObject private var store: AppStore
+    @Environment(\.dismiss) private var dismiss
+    @State private var replyText = ""
+    @FocusState private var focused: Bool
+
+    private var rootId: String { root.threadRootId ?? root.id }
+    private var displayed: [ChatMessage] {
+        let t = chat.threadMessages(rootId: rootId)
+        return t.isEmpty ? [root] : t
+    }
+    private var canReply: Bool { !replyText.trimmingCharacters(in: .whitespaces).isEmpty }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // ── En-tête ──────────────────────────────────────────────
+            HStack(spacing: 8) {
+                Image(systemName: "bubble.left.and.bubble.right.fill")
+                    .font(.system(size: 15)).foregroundColor(.tPrimary)
+                Text(store.t("thread_title"))
+                    .font(.system(size: 16, weight: .bold)).foregroundColor(.tText)
+                Spacer()
+                Button { dismiss() } label: {
+                    Image(systemName: "xmark").font(.system(size: 14, weight: .bold))
+                        .foregroundColor(.tMuted).frame(width: 30, height: 30)
+                        .background(Color.tSurface).clipShape(Circle())
+                }
+            }
+            .padding(.horizontal, 14).padding(.vertical, 10)
+            .background(Color.tCard)
+            Divider().background(Color.tBorder)
+
+            // ── Messages du fil ──────────────────────────────────────
+            GeometryReader { geo in
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        ForEach(displayed) { m in
+                            ChatMessageRow(message: m, availableWidth: geo.size.width)
+                                .id(m.id)
+                        }
+                    }
+                    .frame(width: geo.size.width, alignment: .leading)
+                    .padding(.vertical, 4)
+                }
+            }
+
+            // ── Réponse ──────────────────────────────────────────────
+            if canSend {
+                Divider().background(Color.tBorder)
+                HStack(spacing: 8) {
+                    TextField("\(store.t("thread_reply_to")) @\(rootDisplayName)", text: $replyText)
+                        .focused($focused)
+                        .foregroundColor(.tText)
+                        .autocorrectionDisabled()
+                        .padding(.horizontal, 12).padding(.vertical, 10)
+                        .background(Color.tSurface).cornerRadius(10)
+                        .overlay(RoundedRectangle(cornerRadius: 10)
+                            .stroke(focused ? Color.tPrimary : Color.tBorder, lineWidth: 1))
+                        .submitLabel(.send).onSubmit(sendReply)
+                    Button(action: sendReply) {
+                        Image(systemName: "paperplane.fill")
+                            .font(.system(size: 15, weight: .bold)).foregroundColor(.white)
+                            .frame(width: 44, height: 44)
+                            .background(canReply ? Color.tPrimary : Color.tMuted.opacity(0.35))
+                            .cornerRadius(10)
+                    }
+                    .disabled(!canReply)
+                }
+                .padding(.horizontal, 12).padding(.vertical, 10)
+                .background(Color.tCard)
+            }
+        }
+        .background(Color.tDark)
+    }
+
+    private func sendReply() {
+        let t = replyText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty else { return }
+        replyText = ""
+        Task {
+            await chat.sendMessage(t, replyParentId: root.id,
+                                   replyRootId: rootId, replyToName: rootDisplayName)
+        }
     }
 }

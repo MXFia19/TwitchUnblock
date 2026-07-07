@@ -92,12 +92,19 @@ final class ChatService: NSObject, ObservableObject {
     }
 
     // MARK: – Send message
-    func sendMessage(_ text: String) async {
+    func sendMessage(_ text: String,
+                     replyParentId: String? = nil,
+                     replyRootId: String? = nil,
+                     replyToName: String? = nil) async {
         let sanitized = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !sanitized.isEmpty, sanitized.count <= 500,
               isAuthenticated, isConnected else { return }
 
-        await send("PRIVMSG #\(channelName) :\(sanitized)")
+        if let pid = replyParentId {
+            await send("@reply-parent-msg-id=\(pid) PRIVMSG #\(channelName) :\(sanitized)")
+        } else {
+            await send("PRIVMSG #\(channelName) :\(sanitized)")
+        }
         logger.info("CHAT", "Message envoyé → #\(channelName)", String(sanitized.prefix(80)))
 
         let tokens = await tokenizeText(sanitized, channelId: channelId)
@@ -107,10 +114,22 @@ final class ChatService: NSObject, ObservableObject {
             displayName: localDisplayName.isEmpty ? localLogin : localDisplayName,
             color: localColor, badges: localBadges, tokens: tokens,
             timestamp: Date(), isAction: false, isHighlight: false,
-            isFirstMessage: false, replyTo: nil, replyBody: nil
+            isFirstMessage: false,
+            replyTo: replyToName, replyBody: nil,
+            systemMsg: nil,
+            parentMsgId: replyParentId,
+            threadRootId: replyRootId ?? replyParentId
         )
         messages.insert(localMsg, at: 0)
         if messages.count > maxMessages { messages = Array(messages.prefix(maxMessages)) }
+    }
+
+    // MARK: – Fil de discussion (thread)
+    /// Messages appartenant au fil dont la racine est `rootId`, du plus ancien au plus récent.
+    func threadMessages(rootId: String) -> [ChatMessage] {
+        messages
+            .filter { $0.id == rootId || $0.threadRootId == rootId }
+            .sorted { $0.timestamp < $1.timestamp }
     }
 
     // MARK: – Send raw IRC

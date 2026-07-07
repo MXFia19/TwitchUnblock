@@ -10,6 +10,7 @@ struct ChatView: View {
     @EnvironmentObject private var store: AppStore
     @StateObject private var chat          = ChatService()
     @StateObject private var pointsService = ChannelPointsService()
+    @StateObject private var pubsub        = ChatPubSub()
 
     @State private var autoScroll       = true
     @State private var messageText      = ""
@@ -54,6 +55,31 @@ struct ChatView: View {
             .padding(.vertical, 6)
             .background(Color.tCard)
             .overlay(Divider().background(Color.tBorder), alignment: .bottom)
+
+            // ── Message épinglé (PubSub) ────────────────────────────
+            if let pin = pubsub.pinnedText {
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "pin.fill")
+                        .font(.system(size: 12)).foregroundColor(.tWarning)
+                        .padding(.top, 1)
+                    VStack(alignment: .leading, spacing: 2) {
+                        if let author = pubsub.pinnedAuthor {
+                            Text(author)
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundColor(.tWarning)
+                        }
+                        Text(pin)
+                            .font(.system(size: 12))
+                            .foregroundColor(.tText)
+                            .lineLimit(3)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 12).padding(.vertical, 8)
+                .background(Color.tWarning.opacity(0.12))
+                .overlay(Divider().background(Color.tBorder), alignment: .bottom)
+            }
 
             // ── Zone principale ─────────────────────────────────────
             if showEmotePicker && canSendMessages {
@@ -189,6 +215,7 @@ struct ChatView: View {
             let work = DispatchWorkItem {
                 guard !PlayerFullscreen.isActive else { return }   // plein écran → on garde tout actif
                 chat.disconnect()
+                pubsub.disconnect()
                 pointsService.stopPolling()
                 isSetup = false
             }
@@ -223,6 +250,11 @@ struct ChatView: View {
         }
         chat.channelId = channelId
         chat.connect(channel: channelName, token: token, login: login)
+
+        // Messages épinglés (PubSub) — nécessite un token + l'ID du canal.
+        if let cid = channelId, let tok = store.twitchWebToken ?? store.twitchToken {
+            pubsub.connect(channelId: cid, token: tok)
+        }
     }
 
     // MARK: – Input bar

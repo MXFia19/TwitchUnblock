@@ -79,31 +79,52 @@ final class ChatPubSub: ObservableObject {
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let type = json["type"] as? String else { return }
 
-        if type == "RECONNECT" {
-            connect(channelId: channelId, token: token)
+        switch type {
+        case "PONG":
             return
+        case "RECONNECT":
+            connect(channelId: channelId, token: token)
+        case "RESPONSE":
+            // Réponse au LISTEN : error vide = accepté ; sinon ERR_BADAUTH / ERR_BADTOPIC…
+            let err = json["error"] as? String ?? ""
+            if err.isEmpty { logger.success("PUBSUB", "LISTEN accepté (épinglés)", nil) }
+            else { logger.error("PUBSUB", "LISTEN refusé", err) }
+        case "MESSAGE":
+            guard let dataObj = json["data"]       as? [String: Any],
+                  let inner   = dataObj["message"] as? String else { return }
+            logger.debug("PUBSUB", "MESSAGE reçu", String(inner.prefix(400)))
+            parsePinned(inner)
+        default:
+            logger.debug("PUBSUB", "Type reçu: \(type)", nil)
         }
-        guard type == "MESSAGE",
-              let dataObj  = json["data"]      as? [String: Any],
-              let inner    = dataObj["message"] as? String,
-              let innerD   = inner.data(using: .utf8),
-              let innerJ   = try? JSONSerialization.jsonObject(with: innerD) as? [String: Any],
-              let mtype    = innerJ["type"]    as? String else { return }
+    }
+
+    private func parsePinned(_ inner: String) {
+        guard let d = inner.data(using: .utf8),
+              let j = try? JSONSerialization.jsonObject(with: d) as? [String: Any],
+              let mtype = j["type"] as? String else { return }
 
         switch mtype {
         case "pin-message", "update-message":
-            if let d = innerJ["data"] as? [String: Any],
-               let m = (d["message"] as? [String: Any]) ?? (d["pinned_message"] as? [String: Any]),
-               let content = m["content"] as? [String: Any],
-               let txt = content["text"] as? String {
+            // La structure exacte peut varier : on tente plusieurs chemins.
+            let data = j["data"] as? [String: Any]
+            let m = (data?["message"] as? [String: Any])
+                 ?? (data?["pinned_message"] as? [String: Any])
+                 ?? ((data?["pinned_chat_message"] as? [String: Any])?["message"] as? [String: Any])
+            if let m = m,
+               let content = (m["content"] as? [String: Any]) ?? (m["message"] as? [String: Any]),
+               let txt = (content["text"] as? String) ?? (m["text"] as? String) {
                 pinnedText   = txt
                 pinnedAuthor = (m["sender"] as? [String: Any])?["display_name"] as? String
                 logger.success("PUBSUB", "📌 Message épinglé", txt)
+            } else {
+                logger.warn("PUBSUB", "pin-message non parsé", "structure inattendue")
             }
         case "unpin-message":
             pinnedText = nil; pinnedAuthor = nil
             logger.debug("PUBSUB", "Message désépinglé", nil)
-        default: break
+        default:
+            logger.debug("PUBSUB", "Type interne: \(mtype)", nil)
         }
     }
 }

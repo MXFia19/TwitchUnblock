@@ -11,6 +11,7 @@ struct ChatView: View {
     @StateObject private var chat          = ChatService()
     @StateObject private var pointsService = ChannelPointsService()
     @StateObject private var pubsub        = ChatPubSub()
+    @StateObject private var follow        = FollowService()
 
     @State private var autoScroll       = true
     @State private var messageText      = ""
@@ -43,6 +44,26 @@ struct ChatView: View {
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundColor(.tMuted)
                 Spacer()
+                // Bouton Suivre / Ne plus suivre
+                if let following = follow.isFollowing {
+                    Button {
+                        Task { await follow.toggle(token: store.twitchWebToken) }
+                    } label: {
+                        HStack(spacing: 3) {
+                            Image(systemName: following ? "heart.fill" : "heart")
+                            Text(following ? store.t("following") : store.t("follow"))
+                                .font(.system(size: 10, weight: .bold))
+                        }
+                        .foregroundColor(following ? .tDanger : .tPrimary)
+                        .padding(.horizontal, 8).padding(.vertical, 3)
+                        .background((following ? Color.tDanger : Color.tPrimary).opacity(0.15))
+                        .cornerRadius(6)
+                        .overlay(RoundedRectangle(cornerRadius: 6)
+                            .stroke(following ? Color.tDanger : Color.tPrimary, lineWidth: 1))
+                    }
+                    .disabled(follow.busy)
+                    .opacity(follow.busy ? 0.5 : 1)
+                }
                 if chat.isAuthenticated, let l = login {
                     Text("✏️ @\(l)")
                         .font(.system(size: 10, weight: .bold))
@@ -271,6 +292,10 @@ struct ChatView: View {
         // Messages épinglés (PubSub) — nécessite un token + l'ID du canal.
         if let cid = channelId, let tok = store.twitchWebToken ?? store.twitchToken {
             pubsub.connect(channelId: cid, token: tok)
+        }
+        // Statut de suivi (nécessite le token web pour le champ self.follower)
+        if let cid = channelId {
+            await follow.load(login: channelName, channelId: cid, token: store.twitchWebToken)
         }
     }
 

@@ -19,6 +19,7 @@ struct ChatView: View {
     @State private var showWebLogin     = false
     @State private var webLoginClear    = false   // true = re-login forcé (token web expiré)
     @State private var threadRoot: ChatMessage? = nil   // fil de discussion ouvert
+    @State private var pinnedCollapsed  = false   // bandeau épinglé masqué/affiché
     @State private var isSetup          = false   // chat/points déjà initialisés
     @State private var teardownWork: DispatchWorkItem? = nil   // anti-rebond plein écran
     @FocusState private var isInputFocused: Bool
@@ -56,7 +57,7 @@ struct ChatView: View {
             .background(Color.tCard)
             .overlay(Divider().background(Color.tBorder), alignment: .bottom)
 
-            // ── Message épinglé (PubSub) ────────────────────────────
+            // ── Message épinglé ─────────────────────────────────────
             if let pin = pubsub.pinnedText {
                 HStack(alignment: .top, spacing: 8) {
                     Image(systemName: "pin.fill")
@@ -68,13 +69,29 @@ struct ChatView: View {
                                 .font(.system(size: 11, weight: .bold))
                                 .foregroundColor(.tWarning)
                         }
-                        Text(pin)
-                            .font(.system(size: 12))
-                            .foregroundColor(.tText)
-                            .lineLimit(3)
-                            .fixedSize(horizontal: false, vertical: true)
+                        if !pinnedCollapsed {
+                            // Liens cliquables (détection auto d'URL) + retour à la ligne
+                            Text(linkified(pin))
+                                .font(.system(size: 12))
+                                .tint(.tOutplayer)
+                                .foregroundColor(.tText)
+                                .fixedSize(horizontal: false, vertical: true)
+                        } else {
+                            Text(pin)
+                                .font(.system(size: 12)).foregroundColor(.tMuted)
+                                .lineLimit(1).truncationMode(.tail)
+                        }
                     }
                     Spacer(minLength: 0)
+                    // Bouton masquer / afficher
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.15)) { pinnedCollapsed.toggle() }
+                    } label: {
+                        Image(systemName: pinnedCollapsed ? "chevron.down" : "chevron.up")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundColor(.tMuted)
+                            .frame(width: 26, height: 26)
+                    }
                 }
                 .padding(.horizontal, 12).padding(.vertical, 8)
                 .background(Color.tWarning.opacity(0.12))
@@ -350,6 +367,23 @@ struct ChatView: View {
     private func insertEmote(_ emote: TwitchEmote) {
         messageText += (messageText.isEmpty || messageText.hasSuffix(" ") ? "" : " ")
             + emote.name + " "
+    }
+
+    /// Transforme les URLs d'un texte en liens tappables (message épinglé).
+    private func linkified(_ s: String) -> AttributedString {
+        var att = AttributedString(s)
+        if let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) {
+            let ns = s as NSString
+            for m in detector.matches(in: s, range: NSRange(location: 0, length: ns.length)) {
+                guard let url = m.url,
+                      let r = Range(m.range, in: s),
+                      let attRange = att.range(of: String(s[r])) else { continue }
+                att[attRange].link = url
+                att[attRange].underlineStyle = .single
+                att[attRange].foregroundColor = .tOutplayer
+            }
+        }
+        return att
     }
 }
 

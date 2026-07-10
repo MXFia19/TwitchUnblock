@@ -121,22 +121,7 @@ struct VideoPlayerView: View {
 
             // ── Player ──────────────────────────────────────────────
             if let url = currentURL {
-                #if canImport(VLCKitSPM)
-                if store.useVLCPlayer {
-                    VLCVideoPlayer(
-                        url: url,
-                        isLive: vodId == nil,
-                        savedTime: vodId.map { store.getVodProgress($0) } ?? 0
-                    ) { time in
-                        currentTime = time
-                        if let id = vodId { store.setVodProgress(id, time: time) }
-                    }
-                } else {
-                    nativePlayer(url: url)
-                }
-                #else
                 nativePlayer(url: url)
-                #endif
             }
 
             // En mode compact (chat ouvert) on n'affiche que le lecteur.
@@ -245,7 +230,7 @@ struct VideoPlayerView: View {
         }
     }
 
-    // Lecteur natif (AVPlayerViewController) — utilisé si VLC désactivé/indisponible.
+    // Lecteur natif (AVPlayerViewController) avec PiP + reprise de position.
     @ViewBuilder
     private func nativePlayer(url: URL) -> some View {
         NativeVideoPlayer(

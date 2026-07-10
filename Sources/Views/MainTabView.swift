@@ -194,10 +194,12 @@ struct MainTabView: View {
         if let mode = playerMode {
             HStack(spacing: 10) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(statusTitle)
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundColor(.white)
-                        .lineLimit(1)
+                    if store.showStreamTitle {
+                        Text(statusTitle)
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundColor(.white)
+                            .lineLimit(1)
+                    }
 
                     if case .live = mode {
                         HStack(spacing: 6) {

@@ -100,28 +100,27 @@ struct SettingsView: View {
                     }
                 }
 
-                // ── Lecteur VLC ─────────────────────────────────────
+                // ── Personnalisation chat & lecteur ─────────────────
                 settingCard {
-                    VStack(alignment: .leading, spacing: 8) {
-                        label("🎬", store.t("player_section"))
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(store.t("vlc_player"))
-                                    .font(.system(size: 15, weight: .semibold))
-                                    .foregroundColor(.tText)
-                                Text(store.t("vlc_player_sub"))
-                                    .font(.system(size: 12))
-                                    .foregroundColor(.tMuted)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                            Spacer()
-                            Toggle("", isOn: $store.useVLCPlayer)
-                                .labelsHidden()
-                                .tint(.tPrimary)
-                                .onChange(of: store.useVLCPlayer) { val in
-                                    logger.settingChanged("Lecteur VLC", value: val ? "activé" : "désactivé")
-                                }
-                        }
+                    VStack(alignment: .leading, spacing: 14) {
+                        label("🎨", store.t("customize"))
+                        toggleRow(store.t("cfg_title"),  store.t("cfg_title_sub"),
+                                  $store.showStreamTitle,    log: "Titre du live")
+                        Divider().background(Color.tBorder)
+                        toggleRow(store.t("cfg_pinned"), store.t("cfg_pinned_sub"),
+                                  $store.showPinnedMessages, log: "Messages épinglés")
+                        Divider().background(Color.tBorder)
+                        toggleRow(store.t("cfg_follow"), store.t("cfg_follow_sub"),
+                                  $store.showFollowButton,   log: "Bouton suivre")
+                        Divider().background(Color.tBorder)
+                        toggleRow(store.t("cfg_streak"), store.t("cfg_streak_sub"),
+                                  $store.showWatchStreak,    log: "Série de visionnage")
+                        Divider().background(Color.tBorder)
+                        toggleRow(store.t("cfg_events"), store.t("cfg_events_sub"),
+                                  $store.showLiveEvents,     log: "Événements live")
+                        Divider().background(Color.tBorder)
+                        toggleRow(store.t("cfg_raids"),  store.t("cfg_raids_sub"),
+                                  $store.enableRaids,        log: "Système de raid")
                     }
                 }
 
@@ -290,6 +289,29 @@ struct SettingsView: View {
         .background(Color.tCard)
         .cornerRadius(16)
         .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.tBorder, lineWidth: 1))
+    }
+
+    @ViewBuilder
+    private func toggleRow(_ title: String, _ sub: String,
+                           _ isOn: Binding<Bool>, log: String) -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(.tText)
+                Text(sub)
+                    .font(.system(size: 12))
+                    .foregroundColor(.tMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer()
+            Toggle("", isOn: isOn)
+                .labelsHidden()
+                .tint(.tPrimary)
+                .onChange(of: isOn.wrappedValue) { v in
+                    logger.settingChanged(log, value: v ? "activé" : "désactivé")
+                }
+        }
     }
 
     @ViewBuilder

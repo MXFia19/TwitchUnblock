@@ -14,11 +14,6 @@ settings:
     ENABLE_BITCODE: NO
     SUPPORTS_MACCATALYST: NO
 
-packages:
-  MobileVLCKit:
-    url: https://github.com/tylerjonesio/vlckit-spm.git
-    from: "3.0.0"
-
 targets:
   TwitchUnblock:
     type: application
@@ -27,10 +22,6 @@ targets:
 
     sources:
       - path: Sources
-
-    dependencies:
-      - package: MobileVLCKit
-        product: VLCKitSPM
 
     info:
       path: Info.plist

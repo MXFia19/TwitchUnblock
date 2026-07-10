@@ -46,10 +46,30 @@ final class AppStore: ObservableObject {
         didSet { UserDefaults.standard.set(autoClaimChest, forKey: "auto_claim_chest") }
     }
 
-    // MARK: – Lecteur
-    /// Utilise le lecteur VLC (MobileVLCKit) au lieu du natif AVPlayer.
-    @Published var useVLCPlayer: Bool = false {
-        didSet { UserDefaults.standard.set(useVLCPlayer, forKey: "use_vlc_player") }
+    // MARK: – Personnalisation chat / lecteur
+    /// Afficher le titre du live dans la barre compacte (chat ouvert).
+    @Published var showStreamTitle: Bool = true {
+        didSet { UserDefaults.standard.set(showStreamTitle, forKey: "cfg_title") }
+    }
+    /// Afficher le bandeau des messages épinglés.
+    @Published var showPinnedMessages: Bool = true {
+        didSet { UserDefaults.standard.set(showPinnedMessages, forKey: "cfg_pinned") }
+    }
+    /// Afficher le bouton Suivre / Ne plus suivre.
+    @Published var showFollowButton: Bool = true {
+        didSet { UserDefaults.standard.set(showFollowButton, forKey: "cfg_follow") }
+    }
+    /// Afficher le badge de série de visionnage (streak).
+    @Published var showWatchStreak: Bool = true {
+        didSet { UserDefaults.standard.set(showWatchStreak, forKey: "cfg_streak") }
+    }
+    /// Afficher les événements live (sondages, prédictions, hype train).
+    @Published var showLiveEvents: Bool = true {
+        didSet { UserDefaults.standard.set(showLiveEvents, forKey: "cfg_events") }
+    }
+    /// Activer la détection des raids (bannière + auto-rejoindre).
+    @Published var enableRaids: Bool = true {
+        didSet { UserDefaults.standard.set(enableRaids, forKey: "cfg_raids") }
     }
 
     // MARK: – History
@@ -69,7 +89,12 @@ final class AppStore: ObservableObject {
         twitchLogin = ud.string(forKey: "twitch_login")
         useProxy = ud.object(forKey: "twitch_use_proxy") as? Bool ?? false
         autoClaimChest = ud.object(forKey: "auto_claim_chest") as? Bool ?? true
-        useVLCPlayer = ud.object(forKey: "use_vlc_player") as? Bool ?? false
+        showStreamTitle    = ud.object(forKey: "cfg_title")  as? Bool ?? true
+        showPinnedMessages = ud.object(forKey: "cfg_pinned") as? Bool ?? true
+        showFollowButton   = ud.object(forKey: "cfg_follow") as? Bool ?? true
+        showWatchStreak    = ud.object(forKey: "cfg_streak") as? Bool ?? true
+        showLiveEvents     = ud.object(forKey: "cfg_events") as? Bool ?? true
+        enableRaids        = ud.object(forKey: "cfg_raids")  as? Bool ?? true
         if let data = ud.data(forKey: "twitch_vod_history"),
            let decoded = try? JSONDecoder().decode([HistoryItem].self, from: data) {
             history = decoded

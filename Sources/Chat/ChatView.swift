@@ -55,7 +55,7 @@ struct ChatView: View {
                     .foregroundColor(.tMuted)
                 Spacer()
                 // Série de visionnage
-                if events.watchStreak > 0 {
+                if store.showWatchStreak, events.watchStreak > 0 {
                     HStack(spacing: 2) {
                         Text("🔥").font(.system(size: 10))
                         Text("\(events.watchStreak)").font(.system(size: 10, weight: .bold))
@@ -65,7 +65,7 @@ struct ChatView: View {
                     .background(Color.tWarning.opacity(0.15)).cornerRadius(6)
                 }
                 // Bouton Suivre / Ne plus suivre
-                if let following = follow.isFollowing {
+                if store.showFollowButton, let following = follow.isFollowing {
                     Button {
                         Task { await follow.toggle(token: store.twitchWebToken) }
                     } label: {
@@ -99,7 +99,7 @@ struct ChatView: View {
             .overlay(Divider().background(Color.tBorder), alignment: .bottom)
 
             // ── Message épinglé ─────────────────────────────────────
-            if let pin = pubsub.pinnedText {
+            if store.showPinnedMessages, let pin = pubsub.pinnedText {
                 HStack(alignment: .top, spacing: 8) {
                     Image(systemName: "pin.fill")
                         .font(.system(size: 12)).foregroundColor(.tWarning)
@@ -140,10 +140,12 @@ struct ChatView: View {
             }
 
             // ── Événements live (sondage / prédiction / hype train) ─
-            LiveEventsBanner(events: events)
+            if store.showLiveEvents {
+                LiveEventsBanner(events: events)
+            }
 
             // ── Raid sortant ────────────────────────────────────────
-            if let r = raidService.raid {
+            if store.enableRaids, let r = raidService.raid {
                 Button {
                     onJoinChannel(r.targetLogin)
                 } label: {
@@ -367,17 +369,26 @@ struct ChatView: View {
         chat.channelId = channelId
         chat.connect(channel: channelName, token: token, login: login)
 
+        // Les services ci-dessous sont conditionnés par les réglages de personnalisation :
+        // on n'ouvre pas de sondage/websocket inutile si l'option est désactivée.
         // Messages épinglés (PubSub) — nécessite un token + l'ID du canal.
-        if let cid = channelId, let tok = store.twitchWebToken ?? store.twitchToken {
+        if store.showPinnedMessages, let cid = channelId,
+           let tok = store.twitchWebToken ?? store.twitchToken {
             pubsub.connect(channelId: cid, token: tok)
         }
-        // Statut de suivi (nécessite le token web pour le champ self.follower)
         if let cid = channelId {
-            await follow.load(login: channelName, channelId: cid, token: store.twitchWebToken)
+            // Statut de suivi (nécessite le token web pour le champ self.follower)
+            if store.showFollowButton {
+                await follow.load(login: channelName, channelId: cid, token: store.twitchWebToken)
+            }
             // Événements live (série de visionnage, sondage, prédiction, hype train)
-            events.start(login: channelName, channelId: cid, token: store.twitchWebToken)
+            if store.showWatchStreak || store.showLiveEvents {
+                events.start(login: channelName, channelId: cid, token: store.twitchWebToken)
+            }
             // Raid sortant (auto-bascule vers la chaîne raidée)
-            raidService.connect(channelId: cid, token: store.twitchWebToken ?? "")
+            if store.enableRaids {
+                raidService.connect(channelId: cid, token: store.twitchWebToken ?? "")
+            }
         }
     }
 

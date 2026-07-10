@@ -6,7 +6,7 @@ import SwiftUI
 // bannière pendant le décompte, puis auto-bascule quand le raid part (raid_go).
 @MainActor
 final class RaidService: ObservableObject {
-    struct RaidInfo { let targetLogin: String; let targetName: String; let viewers: Int }
+    struct RaidInfo { let id: String; let targetLogin: String; let targetName: String; let viewers: Int }
 
     @Published var raid: RaidInfo? = nil     // raid en préparation (bannière)
     @Published var joinTarget: String? = nil // login à rejoindre (raid parti)
@@ -72,6 +72,12 @@ final class RaidService: ObservableObject {
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let type = json["type"] as? String else { return }
 
+        if type == "PONG" { return }
+        if type == "RESPONSE" {
+            let err = (json["error"] as? String) ?? ""
+            logger.debug("RAID", "LISTEN accepté", err.isEmpty ? "ok" : "erreur: \(err)")
+            return
+        }
         if type == "RECONNECT" { connect(channelId: channelId, token: token); return }
         guard type == "MESSAGE",
               let dataObj = json["data"]      as? [String: Any],
@@ -80,27 +86,31 @@ final class RaidService: ObservableObject {
               let innerJ  = try? JSONSerialization.jsonObject(with: innerD) as? [String: Any],
               let mtype   = innerJ["type"]    as? String else { return }
 
+        // Dump brut : à copier au premier vrai raid pour confirmer la structure.
+        logger.debug("RAID", "Payload \(mtype)", inner)
+
         let r = innerJ["raid"] as? [String: Any]
         switch mtype {
         case "raid_update_v2", "raid_update":
             if let r = r, let login = r["target_login"] as? String {
                 raid = RaidInfo(
+                    id: (r["id"] as? String) ?? "",
                     targetLogin: login,
                     targetName: (r["target_display_name"] as? String) ?? login,
                     viewers: (r["viewer_count"] as? Int) ?? 0)
-                logger.success("RAID", "🚀 Raid en préparation", "→ \(login)")
+                logger.success("RAID", "🚀 Raid en préparation", "→ \(login) (\(raid?.viewers ?? 0) spect.)")
             }
         case "raid_go_v2", "raid_go":
             let login = (r?["target_login"] as? String) ?? raid?.targetLogin
             if let login = login {
-                logger.success("RAID", "🚀 Raid parti", "→ \(login)")
+                logger.success("RAID", "🚀 Raid parti → auto-rejoint", login)
                 joinTarget = login
             }
         case "raid_cancel_v2", "raid_cancel":
-            logger.debug("RAID", "Raid annulé", nil)
+            logger.warn("RAID", "Raid annulé", nil)
             raid = nil
         default:
-            logger.debug("RAID", "Type: \(mtype)", nil)
+            logger.debug("RAID", "Type inattendu: \(mtype)", nil)
         }
     }
 }

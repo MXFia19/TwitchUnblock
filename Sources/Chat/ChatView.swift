@@ -1,5 +1,12 @@
 import SwiftUI
 
+// Position du bas du contenu du chat dans le repère du ScrollView
+// (sert à savoir si l'utilisateur est proche du bas ou en train de lire plus haut).
+private struct ChatScrollBottomKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+}
+
 // MARK: – Main Chat View
 struct ChatView: View {
     let channelName: String
@@ -174,8 +181,8 @@ struct ChatView: View {
                 ))
             } else {
                 GeometryReader { geo in
-                    ZStack(alignment: .bottomTrailing) {
-                        ScrollViewReader { proxy in
+                    ScrollViewReader { proxy in
+                        ZStack(alignment: .bottomTrailing) {
                             ScrollView {
                                 LazyVStack(alignment: .leading, spacing: 0) {
                                     ForEach(chat.messages.reversed()) { msg in
@@ -193,27 +200,46 @@ struct ChatView: View {
                                 }
                                 .frame(width: geo.size.width, alignment: .leading)
                                 .padding(.vertical, 4)
+                                .background(GeometryReader { g in
+                                    Color.clear.preference(
+                                        key: ChatScrollBottomKey.self,
+                                        value: g.frame(in: .named("chatScroll")).maxY)
+                                })
                             }
+                            .coordinateSpace(name: "chatScroll")
                             .onChange(of: chat.messages.first?.id) { newId in
+                                // Ne suit les nouveaux messages QUE si on est déjà en bas.
                                 guard autoScroll, let id = newId else { return }
                                 withAnimation(.linear(duration: 0.1)) {
                                     proxy.scrollTo(id, anchor: .bottom)
                                 }
                             }
-                        }
-
-                        if !autoScroll {
-                            Button { autoScroll = true } label: {
-                                HStack(spacing: 4) {
-                                    Image(systemName: "arrow.down")
-                                    Text(store.t("chat_follow")).font(.system(size: 11, weight: .bold))
-                                }
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 10).padding(.vertical, 6)
-                                .background(Color.tPrimary)
-                                .cornerRadius(20)
+                            .onPreferenceChange(ChatScrollBottomKey.self) { maxY in
+                                // maxY ≈ hauteur visible ⇒ on est en bas ; plus grand ⇒ on lit plus haut.
+                                let atBottom = maxY - geo.size.height < 60
+                                if autoScroll != atBottom { autoScroll = atBottom }
                             }
-                            .padding(10)
+
+                            if !autoScroll {
+                                Button {
+                                    autoScroll = true
+                                    if let id = chat.messages.first?.id {
+                                        withAnimation(.linear(duration: 0.15)) {
+                                            proxy.scrollTo(id, anchor: .bottom)
+                                        }
+                                    }
+                                } label: {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "arrow.down")
+                                        Text(store.t("chat_follow")).font(.system(size: 11, weight: .bold))
+                                    }
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 10).padding(.vertical, 6)
+                                    .background(Color.tPrimary)
+                                    .cornerRadius(20)
+                                }
+                                .padding(10)
+                            }
                         }
                     }
                 }

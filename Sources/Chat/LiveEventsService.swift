@@ -62,11 +62,15 @@ final class LiveEventsService: ObservableObject {
                                                       sha256: H.streak, token: token),
               let data = res["data"] as? [String: Any],
               let arr  = data["batchGetWatchStreaks"] as? [[String: Any]] else { return }
+        var v = 0
         for item in arr where (item["channel"] as? [String: Any])?["id"] as? String == channelId {
-            watchStreak = item["value"] as? Int ?? 0
-            return
+            v = item["value"] as? Int ?? 0
+            break
         }
-        watchStreak = 0
+        if v != watchStreak {
+            logger.success("EVENTS", "🔥 Série de visionnage", "\(v) pour \(login)")
+        }
+        watchStreak = v
     }
 
     // MARK: Sondage
@@ -75,8 +79,11 @@ final class LiveEventsService: ObservableObject {
                                                        variables: ["login": login], sha256: H.poll, token: token),
               let data  = res["data"]    as? [String: Any],
               let chan  = data["channel"] as? [String: Any] else { return }
-        guard let p = chan["viewablePoll"] as? [String: Any] else { poll = nil; return }
-        logger.debug("EVENTS", "Sondage détecté", "\(p.keys.sorted())")
+        guard let p = chan["viewablePoll"] as? [String: Any] else {
+            if poll != nil { logger.debug("EVENTS", "Sondage terminé", nil) }
+            poll = nil; return
+        }
+        logger.debug("EVENTS", "Sondage brut", "\(p.keys.sorted())")
         let title = p["title"] as? String ?? "Sondage"
         let raw = p["choices"] as? [[String: Any]] ?? []
         let choices = raw.map { c -> (String, Int) in
@@ -84,7 +91,11 @@ final class LiveEventsService: ObservableObject {
                  ?? ((c["votes"] as? [String: Any])?["total"] as? Int) ?? 0
             return (c["title"] as? String ?? "", v)
         }
-        poll = choices.isEmpty ? nil : LivePoll(title: title, choices: choices)
+        let newPoll = choices.isEmpty ? nil : LivePoll(title: title, choices: choices)
+        if newPoll?.title != poll?.title, let np = newPoll {
+            logger.success("EVENTS", "📊 Sondage actif", np.title)
+        }
+        poll = newPoll
     }
 
     // MARK: Prédiction
@@ -97,7 +108,10 @@ final class LiveEventsService: ObservableObject {
               let chan  = comm["channel"]    as? [String: Any] else { return }
         let active = chan["activePredictionEvents"] as? [[String: Any]] ?? []
         let locked = chan["lockedPredictionEvents"] as? [[String: Any]] ?? []
-        guard let ev = active.first ?? locked.first else { prediction = nil; return }
+        guard let ev = active.first ?? locked.first else {
+            if prediction != nil { logger.debug("EVENTS", "Prédiction terminée", nil) }
+            prediction = nil; return
+        }
         let title = ev["title"] as? String ?? "Prédiction"
         let isLocked = active.isEmpty || (ev["status"] as? String) == "LOCKED"
         let outcomes = (ev["outcomes"] as? [[String: Any]] ?? []).map { o -> (String, String, Int) in
@@ -105,8 +119,12 @@ final class LiveEventsService: ObservableObject {
              o["color"] as? String ?? "BLUE",
              o["totalPoints"] as? Int ?? 0)
         }
-        prediction = outcomes.isEmpty ? nil
-                   : LivePrediction(title: title, locked: isLocked, outcomes: outcomes)
+        let newPred = outcomes.isEmpty ? nil
+                    : LivePrediction(title: title, locked: isLocked, outcomes: outcomes)
+        if newPred?.title != prediction?.title, let np = newPred {
+            logger.success("EVENTS", "🔮 Prédiction active\(np.locked ? " (verrouillée)" : "")", np.title)
+        }
+        prediction = newPred
     }
 
     // MARK: Hype train (structure active jamais capturée → parse défensif + log)
@@ -117,14 +135,20 @@ final class LiveEventsService: ObservableObject {
               let user = data["user"]   as? [String: Any],
               let chan = user["channel"] as? [String: Any],
               let ht   = chan["hypeTrain"] as? [String: Any] else { return }
-        guard let exec = ht["execution"] as? [String: Any] else { hype = nil; return }
-        logger.debug("EVENTS", "Hype train actif", "\(exec.keys.sorted())")
+        guard let exec = ht["execution"] as? [String: Any] else {
+            if hype != nil { logger.debug("EVENTS", "Hype train terminé", nil) }
+            hype = nil; return
+        }
+        logger.debug("EVENTS", "Hype train brut", "\(exec.keys.sorted())")
         let progress = exec["progress"] as? [String: Any]
         let level = (progress?["level"] as? [String: Any])?["value"] as? Int
                  ?? (exec["level"] as? [String: Any])?["value"] as? Int ?? 1
         let total = progress?["total"] as? Int ?? 0
         let goal  = (progress?["goal"] as? Int)
                  ?? ((progress?["level"] as? [String: Any])?["goal"] as? Int) ?? 0
+        if hype?.level != level {
+            logger.success("EVENTS", "🚄 Hype train actif", "niveau \(level)")
+        }
         hype = LiveHype(level: level, percent: goal > 0 ? min(1, Double(total) / Double(goal)) : 0)
     }
 }

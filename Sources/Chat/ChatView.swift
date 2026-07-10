@@ -6,6 +6,7 @@ struct ChatView: View {
     let channelId: String?
     let token: String?
     let login: String?
+    var onJoinChannel: (String) -> Void = { _ in }   // raid → bascule vers une autre chaîne
 
     @EnvironmentObject private var store: AppStore
     @StateObject private var chat          = ChatService()
@@ -13,6 +14,7 @@ struct ChatView: View {
     @StateObject private var pubsub        = ChatPubSub()
     @StateObject private var follow        = FollowService()
     @StateObject private var events        = LiveEventsService()
+    @StateObject private var raidService   = RaidService()
 
     @State private var autoScroll       = true
     @State private var messageText      = ""
@@ -132,6 +134,34 @@ struct ChatView: View {
 
             // ── Événements live (sondage / prédiction / hype train) ─
             LiveEventsBanner(events: events)
+
+            // ── Raid sortant ────────────────────────────────────────
+            if let r = raidService.raid {
+                Button {
+                    onJoinChannel(r.targetLogin)
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "figure.run").font(.system(size: 13, weight: .bold))
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text("🚀 \(store.t("raid_to")) \(r.targetName)")
+                                .font(.system(size: 12, weight: .bold)).foregroundColor(.tText)
+                            if r.viewers > 0 {
+                                Text("\(r.viewers) \(store.t("viewers"))")
+                                    .font(.system(size: 10)).foregroundColor(.tMuted)
+                            }
+                        }
+                        Spacer(minLength: 0)
+                        Text(store.t("join")).font(.system(size: 11, weight: .bold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 10).padding(.vertical, 5)
+                            .background(Color.tPrimary).clipShape(Capsule())
+                    }
+                    .padding(.horizontal, 12).padding(.vertical, 8)
+                    .background(Color.tPrimary.opacity(0.12))
+                    .overlay(Divider().background(Color.tBorder), alignment: .bottom)
+                }
+                .buttonStyle(.plain)
+            }
 
             // ── Zone principale ─────────────────────────────────────
             if showEmotePicker && canSendMessages {
@@ -253,6 +283,12 @@ struct ChatView: View {
             chat.connect(channel: channelName, token: tok, login: store.twitchLogin)
         }
         .onChange(of: store.autoClaimChest) { pointsService.autoClaim = $0 }
+        .onChange(of: raidService.joinTarget) { target in
+            // Raid parti → on suit automatiquement vers la chaîne raidée.
+            guard let target = target else { return }
+            raidService.disconnect()
+            onJoinChannel(target)
+        }
         .onAppear {
             // Annule un éventuel teardown différé (retour de plein écran).
             teardownWork?.cancel(); teardownWork = nil
@@ -269,6 +305,7 @@ struct ChatView: View {
                 chat.disconnect()
                 pubsub.disconnect()
                 events.stop()
+                raidService.disconnect()
                 pointsService.stopPolling()
                 isSetup = false
             }
@@ -313,6 +350,8 @@ struct ChatView: View {
             await follow.load(login: channelName, channelId: cid, token: store.twitchWebToken)
             // Événements live (série de visionnage, sondage, prédiction, hype train)
             events.start(login: channelName, channelId: cid, token: store.twitchWebToken)
+            // Raid sortant (auto-bascule vers la chaîne raidée)
+            raidService.connect(channelId: cid, token: store.twitchWebToken ?? "")
         }
     }
 

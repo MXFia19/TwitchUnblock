@@ -14,6 +14,7 @@ struct MainTabView: View {
 
     // ── Chat state ───────────────────────────────────────────────────────
     @State private var showChat = false
+    @State private var keepChatOnLoad = false   // raid → rouvrir le chat sur la chaîne raidée
     @State private var currentChannelName: String? = nil
     @State private var currentChannelId: String? = nil   // ← branché sur data.userId
 
@@ -160,8 +161,13 @@ struct MainTabView: View {
                             channelName: channel,
                             channelId: currentChannelId,   // ← userId Twitch du canal
                             token: store.twitchToken,
-                            login: store.twitchLogin
+                            login: store.twitchLogin,
+                            onJoinChannel: { target in    // raid → suit la chaîne raidée
+                                keepChatOnLoad = true
+                                playLive(target)
+                            }
                         )
+                        .id(channel)   // change de chaîne (raid) → ChatView reconstruit à neuf
                         .frame(maxHeight: .infinity)
                         .cornerRadius(12)
                         .padding(.horizontal, 12)
@@ -394,7 +400,7 @@ struct MainTabView: View {
             case .live(let channel):
                 let data = await getLive(channelName: channel)
                 if let err = data.error, err != "offline" {
-                    await MainActor.run { errorMsg = err; loading = false }
+                    await MainActor.run { errorMsg = err; loading = false; keepChatOnLoad = false }
                 } else if let links = data.links, !links.isEmpty {
                     await MainActor.run {
                         qualityLinks      = links
@@ -403,10 +409,11 @@ struct MainTabView: View {
                         liveStartedAt     = data.startedAt
                         currentChannelId  = data.userId   // ← userId Twitch → emotes canal
                         loading           = false
+                        if keepChatOnLoad { showChat = true; keepChatOnLoad = false }
                         startLiveTimers(channel: channel)
                     }
                 } else {
-                    await MainActor.run { errorMsg = store.t("offline_msg"); loading = false }
+                    await MainActor.run { errorMsg = store.t("offline_msg"); loading = false; keepChatOnLoad = false }
                 }
             }
         }

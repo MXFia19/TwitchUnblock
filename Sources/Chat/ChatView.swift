@@ -12,6 +12,7 @@ struct ChatView: View {
     @StateObject private var pointsService = ChannelPointsService()
     @StateObject private var pubsub        = ChatPubSub()
     @StateObject private var follow        = FollowService()
+    @StateObject private var events        = LiveEventsService()
 
     @State private var autoScroll       = true
     @State private var messageText      = ""
@@ -44,6 +45,16 @@ struct ChatView: View {
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundColor(.tMuted)
                 Spacer()
+                // Série de visionnage
+                if events.watchStreak > 0 {
+                    HStack(spacing: 2) {
+                        Text("🔥").font(.system(size: 10))
+                        Text("\(events.watchStreak)").font(.system(size: 10, weight: .bold))
+                    }
+                    .foregroundColor(.tWarning)
+                    .padding(.horizontal, 6).padding(.vertical, 3)
+                    .background(Color.tWarning.opacity(0.15)).cornerRadius(6)
+                }
                 // Bouton Suivre / Ne plus suivre
                 if let following = follow.isFollowing {
                     Button {
@@ -118,6 +129,9 @@ struct ChatView: View {
                 .background(Color.tWarning.opacity(0.12))
                 .overlay(Divider().background(Color.tBorder), alignment: .bottom)
             }
+
+            // ── Événements live (sondage / prédiction / hype train) ─
+            LiveEventsBanner(events: events)
 
             // ── Zone principale ─────────────────────────────────────
             if showEmotePicker && canSendMessages {
@@ -254,6 +268,7 @@ struct ChatView: View {
                 guard !PlayerFullscreen.isActive else { return }   // plein écran → on garde tout actif
                 chat.disconnect()
                 pubsub.disconnect()
+                events.stop()
                 pointsService.stopPolling()
                 isSetup = false
             }
@@ -296,6 +311,8 @@ struct ChatView: View {
         // Statut de suivi (nécessite le token web pour le champ self.follower)
         if let cid = channelId {
             await follow.load(login: channelName, channelId: cid, token: store.twitchWebToken)
+            // Événements live (série de visionnage, sondage, prédiction, hype train)
+            events.start(login: channelName, channelId: cid, token: store.twitchWebToken)
         }
     }
 

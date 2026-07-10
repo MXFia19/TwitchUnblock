@@ -65,11 +65,28 @@ struct DiscoveryView: View {
 
     // MARK: – Login prompt
     @ViewBuilder private var loginPrompt: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 16) {
             Text(store.t("login_prompt"))
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(Color(hex: "e0ccff"))
                 .multilineTextAlignment(.center)
+
+            // Rappel : pour les points de chaîne, il faut AUSSI la session web (Réglages).
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: "crown.fill")
+                    .font(.system(size: 12))
+                    .foregroundColor(.tPrimary)
+                    .padding(.top, 1)
+                Text(store.t("login_points_hint"))
+                    .font(.system(size: 12))
+                    .foregroundColor(.tMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(10)
+            .frame(maxWidth: .infinity)
+            .background(Color.tSurface)
+            .cornerRadius(10)
+
             Button { Task { await handleLogin() } } label: {
                 Text(store.t("btn_login_twitch"))
                     .font(.system(size: 16, weight: .bold))

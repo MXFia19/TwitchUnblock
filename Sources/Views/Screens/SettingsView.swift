@@ -6,6 +6,9 @@ struct SettingsView: View {
     @State private var showLogs        = false
     @State private var showLogoutAlert = false
     @State private var showClearAlert  = false
+    @State private var showWebLogin    = false   // login web (points de chaîne)
+    @State private var webLoginClear   = false
+    @State private var apiLoggingIn    = false
 
     private var vodCount:     Int { store.history.filter { $0.type == .vod }.count }
     private var channelCount: Int { store.history.filter { $0.type == .channel }.count }
@@ -126,33 +129,38 @@ struct SettingsView: View {
 
                 // ── Compte Twitch ───────────────────────────────────
                 settingCard {
-                    VStack(alignment: .leading, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 14) {
                         label("💜", store.t("twitch_account"))
-                        if store.twitchToken != nil {
-                            HStack(spacing: 12) {
-                                Text("✅")
-                                Text(store.t("connected"))
-                                    .font(.system(size: 15, weight: .bold))
-                                    .foregroundColor(.tSuccess)
-                                Spacer()
-                                Button {
-                                    showLogoutAlert = true
-                                } label: {
-                                    Text(store.t("btn_logout"))
-                                        .font(.system(size: 13, weight: .bold))
-                                        .foregroundColor(.tDanger)
-                                        .padding(.horizontal, 14).padding(.vertical, 8)
-                                        .background(Color.tDanger.opacity(0.15))
-                                        .cornerRadius(8)
-                                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.tDanger, lineWidth: 1))
-                                }
-                            }
-                        } else {
-                            HStack(spacing: 10) {
-                                Text("⚪")
-                                Text(store.t("not_connected"))
-                                    .font(.system(size: 14, weight: .semibold))
-                                    .foregroundColor(.tMuted)
+
+                        // Connexion API (OAuth) — chat + chaînes suivies
+                        accountRow(
+                            title: store.t("account_api"),
+                            sub: store.t("account_api_sub"),
+                            connected: store.twitchToken != nil,
+                            busy: apiLoggingIn,
+                            actionLabel: store.twitchToken != nil ? store.t("btn_logout")
+                                                                  : store.t("btn_login_twitch")
+                        ) {
+                            if store.twitchToken != nil { showLogoutAlert = true }
+                            else { Task { await handleApiLogin() } }
+                        }
+
+                        Divider().background(Color.tBorder)
+
+                        // Session web — points de chaîne (cookie auth-token)
+                        accountRow(
+                            title: store.t("account_web"),
+                            sub: store.t("account_web_sub"),
+                            connected: store.twitchWebToken != nil,
+                            busy: false,
+                            actionLabel: store.twitchWebToken != nil ? store.t("btn_logout")
+                                                                     : store.t("points_connect_btn")
+                        ) {
+                            if store.twitchWebToken != nil {
+                                logger.info("AUTH/WEB", "Déconnexion session web", nil)
+                                store.twitchWebToken = nil
+                            } else {
+                                startWebLogin()
                             }
                         }
                     }
@@ -256,6 +264,19 @@ struct SettingsView: View {
         } message: {
             Text(store.t("confirm"))
         }
+        // ── Login web Twitch (cookie auth-token pour les points) ─────
+        .sheet(isPresented: $showWebLogin) {
+            TwitchWebLoginSheet(
+                clearSession: webLoginClear,
+                onComplete: { webToken, webLogin in
+                    showWebLogin = false
+                    if store.twitchLogin == nil, let l = webLogin { store.twitchLogin = l }
+                    store.twitchWebToken = webToken
+                    logger.success("AUTH/WEB", "Session web connectée depuis les réglages", nil)
+                },
+                onCancel: { showWebLogin = false }
+            )
+        }
         // ── Logs sheet ───────────────────────────────────────────────
         .sheet(isPresented: $showLogs) {
             VStack(spacing: 0) {
@@ -277,6 +298,22 @@ struct SettingsView: View {
             }
             .background(Color.tDark)
         }
+    }
+
+    // MARK: – Actions login
+    private func handleApiLogin() async {
+        apiLoggingIn = true
+        defer { apiLoggingIn = false }
+        if let token = await TwitchAuthManager.shared.login() {
+            store.twitchToken = token
+            logger.success("AUTH", "Connexion API réussie", nil)
+        }
+    }
+
+    private func startWebLogin() {
+        // Re-login forcé seulement si un token existe déjà mais est invalide.
+        webLoginClear = false
+        showWebLogin = true
     }
 
     // MARK: – Subviews
@@ -311,6 +348,40 @@ struct SettingsView: View {
                 .onChange(of: isOn.wrappedValue) { v in
                     logger.settingChanged(log, value: v ? "activé" : "désactivé")
                 }
+        }
+    }
+
+    @ViewBuilder
+    private func accountRow(title: String, sub: String, connected: Bool, busy: Bool,
+                           actionLabel: String, action: @escaping () -> Void) -> some View {
+        HStack(spacing: 12) {
+            Text(connected ? "✅" : "⚪").font(.system(size: 16))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundColor(.tText)
+                Text(connected ? store.t("connected") : sub)
+                    .font(.system(size: 11))
+                    .foregroundColor(connected ? .tSuccess : .tMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 8)
+            Button(action: action) {
+                Group {
+                    if busy {
+                        ProgressView().tint(.tPrimary)
+                    } else {
+                        Text(actionLabel).font(.system(size: 13, weight: .bold))
+                    }
+                }
+                .foregroundColor(connected ? .tDanger : .tPrimary)
+                .padding(.horizontal, 14).padding(.vertical, 8)
+                .background((connected ? Color.tDanger : Color.tPrimary).opacity(0.15))
+                .cornerRadius(8)
+                .overlay(RoundedRectangle(cornerRadius: 8)
+                    .stroke(connected ? Color.tDanger : Color.tPrimary, lineWidth: 1))
+            }
+            .disabled(busy)
         }
     }
 

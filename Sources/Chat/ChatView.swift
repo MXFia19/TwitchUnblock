@@ -1,12 +1,5 @@
 import SwiftUI
 
-// Position du bas du contenu du chat dans le repère du ScrollView
-// (sert à savoir si l'utilisateur est proche du bas ou en train de lire plus haut).
-private struct ChatScrollBottomKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
-}
-
 // MARK: – Main Chat View
 struct ChatView: View {
     let channelName: String
@@ -34,6 +27,8 @@ struct ChatView: View {
     @State private var isSetup          = false   // chat/points déjà initialisés
     @State private var teardownWork: DispatchWorkItem? = nil   // anti-rebond plein écran
     @FocusState private var isInputFocused: Bool
+
+    private let bottomAnchor = "chat_bottom_anchor"   // sentinelle de bas de liste
 
     private var canSendMessages: Bool { token != nil && login != nil }
     private var canSend: Bool {
@@ -199,37 +194,31 @@ struct ChatView: View {
                                             threadRoot = msg
                                         }
                                     }
+                                    // Sentinelle de bas de liste : visible ⇒ on est en bas.
+                                    // (fiable avec LazyVStack, contrairement à la mesure de hauteur)
+                                    Color.clear
+                                        .frame(height: 1)
+                                        .id(bottomAnchor)
+                                        .onAppear  { autoScroll = true }
+                                        .onDisappear { autoScroll = false }
                                 }
                                 .frame(width: geo.size.width, alignment: .leading)
                                 .padding(.vertical, 4)
-                                .background(GeometryReader { g in
-                                    Color.clear.preference(
-                                        key: ChatScrollBottomKey.self,
-                                        value: g.frame(in: .named("chatScroll")).maxY)
-                                })
                             }
-                            .coordinateSpace(name: "chatScroll")
-                            .onChange(of: chat.messages.first?.id) { newId in
+                            .onChange(of: chat.messages.first?.id) { _ in
                                 // Ne suit les nouveaux messages QUE si on est déjà en bas.
-                                guard autoScroll, let id = newId else { return }
+                                guard autoScroll else { return }
                                 withAnimation(.linear(duration: 0.1)) {
-                                    proxy.scrollTo(id, anchor: .bottom)
+                                    proxy.scrollTo(bottomAnchor, anchor: .bottom)
                                 }
-                            }
-                            .onPreferenceChange(ChatScrollBottomKey.self) { maxY in
-                                // maxY ≈ hauteur visible ⇒ on est en bas ; plus grand ⇒ on lit plus haut.
-                                let atBottom = maxY - geo.size.height < 60
-                                if autoScroll != atBottom { autoScroll = atBottom }
                             }
 
                             if !autoScroll {
                                 Button {
-                                    autoScroll = true
-                                    if let id = chat.messages.first?.id {
-                                        withAnimation(.linear(duration: 0.15)) {
-                                            proxy.scrollTo(id, anchor: .bottom)
-                                        }
+                                    withAnimation(.linear(duration: 0.15)) {
+                                        proxy.scrollTo(bottomAnchor, anchor: .bottom)
                                     }
+                                    autoScroll = true
                                 } label: {
                                     HStack(spacing: 4) {
                                         Image(systemName: "arrow.down")

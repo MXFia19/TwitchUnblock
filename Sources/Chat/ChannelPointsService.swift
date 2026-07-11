@@ -32,8 +32,8 @@ final class ChannelPointsService: ObservableObject {
     private var token        = ""
     private var balanceTimer: Timer? = nil
     private var claimTimer:   Timer? = nil
-    private let balancePollInterval: TimeInterval = 60
-    private let claimPollInterval:   TimeInterval = 10
+    private let balancePollInterval: TimeInterval = 90
+    private let claimPollInterval:   TimeInterval = 30
 
     // MARK: – Présence "minute-watched" (pour gagner des points passivement)
     // Twitch ne crédite les points passifs (~10/5min) et ne génère les coffres
@@ -146,8 +146,8 @@ final class ChannelPointsService: ObservableObject {
 
     // MARK: – Refresh balance (60s)
     private func refreshBalance() async {
-        logger.debug("POINTS", "Refresh balance…", "canal: \(channelLogin)")
-        let b = await fetchBalance()
+        // Polling silencieux : on ne logge que les vrais changements (gains/pertes/coffre).
+        let b = await fetchBalance(quiet: true)
         let delta = b.balance - balance
         if delta > 0 {
             logger.success("POINTS", "Points passifs gagnés",
@@ -159,8 +159,6 @@ final class ChannelPointsService: ObservableObject {
         } else if delta < 0 {
             logger.warn("POINTS", "Balance diminuée", "\(formatted(balance)) → \(formatted(b.balance))")
             balance = b.balance
-        } else {
-            logger.debug("POINTS", "Balance inchangée", "\(formatted(balance)) pts")
         }
         if pendingClaimId == nil, let cid = b.claimId, !failedClaims.contains(cid) {
             pendingClaimId = cid
@@ -177,7 +175,7 @@ final class ChannelPointsService: ObservableObject {
             self { communityPoints { availableClaim { id } } }
         } }
         """
-        guard let json    = try? await gqlAuth(query, tag: "checkBonus") as? [String: Any],
+        guard let json    = try? await gqlAuth(query, tag: "checkBonus", quiet: true) as? [String: Any],
               let data    = json["data"]                                   as? [String: Any],
               let channel = data["channel"]                                as? [String: Any],
               let selfObj = channel["self"]                                as? [String: Any],
@@ -186,8 +184,7 @@ final class ChannelPointsService: ObservableObject {
               let cid     = claim["id"]                                    as? String,
               !failedClaims.contains(cid)
         else {
-            logger.debug("POINTS", "Pas de coffre disponible", nil)
-            return
+            return   // pas de coffre : silencieux (évite un log toutes les 30 s)
         }
         pendingClaimId = cid
         logger.success("POINTS", "🎁 Coffre bonus disponible !",
@@ -442,14 +439,14 @@ final class ChannelPointsService: ObservableObject {
     }
 
     // MARK: – Fetch balance (AVEC auth OAuth)
-    private func fetchBalance() async -> (balance: Int, claimId: String?) {
-        logger.debug("POINTS", "fetchBalance → channel(name:\(channelLogin)).self", nil)
+    private func fetchBalance(quiet: Bool = false) async -> (balance: Int, claimId: String?) {
+        if !quiet { logger.debug("POINTS", "fetchBalance → channel(name:\(channelLogin)).self", nil) }
         let query = """
         { channel(name: "\(channelLogin)") {
             self { communityPoints { balance availableClaim { id } } }
         } }
         """
-        guard let json    = try? await gqlAuth(query, tag: "fetchBalance") as? [String: Any],
+        guard let json    = try? await gqlAuth(query, tag: "fetchBalance", quiet: quiet) as? [String: Any],
               let data    = json["data"]                                    as? [String: Any],
               let channel = data["channel"]                                 as? [String: Any],
               let selfObj = channel["self"]                                 as? [String: Any]
@@ -464,8 +461,10 @@ final class ChannelPointsService: ObservableObject {
         }
         let bal     = pts["balance"] as? Int ?? 0
         let claimId = (pts["availableClaim"] as? [String: Any])?["id"] as? String
-        logger.success("POINTS", "Balance récupérée",
-                       "\(formatted(bal)) pts · claim: \(claimId != nil ? "🎁 OUI" : "non")")
+        if !quiet {
+            logger.success("POINTS", "Balance récupérée",
+                           "\(formatted(bal)) pts · claim: \(claimId != nil ? "🎁 OUI" : "non")")
+        }
         return (bal, claimId)
     }
 
@@ -477,13 +476,13 @@ final class ChannelPointsService: ObservableObject {
     // MARK: – GQL authentifié (Authorization: OAuth <token web> — données privées)
     // ✅ Token de session web (cookie auth-token) → communityPoints renvoyé correctement
     // ❌ Token OAuth custom (Helix) → communityPoints null (Client-ID incompatible avec GQL)
-    private func gqlAuth(_ query: String, tag: String) async throws -> Any {
-        return try await makeGQLRequest(query, tag: tag, withAuth: true)
+    private func gqlAuth(_ query: String, tag: String, quiet: Bool = false) async throws -> Any {
+        return try await makeGQLRequest(query, tag: tag, withAuth: true, quiet: quiet)
     }
 
     private func makeGQLRequest(_ query: String, tag: String,
-                                 withAuth: Bool) async throws -> Any {
-        logger.debug("POINTS/GQL", "→ \(tag)", withAuth ? "OAuth" : "public")
+                                 withAuth: Bool, quiet: Bool = false) async throws -> Any {
+        if !quiet { logger.debug("POINTS/GQL", "→ \(tag)", withAuth ? "OAuth" : "public") }
         guard let url = URL(string: "https://gql.twitch.tv/gql") else { throw URLError(.badURL) }
 
         var req = URLRequest(url: url)
@@ -518,7 +517,7 @@ final class ChannelPointsService: ObservableObject {
            let errors = json["errors"] as? [[String: Any]], !errors.isEmpty {
             let msgs = errors.compactMap { $0["message"] as? String }.joined(separator: " · ")
             logger.warn("POINTS/GQL", "Erreurs GQL dans \(tag)", msgs + " (\(ms))")
-        } else {
+        } else if !quiet {
             logger.debug("POINTS/GQL", "← \(tag) OK", ms)
         }
 

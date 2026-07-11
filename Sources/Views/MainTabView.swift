@@ -93,11 +93,38 @@ struct MainTabView: View {
                         .font(.system(size: 15, weight: .bold))
                         .foregroundColor(.tPrimary)
 
-                    Text(modeTitle)
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundColor(.white)
-                        .lineLimit(1)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    // Titre (masquable) + stats live remontées quand le chat est ouvert.
+                    VStack(alignment: .leading, spacing: 2) {
+                        if !showChat || store.showStreamTitle {
+                            Text(modeTitle)
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundColor(.white)
+                                .lineLimit(1)
+                        }
+                        if showChat && isLivePlaying {
+                            headerLiveStats
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                    // Fermer le chat (revenir au lecteur + infos complètes)
+                    if showChat {
+                        Button {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                                showChat = false
+                            }
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "xmark").font(.system(size: 10, weight: .bold))
+                                Text("Chat").font(.system(size: 12, weight: .bold))
+                            }
+                            .foregroundColor(.tPrimary)
+                            .padding(.horizontal, 8).padding(.vertical, 6)
+                            .background(Color.tPrimary.opacity(0.15))
+                            .cornerRadius(8)
+                            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.tPrimary, lineWidth: 1))
+                        }
+                    }
 
                     Button { stopPlayer() } label: {
                         Text("✕")
@@ -154,9 +181,8 @@ struct MainTabView: View {
 
                     if showChat, let channel = currentChannelName {
                         // ── Mode chat ouvert ─────────────────────────
-                        compactInfoBar
-                            .transition(.opacity)
-
+                        // (les stats live sont remontées dans le header pour laisser
+                        //  un maximum de place au chat)
                         ChatView(
                             channelName: channel,
                             channelId: currentChannelId,   // ← userId Twitch du canal
@@ -188,75 +214,39 @@ struct MainTabView: View {
         }
     }
 
-    // MARK: – Barre compacte (chat ouvert)
+    // MARK: – Stats live (remontées dans le header quand le chat est ouvert)
+    private var isLivePlaying: Bool {
+        guard let mode = playerMode else { return false }
+        if case .live = mode { return true }
+        return false
+    }
+
     @ViewBuilder
-    private var compactInfoBar: some View {
-        if let mode = playerMode {
-            HStack(spacing: 10) {
-                VStack(alignment: .leading, spacing: 2) {
-                    if store.showStreamTitle {
-                        Text(statusTitle)
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundColor(.white)
-                            .lineLimit(1)
-                    }
+    private var headerLiveStats: some View {
+        HStack(spacing: 8) {
+            Text(store.t("live_badge"))
+                .font(.system(size: 9, weight: .bold))
+                .foregroundColor(.white)
+                .padding(.horizontal, 5).padding(.vertical, 2)
+                .background(Color.tLive).cornerRadius(3)
 
-                    if case .live = mode {
-                        HStack(spacing: 6) {
-                            Text(store.t("live_badge"))
-                                .font(.system(size: 10, weight: .bold))
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 6).padding(.vertical, 2)
-                                .background(Color.tLive).cornerRadius(3)
-
-                            if liveViewerCount > 0 {
-                                HStack(spacing: 3) {
-                                    Image(systemName: "eye.fill").font(.system(size: 9))
-                                    Text(formatViewers(liveViewerCount))
-                                        .font(.system(size: 11, weight: .semibold))
-                                }
-                                .foregroundColor(.tMuted)
-                            }
-
-                            if !liveUptimeText.isEmpty {
-                                HStack(spacing: 3) {
-                                    Image(systemName: "clock.fill").font(.system(size: 9))
-                                    Text(liveUptimeText)
-                                        .font(.system(size: 11, weight: .semibold))
-                                }
-                                .foregroundColor(.tMuted)
-                            }
-                        }
-                    } else if case .vod(_, _, _, let streamer) = mode, let s = streamer {
-                        Text("\(store.t("points_by")) \(s)")
-                            .font(.system(size: 11))
-                            .foregroundColor(.tMuted)
-                    }
+            if liveViewerCount > 0 {
+                HStack(spacing: 3) {
+                    Image(systemName: "eye.fill").font(.system(size: 9))
+                    Text(formatViewers(liveViewerCount))
+                        .font(.system(size: 11, weight: .semibold))
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-                Button {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-                        showChat = false
-                    }
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "xmark").font(.system(size: 11, weight: .bold))
-                        Text("Chat").font(.system(size: 12, weight: .bold))
-                    }
-                    .foregroundColor(.tPrimary)
-                    .padding(.horizontal, 10).padding(.vertical, 7)
-                    .background(Color.tPrimary.opacity(0.15))
-                    .cornerRadius(8)
-                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.tPrimary, lineWidth: 1))
-                }
+                .foregroundColor(.tMuted)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .background(Color.tCard)
-            .cornerRadius(10)
-            .padding(.horizontal, 12)
-            .padding(.top, 8)
+
+            if !liveUptimeText.isEmpty {
+                HStack(spacing: 3) {
+                    Image(systemName: "clock.fill").font(.system(size: 9))
+                    Text(liveUptimeText)
+                        .font(.system(size: 11, weight: .semibold))
+                }
+                .foregroundColor(.tMuted)
+            }
         }
     }
 

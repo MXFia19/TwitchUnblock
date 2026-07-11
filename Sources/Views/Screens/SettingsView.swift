@@ -2,7 +2,6 @@ import SwiftUI
 
 struct SettingsView: View {
     @EnvironmentObject private var store: AppStore
-    @AppStorage("liveSource") private var liveSource: LiveSource = .auto
     @State private var showLogs        = false
     @State private var showLogoutAlert = false
     @State private var showClearAlert  = false
@@ -29,18 +28,6 @@ struct SettingsView: View {
                 .padding(.horizontal, 16)
                 .padding(.top, 8)
 
-                // ── Source vidéo ─────────────────────────────────────
-                settingCard {
-                    VStack(alignment: .leading, spacing: 12) {
-                        label("🎬", store.t("proxy"))
-                        VStack(spacing: 8) {
-                            ForEach(LiveSource.allCases, id: \.self) { src in
-                                sourceButton(src)
-                            }
-                        }
-                    }
-                }
-
                 // ── Langue ──────────────────────────────────────────
                 settingCard {
                     VStack(alignment: .leading, spacing: 12) {
@@ -49,31 +36,6 @@ struct SettingsView: View {
                             ForEach(Lang.allCases) { lang in
                                 langButton(lang)
                             }
-                        }
-                    }
-                }
-
-                // ── Proxy toggle ────────────────────────────────────
-                settingCard {
-                    VStack(alignment: .leading, spacing: 8) {
-                        label("🔒", store.t("proxy_enable"))
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(store.t("proxy_enable"))
-                                    .font(.system(size: 15, weight: .semibold))
-                                    .foregroundColor(.tText)
-                                Text(store.t("proxy_sub"))
-                                    .font(.system(size: 12))
-                                    .foregroundColor(.tMuted)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                            Spacer()
-                            Toggle("", isOn: $store.useProxy)
-                                .labelsHidden()
-                                .tint(.tPrimary)
-                                .onChange(of: store.useProxy) { val in
-                                    logger.settingChanged("Proxy", value: val ? "activé" : "désactivé")
-                                }
                         }
                     }
                 }
@@ -394,40 +356,6 @@ struct SettingsView: View {
                 .foregroundColor(.tPurple)
                 .tracking(0.8)
         }
-    }
-
-    @ViewBuilder
-    private func sourceButton(_ src: LiveSource) -> some View {
-        let isSelected = liveSource == src
-        Button {
-            logger.settingChanged("Source vidéo", value: src.rawValue)
-            liveSource = src
-        } label: {
-            HStack(spacing: 12) {
-                Text(src.emoji)
-                    .font(.system(size: 18))
-                    .frame(width: 30)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(src.displayName)
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundColor(isSelected ? .tPrimary : .tText)
-                    Text(src.subtitle)
-                        .font(.system(size: 11))
-                        .foregroundColor(.tMuted)
-                }
-                Spacer()
-                if isSelected {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(.tPrimary)
-                        .font(.system(size: 18))
-                }
-            }
-            .padding(.horizontal, 14).padding(.vertical, 12)
-            .background(isSelected ? Color.tPrimary.opacity(0.12) : Color.tSurface)
-            .cornerRadius(12)
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(isSelected ? Color.tPrimary : Color.tBorder, lineWidth: isSelected ? 1.5 : 1))
-        }
-        .buttonStyle(.plain)
     }
 
     @ViewBuilder

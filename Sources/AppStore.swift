@@ -35,11 +35,6 @@ final class AppStore: ObservableObject {
         }
     }
 
-    // MARK: – Proxy
-    @Published var useProxy: Bool = true {
-        didSet { UserDefaults.standard.set(useProxy, forKey: "twitch_use_proxy") }
-    }
-
     // MARK: – Points
     /// Réclamer automatiquement les coffres bonus dès qu'ils sont disponibles.
     @Published var autoClaimChest: Bool = true {
@@ -87,7 +82,6 @@ final class AppStore: ObservableObject {
         twitchToken = ud.string(forKey: "twitch_token")
         twitchWebToken = ud.string(forKey: "twitch_web_token")
         twitchLogin = ud.string(forKey: "twitch_login")
-        useProxy = ud.object(forKey: "twitch_use_proxy") as? Bool ?? false
         autoClaimChest = ud.object(forKey: "auto_claim_chest") as? Bool ?? true
         showStreamTitle    = ud.object(forKey: "cfg_title")  as? Bool ?? true
         showPinnedMessages = ud.object(forKey: "cfg_pinned") as? Bool ?? true

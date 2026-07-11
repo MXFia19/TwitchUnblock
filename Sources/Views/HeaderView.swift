@@ -28,16 +28,6 @@ struct HeaderView: View {
             }
             Spacer()
 
-            Button(action: { store.useProxy.toggle() }) {
-                Text(store.useProxy ? "🔒 Proxy" : "🔓 Direct")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(.tMuted)
-                    .padding(.horizontal, 8).padding(.vertical, 4)
-                    .background(Color.tSurface)
-                    .cornerRadius(6)
-                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.tBorder, lineWidth: 1))
-            }
-
             Button(action: cycleLang) {
                 Text(store.lang.flag)
                     .font(.system(size: 16))

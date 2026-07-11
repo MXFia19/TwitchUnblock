@@ -10,9 +10,12 @@ final class LiveEventsService: ObservableObject {
     @Published var hype: LiveHype? = nil
 
     struct LivePoll {
+        let id: String
         let title: String
-        let choices: [(title: String, votes: Int)]
+        let choices: [Choice]
+        let endsAt: Date?
         var total: Int { max(1, choices.reduce(0) { $0 + $1.votes }) }
+        struct Choice: Identifiable { let id: String; let title: String; let votes: Int }
     }
     struct LivePrediction {
         let title: String
@@ -86,16 +89,40 @@ final class LiveEventsService: ObservableObject {
         logger.debug("EVENTS", "Sondage brut", "\(p.keys.sorted())")
         let title = p["title"] as? String ?? "Sondage"
         let raw = p["choices"] as? [[String: Any]] ?? []
-        let choices = raw.map { c -> (String, Int) in
+        let choices = raw.map { c -> LivePoll.Choice in
             let v = (c["totalVoters"] as? Int)
                  ?? ((c["votes"] as? [String: Any])?["total"] as? Int) ?? 0
-            return (c["title"] as? String ?? "", v)
+            return LivePoll.Choice(id: c["id"] as? String ?? "",
+                                   title: c["title"] as? String ?? "", votes: v)
         }
-        let newPoll = choices.isEmpty ? nil : LivePoll(title: title, choices: choices)
+        // Fin du sondage : plusieurs formes possibles selon la réponse → parse défensif.
+        let endsAt = pollEndDate(p)
+        let newPoll = choices.isEmpty ? nil
+                    : LivePoll(id: p["id"] as? String ?? "", title: title,
+                               choices: choices, endsAt: endsAt)
         if newPoll?.title != poll?.title, let np = newPoll {
-            logger.success("EVENTS", "📊 Sondage actif", np.title)
+            logger.success("EVENTS", "📊 Sondage actif", "\(np.title) · fin \(np.endsAt.map { "\($0)" } ?? "?")")
         }
         poll = newPoll
+    }
+
+    /// Déduit l'heure de fin d'un sondage depuis les champs disponibles.
+    private func pollEndDate(_ p: [String: Any]) -> Date? {
+        if let ms = p["remainingDurationMilliseconds"] as? Int {
+            return Date().addingTimeInterval(Double(ms) / 1000)
+        }
+        if let end = p["endedAt"] as? String, let d = isoDate(end) { return d }
+        if let dur = p["durationSeconds"] as? Int, let startStr = p["startedAt"] as? String,
+           let start = isoDate(startStr) {
+            return start.addingTimeInterval(Double(dur))
+        }
+        return nil
+    }
+
+    private func isoDate(_ s: String) -> Date? {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f.date(from: s) ?? ISO8601DateFormatter().date(from: s)
     }
 
     // MARK: Prédiction
@@ -172,8 +199,20 @@ struct LiveEventsBanner: View {
             if let poll = events.poll {
                 banner(icon: "chart.bar.fill", tint: .tPrimary) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("📊 \(poll.title)").font(.system(size: 12, weight: .bold)).foregroundColor(.tText)
-                        ForEach(Array(poll.choices.enumerated()), id: \.offset) { _, c in
+                        HStack(spacing: 6) {
+                            Text("📊 \(poll.title)")
+                                .font(.system(size: 12, weight: .bold)).foregroundColor(.tText)
+                            Spacer(minLength: 4)
+                            if let endsAt = poll.endsAt, endsAt > Date() {
+                                HStack(spacing: 3) {
+                                    Image(systemName: "clock.fill").font(.system(size: 9))
+                                    Text(timerInterval: Date()...endsAt, countsDown: true)
+                                        .font(.system(size: 11, weight: .bold).monospacedDigit())
+                                }
+                                .foregroundColor(.tPrimary)
+                            }
+                        }
+                        ForEach(poll.choices) { c in
                             bar(label: c.title, value: c.votes, total: poll.total, color: .tPrimary)
                         }
                     }

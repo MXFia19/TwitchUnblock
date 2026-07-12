@@ -28,6 +28,9 @@ struct ChatView: View {
     @State private var teardownWork: DispatchWorkItem? = nil   // anti-rebond plein écran
     @FocusState private var isInputFocused: Bool
 
+    @State private var sentinelVisible = true   // le bas de la liste est-il visible ?
+    @State private var isDragging      = false  // l'utilisateur fait-il défiler à la main ?
+
     private let bottomAnchor = "chat_bottom_anchor"   // sentinelle de bas de liste
 
     private var canSendMessages: Bool { token != nil && login != nil }
@@ -48,7 +51,9 @@ struct ChatView: View {
                 Text(chat.isConnected ? store.t("chat_connected") : store.t("chat_connecting"))
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundColor(.tMuted)
-                Spacer()
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Spacer(minLength: 4)
                 // Série de visionnage
                 if store.showWatchStreak, events.watchStreak > 0 {
                     HStack(spacing: 2) {
@@ -68,7 +73,9 @@ struct ChatView: View {
                             Image(systemName: following ? "heart.fill" : "heart")
                             Text(following ? store.t("following") : store.t("follow"))
                                 .font(.system(size: 10, weight: .bold))
+                                .lineLimit(1)
                         }
+                        .fixedSize()
                         .foregroundColor(following ? .tDanger : .tPrimary)
                         .padding(.horizontal, 8).padding(.vertical, 3)
                         .background((following ? Color.tDanger : Color.tPrimary).opacity(0.15))
@@ -83,10 +90,14 @@ struct ChatView: View {
                     Text("✏️ @\(l)")
                         .font(.system(size: 10, weight: .bold))
                         .foregroundColor(.tPrimary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
                 }
                 Text("#\(channelName)")
                     .font(.system(size: 11, weight: .bold))
                     .foregroundColor(.tPrimary)
+                    .lineLimit(1)
+                    .fixedSize()
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
@@ -195,30 +206,49 @@ struct ChatView: View {
                                         }
                                     }
                                     // Sentinelle de bas de liste : visible ⇒ on est en bas.
-                                    // (fiable avec LazyVStack, contrairement à la mesure de hauteur)
                                     Color.clear
                                         .frame(height: 1)
                                         .id(bottomAnchor)
-                                        .onAppear  { autoScroll = true }
-                                        .onDisappear { autoScroll = false }
+                                        .onAppear {
+                                            sentinelVisible = true
+                                            autoScroll = true    // revenu en bas → on suit
+                                        }
+                                        .onDisappear {
+                                            sentinelVisible = false
+                                            // On NE coupe PAS le suivi ici : sinon une rafale
+                                            // de messages (qui pousse brièvement la sentinelle
+                                            // hors champ) l'activerait à tort. C'est le geste
+                                            // de défilement manuel qui coupe le suivi.
+                                        }
                                 }
                                 .frame(width: geo.size.width, alignment: .leading)
                                 .padding(.vertical, 4)
                             }
+                            // Défilement manuel de l'utilisateur → on arrête de le ramener en bas.
+                            .simultaneousGesture(
+                                DragGesture(minimumDistance: 10)
+                                    .onChanged { _ in
+                                        isDragging = true
+                                        if !sentinelVisible { autoScroll = false }
+                                    }
+                                    .onEnded { _ in isDragging = false }
+                            )
                             .onChange(of: chat.messages.first?.id) { _ in
-                                // Ne suit les nouveaux messages QUE si on est déjà en bas.
-                                guard autoScroll else { return }
-                                withAnimation(.linear(duration: 0.1)) {
-                                    proxy.scrollTo(bottomAnchor, anchor: .bottom)
-                                }
+                                // Suit les nouveaux messages seulement si en bas et hors défilement
+                                // manuel. Sans animation → re-cale instantané, la sentinelle reste
+                                // visible même en rafale (n'active plus le mode lecture par erreur).
+                                guard autoScroll, !isDragging else { return }
+                                proxy.scrollTo(bottomAnchor, anchor: .bottom)
                             }
+                            // En mode lecture (remonté), on met en pause la purge des vieux
+                            // messages : sinon retirer les plus anciens (en haut) fait « descendre »
+                            // la vue pendant qu'on lit l'historique.
+                            .onChange(of: autoScroll) { chat.pauseTrim = !$0 }
 
                             if !autoScroll {
                                 Button {
-                                    withAnimation(.linear(duration: 0.15)) {
-                                        proxy.scrollTo(bottomAnchor, anchor: .bottom)
-                                    }
                                     autoScroll = true
+                                    proxy.scrollTo(bottomAnchor, anchor: .bottom)
                                 } label: {
                                     HStack(spacing: 4) {
                                         Image(systemName: "arrow.down")

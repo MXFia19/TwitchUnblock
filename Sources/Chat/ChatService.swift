@@ -16,6 +16,15 @@ final class ChatService: NSObject, ObservableObject {
     private var pingTimer: Timer?
     private var connectionTimeoutTask: Task<Void, Never>?
     private let maxMessages = 200
+    private let maxMessagesPaused = 600   // plafond dur quand la purge est en pause (lecture)
+    /// Quand true (utilisateur remonté pour lire l'historique), on ne purge pas les
+    /// plus anciens messages : ça éviterait de faire « descendre » la vue pendant la lecture.
+    var pauseTrim = false
+
+    private func trimIfNeeded() {
+        let cap = pauseTrim ? maxMessagesPaused : maxMessages
+        if messages.count > cap { messages = Array(messages.prefix(cap)) }
+    }
 
     // Infos du compte connecté (GLOBALUSERSTATE / USERSTATE)
     private var localLogin       = ""
@@ -121,7 +130,7 @@ final class ChatService: NSObject, ObservableObject {
             threadRootId: replyRootId ?? replyParentId
         )
         messages.insert(localMsg, at: 0)
-        if messages.count > maxMessages { messages = Array(messages.prefix(maxMessages)) }
+        trimIfNeeded()
     }
 
     // MARK: – Fil de discussion (thread)
@@ -252,7 +261,7 @@ final class ChatService: NSObject, ObservableObject {
         )
 
         messages.insert(message, at: 0)
-        if messages.count > maxMessages { messages = Array(messages.prefix(maxMessages)) }
+        trimIfNeeded()
     }
 
     // MARK: – USERNOTICE (abonnements, séries de visionnage, raids…)
@@ -297,7 +306,7 @@ final class ChatService: NSObject, ObservableObject {
             systemMsg: systemMsg.isEmpty ? nil : systemMsg
         )
         messages.insert(message, at: 0)
-        if messages.count > maxMessages { messages = Array(messages.prefix(maxMessages)) }
+        trimIfNeeded()
         logger.debug("CHAT", "USERNOTICE \(irc.tags["msg-id"] ?? "")", systemMsg)
     }
 

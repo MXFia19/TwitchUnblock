@@ -42,10 +42,6 @@ final class AppStore: ObservableObject {
     }
 
     // MARK: – Personnalisation chat / lecteur
-    /// Afficher le titre du live dans la barre compacte (chat ouvert).
-    @Published var showStreamTitle: Bool = true {
-        didSet { UserDefaults.standard.set(showStreamTitle, forKey: "cfg_title") }
-    }
     /// Afficher le bandeau des messages épinglés.
     @Published var showPinnedMessages: Bool = true {
         didSet { UserDefaults.standard.set(showPinnedMessages, forKey: "cfg_pinned") }
@@ -83,7 +79,6 @@ final class AppStore: ObservableObject {
         twitchWebToken = ud.string(forKey: "twitch_web_token")
         twitchLogin = ud.string(forKey: "twitch_login")
         autoClaimChest = ud.object(forKey: "auto_claim_chest") as? Bool ?? true
-        showStreamTitle    = ud.object(forKey: "cfg_title")  as? Bool ?? true
         showPinnedMessages = ud.object(forKey: "cfg_pinned") as? Bool ?? true
         showFollowButton   = ud.object(forKey: "cfg_follow") as? Bool ?? true
         showWatchStreak    = ud.object(forKey: "cfg_streak") as? Bool ?? true

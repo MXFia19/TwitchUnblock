@@ -93,16 +93,16 @@ struct MainTabView: View {
                         .font(.system(size: 15, weight: .bold))
                         .foregroundColor(.tPrimary)
 
-                    // Titre (masquable) + stats live remontées quand le chat est ouvert.
-                    VStack(alignment: .leading, spacing: 2) {
-                        if !showChat || store.showStreamTitle {
+                    // Chat ouvert : seulement les stats live (le nom de chaîne est déjà
+                    // affiché « #chaine » dans la barre du chat). Chat fermé : le titre.
+                    Group {
+                        if showChat {
+                            if isLivePlaying { headerLiveStats }
+                        } else {
                             Text(modeTitle)
                                 .font(.system(size: 14, weight: .bold))
                                 .foregroundColor(.white)
                                 .lineLimit(1)
-                        }
-                        if showChat && isLivePlaying {
-                            headerLiveStats
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -229,6 +229,7 @@ struct MainTabView: View {
                 .foregroundColor(.white)
                 .padding(.horizontal, 5).padding(.vertical, 2)
                 .background(Color.tLive).cornerRadius(3)
+                .fixedSize()
 
             if liveViewerCount > 0 {
                 HStack(spacing: 3) {
@@ -237,6 +238,7 @@ struct MainTabView: View {
                         .font(.system(size: 11, weight: .semibold))
                 }
                 .foregroundColor(.tMuted)
+                .fixedSize()
             }
 
             if !liveUptimeText.isEmpty {
@@ -246,8 +248,10 @@ struct MainTabView: View {
                         .font(.system(size: 11, weight: .semibold))
                 }
                 .foregroundColor(.tMuted)
+                .fixedSize()
             }
         }
+        .lineLimit(1)
     }
 
     // MARK: – Info box complète (chat fermé)

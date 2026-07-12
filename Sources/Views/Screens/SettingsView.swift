@@ -69,9 +69,6 @@ struct SettingsView: View {
                 settingCard {
                     VStack(alignment: .leading, spacing: 14) {
                         label("🎨", store.t("customize"))
-                        toggleRow(store.t("cfg_title"),  store.t("cfg_title_sub"),
-                                  $store.showStreamTitle,    log: "Titre du live")
-                        Divider().background(Color.tBorder)
                         toggleRow(store.t("cfg_pinned"), store.t("cfg_pinned_sub"),
                                   $store.showPinnedMessages, log: "Messages épinglés")
                         Divider().background(Color.tBorder)

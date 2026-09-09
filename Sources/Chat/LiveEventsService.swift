@@ -25,8 +25,13 @@ final class LiveEventsService: ObservableObject {
     }
     struct LiveHype { let level: Int; let percent: Double }
 
+    /// Choix pour lequel on a voté (nil = pas encore voté sur ce sondage).
+    @Published var votedChoiceId: String? = nil
+    @Published var voting = false
+
     private var channelId = ""
     private var login = ""
+    private var viewerId = ""
     private var token: String? = nil
     private var timer: Timer?
     private let interval: TimeInterval = 15
@@ -36,11 +41,13 @@ final class LiveEventsService: ObservableObject {
         static let poll       = "e83188a3836c636393df3191665e543a03733d7c51d3ade3d85e42aa46c2bf55"
         static let prediction = "beb846598256b75bd7c1fe54a80431335996153e358ca9c7837ce7bb83d7d383"
         static let hype       = "75ce00c56153ceba3be9f6772e1db11a9c5aed5029dc6243cfcc132460c56b23"
+        static let votePoll   = "1280e27b0f3c7ae60b5714bd569771ea50635778473182e6e959e2dcfcc16e3c"
     }
 
-    func start(login: String, channelId: String, token: String?) {
+    func start(login: String, channelId: String, token: String?, viewerId: String = "") {
         stop()
-        self.login = login.lowercased(); self.channelId = channelId; self.token = token
+        self.login = login.lowercased(); self.channelId = channelId
+        self.token = token; self.viewerId = viewerId
         Task { await fetchAll() }
         timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
             Task { await self?.fetchAll() }
@@ -50,6 +57,40 @@ final class LiveEventsService: ObservableObject {
     func stop() {
         timer?.invalidate(); timer = nil
         watchStreak = 0; poll = nil; prediction = nil; hype = nil
+        votedChoiceId = nil; voting = false
+    }
+
+    // MARK: Vote au sondage
+    func vote(choiceId: String) async {
+        guard !voting, votedChoiceId == nil,
+              let p = poll, !p.id.isEmpty, !choiceId.isEmpty else { return }
+        guard !viewerId.isEmpty, let tok = token, !tok.isEmpty else {
+            logger.warn("EVENTS", "Vote impossible", "session web ou compte manquant")
+            return
+        }
+        voting = true
+        defer { voting = false }
+
+        // voteID : identifiant client (UUID sans tirets), comme le site.
+        let voteId = UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased()
+        let input: [String: Any] = [
+            "pollID":   p.id,
+            "choiceID": choiceId,
+            "userID":   viewerId,
+            "voteID":   voteId,
+            "tokens":   NSNull()          // null = vote gratuit (sans points)
+        ]
+        let res = await TwitchGQL.shared.mutation("ChannelPollContext_VoteInPoll",
+                                                  variables: ["input": input],
+                                                  sha256: H.votePoll, token: tok)
+        if let d = res?["data"] as? [String: Any], d["voteInPoll"] != nil,
+           res?["errors"] == nil {
+            votedChoiceId = choiceId
+            logger.success("EVENTS", "🗳️ Vote enregistré", p.title)
+            await fetchPoll()             // rafraîchit les pourcentages
+        } else {
+            logger.warn("EVENTS", "Vote refusé", nil)
+        }
     }
 
     private func fetchAll() async {
@@ -84,7 +125,7 @@ final class LiveEventsService: ObservableObject {
               let chan  = data["channel"] as? [String: Any] else { return }
         guard let p = chan["viewablePoll"] as? [String: Any] else {
             if poll != nil { logger.debug("EVENTS", "Sondage terminé", nil) }
-            poll = nil; return
+            poll = nil; votedChoiceId = nil; return
         }
         logger.debug("EVENTS", "Sondage brut", "\(p.keys.sorted())")
         let title = p["title"] as? String ?? "Sondage"
@@ -100,8 +141,12 @@ final class LiveEventsService: ObservableObject {
         let newPoll = choices.isEmpty ? nil
                     : LivePoll(id: p["id"] as? String ?? "", title: title,
                                choices: choices, endsAt: endsAt)
-        if newPoll?.title != poll?.title, let np = newPoll {
-            logger.success("EVENTS", "📊 Sondage actif", "\(np.title) · fin \(np.endsAt.map { "\($0)" } ?? "?")")
+        if newPoll?.id != poll?.id {
+            votedChoiceId = nil        // nouveau sondage → on peut revoter
+            if let np = newPoll {
+                logger.success("EVENTS", "📊 Sondage actif",
+                               "\(np.title) · fin \(np.endsAt.map { "\($0)" } ?? "?")")
+            }
         }
         poll = newPoll
     }
@@ -213,7 +258,14 @@ struct LiveEventsBanner: View {
                             }
                         }
                         ForEach(poll.choices) { c in
-                            bar(label: c.title, value: c.votes, total: poll.total, color: .tPrimary)
+                            Button {
+                                Task { await events.vote(choiceId: c.id) }
+                            } label: {
+                                bar(label: c.title, value: c.votes, total: poll.total,
+                                    color: .tPrimary, voted: events.votedChoiceId == c.id)
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(events.voting || events.votedChoiceId != nil || c.id.isEmpty)
                         }
                     }
                 }
@@ -255,11 +307,17 @@ struct LiveEventsBanner: View {
     }
 
     @ViewBuilder
-    private func bar(label: String, value: Int, total: Int, color: Color, suffix: String = "") -> some View {
+    private func bar(label: String, value: Int, total: Int, color: Color,
+                     suffix: String = "", voted: Bool = false) -> some View {
         let pct = Double(value) / Double(total)
         VStack(alignment: .leading, spacing: 1) {
-            HStack {
-                Text(label).font(.system(size: 11, weight: .semibold)).foregroundColor(.tText).lineLimit(1)
+            HStack(spacing: 4) {
+                if voted {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 10)).foregroundColor(.tSuccess)
+                }
+                Text(label).font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(voted ? .tSuccess : .tText).lineLimit(1)
                 Spacer()
                 Text("\(Int(pct * 100))%").font(.system(size: 10, weight: .bold)).foregroundColor(.tMuted)
             }

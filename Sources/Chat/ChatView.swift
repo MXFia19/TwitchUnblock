@@ -404,7 +404,9 @@ struct ChatView: View {
             }
             // Événements live (série de visionnage, sondage, prédiction, hype train)
             if store.showWatchStreak || store.showLiveEvents {
-                events.start(login: channelName, channelId: cid, token: store.twitchWebToken)
+                events.start(login: channelName, channelId: cid,
+                             token: store.twitchWebToken,
+                             viewerId: store.twitchUserId ?? "")
             }
             // Raid sortant (auto-bascule vers la chaîne raidée)
             if store.enableRaids {

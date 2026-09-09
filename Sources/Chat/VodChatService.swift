@@ -30,9 +30,10 @@ final class VodChatService: ObservableObject {
     private let maxMessages   = 200
     private let prefetchBelow = 30     // recharge quand le tampon descend sous ce seuil
 
-    // NB : on interroge en GraphQL **brut** plutôt qu'en persisted query.
-    // Les hash des persisted queries changent côté Twitch (on se prenait un
-    // PersistedQueryNotFound) ; la requête brute, elle, ne dépend d'aucun hash.
+    /// Hash de la persisted query utilisée par le site (capturé au cartographe).
+    /// Si Twitch le fait tourner, on bascule automatiquement sur du GraphQL brut.
+    private static let commentsHash =
+        "b70a3591ff0f4e0313d126c6a1502d79a1c02baebb288227c582044aa76adf6a"
 
     // MARK: Cycle de vie
     func start(videoId: String) async {
@@ -110,7 +111,20 @@ final class VodChatService: ObservableObject {
         if firstPage { isLoading = true }
         defer { fetching = false; isLoading = false }
 
-        guard let res = await rawGQL(commentsQuery(offset: offset, cursor: cursor)) else {
+        // 1) Persisted query (exactement ce que fait le site).
+        var vars: [String: Any] = ["videoID": videoId]
+        if let c = cursor { vars["cursor"] = c }
+        else { vars["contentOffsetSeconds"] = offset ?? 0 }
+        var response = await TwitchGQL.shared.query("VideoCommentsByOffsetOrCursor",
+                                                    variables: vars,
+                                                    sha256: Self.commentsHash,
+                                                    token: nil)
+        // 2) Repli : si le hash a tourné côté Twitch, on repasse en GraphQL brut.
+        if Self.isPersistedMiss(response) {
+            logger.warn("VODCHAT", "Hash périmé → repli GraphQL brut", nil)
+            response = await rawGQL(commentsQuery(offset: offset, cursor: cursor))
+        }
+        guard let res = response else {
             errorMsg = "network"
             logger.warn("VODCHAT", "Requête commentaires échouée", nil)
             return
@@ -144,6 +158,15 @@ final class VodChatService: ObservableObject {
         buffer.sort { $0.offset < $1.offset }
         logger.debug("VODCHAT", "Page chargée",
                      "+\(added) · tampon:\(buffer.count) · suite:\(hasNext)")
+    }
+
+    /// La persisted query a-t-elle été rejetée (hash inconnu de Twitch) ?
+    private static func isPersistedMiss(_ res: [String: Any]?) -> Bool {
+        guard let res = res else { return true }
+        guard let errs = res["errors"] as? [[String: Any]] else { return false }
+        return errs.contains {
+            ($0["message"] as? String)?.contains("PersistedQueryNotFound") == true
+        }
     }
 
     /// Fait passer dans `messages` tout ce qui est déjà passé dans la vidéo.

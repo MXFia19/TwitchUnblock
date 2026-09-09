@@ -535,7 +535,9 @@ struct ChatMessageRow: View {
     private static let timeFormatter: DateFormatter = {
         let f = DateFormatter(); f.dateFormat = "HH:mm"; return f
     }()
-    private var timeString: String { Self.timeFormatter.string(from: message.timestamp) }
+    private var timeString: String {
+        message.vodOffsetLabel ?? Self.timeFormatter.string(from: message.timestamp)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {

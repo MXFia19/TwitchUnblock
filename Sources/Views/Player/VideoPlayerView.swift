@@ -86,7 +86,8 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
         func setupObserver(player: AVPlayer, onProgress: @escaping (Double) -> Void) {
             if let existing = timeObserver { playerRef?.removeTimeObserver(existing) }
             playerRef = player
-            let interval = CMTime(seconds: 5, preferredTimescale: 600)
+            // 1 s : assez fin pour synchroniser le chat des VODs.
+            let interval = CMTime(seconds: 1, preferredTimescale: 600)
             timeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { time in
                 onProgress(time.seconds)
             }
@@ -106,12 +107,15 @@ struct VideoPlayerView: View {
     /// Mode compact (chat ouvert) : masque la barre Source / le lien pour laisser
     /// un maximum de place au chat. Seul le lecteur reste visible.
     var compact: Bool = false
+    /// Position de lecture remontee au parent (utilisee par le chat des VODs).
+    var onTime: (Double) -> Void = { _ in }
 
     @EnvironmentObject private var store: AppStore
     @State private var selectedQuality: String = ""
     @State private var showQualityPicker = false
     @State private var showExternalSheet  = false
     @State private var currentTime: Double = 0
+    @State private var lastPersisted: Double = -99
 
     private var qualities: [String] { sortQualities(Array(qualityLinks.keys)) }
     private var currentURL: URL? { qualityLinks[selectedQuality].flatMap(URL.init) }
@@ -238,7 +242,13 @@ struct VideoPlayerView: View {
             savedTime: vodId.map { store.getVodProgress($0) } ?? 0
         ) { time in
             currentTime = time
-            if let id = vodId { store.setVodProgress(id, time: time) }
+            onTime(time)
+            // Progression persistee au plus toutes les 5 s (l'observateur tourne a 1 s,
+            // inutile d'ecrire dans UserDefaults a chaque tick).
+            if let id = vodId, abs(time - lastPersisted) >= 5 {
+                lastPersisted = time
+                store.setVodProgress(id, time: time)
+            }
         }
         .aspectRatio(16/9, contentMode: .fit)
         .background(Color.black)

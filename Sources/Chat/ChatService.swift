@@ -390,21 +390,7 @@ final class ChatService: NSObject, ObservableObject {
     }
 
     private func tokenizeText(_ segment: String, channelId: String?) async -> [MessageToken] {
-        var tokens: [MessageToken] = []
-        for word in segment.components(separatedBy: " ") {
-            guard !word.isEmpty else { continue }
-            let lower = word.lowercased()
-            if lower.hasPrefix("http://") || lower.hasPrefix("https://") || lower.hasPrefix("www.") {
-                tokens.append(.link(word))
-            } else if word.hasPrefix("@") && word.count > 1 {
-                tokens.append(.mention(String(word.dropFirst())))
-            } else if let emote = await EmoteService.shared.resolve(name: word, channelId: channelId) {
-                tokens.append(.emote(emote))
-            } else {
-                tokens.append(.text(word))
-            }
-        }
-        return tokens
+        await tokenizeChatSegment(segment, channelId: channelId)
     }
 
     // MARK: – Moderation

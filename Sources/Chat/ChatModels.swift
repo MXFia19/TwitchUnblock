@@ -55,6 +55,29 @@ struct ChatMessage: Identifiable {
     // Threading (réponses)
     var parentMsgId: String? = nil     // reply-parent-msg-id (message auquel on répond)
     var threadRootId: String? = nil    // reply-thread-parent-msg-id (racine du fil)
+    /// Chat de VOD : horodatage relatif à la vidéo (ex: "1:23:45") au lieu de l'heure.
+    var vodOffsetLabel: String? = nil
+}
+
+// MARK: – Tokenisation d'un segment de texte
+/// Découpe un texte en jetons : liens, mentions, emotes tierces (BTTV/FFZ/7TV), texte.
+/// Partagé par le chat live (IRC) et le chat des VODs.
+func tokenizeChatSegment(_ segment: String, channelId: String?) async -> [MessageToken] {
+    var tokens: [MessageToken] = []
+    for word in segment.components(separatedBy: " ") {
+        guard !word.isEmpty else { continue }
+        let lower = word.lowercased()
+        if lower.hasPrefix("http://") || lower.hasPrefix("https://") || lower.hasPrefix("www.") {
+            tokens.append(.link(word))
+        } else if word.hasPrefix("@") && word.count > 1 {
+            tokens.append(.mention(String(word.dropFirst())))
+        } else if let emote = await EmoteService.shared.resolve(name: word, channelId: channelId) {
+            tokens.append(.emote(emote))
+        } else {
+            tokens.append(.text(word))
+        }
+    }
+    return tokens
 }
 
 // MARK: – Déséchappement IRCv3 (tags system-msg, etc.)

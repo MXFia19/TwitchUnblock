@@ -15,6 +15,7 @@ struct MainTabView: View {
     // ── Chat state ───────────────────────────────────────────────────────
     @State private var showChat = false
     @State private var keepChatOnLoad = false   // raid → rouvrir le chat sur la chaîne raidée
+    @State private var vodPlaybackTime: Double = 0   // pilote le chat des VODs
     @State private var currentChannelName: String? = nil
     @State private var currentChannelId: String? = nil   // ← branché sur data.userId
 
@@ -174,7 +175,8 @@ struct MainTabView: View {
                             if case .vod(let id, _, _, _) = playerMode { return id }
                             return nil
                         }(),
-                        compact: showChat   // chat ouvert → masque Source/lien, place au chat
+                        compact: showChat,  // chat ouvert → masque Source/lien, place au chat
+                        onTime: { vodPlaybackTime = $0 }
                     )
                     .padding(.horizontal, 12)
                     .padding(.top, 12)
@@ -200,6 +202,16 @@ struct MainTabView: View {
                         .padding(.bottom, 12)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
 
+                    } else if showChat, let vid = currentVodId {
+                        // ── Chat de VOD (relecture synchronisée) ─────
+                        VodChatView(videoId: vid, playbackTime: vodPlaybackTime)
+                            .id(vid)
+                            .frame(maxHeight: .infinity)
+                            .cornerRadius(12)
+                            .padding(.horizontal, 12)
+                            .padding(.bottom, 12)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+
                     } else {
                         // ── Mode normal ──────────────────────────────
                         fullInfoBox
@@ -212,6 +224,12 @@ struct MainTabView: View {
                 }
             }
         }
+    }
+
+    /// Identifiant de la VOD en cours de lecture (nil en live).
+    private var currentVodId: String? {
+        if case .vod(let id, _, _, _) = playerMode { return id }
+        return nil
     }
 
     // MARK: – Stats live (remontées dans le header quand le chat est ouvert)
@@ -300,7 +318,7 @@ struct MainTabView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-                if case .live = mode, currentChannelName != nil {
+                if currentChannelName != nil || currentVodId != nil {
                     Button {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
                             showChat = true
@@ -370,6 +388,7 @@ struct MainTabView: View {
         errorMsg      = nil
         qualityLinks  = nil
         showChat      = false
+        vodPlaybackTime = 0
 
         if case .live(let channel) = mode {
             currentChannelName = channel.lowercased()

@@ -62,6 +62,10 @@ final class AppStore: ObservableObject {
     @Published var enableRaids: Bool = true {
         didSet { UserDefaults.standard.set(enableRaids, forKey: "cfg_raids") }
     }
+    /// Vider le cache des emotes/badges en quittant le live (et l'app).
+    @Published var autoPurgeImageCache: Bool = true {
+        didSet { UserDefaults.standard.set(autoPurgeImageCache, forKey: "cfg_purge_cache") }
+    }
 
     // MARK: – History
     @Published var history: [HistoryItem] = [] {
@@ -84,6 +88,7 @@ final class AppStore: ObservableObject {
         showWatchStreak    = ud.object(forKey: "cfg_streak") as? Bool ?? true
         showLiveEvents     = ud.object(forKey: "cfg_events") as? Bool ?? true
         enableRaids        = ud.object(forKey: "cfg_raids")  as? Bool ?? true
+        autoPurgeImageCache = ud.object(forKey: "cfg_purge_cache") as? Bool ?? true
         if let data = ud.data(forKey: "twitch_vod_history"),
            let decoded = try? JSONDecoder().decode([HistoryItem].self, from: data) {
             history = decoded

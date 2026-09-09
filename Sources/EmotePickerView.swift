@@ -151,19 +151,9 @@ private struct EmoteCell: View {
     var body: some View {
         Button(action: onTap) {
             VStack(spacing: 3) {
-                AsyncImage(url: URL(string: emote.url)) { phase in
-                    if let img = phase.image {
-                        img.resizable().interpolation(.medium).scaledToFit()
-                    } else if phase.error != nil {
-                        Text(String(emote.name.prefix(3)))
-                            .font(.system(size: 9))
-                            .foregroundColor(.tMuted)
-                    } else {
-                        Color.tSurface.opacity(0.6)
-                            .cornerRadius(4)
-                    }
-                }
-                .frame(width: 34, height: 34)
+                CachedEmoteImage(url: emote.url, name: String(emote.name.prefix(3)),
+                                 height: 34)
+                    .frame(width: 34, height: 34)
 
                 Text(emote.name)
                     .font(.system(size: 8))

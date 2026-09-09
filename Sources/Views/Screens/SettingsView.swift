@@ -8,6 +8,8 @@ struct SettingsView: View {
     @State private var showWebLogin    = false   // login web (points de chaîne)
     @State private var webLoginClear   = false
     @State private var apiLoggingIn    = false
+    @State private var cacheBytes: Int64 = 0
+    @State private var cacheFiles      = 0
 
     private var vodCount:     Int { store.history.filter { $0.type == .vod }.count }
     private var channelCount: Int { store.history.filter { $0.type == .channel }.count }
@@ -83,6 +85,46 @@ struct SettingsView: View {
                         Divider().background(Color.tBorder)
                         toggleRow(store.t("cfg_raids"),  store.t("cfg_raids_sub"),
                                   $store.enableRaids,        log: "Système de raid")
+                    }
+                }
+
+                // ── Cache emotes & badges ───────────────────────────
+                settingCard {
+                    VStack(alignment: .leading, spacing: 14) {
+                        label("🗂", store.t("cache_section"))
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(store.t("cache_size"))
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundColor(.tText)
+                                Text("\(cacheSizeText) · \(cacheFiles) \(store.t("cache_files"))")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.tMuted)
+                            }
+                            Spacer(minLength: 8)
+                            Button {
+                                ImageCache.shared.purge()
+                                refreshCacheInfo()
+                            } label: {
+                                HStack(spacing: 5) {
+                                    Image(systemName: "trash")
+                                    Text(store.t("cache_clear"))
+                                        .font(.system(size: 13, weight: .bold))
+                                }
+                                .foregroundColor(.tDanger)
+                                .fixedSize()
+                                .padding(.horizontal, 12).padding(.vertical, 8)
+                                .background(Color.tDanger.opacity(0.15))
+                                .cornerRadius(8)
+                                .overlay(RoundedRectangle(cornerRadius: 8)
+                                    .stroke(Color.tDanger, lineWidth: 1))
+                            }
+                            .disabled(cacheBytes == 0)
+                            .opacity(cacheBytes == 0 ? 0.4 : 1)
+                        }
+                        Divider().background(Color.tBorder)
+                        toggleRow(store.t("cache_auto"), store.t("cache_auto_sub"),
+                                  $store.autoPurgeImageCache, log: "Purge auto du cache")
                     }
                 }
 
@@ -204,6 +246,7 @@ struct SettingsView: View {
             .padding(.horizontal, 12)
         }
         .background(Color.tDark)
+        .onAppear { refreshCacheInfo() }
         // ── Alerts ──────────────────────────────────────────────────
         .alert(store.t("btn_logout"), isPresented: $showLogoutAlert) {
             Button(store.t("cancel"), role: .cancel) {}
@@ -256,6 +299,20 @@ struct SettingsView: View {
                 LogsView()
             }
             .background(Color.tDark)
+        }
+    }
+
+    // MARK: – Cache
+    private var cacheSizeText: String {
+        ByteCountFormatter.string(fromByteCount: cacheBytes, countStyle: .file)
+    }
+
+    /// Lit la taille du cache hors du thread principal (parcours de dossier).
+    private func refreshCacheInfo() {
+        Task.detached(priority: .utility) {
+            let bytes = ImageCache.shared.diskSize()
+            let files = ImageCache.shared.fileCount()
+            await MainActor.run { cacheBytes = bytes; cacheFiles = files }
         }
     }
 

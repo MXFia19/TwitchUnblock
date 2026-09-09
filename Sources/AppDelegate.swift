@@ -11,6 +11,13 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         return true
     }
 
+    /// Fermeture de l'app → purge du cache emotes/badges (si l'option est active).
+    /// NB : on ne purge PAS en passant en arriere-plan, sinon revenir d'un
+    /// changement d'app (ou du PiP) rechargerait tout pour rien.
+    func applicationWillTerminate(_ application: UIApplication) {
+        ImageCache.shared.purgeIfNeeded()
+    }
+
     private func configureAudioSession() {
         do {
             try AVAudioSession.sharedInstance().setCategory(

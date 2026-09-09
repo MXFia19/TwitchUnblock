@@ -354,6 +354,8 @@ struct ChatView: View {
                 events.stop()
                 raidService.disconnect()
                 pointsService.stopPolling()
+                // Cache emotes/badges : purge en quittant le live (si l'option est active).
+                ImageCache.shared.purgeIfNeeded()
                 isSetup = false
             }
             teardownWork = work
@@ -612,11 +614,8 @@ struct WrappingHStack: View {
         MessageFlowLayout(spacing: 4, lineSpacing: 4, width: availableWidth) {
             Text(timeString).font(.system(size: 11)).foregroundColor(.tMuted)
             ForEach(message.badges) { badge in
-                AsyncImage(url: URL(string: badge.url)) { phase in
-                    if let img = phase.image { img.resizable().interpolation(.medium).scaledToFit() }
-                    else { Color.clear.frame(width: 16) }
-                }
-                .frame(width: 16, height: 16)
+                CachedEmoteImage(url: badge.url, name: "", height: 16,
+                                 showsNameFallback: false)
             }
             Text(message.displayName + ":")
                 .font(.system(size: 13, weight: .bold)).foregroundColor(message.color)
@@ -675,19 +674,6 @@ struct MessageFlowLayout: Layout {
         }
         for j in ls..<subviews.count {lh[j]=mh}
         return (CGSize(width:W,height:cy+mh),pos,lh,sizes)
-    }
-}
-
-// MARK: – Cached Emote Image
-struct CachedEmoteImage: View {
-    let url: String; let name: String
-    var body: some View {
-        AsyncImage(url: URL(string: url)) { phase in
-            if let img = phase.image { img.resizable().interpolation(.medium).scaledToFit() }
-            else if phase.error != nil { Text(name).font(.system(size:11)).foregroundColor(.tMuted) }
-            else { Color.clear.frame(width:24,height:24) }
-        }
-        .frame(height: 24)
     }
 }
 

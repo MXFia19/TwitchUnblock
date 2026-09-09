@@ -3,11 +3,10 @@ import SwiftUI
 
 // MARK: – Chat de VOD (relecture des commentaires, synchronisée à la lecture)
 //
-// Twitch expose les commentaires d'une VOD via la persisted query
-// `VideoCommentsByOffsetOrCursor` : on demande une position (en secondes) puis on
-// pagine au curseur. On garde une file tampon triée par offset et on libère les
-// messages au fur et à mesure que la lecture avance, ce qui reproduit le
-// défilement du chat d'origine.
+// On interroge `video.comments` en GraphQL brut : une position (en secondes)
+// pour la première page, puis un curseur pour la suite. On garde une file tampon
+// triée par offset et on libère les messages au fur et à mesure que la lecture
+// avance, ce qui reproduit le défilement du chat d'origine.
 @MainActor
 final class VodChatService: ObservableObject {
 
@@ -31,9 +30,9 @@ final class VodChatService: ObservableObject {
     private let maxMessages   = 200
     private let prefetchBelow = 30     // recharge quand le tampon descend sous ce seuil
 
-    /// Hash de la persisted query (le même que celui utilisé par le site web).
-    private static let commentsHash =
-        "b70a3591ff0f4e0313d126c6a1502d79a1c02baebb288227c582d1e9b9fbb4a1"
+    // NB : on interroge en GraphQL **brut** plutôt qu'en persisted query.
+    // Les hash des persisted queries changent côté Twitch (on se prenait un
+    // PersistedQueryNotFound) ; la requête brute, elle, ne dépend d'aucun hash.
 
     // MARK: Cycle de vie
     func start(videoId: String) async {
@@ -70,25 +69,48 @@ final class VodChatService: ObservableObject {
     // MARK: Chargement
     private func seek(to offset: Double) async {
         buffer = []; seen = []; cursor = nil; hasNext = true; messages = []
-        await load(variables: ["videoID": videoId, "contentOffsetSeconds": Int(offset)],
-                   firstPage: true)
+        await load(offset: Int(offset), cursor: nil, firstPage: true)
         release(upTo: offset)
     }
 
     private func fetchMore() async {
         guard let c = cursor else { hasNext = false; return }
-        await load(variables: ["videoID": videoId, "cursor": c], firstPage: false)
+        await load(offset: nil, cursor: c, firstPage: false)
     }
 
-    private func load(variables: [String: Any], firstPage: Bool) async {
+    /// Requête des commentaires : par position (première page) ou par curseur (suite).
+    private func commentsQuery(offset: Int?, cursor: String?) -> String {
+        let arg = cursor.map { "after: \"\($0)\"" } ?? "contentOffsetSeconds: \(offset ?? 0)"
+        return """
+        query {
+          video(id: "\(videoId)") {
+            comments(\(arg)) {
+              edges {
+                cursor
+                node {
+                  id
+                  contentOffsetSeconds
+                  commenter { id login displayName }
+                  message {
+                    userColor
+                    userBadges { setID version }
+                    fragments { text emote { emoteID } }
+                  }
+                }
+              }
+              pageInfo { hasNextPage }
+            }
+          }
+        }
+        """
+    }
+
+    private func load(offset: Int?, cursor: String?, firstPage: Bool) async {
         fetching = true
         if firstPage { isLoading = true }
         defer { fetching = false; isLoading = false }
 
-        guard let res = await TwitchGQL.shared.query("VideoCommentsByOffsetOrCursor",
-                                                    variables: variables,
-                                                    sha256: Self.commentsHash,
-                                                    token: nil) else {
+        guard let res = await rawGQL(commentsQuery(offset: offset, cursor: cursor)) else {
             errorMsg = "network"
             logger.warn("VODCHAT", "Requête commentaires échouée", nil)
             return
@@ -110,7 +132,8 @@ final class VodChatService: ObservableObject {
         }
 
         hasNext = (comments["pageInfo"] as? [String: Any])?["hasNextPage"] as? Bool ?? false
-        if let last = edges.last?["cursor"] as? String { cursor = last }
+        // self. explicite : le parametre `cursor` masque la propriete.
+        if let last = edges.last?["cursor"] as? String { self.cursor = last }
 
         var added = 0
         for e in edges {
@@ -202,18 +225,22 @@ final class VodChatService: ObservableObject {
         return (offset, msg)
     }
 
-    // MARK: Propriétaire de la VOD (pour charger les emotes/badges du canal)
-    private func resolveOwner() async {
-        let q = "query { video(id: \"\(videoId)\") { owner { id login } } }"
-        guard let url = URL(string: "https://gql.twitch.tv/gql") else { return }
+    // MARK: GraphQL brut (pas de persisted query : aucun hash a maintenir)
+    private func rawGQL(_ query: String) async -> [String: Any]? {
+        guard let url = URL(string: "https://gql.twitch.tv/gql") else { return nil }
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
         req.setValue(kGQLClientID,       forHTTPHeaderField: "Client-ID")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.httpBody = try? JSONSerialization.data(withJSONObject: ["query": q])
+        req.httpBody = try? JSONSerialization.data(withJSONObject: ["query": query])
+        guard let (data, _) = try? await URLSession.shared.data(for: req) else { return nil }
+        return try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+    }
 
-        guard let (data, _) = try? await URLSession.shared.data(for: req),
-              let json  = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+    // MARK: Propriétaire de la VOD (pour charger les emotes/badges du canal)
+    private func resolveOwner() async {
+        let q = "query { video(id: \"\(videoId)\") { owner { id login } } }"
+        guard let json  = await rawGQL(q),
               let d     = json["data"]   as? [String: Any],
               let video = d["video"]     as? [String: Any],
               let owner = video["owner"] as? [String: Any] else {

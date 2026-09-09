@@ -94,11 +94,13 @@ struct MainTabView: View {
                         .font(.system(size: 15, weight: .bold))
                         .foregroundColor(.tPrimary)
 
-                    // Chat ouvert : seulement les stats live (le nom de chaîne est déjà
-                    // affiché « #chaine » dans la barre du chat). Chat fermé : le titre.
+                    // Live + chat ouvert : stats live (le nom de chaîne est déjà affiché
+                    // « #chaine » dans la barre du chat). Sinon : le titre.
+                    // NB : ce Group ne doit JAMAIS être vide — une EmptyView ignore
+                    // .frame(maxWidth:.infinity) et la barre du header se rétracte.
                     Group {
-                        if showChat {
-                            if isLivePlaying { headerLiveStats }
+                        if showChat, isLivePlaying {
+                            headerLiveStats
                         } else {
                             Text(modeTitle)
                                 .font(.system(size: 14, weight: .bold))

@@ -12,6 +12,9 @@ struct LiveData {
     var links: QualityLinks?
     var viewerCount: Int = 0
     var startedAt: Date? = nil
+    /// ID du VOD en cours d'enregistrement (DVR) : permet de rembobiner le live.
+    /// nil si le streamer n'archive pas ses lives.
+    var dvrVideoId: String? = nil
     var error: String?
 }
 

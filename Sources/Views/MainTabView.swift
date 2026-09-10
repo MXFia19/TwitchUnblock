@@ -16,6 +16,10 @@ struct MainTabView: View {
     @State private var showChat = false
     @State private var keepChatOnLoad = false   // raid → rouvrir le chat sur la chaîne raidée
     @State private var vodPlaybackTime: Double = 0   // pilote le chat des VODs
+    // ── DVR (rembobiner un live) ─────────────────────────────────────────
+    @State private var liveDvrVideoId: String? = nil    // VOD en cours du live regardé
+    @State private var pendingDvrChannel: String? = nil // passe le relais à startPlayback
+    @State private var dvrSourceChannel: String? = nil  // on regarde le DVR de cette chaîne
     @State private var currentChannelName: String? = nil
     @State private var currentChannelId: String? = nil   // ← branché sur data.userId
 
@@ -320,6 +324,42 @@ struct MainTabView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
+                // Rembobiner le live (DVR) : lit le VOD en cours d'enregistrement,
+                // ce qui rend la barre de progression utilisable.
+                if currentChannelName != nil, let dvr = liveDvrVideoId {
+                    Button {
+                        pendingDvrChannel = currentChannelName
+                        playVod(dvr, statusTitle, nil, currentChannelName)
+                    } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: "gobackward")
+                            Text(store.t("rewind")).font(.system(size: 13, weight: .bold))
+                        }
+                        .foregroundColor(.tPrimary)
+                        .fixedSize()
+                        .padding(.horizontal, 12).padding(.vertical, 8)
+                        .background(Color.tPrimary.opacity(0.15))
+                        .cornerRadius(10)
+                        .overlay(RoundedRectangle(cornerRadius: 10)
+                            .stroke(Color.tPrimary, lineWidth: 1))
+                    }
+                }
+
+                // Revenir au direct depuis le rembobinage
+                if let ch = dvrSourceChannel {
+                    Button { playLive(ch) } label: {
+                        HStack(spacing: 5) {
+                            Circle().fill(Color.white).frame(width: 7, height: 7)
+                            Text(store.t("back_to_live")).font(.system(size: 13, weight: .bold))
+                        }
+                        .foregroundColor(.white)
+                        .fixedSize()
+                        .padding(.horizontal, 12).padding(.vertical, 8)
+                        .background(Color.tLive)
+                        .cornerRadius(10)
+                    }
+                }
+
                 if currentChannelName != nil || currentVodId != nil {
                     Button {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
@@ -391,6 +431,12 @@ struct MainTabView: View {
         qualityLinks  = nil
         showChat      = false
         vodPlaybackTime = 0
+        liveDvrVideoId  = nil
+        // Un VOD lancé depuis le bouton Rembobiner garde le lien vers sa chaîne,
+        // pour pouvoir revenir au direct. Un VOD normal, non.
+        if case .live = mode { dvrSourceChannel = nil }
+        else { dvrSourceChannel = pendingDvrChannel }
+        pendingDvrChannel = nil
 
         if case .live(let channel) = mode {
             currentChannelName = channel.lowercased()
@@ -425,6 +471,7 @@ struct MainTabView: View {
                         liveViewerCount   = data.viewerCount
                         liveStartedAt     = data.startedAt
                         currentChannelId  = data.userId   // ← userId Twitch → emotes canal
+                        liveDvrVideoId    = data.dvrVideoId
                         loading           = false
                         if keepChatOnLoad { showChat = true; keepChatOnLoad = false }
                         startLiveTimers(channel: channel)
@@ -442,6 +489,9 @@ struct MainTabView: View {
         showChat           = false
         currentChannelName = nil
         currentChannelId   = nil
+        liveDvrVideoId     = nil
+        dvrSourceChannel   = nil
+        pendingDvrChannel  = nil
         liveViewerCount    = 0
         liveStartedAt      = nil
         liveUptimeText     = ""

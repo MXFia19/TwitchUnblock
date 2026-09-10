@@ -167,7 +167,10 @@ func getLive(channelName: String) async -> LiveData {
     query { user(login: "\(login)") {
         id
         profileImageURL(width: 70)
-        stream { title game { name } previewImageURL(width: 320, height: 180) viewersCount createdAt }
+        stream {
+            title game { name } previewImageURL(width: 320, height: 180) viewersCount createdAt
+            archiveVideo { id }
+        }
     }}
     """
     async let streamTask = twitchGQL(q)
@@ -194,6 +197,13 @@ func getLive(channelName: String) async -> LiveData {
     let game        = (stream["game"] as? [String: Any])?["name"] as? String ?? ""
     let thumbnail   = stream["previewImageURL"] as? String ?? ""
     let viewerCount = stream["viewersCount"] as? Int ?? 0
+    // VOD en cours d'enregistrement → rembobinage du live (DVR)
+    let dvrVideoId  = (stream["archiveVideo"] as? [String: Any])?["id"] as? String
+    if let d = dvrVideoId {
+        logger.success("LIVE", "Rembobinage disponible (DVR)", "vod \(d)")
+    } else {
+        logger.debug("LIVE", "Pas de rembobinage", "le streamer n'archive pas ses lives")
+    }
 
     var startedAt: Date? = nil
     if let createdAtStr = stream["createdAt"] as? String {
@@ -279,7 +289,8 @@ func getLive(channelName: String) async -> LiveData {
     }
 
     return LiveData(title: title, game: game, thumbnail: thumbnail, avatar: avatar,
-                    userId: userId, links: links, viewerCount: viewerCount, startedAt: startedAt)
+                    userId: userId, links: links, viewerCount: viewerCount,
+                    startedAt: startedAt, dvrVideoId: dvrVideoId)
 }
 
 // MARK: – getStreamStats (rafraîchissement LÉGER viewers/uptime, sans re-fetch des liens)

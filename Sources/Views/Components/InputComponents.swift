@@ -11,6 +11,9 @@ struct AutocompleteInputView: View {
     @State private var loading = false
     @State private var showSuggestions = false
     @State private var debounceTask: Task<Void, Never>? = nil
+    /// La liste ne s'affiche que si le champ a le focus : un texte posé
+    /// par programme (tag d'historique) ne doit pas rouvrir la liste.
+    @FocusState private var isFocused: Bool
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -21,7 +24,8 @@ struct AutocompleteInputView: View {
                     .autocapitalization(.none)
                     .foregroundColor(.white)
                     .submitLabel(.search)
-                    .onSubmit { showSuggestions = false; onSubmit() }
+                    .focused($isFocused)
+                    .onSubmit { closeSuggestions(); onSubmit() }
                     .onChange(of: text) { newValue in handleChange(newValue) }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 12)
@@ -35,12 +39,12 @@ struct AutocompleteInputView: View {
             .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.tBorder, lineWidth: 2))
 
             // Dropdown
-            if showSuggestions && !suggestions.isEmpty {
+            if isFocused && showSuggestions && !suggestions.isEmpty {
                 VStack(spacing: 0) {
                     ForEach(suggestions) { s in
                         Button {
                             text = s.login + " "
-                            showSuggestions = false
+                            closeSuggestions()
                             onSubmit()
                         } label: {
                             HStack(spacing: 10) {
@@ -80,10 +84,28 @@ struct AutocompleteInputView: View {
         }
     }
 
+    /// Ferme la liste ET annule la recherche en vol : sinon une requête lancée
+    /// juste avant la validation rouvrait la liste en arrivant après coup.
+    private func closeSuggestions() {
+        debounceTask?.cancel(); debounceTask = nil
+        suggestions = []
+        showSuggestions = false
+        loading = false
+        isFocused = false          // referme aussi le clavier
+    }
+
     private func handleChange(_ newText: String) {
+        // Texte modifié sans que l'utilisateur soit dans le champ (tag
+        // d'historique, remplissage auto) : on ne propose rien.
+        guard isFocused else {
+            debounceTask?.cancel()
+            suggestions = []; showSuggestions = false; loading = false
+            return
+        }
         let firstWord = newText.components(separatedBy: " ").first?.lowercased() ?? ""
         guard !firstWord.isEmpty && !newText.contains(" ") else {
-            suggestions = []; showSuggestions = false; return
+            debounceTask?.cancel()
+            suggestions = []; showSuggestions = false; loading = false; return
         }
         debounceTask?.cancel()
         debounceTask = Task {
@@ -100,9 +122,13 @@ struct AutocompleteInputView: View {
                 results.append(s)
             }
             await MainActor.run {
+                loading = false
+                // Le champ a pu perdre le focus (validation) pendant la requête.
+                guard !Task.isCancelled, isFocused else {
+                    suggestions = []; showSuggestions = false; return
+                }
                 suggestions     = Array(results.prefix(6))
                 showSuggestions = !suggestions.isEmpty
-                loading         = false
             }
         }
     }

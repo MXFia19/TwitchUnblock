@@ -282,11 +282,14 @@ struct MainTabView: View {
     @ViewBuilder
     private var fullInfoBox: some View {
         if let mode = playerMode {
-            HStack(alignment: .top, spacing: 12) {
+            // Infos en haut, actions sur leur PROPRE ligne : sinon les boutons
+            // compriment le titre et font passer les stats à la ligne.
+            VStack(alignment: .leading, spacing: 12) {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(statusTitle)
                         .font(.system(size: 15, weight: .bold))
                         .foregroundColor(.white)
+                        .lineLimit(2)
 
                     if case .vod(_, _, _, let streamer) = mode, let s = streamer {
                         Text("\(store.t("points_by")) \(s)")
@@ -301,6 +304,7 @@ struct MainTabView: View {
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 8).padding(.vertical, 3)
                                 .background(Color.tLive).cornerRadius(4)
+                                .fixedSize()
 
                             if liveViewerCount > 0 {
                                 HStack(spacing: 3) {
@@ -309,6 +313,7 @@ struct MainTabView: View {
                                         .font(.system(size: 12, weight: .semibold))
                                 }
                                 .foregroundColor(.tMuted)
+                                .fixedSize()
                             }
 
                             if !liveUptimeText.isEmpty {
@@ -318,11 +323,17 @@ struct MainTabView: View {
                                         .font(.system(size: 12, weight: .semibold))
                                 }
                                 .foregroundColor(.tMuted)
+                                .fixedSize()
                             }
+                            Spacer(minLength: 0)
                         }
+                        .lineLimit(1)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+
+                // ── Actions ──────────────────────────────────────────
+                HStack(spacing: 8) {
 
                 // Rembobiner le live (DVR) : lit le VOD en cours d'enregistrement,
                 // ce qui rend la barre de progression utilisable.
@@ -360,6 +371,8 @@ struct MainTabView: View {
                     }
                 }
 
+                Spacer(minLength: 0)
+
                 if currentChannelName != nil || currentVodId != nil {
                     Button {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
@@ -375,6 +388,7 @@ struct MainTabView: View {
                         .background(Color.tPrimary)
                         .cornerRadius(10)
                     }
+                }
                 }
             }
             .padding(16)
@@ -414,6 +428,15 @@ struct MainTabView: View {
     // MARK: – Playback
     private func playVod(_ id: String, _ title: String? = nil,
                          _ thumb: String? = nil, _ streamer: String? = nil) {
+        // Historique des VODs vues : centralisé ici pour couvrir TOUS les points
+        // d'entrée (Découverte, Streamer, Lien/ID, rembobinage…). Avant, seul
+        // l'onglet Lien/ID enregistrait, donc l'onglet VODs restait vide.
+        store.saveToHistory(HistoryItem(
+            term: id, type: .vod,
+            display: title ?? "VOD \(id)",
+            thumb: thumb, streamer: streamer,
+            addedAt: Date().timeIntervalSince1970 * 1000
+        ))
         startPlayback(.vod(id: id, title: title, thumb: thumb, streamer: streamer))
     }
     private func playLive(_ channel: String) {
@@ -421,6 +444,10 @@ struct MainTabView: View {
     }
 
     private func startPlayback(_ mode: PlayerMode) {
+        // Referme le clavier s'il était ouvert (recherche en cours) : sinon il
+        // restait affiché par-dessus le lecteur.
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder),
+                                        to: nil, from: nil, for: nil)
         // Empêche la mise en veille pendant la lecture (utile en audio-only où
         // l'écran ne joue pas de vidéo et s'éteindrait sinon).
         UIApplication.shared.isIdleTimerDisabled = true

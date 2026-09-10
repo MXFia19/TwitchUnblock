@@ -7,7 +7,7 @@ struct HistoryView: View {
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 16) {
-                Text("Vos dernières VODs")
+                Text(store.t("history_vods_title"))
                     .font(.system(size: 20, weight: .bold))
                     .foregroundColor(.white)
                     .padding(.horizontal)
@@ -16,7 +16,7 @@ struct HistoryView: View {
                 let vods = store.history.filter { $0.type == .vod }
                 
                 if vods.isEmpty {
-                    Text("Aucune VOD dans votre historique pour le moment.")
+                    Text(store.t("history_vods_empty"))
                         .foregroundColor(.tMuted)
                         .padding()
                 } else {

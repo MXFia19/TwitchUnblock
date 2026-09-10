@@ -114,7 +114,9 @@ final class AppStore: ObservableObject {
     func saveToHistory(_ item: HistoryItem) {
         var filtered = history.filter { $0.term.lowercased() != item.term.lowercased() }
         filtered.insert(item, at: 0)
-        history = Array(filtered.prefix(20))
+        // 50 : l'historique mélange chaînes et VODs, 20 faisait disparaître les
+        // VODs vues dès qu'on enchaînait quelques recherches de streamers.
+        history = Array(filtered.prefix(50))
     }
 
     func removeFromHistory(term: String) {

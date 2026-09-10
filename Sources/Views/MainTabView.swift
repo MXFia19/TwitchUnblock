@@ -11,6 +11,8 @@ struct MainTabView: View {
     @State private var loading = false
     @State private var errorMsg: String? = nil
     @State private var statusTitle = ""
+    /// Titre déplié : un titre long est tronqué, on le déplie au toucher.
+    @State private var titleExpanded = false
 
     // ── Chat state ───────────────────────────────────────────────────────
     @State private var showChat = false
@@ -109,7 +111,14 @@ struct MainTabView: View {
                             Text(modeTitle)
                                 .font(.system(size: 14, weight: .bold))
                                 .foregroundColor(.white)
-                                .lineLimit(1)
+                                .lineLimit(titleExpanded ? nil : 1)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    withAnimation(.easeInOut(duration: 0.15)) {
+                                        titleExpanded.toggle()
+                                    }
+                                }
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -182,7 +191,10 @@ struct MainTabView: View {
                             return nil
                         }(),
                         compact: showChat,  // chat ouvert → masque Source/lien, place au chat
-                        onTime: { vodPlaybackTime = $0 }
+                        onTime: { vodPlaybackTime = $0 },
+                        onChat: chatAction,
+                        onRewind: rewindAction,
+                        onBackToLive: backToLiveAction
                     )
                     .padding(.horizontal, 12)
                     .padding(.top, 12)
@@ -230,6 +242,28 @@ struct MainTabView: View {
                 }
             }
         }
+    }
+
+    // MARK: – Actions du lecteur (nil ⇒ bouton masqué)
+    private var chatAction: (() -> Void)? {
+        guard currentChannelName != nil || currentVodId != nil else { return nil }
+        return {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { showChat = true }
+        }
+    }
+
+    /// Rembobiner un live : lit le VOD en cours d'enregistrement.
+    private var rewindAction: (() -> Void)? {
+        guard let ch = currentChannelName, let dvr = liveDvrVideoId else { return nil }
+        return {
+            pendingDvrChannel = ch
+            playVod(dvr, statusTitle, nil, ch)
+        }
+    }
+
+    private var backToLiveAction: (() -> Void)? {
+        guard let ch = dvrSourceChannel else { return nil }
+        return { playLive(ch) }
     }
 
     /// Identifiant de la VOD en cours de lecture (nil en live).
@@ -289,7 +323,14 @@ struct MainTabView: View {
                     Text(statusTitle)
                         .font(.system(size: 15, weight: .bold))
                         .foregroundColor(.white)
-                        .lineLimit(2)
+                        .lineLimit(titleExpanded ? nil : 2)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            withAnimation(.easeInOut(duration: 0.15)) {
+                                titleExpanded.toggle()
+                            }
+                        }
 
                     if case .vod(_, _, _, let streamer) = mode, let s = streamer {
                         Text("\(store.t("points_by")) \(s)")
@@ -332,64 +373,6 @@ struct MainTabView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-                // ── Actions ──────────────────────────────────────────
-                HStack(spacing: 8) {
-
-                // Rembobiner le live (DVR) : lit le VOD en cours d'enregistrement,
-                // ce qui rend la barre de progression utilisable.
-                if currentChannelName != nil, let dvr = liveDvrVideoId {
-                    Button {
-                        pendingDvrChannel = currentChannelName
-                        playVod(dvr, statusTitle, nil, currentChannelName)
-                    } label: {
-                        HStack(spacing: 5) {
-                            Image(systemName: "gobackward")
-                            Text(store.t("rewind")).font(.system(size: 13, weight: .bold))
-                        }
-                        .foregroundColor(.tPrimary)
-                        .fixedSize()
-                        .padding(.horizontal, 12).padding(.vertical, 8)
-                        .background(Color.tPrimary.opacity(0.15))
-                        .cornerRadius(10)
-                        .overlay(RoundedRectangle(cornerRadius: 10)
-                            .stroke(Color.tPrimary, lineWidth: 1))
-                    }
-                }
-
-                // Revenir au direct depuis le rembobinage
-                if let ch = dvrSourceChannel {
-                    Button { playLive(ch) } label: {
-                        HStack(spacing: 5) {
-                            Circle().fill(Color.white).frame(width: 7, height: 7)
-                            Text(store.t("back_to_live")).font(.system(size: 13, weight: .bold))
-                        }
-                        .foregroundColor(.white)
-                        .fixedSize()
-                        .padding(.horizontal, 12).padding(.vertical, 8)
-                        .background(Color.tLive)
-                        .cornerRadius(10)
-                    }
-                }
-
-                Spacer(minLength: 0)
-
-                if currentChannelName != nil || currentVodId != nil {
-                    Button {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-                            showChat = true
-                        }
-                    } label: {
-                        HStack(spacing: 5) {
-                            Image(systemName: "bubble.left.fill")
-                            Text("Chat").font(.system(size: 13, weight: .bold))
-                        }
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 12).padding(.vertical, 8)
-                        .background(Color.tPrimary)
-                        .cornerRadius(10)
-                    }
-                }
-                }
             }
             .padding(16)
             .background(Color.tCard)
@@ -458,6 +441,7 @@ struct MainTabView: View {
         qualityLinks  = nil
         showChat      = false
         vodPlaybackTime = 0
+        titleExpanded   = false
         liveDvrVideoId  = nil
         // Un VOD lancé depuis le bouton Rembobiner garde le lien vers sa chaîne,
         // pour pouvoir revenir au direct. Un VOD normal, non.

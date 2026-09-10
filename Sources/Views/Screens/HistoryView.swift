@@ -3,6 +3,7 @@ import SwiftUI
 struct HistoryView: View {
     let onPlayVod: (String, String?, String?, String?) -> Void
     @EnvironmentObject private var store: AppStore
+    @ObservedObject private var metaStore = VodMetaStore.shared
 
     var body: some View {
         ScrollView {
@@ -55,17 +56,21 @@ struct HistoryView: View {
                                         .foregroundColor(.white)
                                         .lineLimit(2)
                                         .multilineTextAlignment(.leading)
-                                    
+
                                     if let streamer = item.streamer {
                                         Text(streamer)
                                             .font(.caption)
                                             .foregroundColor(.tPrimary)
                                     }
+
+                                    progressLine(for: item.term)
                                 }
                                 Spacer()
                             }
                             .padding(.horizontal)
                         }
+                        // Lignes visibles uniquement (LazyVStack) → une requête par VOD.
+                        .task { await metaStore.load(item.term) }
                     }
                 }
             }
@@ -73,6 +78,49 @@ struct HistoryView: View {
         .background(Color.tDark)
     }
     
+    /// « position atteinte / durée totale » + nombre de vues, avec une fine
+    /// barre de progression. Les métadonnées arrivent de façon asynchrone.
+    @ViewBuilder
+    private func progressLine(for vodId: String) -> some View {
+        let watched = store.getVodProgress(vodId)
+        let total   = metaStore.meta(vodId)?.lengthSeconds ?? 0
+        let views   = metaStore.meta(vodId)?.viewCount ?? 0
+
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 8) {
+                if total > 0 {
+                    HStack(spacing: 3) {
+                        Image(systemName: "clock.fill").font(.system(size: 9))
+                        Text("\(formatDuration(Int(watched))) / \(formatDuration(total))")
+                            .font(.system(size: 11, weight: .semibold))
+                    }
+                    .foregroundColor(.tMuted)
+                }
+                if views > 0 {
+                    HStack(spacing: 3) {
+                        Image(systemName: "eye.fill").font(.system(size: 9))
+                        Text(formatViewers(views))
+                            .font(.system(size: 11, weight: .semibold))
+                    }
+                    .foregroundColor(.tMuted)
+                }
+            }
+            .lineLimit(1)
+
+            if total > 0, watched > 1 {
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(Color.tSurface).frame(height: 3)
+                        Capsule().fill(Color.tPrimary)
+                            .frame(width: max(2, geo.size.width *
+                                   min(1, watched / Double(total))), height: 3)
+                    }
+                }
+                .frame(height: 3)
+            }
+        }
+    }
+
     // Le rectangle gris de secours si l'image ne charge pas
     private var fallbackRectangle: some View {
         Rectangle()

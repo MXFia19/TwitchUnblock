@@ -65,6 +65,8 @@ struct VodMeta {
     let title: String
     let streamer: String
     let thumb: String
+    var lengthSeconds: Int = 0
+    var viewCount: Int = 0
 }
 
 // MARK: – App Models

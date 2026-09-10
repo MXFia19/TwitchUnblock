@@ -217,32 +217,35 @@ func getLive(channelName: String) async -> LiveData {
     let sourcePref = UserDefaults.standard.string(forKey: "liveSource") ?? "auto"
     logger.info("LIVE", "Source sélectionnée : \(sourcePref.uppercased())")
 
-    // 1 - Luminous
+    // 1 - Luminous (plusieurs miroirs : on bascule sur le suivant si l'un tombe)
     if sourcePref == "auto" || sourcePref == "luminous" {
-        logger.info("LIVE", "Tentative Luminous (Sans Pub)...")
-        var lumComps = URLComponents(string: "https://as.luminous.dev/live/\(login)")!
-        lumComps.queryItems = [
-            .init(name: "allow_source",    value: "true"),
-            .init(name: "allow_audio_only", value: "true"),
-            .init(name: "fast_bread",      value: "true")
-        ]
-        if let lumUrl = lumComps.url {
+        for host in kLuminousHosts {
+            if !links.isEmpty { break }
+            logger.info("LIVE", "Tentative Luminous (Sans Pub)…", host)
+            guard var lumComps = URLComponents(string: "https://\(host)/live/\(login)") else { continue }
+            lumComps.queryItems = [
+                .init(name: "allow_source",     value: "true"),
+                .init(name: "allow_audio_only", value: "true"),
+                .init(name: "fast_bread",       value: "true")
+            ]
+            guard let lumUrl = lumComps.url else { continue }
             var req = URLRequest(url: lumUrl)
             requestHeaders.forEach { req.setValue($1, forHTTPHeaderField: $0) }
             do {
                 let (data, resp) = try await URLSession.shared.data(for: req)
-                if let httpResp = resp as? HTTPURLResponse {
-                    if httpResp.statusCode == 200, let body = String(data: data, encoding: .utf8) {
-                        links = parseM3U8(body, baseURL: lumUrl)
-                        if !links.isEmpty {
-                            logger.success("LIVE", "✅ Luminous OK : \(links.count) qualités")
-                        }
+                let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+                if code == 200, let body = String(data: data, encoding: .utf8) {
+                    links = parseM3U8(body, baseURL: lumUrl)
+                    if !links.isEmpty {
+                        logger.success("LIVE", "✅ Luminous OK (\(host))", "\(links.count) qualités")
                     } else {
-                        logger.warn("LIVE", "⚠️ Luminous échec (\(httpResp.statusCode))")
+                        logger.warn("LIVE", "⚠️ Luminous \(host) : playlist vide", "miroir suivant…")
                     }
+                } else {
+                    logger.warn("LIVE", "⚠️ Luminous \(host) échec (\(code))", "miroir suivant…")
                 }
             } catch {
-                logger.error("LIVE", "❌ Erreur Luminous", error.localizedDescription)
+                logger.error("LIVE", "❌ Erreur Luminous \(host)", error.localizedDescription)
             }
         }
     }
@@ -435,7 +438,7 @@ func searchUsersGQL(_ query: String) async -> [AutocompleteSuggestion] {
 }
 
 func getVodMetaGQL(_ vodId: String) async -> VodMeta? {
-    let q = "query { video(id: \"\(vodId)\") { title owner { displayName } previewThumbnailURL(height: 180, width: 320) } }"
+    let q = "query { video(id: \"\(vodId)\") { title lengthSeconds viewCount owner { displayName } previewThumbnailURL(height: 180, width: 320) } }"
     guard let json = try? await twitchGQL(q) as? [String: Any],
           let data = json["data"] as? [String: Any],
           let v    = data["video"] as? [String: Any],
@@ -443,7 +446,9 @@ func getVodMetaGQL(_ vodId: String) async -> VodMeta? {
     return VodMeta(
         title: title,
         streamer: (v["owner"] as? [String: Any])?["displayName"] as? String ?? "Inconnu",
-        thumb: v["previewThumbnailURL"] as? String ?? ""
+        thumb: v["previewThumbnailURL"] as? String ?? "",
+        lengthSeconds: v["lengthSeconds"] as? Int ?? 0,
+        viewCount: v["viewCount"] as? Int ?? 0
     )
 }
 

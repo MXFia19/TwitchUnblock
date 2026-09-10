@@ -109,11 +109,14 @@ struct VideoPlayerView: View {
     var compact: Bool = false
     /// Position de lecture remontee au parent (utilisee par le chat des VODs).
     var onTime: (Double) -> Void = { _ in }
+    // Actions affichees a cote du bouton Source (nil = bouton masque).
+    var onChat: (() -> Void)? = nil
+    var onRewind: (() -> Void)? = nil
+    var onBackToLive: (() -> Void)? = nil
 
     @EnvironmentObject private var store: AppStore
     @State private var selectedQuality: String = ""
     @State private var showQualityPicker = false
-    @State private var showExternalSheet  = false
     @State private var currentTime: Double = 0
     @State private var lastPersisted: Double = -99
 
@@ -132,30 +135,64 @@ struct VideoPlayerView: View {
             if !compact {
             // ── Options bar ─────────────────────────────────────────
             HStack(spacing: 8) {
-                Button {
-                    showQualityPicker.toggle()
-                    showExternalSheet = false
-                } label: {
+                // Qualité : bouton compact, il laisse la place aux actions.
+                Button { showQualityPicker.toggle() } label: {
                     Text("🎬 \(qualityLabel(selectedQuality))")
                         .font(.system(size: 12, weight: .bold))
                         .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
+                        .lineLimit(1)
+                        .padding(.horizontal, 12).padding(.vertical, 10)
                         .background(Color.tPrimary)
                         .cornerRadius(8)
                 }
 
-                Button {
-                    showExternalSheet.toggle()
-                    showQualityPicker = false
-                } label: {
-                    Text("📤")
-                        .font(.system(size: 16))
-                        .frame(width: 44, height: 38)
-                        .background(Color.tSurface)
+                if let rewind = onRewind {
+                    Button(action: rewind) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "gobackward")
+                            Text(store.t("rewind")).font(.system(size: 12, weight: .bold))
+                        }
+                        .foregroundColor(.tPrimary)
+                        .lineLimit(1)
+                        .padding(.horizontal, 10).padding(.vertical, 10)
+                        .background(Color.tPrimary.opacity(0.15))
                         .cornerRadius(8)
+                        .overlay(RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color.tPrimary, lineWidth: 1))
+                    }
+                }
+
+                if let backLive = onBackToLive {
+                    Button(action: backLive) {
+                        HStack(spacing: 4) {
+                            Circle().fill(Color.white).frame(width: 6, height: 6)
+                            Text(store.t("back_to_live")).font(.system(size: 12, weight: .bold))
+                        }
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                        .padding(.horizontal, 10).padding(.vertical, 10)
+                        .background(Color.tLive)
+                        .cornerRadius(8)
+                    }
+                }
+
+                Spacer(minLength: 0)
+
+                if let chat = onChat {
+                    Button(action: chat) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "bubble.left.fill")
+                            Text("Chat").font(.system(size: 12, weight: .bold))
+                        }
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                        .padding(.horizontal, 12).padding(.vertical, 10)
+                        .background(Color.tPrimary)
+                        .cornerRadius(8)
+                    }
                 }
             }
+            .fixedSize(horizontal: false, vertical: true)
             .padding(12)
             .background(Color.tCard)
 
@@ -186,31 +223,6 @@ struct VideoPlayerView: View {
                 .cornerRadius(10)
                 .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.tBorder, lineWidth: 1))
                 .padding(.horizontal, 12)
-            }
-
-            // ── External apps sheet ─────────────────────────────────
-            if showExternalSheet, let rawURL = qualityLinks[selectedQuality] {
-                VStack(spacing: 8) {
-                    extButton("🟠 \(store.t("open_vlc"))", color: .tVLC) {
-                        open(scheme: "vlc://\(rawURL)")
-                    }
-                    extButton("🔵 \(store.t("open_outplayer"))", color: .tOutplayer) {
-                        open(scheme: "outplayer://\(rawURL)")
-                    }
-                    extButton("🔴 \(store.t("open_infuse"))", color: .tInfuse) {
-                        let encoded = rawURL.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? rawURL
-                        open(scheme: "infuse://x-callback-url/play?url=\(encoded)")
-                    }
-                    extButton("📋 \(store.t("btn_copy"))", color: .tSurface) {
-                        UIPasteboard.general.string = rawURL
-                        showExternalSheet = false
-                    }
-                    extButton("Fermer", color: Color(hex: "333333"), textColor: .tMuted) {
-                        showExternalSheet = false
-                    }
-                }
-                .padding(.horizontal, 12)
-                .padding(.bottom, 8)
             }
 
             // ── URL bar ─────────────────────────────────────────────
@@ -252,25 +264,6 @@ struct VideoPlayerView: View {
         }
         .aspectRatio(16/9, contentMode: .fit)
         .background(Color.black)
-    }
-
-    @ViewBuilder
-    private func extButton(_ label: String, color: Color, textColor: Color = .white, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(label)
-                .font(.system(size: 14, weight: .bold))
-                .foregroundColor(textColor)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 13)
-                .background(color)
-                .cornerRadius(10)
-        }
-    }
-
-    private func open(scheme: String) {
-        guard let url = URL(string: scheme) else { return }
-        UIApplication.shared.open(url)
-        showExternalSheet = false
     }
 
     private func qualityLabel(_ q: String) -> String {

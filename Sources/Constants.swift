@@ -7,6 +7,16 @@ let kGQLClientID     = "kimne78kx3ncx6brgo4mv6wki5h1ko"
 let kRedirectURI     = "https://mxfia19.github.io/TwitchUnblock/auth.html"
 let kDeepLinkScheme  = "twitchunblock://"
 
+/// Miroirs Luminous (source « sans pub »), essayés dans l'ordre : si l'un est
+/// indisponible on passe au suivant. as = Asie (historique),
+/// eu/eu2/eu3 = Europe (recommandés pour le mobile).
+let kLuminousHosts = [
+    "as.luminous.dev",
+    "eu.luminous.dev",
+    "eu2.luminous.dev",
+    "eu3.luminous.dev"
+]
+
 // MARK: – Colors
 extension Color {
     static let tPrimary   = Color(hex: "9146ff")

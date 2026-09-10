@@ -21,9 +21,43 @@ final class ChatService: NSObject, ObservableObject {
     /// plus anciens messages : ça éviterait de faire « descendre » la vue pendant la lecture.
     var pauseTrim = false
 
+    /// Délai (s) appliqué à l'affichage des messages reçus, pour les recaler sur
+    /// l'image (le chat arrive en temps réel, la vidéo a plusieurs secondes de retard).
+    /// 0 = affichage immédiat. Piloté par la synchro auto du chat.
+    var displayDelay: Double = 0
+
+    /// Incrémenté à chaque (re)connexion : les messages en attente d'une session
+    /// précédente sont abandonnés au lieu d'atterrir dans le nouveau canal.
+    private var generation = 0
+
     private func trimIfNeeded() {
         let cap = pauseTrim ? maxMessagesPaused : maxMessages
         if messages.count > cap { messages = Array(messages.prefix(cap)) }
+    }
+
+    /// Insère un message reçu, immédiatement ou après le délai de synchro.
+    private func publish(_ message: ChatMessage) {
+        let delay = displayDelay
+        guard delay >= 0.5 else { insert(message); return }
+        let gen = generation
+        Task { [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            guard let self, !Task.isCancelled, self.generation == gen else { return }
+            self.insert(message)
+        }
+    }
+
+    private func insert(_ message: ChatMessage) {
+        // La liste est rangée du plus récent au plus ancien. Si le délai de synchro
+        // vient de baisser, un message peut arriver après un plus récent : on le
+        // replace alors à sa position chronologique au lieu de le coller en haut.
+        if let first = messages.first, message.timestamp < first.timestamp {
+            let idx = messages.firstIndex { $0.timestamp <= message.timestamp } ?? messages.count
+            messages.insert(message, at: idx)
+        } else {
+            messages.insert(message, at: 0)
+        }
+        trimIfNeeded()
     }
 
     // Infos du compte connecté (GLOBALUSERSTATE / USERSTATE)
@@ -72,6 +106,7 @@ final class ChatService: NSObject, ObservableObject {
 
     // MARK: – Disconnect
     func disconnect() {
+        generation &+= 1   // abandonne les messages encore en attente de synchro
         connectionTimeoutTask?.cancel(); connectionTimeoutTask = nil
         pingTimer?.invalidate(); pingTimer = nil
         webSocketTask?.cancel(with: .normalClosure, reason: nil); webSocketTask = nil
@@ -129,8 +164,8 @@ final class ChatService: NSObject, ObservableObject {
             parentMsgId: replyParentId,
             threadRootId: replyRootId ?? replyParentId
         )
-        messages.insert(localMsg, at: 0)
-        trimIfNeeded()
+        // Message envoyé par nous : affiché tout de suite, jamais retardé.
+        insert(localMsg)
     }
 
     // MARK: – Fil de discussion (thread)
@@ -260,8 +295,7 @@ final class ChatService: NSObject, ObservableObject {
             threadRootId: irc.replyThreadRootId
         )
 
-        messages.insert(message, at: 0)
-        trimIfNeeded()
+        publish(message)
     }
 
     // MARK: – USERNOTICE (abonnements, séries de visionnage, raids…)
@@ -305,8 +339,7 @@ final class ChatService: NSObject, ObservableObject {
             replyTo: nil, replyBody: nil,
             systemMsg: systemMsg.isEmpty ? nil : systemMsg
         )
-        messages.insert(message, at: 0)
-        trimIfNeeded()
+        publish(message)
         logger.debug("CHAT", "USERNOTICE \(irc.tags["msg-id"] ?? "")", systemMsg)
     }
 

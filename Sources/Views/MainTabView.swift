@@ -32,6 +32,20 @@ struct MainTabView: View {
     @State private var refreshTimer: Timer? = nil
     @State private var uptimeTimer: Timer? = nil
 
+    // ── Débogage / synchro ────────────────────────────────────────────────
+    /// Latence mesurée du direct, arrondie à la seconde (synchro auto du chat).
+    @State private var liveLatency: Double = 0
+
+    // ── Minuteur de veille ────────────────────────────────────────────────
+    @ObservedObject private var sleepTimer = SleepTimerService.shared
+    @State private var showSleepSheet = false
+
+    /// Décalage à appliquer au chat : la latence mesurée, si la synchro est active.
+    private var chatDelay: Double {
+        guard store.autoChatDelay, isLivePlaying else { return 0 }
+        return max(0, min(liveLatency, 60))   // borne haute : évite un décalage absurde
+    }
+
     enum TabName: String, CaseIterable {
         case discovery, streamer, history, direct, settings
         var icon: String {
@@ -84,6 +98,17 @@ struct MainTabView: View {
                     .transition(.opacity)
             }
         }
+        // Réglage rapide du minuteur depuis le lecteur.
+        .sheet(isPresented: $showSleepSheet) {
+            SleepTimerSheet()
+                .presentationDetents([.medium])
+        }
+        // Minuteur de veille écoulé → on coupe la lecture.
+        .onChange(of: sleepTimer.fireCount) { _ in
+            guard playerMode != nil else { return }
+            logger.info("SLEEP", "Arrêt du lecteur par le minuteur de veille", nil)
+            stopPlayer()
+        }
     }
 
     // MARK: – Player Overlay (non scrollable)
@@ -95,7 +120,9 @@ struct MainTabView: View {
             VStack(spacing: 0) {
 
                 // ── Header fixe ─────────────────────────────────────
-                HStack(spacing: 12) {
+                // Espacement serré : avec le chat ouvert la barre porte déjà les
+                // stats live, le minuteur, « Chat » et la croix.
+                HStack(spacing: 8) {
                     Button(store.t("reduce")) { withAnimation { playerVisible = false } }
                         .font(.system(size: 15, weight: .bold))
                         .foregroundColor(.tPrimary)
@@ -122,6 +149,24 @@ struct MainTabView: View {
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
+
+                    // Minuteur de veille : compte à rebours si armé, sinon simple accès
+                    Button { showSleepSheet = true } label: {
+                        HStack(spacing: 3) {
+                            Image(systemName: "moon.zzz.fill").font(.system(size: 10))
+                            // Le compte à rebours n'est affiché que si la place le
+                            // permet : chat ouvert, les stats live occupent la barre.
+                            if sleepTimer.isActive, !showChat {
+                                Text(sleepTimer.label)
+                                    .font(.system(size: 10, weight: .bold).monospacedDigit())
+                            }
+                        }
+                        .foregroundColor(sleepTimer.isActive ? .tPurple : .tMuted)
+                        .fixedSize()
+                        .padding(.horizontal, 7).padding(.vertical, 5)
+                        .background(sleepTimer.isActive ? Color.tPurple.opacity(0.15) : Color.tSurface)
+                        .cornerRadius(6)
+                    }
 
                     // Fermer le chat (revenir au lecteur + infos complètes)
                     if showChat {
@@ -192,6 +237,12 @@ struct MainTabView: View {
                         }(),
                         compact: showChat,  // chat ouvert → masque Source/lien, place au chat
                         onTime: { vodPlaybackTime = $0 },
+                        onLatency: { value in
+                            // Arrondi à la seconde : sinon la vue se recalculerait
+                            // à chaque tick de l'observateur (1 s) pour rien.
+                            let rounded = (value ?? 0).rounded()
+                            if abs(rounded - liveLatency) >= 1 { liveLatency = rounded }
+                        },
                         onChat: chatAction,
                         onRewind: rewindAction,
                         onBackToLive: backToLiveAction
@@ -208,6 +259,7 @@ struct MainTabView: View {
                             channelId: currentChannelId,   // ← userId Twitch du canal
                             token: store.twitchToken,
                             login: store.twitchLogin,
+                            chatDelay: chatDelay,
                             onJoinChannel: { target in    // raid → suit la chaîne raidée
                                 keepChatOnLoad = true
                                 playLive(target)
@@ -443,6 +495,7 @@ struct MainTabView: View {
         vodPlaybackTime = 0
         titleExpanded   = false
         liveDvrVideoId  = nil
+        liveLatency     = 0
         // Un VOD lancé depuis le bouton Rembobiner garde le lien vers sa chaîne,
         // pour pouvoir revenir au direct. Un VOD normal, non.
         if case .live = mode { dvrSourceChannel = nil }
@@ -506,6 +559,7 @@ struct MainTabView: View {
         liveViewerCount    = 0
         liveStartedAt      = nil
         liveUptimeText     = ""
+        liveLatency        = 0
         withAnimation {
             playerVisible = false
             playerMode    = nil

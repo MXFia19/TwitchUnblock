@@ -67,6 +67,16 @@ final class AppStore: ObservableObject {
         didSet { UserDefaults.standard.set(autoPurgeImageCache, forKey: "cfg_purge_cache") }
     }
 
+    // MARK: – Débogage (section temporaire)
+    /// Afficher la latence du direct par-dessus le lecteur.
+    @Published var showLatency: Bool = false {
+        didSet { UserDefaults.standard.set(showLatency, forKey: "dbg_latency") }
+    }
+    /// Retarder le chat de la latence mesurée, pour qu'il colle à l'image.
+    @Published var autoChatDelay: Bool = false {
+        didSet { UserDefaults.standard.set(autoChatDelay, forKey: "dbg_chat_delay") }
+    }
+
     // MARK: – History
     @Published var history: [HistoryItem] = [] {
         didSet { persistHistory() }
@@ -89,6 +99,8 @@ final class AppStore: ObservableObject {
         showLiveEvents     = ud.object(forKey: "cfg_events") as? Bool ?? true
         enableRaids        = ud.object(forKey: "cfg_raids")  as? Bool ?? true
         autoPurgeImageCache = ud.object(forKey: "cfg_purge_cache") as? Bool ?? true
+        showLatency        = ud.object(forKey: "dbg_latency")    as? Bool ?? false
+        autoChatDelay      = ud.object(forKey: "dbg_chat_delay") as? Bool ?? false
         if let data = ud.data(forKey: "twitch_vod_history"),
            let decoded = try? JSONDecoder().decode([HistoryItem].self, from: data) {
             history = decoded

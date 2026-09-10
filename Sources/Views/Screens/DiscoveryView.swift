@@ -12,8 +12,21 @@ struct DiscoveryView: View {
     @State private var loadingFollowed  = false
     @State private var loadingTop       = false
     @State private var errorFollowed: String? = nil
+    @State private var section: DiscoverySection = .streams
 
     enum TopLang { case fr, all }
+
+    /// Deux sous-onglets : les lives (chaînes suivies + top) et les catégories.
+    enum DiscoverySection: String, CaseIterable, Identifiable {
+        case streams, categories
+        var id: String { rawValue }
+        func label(_ store: AppStore) -> String {
+            switch self {
+            case .streams:    return store.t("streams")
+            case .categories: return store.t("categories")
+            }
+        }
+    }
 
     private let columns = [GridItem(.flexible()), GridItem(.flexible())]
 
@@ -36,20 +49,29 @@ struct DiscoveryView: View {
                 .background(Color.tDark)
             } else {
                 // VUE CONNECTÉE
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 0) {
-                        VodHistoryRowView { item in
-                            onPlayVod(item.term, item.display, item.thumb, item.streamer)
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.top, 8)
+                VStack(spacing: 0) {
+                    sectionPicker
 
-                        loggedInContent
+                    if section == .streams {
+                        ScrollView {
+                            LazyVStack(alignment: .leading, spacing: 0) {
+                                VodHistoryRowView { item in
+                                    onPlayVod(item.term, item.display, item.thumb, item.streamer)
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.top, 8)
+
+                                loggedInContent
+                            }
+                        }
+                        .padding(.top, 1)
+                        .refreshable { await refresh() }
+                    } else {
+                        CategoriesView(onPlayStream: onPlayStream)
                     }
                 }
-                .padding(.top, 1)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(Color.tDark)
-                .refreshable { await refresh() }
             }
         }
         .onAppear {
@@ -61,6 +83,32 @@ struct DiscoveryView: View {
             if token != nil { Task { await loadAll() } }
             else { followedStreams = []; topStreams = [] }
         }
+    }
+
+    // MARK: – Sous-onglets Streams / Catégories
+    @ViewBuilder private var sectionPicker: some View {
+        HStack(spacing: 0) {
+            ForEach(DiscoverySection.allCases) { s in
+                Button {
+                    withAnimation(.easeInOut(duration: 0.15)) { section = s }
+                } label: {
+                    VStack(spacing: 6) {
+                        Text(s.label(store))
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundColor(section == s ? .tPurple : .tMuted)
+                        Rectangle()
+                            .fill(section == s ? Color.tPurple : .clear)
+                            .frame(height: 2)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.top, 10)
+        .background(Color.tDark)
+        .overlay(Divider().background(Color.tBorder), alignment: .bottom)
     }
 
     // MARK: – Login prompt

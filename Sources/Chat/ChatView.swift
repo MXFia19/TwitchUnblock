@@ -6,6 +6,8 @@ struct ChatView: View {
     let channelId: String?
     let token: String?
     let login: String?
+    /// Décalage (s) appliqué aux messages reçus pour les recaler sur l'image.
+    var chatDelay: Double = 0
     var onJoinChannel: (String) -> Void = { _ in }   // raid → bascule vers une autre chaîne
 
     @EnvironmentObject private var store: AppStore
@@ -54,6 +56,18 @@ struct ChatView: View {
                     .lineLimit(1)
                     .truncationMode(.tail)
                 Spacer(minLength: 4)
+                // Synchro auto : décalage appliqué au chat
+                if chatDelay >= 0.5 {
+                    HStack(spacing: 2) {
+                        Image(systemName: "clock.arrow.2.circlepath").font(.system(size: 9))
+                        Text(String(format: "%.0fs", chatDelay))
+                            .font(.system(size: 10, weight: .bold).monospacedDigit())
+                    }
+                    .foregroundColor(.tOutplayer)
+                    .fixedSize()
+                    .padding(.horizontal, 6).padding(.vertical, 3)
+                    .background(Color.tOutplayer.opacity(0.15)).cornerRadius(6)
+                }
                 // Série de visionnage
                 if store.showWatchStreak, events.watchStreak > 0 {
                     HStack(spacing: 2) {
@@ -330,6 +344,7 @@ struct ChatView: View {
             chat.connect(channel: channelName, token: tok, login: store.twitchLogin)
         }
         .onChange(of: store.autoClaimChest) { pointsService.autoClaim = $0 }
+        .onChange(of: chatDelay) { chat.displayDelay = $0 }
         .onChange(of: raidService.joinTarget) { target in
             // Raid parti → on suit automatiquement vers la chaîne raidée.
             guard let target = target else { return }
@@ -388,6 +403,7 @@ struct ChatView: View {
             )
         }
         chat.channelId = channelId
+        chat.displayDelay = chatDelay
         chat.connect(channel: channelName, token: token, login: login)
 
         // Les services ci-dessous sont conditionnés par les réglages de personnalisation :

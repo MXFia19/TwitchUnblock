@@ -410,6 +410,70 @@ func getTopStreams(token: String, lang: String? = nil) async throws -> [TwitchSt
     return arr.map { streamFromDict($0) }
 }
 
+// MARK: – Catégories (Helix)
+/// Top des catégories, triées par audience décroissante côté Twitch.
+func getTopCategories(token: String, cursor: String? = nil) async throws -> (categories: [TwitchCategory], cursor: String?) {
+    var urlStr = "https://api.twitch.tv/helix/games/top?first=100"
+    if let cursor { urlStr += "&after=\(cursor)" }
+    guard let url = URL(string: urlStr) else { return ([], nil) }
+    var req = URLRequest(url: url)
+    req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+    req.setValue(kHelixClientID, forHTTPHeaderField: "Client-Id")
+    let (data, resp) = try await URLSession.shared.data(for: req)
+    guard (resp as? HTTPURLResponse)?.statusCode == 200 else { throw URLError(.badServerResponse) }
+    let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+    let arr  = json?["data"] as? [[String: Any]] ?? []
+    let next = (json?["pagination"] as? [String: Any])?["cursor"] as? String
+    logger.success("HELIX", "\(arr.count) catégories chargées")
+    return (arr.map { categoryFromDict($0) }, arr.isEmpty ? nil : next)
+}
+
+/// Recherche de catégories par nom (barre de recherche de l'onglet Catégories).
+func searchCategories(token: String, query: String) async throws -> [TwitchCategory] {
+    let q = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? query
+    guard !q.isEmpty,
+          let url = URL(string: "https://api.twitch.tv/helix/search/categories?first=50&query=\(q)")
+    else { return [] }
+    var req = URLRequest(url: url)
+    req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+    req.setValue(kHelixClientID, forHTTPHeaderField: "Client-Id")
+    let (data, resp) = try await URLSession.shared.data(for: req)
+    guard (resp as? HTTPURLResponse)?.statusCode == 200 else { throw URLError(.badServerResponse) }
+    let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+    let arr  = json?["data"] as? [[String: Any]] ?? []
+    logger.success("HELIX", "\(arr.count) catégories pour « \(query) »")
+    return arr.map { categoryFromDict($0) }
+}
+
+/// Lives d'une catégorie. Twitch les renvoie déjà par audience décroissante ;
+/// les autres tris sont appliqués côté app (voir CategoriesView).
+func getStreamsByCategory(token: String, gameId: String, cursor: String? = nil) async throws -> (streams: [TwitchStream], cursor: String?) {
+    var urlStr = "https://api.twitch.tv/helix/streams?first=100&game_id=\(gameId)"
+    if let cursor { urlStr += "&after=\(cursor)" }
+    guard let url = URL(string: urlStr) else { return ([], nil) }
+    var req = URLRequest(url: url)
+    req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+    req.setValue(kHelixClientID, forHTTPHeaderField: "Client-Id")
+    let (data, resp) = try await URLSession.shared.data(for: req)
+    guard (resp as? HTTPURLResponse)?.statusCode == 200 else { throw URLError(.badServerResponse) }
+    let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+    let arr  = json?["data"] as? [[String: Any]] ?? []
+    let next = (json?["pagination"] as? [String: Any])?["cursor"] as? String
+    logger.success("HELIX", "\(arr.count) lives dans la catégorie \(gameId)")
+    return (arr.map { streamFromDict($0) }, arr.isEmpty ? nil : next)
+}
+
+private func categoryFromDict(_ d: [String: Any]) -> TwitchCategory {
+    let raw = (d["box_art_url"] as? String ?? "")
+        .replacingOccurrences(of: "{width}",  with: "144")
+        .replacingOccurrences(of: "{height}", with: "192")
+    return TwitchCategory(
+        id:   d["id"]   as? String ?? UUID().uuidString,
+        name: d["name"] as? String ?? "",
+        boxArtURL: raw
+    )
+}
+
 private func streamFromDict(_ d: [String: Any]) -> TwitchStream {
     TwitchStream(
         id: d["user_id"] as? String ?? UUID().uuidString,

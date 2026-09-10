@@ -47,6 +47,14 @@ struct TwitchStream: Identifiable {
     let thumbnailURL: String
 }
 
+/// Catégorie / jeu Twitch (onglet Catégories).
+struct TwitchCategory: Identifiable, Hashable {
+    let id: String          // game_id
+    let name: String
+    /// URL de la jaquette, avec les gabarits {width}/{height} déjà remplacés.
+    let boxArtURL: String
+}
+
 struct TwitchUser {
     let id: String
     let login: String

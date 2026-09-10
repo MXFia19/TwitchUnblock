@@ -228,7 +228,31 @@ private let translations: [Lang: [String: String]] = [
         "player_section": "Lecteur vidéo",
         "vlc_player": "Lecteur VLC",
         "vlc_player_sub": "Contrôles maison : double-tap ±10s, rembobinage live. (pas de PiP)",
-        "go_live": "EN DIRECT"
+        "go_live": "EN DIRECT",
+
+        // Catégories
+        "streams": "Streams", "categories": "Catégories",
+        "cat_search_ph": "Rechercher une catégorie…",
+        "load_more": "Charger plus",
+        "sort_viewers_desc": "👁 Plus de spectateurs",
+        "sort_viewers_asc": "👁 Moins de spectateurs",
+        "sort_name": "🔤 Nom (A → Z)",
+
+        // Minuteur de veille
+        "sleep_timer": "Minuteur de veille",
+        "sleep_timer_sub": "Coupe la lecture au bout du délai choisi.",
+        "sleep_minutes": "min", "sleep_hour": "1 h", "sleep_2hours": "2 h",
+        "sleep_remaining": "Temps restant",
+        "sleep_cancel": "Annuler",
+        "sleep_add": "+15 min",
+
+        // Débogage
+        "debug_section": "Débogage",
+        "debug_note": "Section temporaire, pensée pour être retirée plus tard.",
+        "dbg_latency": "Afficher la latence",
+        "dbg_latency_sub": "Pastille sur le lecteur : retard du direct en secondes",
+        "dbg_chat_delay": "Synchro auto du chat",
+        "dbg_chat_delay_sub": "Retarde les messages de la latence mesurée pour les caler sur l'image",
     ],
     .en: [
         "title": "Watch Twitch No Sub",
@@ -335,7 +359,31 @@ private let translations: [Lang: [String: String]] = [
         "player_section": "Video player",
         "vlc_player": "VLC player",
         "vlc_player_sub": "Custom controls: double-tap ±10s, live rewind. (no PiP)",
-        "go_live": "LIVE"
+        "go_live": "LIVE",
+
+        // Categories
+        "streams": "Streams", "categories": "Categories",
+        "cat_search_ph": "Search a category…",
+        "load_more": "Load more",
+        "sort_viewers_desc": "👁 Most viewers",
+        "sort_viewers_asc": "👁 Fewest viewers",
+        "sort_name": "🔤 Name (A → Z)",
+
+        // Sleep timer
+        "sleep_timer": "Sleep timer",
+        "sleep_timer_sub": "Stops playback once the delay is over.",
+        "sleep_minutes": "min", "sleep_hour": "1 h", "sleep_2hours": "2 h",
+        "sleep_remaining": "Time left",
+        "sleep_cancel": "Cancel",
+        "sleep_add": "+15 min",
+
+        // Debug
+        "debug_section": "Debug",
+        "debug_note": "Temporary section, meant to be removed later.",
+        "dbg_latency": "Show latency",
+        "dbg_latency_sub": "Player badge: how far behind live, in seconds",
+        "dbg_chat_delay": "Auto chat sync",
+        "dbg_chat_delay_sub": "Delays messages by the measured latency so they match the video",
     ],
     .es: [
         "title": "Ver Twitch sin Sub",
@@ -442,7 +490,31 @@ private let translations: [Lang: [String: String]] = [
         "player_section": "Reproductor de vídeo",
         "vlc_player": "Reproductor VLC",
         "vlc_player_sub": "Controles propios: doble toque ±10s, rebobinar directo. (sin PiP)",
-        "go_live": "EN VIVO"
+        "go_live": "EN VIVO",
+
+        // Categorías
+        "streams": "Streams", "categories": "Categorías",
+        "cat_search_ph": "Buscar una categoría…",
+        "load_more": "Cargar más",
+        "sort_viewers_desc": "👁 Más espectadores",
+        "sort_viewers_asc": "👁 Menos espectadores",
+        "sort_name": "🔤 Nombre (A → Z)",
+
+        // Temporizador
+        "sleep_timer": "Temporizador",
+        "sleep_timer_sub": "Detiene la reproducción al terminar el tiempo.",
+        "sleep_minutes": "min", "sleep_hour": "1 h", "sleep_2hours": "2 h",
+        "sleep_remaining": "Tiempo restante",
+        "sleep_cancel": "Cancelar",
+        "sleep_add": "+15 min",
+
+        // Depuración
+        "debug_section": "Depuración",
+        "debug_note": "Sección temporal, pensada para quitarse más adelante.",
+        "dbg_latency": "Mostrar la latencia",
+        "dbg_latency_sub": "Insignia en el reproductor: retraso del directo en segundos",
+        "dbg_chat_delay": "Sincronía automática del chat",
+        "dbg_chat_delay_sub": "Retrasa los mensajes según la latencia medida para cuadrar con la imagen",
     ],
 ]
 

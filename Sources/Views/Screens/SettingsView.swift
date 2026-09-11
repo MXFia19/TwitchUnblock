@@ -11,6 +11,7 @@ struct SettingsView: View {
     @State private var cacheBytes: Int64 = 0
     @State private var cacheFiles      = 0
     @ObservedObject private var sleepTimer = SleepTimerService.shared
+    @State private var showSleepSheet  = false
 
     private var vodCount:     Int { store.history.filter { $0.type == .vod }.count }
     private var channelCount: Int { store.history.filter { $0.type == .channel }.count }
@@ -89,64 +90,47 @@ struct SettingsView: View {
                     }
                 }
 
+                // ── Lecteur vidéo ───────────────────────────────────
+                settingCard {
+                    VStack(alignment: .leading, spacing: 14) {
+                        label("📺", store.t("player_section"))
+                        toggleRow(store.t("low_latency"), store.t("low_latency_sub"),
+                                  $store.lowLatency, log: "Mode faible latence")
+                    }
+                }
+
                 // ── Minuteur de veille ──────────────────────────────
+                // Les durées (préréglages + durée personnalisée) sont réglées dans
+                // la même feuille que depuis le lecteur : une seule UI à maintenir.
                 settingCard {
                     VStack(alignment: .leading, spacing: 12) {
                         label("🌙", store.t("sleep_timer"))
-
-                        if sleepTimer.isActive {
-                            HStack(spacing: 12) {
-                                VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: 12) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                if sleepTimer.isActive {
                                     Text(store.t("sleep_remaining"))
                                         .font(.system(size: 12)).foregroundColor(.tMuted)
                                     Text(sleepTimer.label)
                                         .font(.system(size: 26, weight: .heavy).monospacedDigit())
                                         .foregroundColor(.tPurple)
-                                }
-                                Spacer(minLength: 8)
-                                Button { sleepTimer.add(minutes: 15) } label: {
-                                    Text(store.t("sleep_add"))
-                                        .font(.system(size: 13, weight: .bold))
-                                        .foregroundColor(.tPrimary)
-                                        .padding(.horizontal, 12).padding(.vertical, 8)
-                                        .background(Color.tPrimary.opacity(0.15))
-                                        .cornerRadius(8)
-                                        .overlay(RoundedRectangle(cornerRadius: 8)
-                                            .stroke(Color.tPrimary, lineWidth: 1))
-                                }
-                                Button { sleepTimer.cancel() } label: {
-                                    Text(store.t("sleep_cancel"))
-                                        .font(.system(size: 13, weight: .bold))
-                                        .foregroundColor(.tDanger)
-                                        .padding(.horizontal, 12).padding(.vertical, 8)
-                                        .background(Color.tDanger.opacity(0.15))
-                                        .cornerRadius(8)
-                                        .overlay(RoundedRectangle(cornerRadius: 8)
-                                            .stroke(Color.tDanger, lineWidth: 1))
+                                } else {
+                                    Text(store.t("sleep_timer_sub"))
+                                        .font(.system(size: 12)).foregroundColor(.tMuted)
+                                        .fixedSize(horizontal: false, vertical: true)
                                 }
                             }
-                        } else {
-                            Text(store.t("sleep_timer_sub"))
-                                .font(.system(size: 12)).foregroundColor(.tMuted)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-
-                        // Durées proposées (une pression arme ou ré-arme le minuteur)
-                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 78), spacing: 8)],
-                                  spacing: 8) {
-                            ForEach(SleepTimerService.presets, id: \.self) { m in
-                                Button { sleepTimer.start(minutes: m) } label: {
-                                    Text(sleepPresetLabel(m))
-                                        .font(.system(size: 13, weight: .bold))
-                                        .foregroundColor(.tText)
-                                        .frame(maxWidth: .infinity)
-                                        .padding(.vertical, 10)
-                                        .background(Color.tSurface)
-                                        .cornerRadius(10)
-                                        .overlay(RoundedRectangle(cornerRadius: 10)
-                                            .stroke(Color.tBorder, lineWidth: 1))
-                                }
-                                .buttonStyle(.plain)
+                            Spacer(minLength: 8)
+                            Button { showSleepSheet = true } label: {
+                                Text(sleepTimer.isActive ? store.t("sleep_edit")
+                                                         : store.t("sleep_set"))
+                                    .font(.system(size: 13, weight: .bold))
+                                    .foregroundColor(.tPrimary)
+                                    .fixedSize()
+                                    .padding(.horizontal, 14).padding(.vertical, 8)
+                                    .background(Color.tPrimary.opacity(0.15))
+                                    .cornerRadius(8)
+                                    .overlay(RoundedRectangle(cornerRadius: 8)
+                                        .stroke(Color.tPrimary, lineWidth: 1))
                             }
                         }
                     }
@@ -359,6 +343,11 @@ struct SettingsView: View {
                 onCancel: { showWebLogin = false }
             )
         }
+        // ── Minuteur de veille (préréglages + durée personnalisée) ───
+        .sheet(isPresented: $showSleepSheet) {
+            SleepTimerSheet()
+                .presentationDetents([.medium, .large])
+        }
         // ── Logs sheet ───────────────────────────────────────────────
         .sheet(isPresented: $showLogs) {
             VStack(spacing: 0) {
@@ -379,16 +368,6 @@ struct SettingsView: View {
                 LogsView()
             }
             .background(Color.tDark)
-        }
-    }
-
-    // MARK: – Minuteur
-    /// « 45 min », « 1 h », « 2 h » selon la durée.
-    private func sleepPresetLabel(_ minutes: Int) -> String {
-        switch minutes {
-        case 60:  return store.t("sleep_hour")
-        case 120: return store.t("sleep_2hours")
-        default:  return "\(minutes) \(store.t("sleep_minutes"))"
         }
     }
 

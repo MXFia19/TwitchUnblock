@@ -42,7 +42,7 @@ final class SleepTimerService: ObservableObject {
         endDate   = Date().addingTimeInterval(TimeInterval(minutes * 60))
         remaining = minutes * 60
         logger.info("SLEEP", "Minuteur de veille armé", "\(minutes) min")
-        ticker = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+        ticker = Timer.scheduledCommon(every: 1) { [weak self] _ in
             self?.tick()
         }
     }

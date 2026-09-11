@@ -125,12 +125,10 @@ final class ChannelPointsService: ObservableObject {
         stopPolling()
         logger.debug("POINTS", "Polling démarré",
                      "balance: \(Int(balancePollInterval))s · claim: \(Int(claimPollInterval))s")
-        balanceTimer = Timer.scheduledTimer(withTimeInterval: balancePollInterval,
-                                            repeats: true) { [weak self] _ in
+        balanceTimer = Timer.scheduledCommon(every: balancePollInterval) { [weak self] _ in
             Task { await self?.refreshBalance() }
         }
-        claimTimer = Timer.scheduledTimer(withTimeInterval: claimPollInterval,
-                                           repeats: true) { [weak self] _ in
+        claimTimer = Timer.scheduledCommon(every: claimPollInterval) { [weak self] _ in
             Task { await self?.checkForBonus() }
         }
     }
@@ -215,7 +213,7 @@ final class ChannelPointsService: ObservableObject {
                            "minute-watched /\(Int(watchPollInterval))s · broadcast: \(bcast.prefix(8))…")
             await sendMinuteWatched()
             watchTimer?.invalidate()
-            watchTimer = Timer.scheduledTimer(withTimeInterval: watchPollInterval, repeats: true) { [weak self] _ in
+            watchTimer = Timer.scheduledCommon(every: watchPollInterval) { [weak self] _ in
                 Task { await self?.sendMinuteWatched() }
             }
         }

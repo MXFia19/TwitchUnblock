@@ -26,7 +26,7 @@ final class ChatPubSub: ObservableObject {
         self.channelId = channelId
         logger.debug("PINNED", "Suivi des épinglés", "canal \(channelId)")
         Task { await fetch() }
-        timer = Timer.scheduledTimer(withTimeInterval: pollInterval, repeats: true) { [weak self] _ in
+        timer = Timer.scheduledCommon(every: pollInterval) { [weak self] _ in
             Task { await self?.fetch() }
         }
     }

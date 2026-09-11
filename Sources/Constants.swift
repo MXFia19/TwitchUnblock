@@ -253,6 +253,11 @@ private let translations: [Lang: [String: String]] = [
         "dbg_latency_sub": "Pastille sur le lecteur : retard du direct en secondes",
         "dbg_chat_delay": "Synchro auto du chat",
         "dbg_chat_delay_sub": "Retarde les messages de la latence mesurée pour les caler sur l'image",
+        "sleep_custom_ph": "Durée", "sleep_start": "Démarrer",
+        "sleep_set": "Régler", "sleep_edit": "Modifier",
+        "low_latency": "Mode faible latence",
+        "low_latency_sub": "Reste au plus près du direct (comme sur Twitch). Peut charger un peu plus souvent sur une connexion lente. S'applique au prochain direct lancé.",
+        "delete_vod": "Retirer de l'historique",
     ],
     .en: [
         "title": "Watch Twitch No Sub",
@@ -384,6 +389,11 @@ private let translations: [Lang: [String: String]] = [
         "dbg_latency_sub": "Player badge: how far behind live, in seconds",
         "dbg_chat_delay": "Auto chat sync",
         "dbg_chat_delay_sub": "Delays messages by the measured latency so they match the video",
+        "sleep_custom_ph": "Duration", "sleep_start": "Start",
+        "sleep_set": "Set", "sleep_edit": "Edit",
+        "low_latency": "Low latency mode",
+        "low_latency_sub": "Stays as close to live as possible (like on Twitch). May buffer a bit more on a slow connection. Applies to the next stream you open.",
+        "delete_vod": "Remove from history",
     ],
     .es: [
         "title": "Ver Twitch sin Sub",
@@ -515,6 +525,11 @@ private let translations: [Lang: [String: String]] = [
         "dbg_latency_sub": "Insignia en el reproductor: retraso del directo en segundos",
         "dbg_chat_delay": "Sincronía automática del chat",
         "dbg_chat_delay_sub": "Retrasa los mensajes según la latencia medida para cuadrar con la imagen",
+        "sleep_custom_ph": "Duración", "sleep_start": "Iniciar",
+        "sleep_set": "Ajustar", "sleep_edit": "Modificar",
+        "low_latency": "Modo de baja latencia",
+        "low_latency_sub": "Se mantiene lo más cerca posible del directo (como en Twitch). Puede cargar más a menudo con conexión lenta. Se aplica al próximo directo.",
+        "delete_vod": "Quitar del historial",
     ],
 ]
 

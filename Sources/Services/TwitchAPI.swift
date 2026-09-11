@@ -226,6 +226,7 @@ func getLive(channelName: String) async -> LiveData {
             lumComps.queryItems = [
                 .init(name: "allow_source",     value: "true"),
                 .init(name: "allow_audio_only", value: "true"),
+                // fast_bread = variante faible latence côté Twitch.
                 .init(name: "fast_bread",       value: "true")
             ]
             guard let lumUrl = lumComps.url else { continue }
@@ -255,16 +256,22 @@ func getLive(channelName: String) async -> LiveData {
         if let token = token {
             logger.info("LIVE", "Tentative Twitch officiel...")
             var comps = URLComponents(string: "https://usher.ttvnw.net/api/channel/hls/\(login).m3u8")!
+            // Mode faible latence : Twitch sert alors la variante « low latency »
+            // (segments plus courts, playlist rafraîchie plus souvent).
+            let wantsLowLatency = UserDefaults.standard.bool(forKey: "cfg_low_latency")
             comps.queryItems = [
                 .init(name: "allow_source",              value: "true"),
                 .init(name: "allow_audio_only",           value: "true"),
                 .init(name: "allow_spectre",              value: "true"),
+                .init(name: "fast_bread",                 value: wantsLowLatency ? "true" : "false"),
+                .init(name: "low_latency",                value: wantsLowLatency ? "true" : "false"),
                 .init(name: "player_backend",             value: "mediaplayer"),
                 .init(name: "playlist_include_framerate", value: "true"),
                 .init(name: "segment_preference",         value: "4"),
                 .init(name: "sig",                        value: token.signature),
                 .init(name: "token",                      value: token.value),
             ]
+            if wantsLowLatency { logger.info("LIVE", "Mode faible latence demandé à Twitch") }
             if let url = comps.url,
                let (data, resp) = try? await URLSession.shared.data(from: url),
                (resp as? HTTPURLResponse)?.statusCode == 200,

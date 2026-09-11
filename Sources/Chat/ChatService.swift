@@ -99,7 +99,7 @@ final class ChatService: NSObject, ObservableObject {
             await receive()
         }
 
-        pingTimer = Timer.scheduledTimer(withTimeInterval: 240, repeats: true) { [weak self] _ in
+        pingTimer = Timer.scheduledCommon(every: 240) { [weak self] _ in
             Task { await self?.send("PING :tmi.twitch.tv") }
         }
     }
@@ -129,7 +129,7 @@ final class ChatService: NSObject, ObservableObject {
         await send("CAP REQ :twitch.tv/tags twitch.tv/commands twitch.tv/membership")
         await send("NICK justinfan\(Int.random(in: 10000...99999))")
         await send("JOIN #\(channelName)")
-        pingTimer = Timer.scheduledTimer(withTimeInterval: 240, repeats: true) { [weak self] _ in
+        pingTimer = Timer.scheduledCommon(every: 240) { [weak self] _ in
             Task { await self?.send("PING :tmi.twitch.tv") }
         }
         await receive()

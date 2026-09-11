@@ -71,7 +71,7 @@ struct MainTabView: View {
 
                 Group {
                     switch activeTab {
-                    case .discovery: DiscoveryView(onPlayStream: playLive, onPlayVod: playVod)
+                    case .discovery: DiscoveryView(onPlayStream: playLive)
                     case .streamer:  StreamerView(onPlayVod: playVod, onPlayLive: playLive)
                     case .history:   HistoryView(onPlayVod: playVod)
                     case .direct:    DirectView(onPlayVod: playVod)
@@ -101,7 +101,7 @@ struct MainTabView: View {
         // Réglage rapide du minuteur depuis le lecteur.
         .sheet(isPresented: $showSleepSheet) {
             SleepTimerSheet()
-                .presentationDetents([.medium])
+                .presentationDetents([.medium, .large])
         }
         // Minuteur de veille écoulé → on coupe la lecture.
         .onChange(of: sleepTimer.fireCount) { _ in
@@ -572,8 +572,8 @@ struct MainTabView: View {
     private func startLiveTimers(channel: String) {
         stopLiveTimers()
         updateUptime()
-        uptimeTimer  = Timer.scheduledTimer(withTimeInterval: 1,  repeats: true) { _ in updateUptime() }
-        refreshTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { _ in
+        uptimeTimer  = Timer.scheduledCommon(every: 1)  { _ in updateUptime() }
+        refreshTimer = Timer.scheduledCommon(every: 30) { _ in
             Task {
                 // Rafraîchissement LÉGER : ne re-fetch PAS les liens du stream,
                 // juste le nombre de viewers et l'uptime.

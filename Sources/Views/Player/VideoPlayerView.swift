@@ -15,6 +15,9 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
     let onProgress: (Double) -> Void
     /// Latence mesurée du direct (nil si la playlist ne porte pas d'horodatage).
     var onLatency: (Double?) -> Void = { _ in }
+    /// Mode faible latence : ne s'applique qu'au direct.
+    var lowLatency: Bool = false
+    var isLive: Bool = false
 
     func makeUIViewController(context: Context) -> AVPlayerViewController {
         let player = AVPlayer(url: url)
@@ -25,6 +28,8 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
         vc.showsPlaybackControls = true
         vc.delegate = context.coordinator
         context.coordinator.playerVC = vc
+        context.coordinator.lowLatency = lowLatency && isLive
+        context.coordinator.configureLatency(player)
         context.coordinator.setupObserver(player: player, onProgress: onProgress, onLatency: onLatency)
         // Restore position
         if savedTime > 5 {
@@ -43,6 +48,8 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
             
             let player = AVPlayer(url: url)
             vc.player = player
+            context.coordinator.lowLatency = lowLatency && isLive
+            context.coordinator.configureLatency(player)
             context.coordinator.setupObserver(player: player, onProgress: onProgress, onLatency: onLatency)
             if savedTime > 5 {
                 player.seek(to: CMTime(seconds: savedTime, preferredTimescale: 600))
@@ -63,6 +70,47 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
         weak var playerVC: AVPlayerViewController?
         private var timeObserver: Any?
         private var playerRef: AVPlayer?
+
+        /// Mode faible latence actif (direct uniquement).
+        var lowLatency = false
+        private var lastCatchUp = Date.distantPast
+
+        /// Cible : rester à ~4 s du bord du direct, comme le mode faible latence de Twitch.
+        private let targetOffset: Double = 4
+        /// Au-delà de ce retard, on recolle au direct.
+        private let catchUpThreshold: Double = 12
+        /// Jamais plus d'un rattrapage par 20 s (sinon on saute sans arrêt).
+        private let catchUpCooldown: Double = 20
+
+        /// Règle le lecteur pour coller au direct. Sans effet en VOD.
+        func configureLatency(_ player: AVPlayer) {
+            guard lowLatency else { return }
+            // Démarre dès qu'il y a de quoi lire, au lieu de constituer un tampon
+            // confortable : c'est ce tampon qui crée l'essentiel de la latence.
+            player.automaticallyWaitsToMinimizeStalling = false
+            if let item = player.currentItem {
+                item.automaticallyPreservesTimeOffsetFromLive = true
+                item.configuredTimeOffsetFromLive = CMTime(seconds: targetOffset, preferredTimescale: 600)
+            }
+            lastCatchUp = Date()   // laisse le temps au flux de démarrer
+            logger.info("LIVE", "Mode faible latence actif", "cible ~\(Int(targetOffset)) s du direct")
+        }
+
+        /// Recolle au bord du direct si la lecture a dérivé (tampon après une coupure).
+        /// On ne bouge pas quand la lecture est en pause : l'utilisateur a la main.
+        private func catchUpIfNeeded() {
+            guard lowLatency, let player = playerRef, player.rate > 0,
+                  let item = player.currentItem,
+                  let liveEdge = item.seekableTimeRanges.last?.timeRangeValue.end,
+                  liveEdge.isValid, liveEdge.isNumeric else { return }
+            let behind = (liveEdge - item.currentTime()).seconds
+            guard behind.isFinite, behind > catchUpThreshold,
+                  Date().timeIntervalSince(lastCatchUp) > catchUpCooldown else { return }
+            lastCatchUp = Date()
+            logger.debug("LIVE", "Rattrapage du direct", String(format: "%.0f s de retard", behind))
+            player.seek(to: liveEdge - CMTime(seconds: targetOffset, preferredTimescale: 600),
+                        toleranceBefore: .positiveInfinity, toleranceAfter: .zero)
+        }
 
         // MARK: Plein écran — maintient PlayerFullscreen.isActive à jour
         func playerViewController(_ playerViewController: AVPlayerViewController,
@@ -92,7 +140,7 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
             playerRef = player
             // 1 s : assez fin pour synchroniser le chat des VODs.
             let interval = CMTime(seconds: 1, preferredTimescale: 600)
-            timeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak player] time in
+            timeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self, weak player] time in
                 onProgress(time.seconds)
                 // Latence = écart entre l'heure réelle et l'horodatage du segment lu
                 // (EXT-X-PROGRAM-DATE-TIME de la playlist HLS). nil si absent.
@@ -101,6 +149,7 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
                 } else {
                     onLatency(nil)
                 }
+                self?.catchUpIfNeeded()
             }
         }
 
@@ -248,7 +297,9 @@ struct VideoPlayerView: View {
                 let measured = isLive ? value : nil
                 if latency != measured { latency = measured }
                 onLatency(measured)
-            }
+            },
+            lowLatency: store.lowLatency,
+            isLive: isLive
         )
         .aspectRatio(16/9, contentMode: .fit)
         .background(Color.black)

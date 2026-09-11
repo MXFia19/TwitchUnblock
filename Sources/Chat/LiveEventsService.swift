@@ -49,7 +49,7 @@ final class LiveEventsService: ObservableObject {
         self.login = login.lowercased(); self.channelId = channelId
         self.token = token; self.viewerId = viewerId
         Task { await fetchAll() }
-        timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
+        timer = Timer.scheduledCommon(every: interval) { [weak self] _ in
             Task { await self?.fetchAll() }
         }
     }

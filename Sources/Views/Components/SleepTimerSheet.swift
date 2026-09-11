@@ -6,8 +6,16 @@ struct SleepTimerSheet: View {
     @EnvironmentObject private var store: AppStore
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var timer = SleepTimerService.shared
+    @State private var customMinutes = ""
+    @FocusState private var customFocused: Bool
 
     private let columns = [GridItem(.adaptive(minimum: 90), spacing: 10)]
+
+    /// Durée personnalisée valide (1 min → 12 h).
+    private var customValue: Int? {
+        guard let m = Int(customMinutes.filter(\.isNumber)), (1...720).contains(m) else { return nil }
+        return m
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -29,6 +37,9 @@ struct SleepTimerSheet: View {
             .background(Color.tCard)
             Divider().background(Color.tBorder)
 
+            // Scrollable : au détent « medium », le clavier numérique de la durée
+            // personnalisée recouvrirait sinon le bouton Démarrer.
+            ScrollView {
             VStack(spacing: 16) {
                 if timer.isActive {
                     VStack(spacing: 4) {
@@ -64,6 +75,39 @@ struct SleepTimerSheet: View {
                     }
                 }
 
+                // ── Durée personnalisée ─────────────────────────────
+                HStack(spacing: 8) {
+                    TextField(store.t("sleep_custom_ph"), text: $customMinutes)
+                        .keyboardType(.numberPad)
+                        .focused($customFocused)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.tText)
+                        .padding(.horizontal, 12).padding(.vertical, 11)
+                        .background(Color.tSurface)
+                        .cornerRadius(10)
+                        .overlay(RoundedRectangle(cornerRadius: 10)
+                            .stroke(customFocused ? Color.tPrimary : Color.tBorder, lineWidth: 1))
+
+                    Text(store.t("sleep_minutes"))
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.tMuted)
+
+                    Button {
+                        guard let m = customValue else { return }
+                        customFocused = false
+                        customMinutes = ""
+                        timer.start(minutes: m)
+                    } label: {
+                        Text(store.t("sleep_start"))
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 16).padding(.vertical, 11)
+                            .background(customValue == nil ? Color.tMuted.opacity(0.35) : Color.tPrimary)
+                            .cornerRadius(10)
+                    }
+                    .disabled(customValue == nil)
+                }
+
                 if timer.isActive {
                     HStack(spacing: 10) {
                         Button { timer.add(minutes: 15) } label: {
@@ -95,6 +139,8 @@ struct SleepTimerSheet: View {
                 Spacer(minLength: 0)
             }
             .padding(16)
+            }
+            .scrollDismissesKeyboard(.interactively)
         }
         .background(Color.tDark)
     }

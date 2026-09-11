@@ -2,7 +2,6 @@ import SwiftUI
 
 struct DiscoveryView: View {
     let onPlayStream: (String) -> Void
-    let onPlayVod:    (String, String?, String?, String?) -> Void
 
     @EnvironmentObject private var store: AppStore
 
@@ -35,12 +34,6 @@ struct DiscoveryView: View {
             if store.twitchToken == nil {
                 // VUE DÉCONNECTÉE
                 VStack(spacing: 0) {
-                    VodHistoryRowView { item in
-                        onPlayVod(item.term, item.display, item.thumb, item.streamer)
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 8)
-
                     Spacer()
                     loginPrompt
                     Spacer()
@@ -53,14 +46,10 @@ struct DiscoveryView: View {
                     sectionPicker
 
                     if section == .streams {
+                        // L'historique des VODs vit dans l'onglet VODs : Découverte
+                        // reste dédiée aux directs.
                         ScrollView {
                             LazyVStack(alignment: .leading, spacing: 0) {
-                                VodHistoryRowView { item in
-                                    onPlayVod(item.term, item.display, item.thumb, item.streamer)
-                                }
-                                .padding(.horizontal, 16)
-                                .padding(.top, 8)
-
                                 loggedInContent
                             }
                         }

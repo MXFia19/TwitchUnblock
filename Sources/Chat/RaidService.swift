@@ -30,7 +30,7 @@ final class RaidService: ObservableObject {
             await sendJSON(["type": "LISTEN", "nonce": UUID().uuidString, "data": data])
             await receive()
         }
-        pingTimer = Timer.scheduledTimer(withTimeInterval: 240, repeats: true) { [weak self] _ in
+        pingTimer = Timer.scheduledCommon(every: 240) { [weak self] _ in
             Task { await self?.sendJSON(["type": "PING"]) }
         }
     }

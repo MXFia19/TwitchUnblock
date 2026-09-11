@@ -22,10 +22,11 @@ struct HistoryView: View {
                         .padding()
                 } else {
                     ForEach(vods, id: \.term) { item in
-                        Button {
-                            onPlayVod(item.term, item.display, item.thumb, item.streamer)
-                        } label: {
-                            HStack {
+                        // Pas de Button englobant : un Button dans un Button déclenche
+                        // les deux. La ligne se lance au toucher, la corbeille reste
+                        // le seul vrai bouton.
+                        HStack(spacing: 10) {
+                            HStack(spacing: 10) {
                                 // ✨ Chargement de l'image de la VOD
                                 if let thumbURL = item.thumb, let url = URL(string: thumbURL) {
                                     AsyncImage(url: url) { phase in
@@ -48,7 +49,7 @@ struct HistoryView: View {
                                 } else {
                                     fallbackRectangle
                                 }
-                                
+
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text(item.display)
                                         .font(.subheadline)
@@ -65,10 +66,30 @@ struct HistoryView: View {
 
                                     progressLine(for: item.term)
                                 }
-                                Spacer()
+                                .frame(maxWidth: .infinity, alignment: .leading)
                             }
-                            .padding(.horizontal)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                onPlayVod(item.term, item.display, item.thumb, item.streamer)
+                            }
+
+                            // Retirer cette VOD de l'historique
+                            Button {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    store.removeFromHistory(term: item.term)
+                                }
+                            } label: {
+                                Image(systemName: "trash")
+                                    .font(.system(size: 13, weight: .bold))
+                                    .foregroundColor(.tDanger)
+                                    .frame(width: 34, height: 34)
+                                    .background(Color.tDanger.opacity(0.15))
+                                    .clipShape(Circle())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel(store.t("delete_vod"))
                         }
+                        .padding(.horizontal)
                         // Lignes visibles uniquement (LazyVStack) → une requête par VOD.
                         .task { await metaStore.load(item.term) }
                     }

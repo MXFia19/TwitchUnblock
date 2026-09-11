@@ -67,6 +67,13 @@ final class AppStore: ObservableObject {
         didSet { UserDefaults.standard.set(autoPurgeImageCache, forKey: "cfg_purge_cache") }
     }
 
+    // MARK: – Lecteur
+    /// Mode faible latence : demande le flux « low latency » à Twitch et garde
+    /// la lecture au plus près du direct.
+    @Published var lowLatency: Bool = false {
+        didSet { UserDefaults.standard.set(lowLatency, forKey: "cfg_low_latency") }
+    }
+
     // MARK: – Débogage (section temporaire)
     /// Afficher la latence du direct par-dessus le lecteur.
     @Published var showLatency: Bool = false {
@@ -99,6 +106,7 @@ final class AppStore: ObservableObject {
         showLiveEvents     = ud.object(forKey: "cfg_events") as? Bool ?? true
         enableRaids        = ud.object(forKey: "cfg_raids")  as? Bool ?? true
         autoPurgeImageCache = ud.object(forKey: "cfg_purge_cache") as? Bool ?? true
+        lowLatency         = ud.object(forKey: "cfg_low_latency") as? Bool ?? false
         showLatency        = ud.object(forKey: "dbg_latency")    as? Bool ?? false
         autoChatDelay      = ud.object(forKey: "dbg_chat_delay") as? Bool ?? false
         if let data = ud.data(forKey: "twitch_vod_history"),

@@ -75,29 +75,31 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
         var lowLatency = false
         private var lastCatchUp = Date.distantPast
 
-        /// Cible : rester à ~4 s du bord du direct, comme le mode faible latence de Twitch.
-        private let targetOffset: Double = 4
-        /// Au-delà de ce retard, on recolle au direct.
-        private let catchUpThreshold: Double = 12
-        /// Jamais plus d'un rattrapage par 20 s (sinon on saute sans arrêt).
-        private let catchUpCooldown: Double = 20
+        /// Recul minimal par rapport au bord du direct après un rattrapage.
+        /// Viser plus près fait rejouer dans des segments non encore chargés :
+        /// le lecteur cale aussitôt et repart en arrière, en boucle.
+        private let safeOffset: Double = 10
+        /// Retard à partir duquel on recolle. Généreux volontairement : en lecture
+        /// normale, AVPlayer se tient déjà quelques segments (souvent 10-20 s)
+        /// derrière la fin de la playlist, ce n'est PAS une dérive.
+        private let catchUpThreshold: Double = 30
+        /// Au plus un rattrapage par minute.
+        private let catchUpCooldown: Double = 60
 
-        /// Règle le lecteur pour coller au direct. Sans effet en VOD.
+        /// Prépare le direct. Le gros du mode faible latence se joue côté serveur
+        /// (playlist `low_latency`/`fast_bread`) : ici on ne force rien.
+        ///
+        /// Ne jamais remettre `automaticallyWaitsToMinimizeStalling = false` ni un
+        /// `configuredTimeOffsetFromLive` inférieur à `recommendedTimeOffsetFromLive` :
+        /// le lecteur démarre alors sans tampon et passe son temps à se recharger.
         func configureLatency(_ player: AVPlayer) {
             guard lowLatency else { return }
-            // Démarre dès qu'il y a de quoi lire, au lieu de constituer un tampon
-            // confortable : c'est ce tampon qui crée l'essentiel de la latence.
-            player.automaticallyWaitsToMinimizeStalling = false
-            if let item = player.currentItem {
-                item.automaticallyPreservesTimeOffsetFromLive = true
-                item.configuredTimeOffsetFromLive = CMTime(seconds: targetOffset, preferredTimescale: 600)
-            }
-            lastCatchUp = Date()   // laisse le temps au flux de démarrer
-            logger.info("LIVE", "Mode faible latence actif", "cible ~\(Int(targetOffset)) s du direct")
+            lastCatchUp = Date()   // laisse le flux démarrer avant tout rattrapage
+            logger.info("LIVE", "Mode faible latence actif", "playlist basse latence + rattrapage du direct")
         }
 
-        /// Recolle au bord du direct si la lecture a dérivé (tampon après une coupure).
-        /// On ne bouge pas quand la lecture est en pause : l'utilisateur a la main.
+        /// Recolle au direct après une vraie dérive (pause longue, coupure réseau).
+        /// On ne bouge pas en pause : l'utilisateur a la main.
         private func catchUpIfNeeded() {
             guard lowLatency, let player = playerRef, player.rate > 0,
                   let item = player.currentItem,
@@ -106,10 +108,20 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
             let behind = (liveEdge - item.currentTime()).seconds
             guard behind.isFinite, behind > catchUpThreshold,
                   Date().timeIntervalSince(lastCatchUp) > catchUpCooldown else { return }
+
+            // Cible : le recul recommandé par le flux lui-même s'il en annonce un,
+            // jamais moins que notre marge de sécurité.
+            let recommended = item.recommendedTimeOffsetFromLive
+            let offset = max(safeOffset,
+                             recommended.isValid && recommended.isNumeric ? recommended.seconds : 0)
             lastCatchUp = Date()
-            logger.debug("LIVE", "Rattrapage du direct", String(format: "%.0f s de retard", behind))
-            player.seek(to: liveEdge - CMTime(seconds: targetOffset, preferredTimescale: 600),
-                        toleranceBefore: .positiveInfinity, toleranceAfter: .zero)
+            logger.debug("LIVE", "Rattrapage du direct",
+                         String(format: "%.0f s de retard → %.0f s du bord", behind, offset))
+            // Tolérances larges des deux côtés : le lecteur se cale sur une frontière
+            // de segment déjà disponible au lieu d'un point exact non chargé.
+            player.seek(to: liveEdge - CMTime(seconds: offset, preferredTimescale: 600),
+                        toleranceBefore: .positiveInfinity,
+                        toleranceAfter: .positiveInfinity)
         }
 
         // MARK: Plein écran — maintient PlayerFullscreen.isActive à jour

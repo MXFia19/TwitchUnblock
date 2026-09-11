@@ -27,6 +27,14 @@ final class AppStore: ObservableObject {
         }
     }
 
+    /// Photo de profil du compte connecté, affichée dans l'en-tête.
+    @Published var twitchAvatar: String? {
+        didSet {
+            if let a = twitchAvatar { UserDefaults.standard.set(a, forKey: "twitch_avatar") }
+            else { UserDefaults.standard.removeObject(forKey: "twitch_avatar") }
+        }
+    }
+
     /// Login IRC (ex: "squeezie") — indispensable pour envoyer des messages en chat
     @Published var twitchLogin: String? {
         didSet {
@@ -99,6 +107,7 @@ final class AppStore: ObservableObject {
         twitchToken = ud.string(forKey: "twitch_token")
         twitchWebToken = ud.string(forKey: "twitch_web_token")
         twitchLogin = ud.string(forKey: "twitch_login")
+        twitchAvatar = ud.string(forKey: "twitch_avatar")
         autoClaimChest = ud.object(forKey: "auto_claim_chest") as? Bool ?? true
         showPinnedMessages = ud.object(forKey: "cfg_pinned") as? Bool ?? true
         showFollowButton   = ud.object(forKey: "cfg_follow") as? Bool ?? true
@@ -128,6 +137,7 @@ final class AppStore: ObservableObject {
         twitchWebToken = nil
         twitchUserId   = nil
         twitchLogin    = nil   // ← nettoyage complet
+        twitchAvatar   = nil
     }
 
     // MARK: – History management

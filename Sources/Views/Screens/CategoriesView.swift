@@ -16,6 +16,14 @@ enum StreamSort: String, CaseIterable, Identifiable {
         }
     }
 
+    var icon: String {
+        switch self {
+        case .viewersDesc: return "arrow.down"
+        case .viewersAsc:  return "arrow.up"
+        case .nameAsc:     return "textformat.abc"
+        }
+    }
+
     func apply(_ streams: [TwitchStream]) -> [TwitchStream] {
         switch self {
         case .viewersDesc: return streams.sorted { $0.viewerCount > $1.viewerCount }
@@ -61,69 +69,36 @@ struct CategoriesView: View {
     // MARK: – Liste / recherche
     @ViewBuilder private var browser: some View {
         VStack(spacing: 0) {
-            // ── Recherche ───────────────────────────────────────────
-            HStack(spacing: 8) {
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: 13)).foregroundColor(.tMuted)
-                TextField(store.t("cat_search_ph"), text: $search)
-                    .font(.system(size: 14))
-                    .foregroundColor(.tText)
-                    .autocorrectionDisabled()
-                    .submitLabel(.search)
-                    .onChange(of: search) { runSearch($0) }
-                if !search.isEmpty {
-                    // Vider le champ suffit : onChange relance le Top.
-                    Button { search = "" } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 14)).foregroundColor(.tMuted)
-                    }
-                }
-            }
-            .padding(.horizontal, 12).padding(.vertical, 10)
-            .background(Color.tSurface)
-            .cornerRadius(10)
-            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.tBorder, lineWidth: 1))
-            .padding(.horizontal, 16)
-            .padding(.top, 12)
+            TSearchField(text: $search, placeholder: store.t("cat_search_ph"))
+                .padding(.horizontal, TSpace.lg)
+                .padding(.top, TSpace.md)
+                .onChange(of: search) { runSearch($0) }
 
             if loading {
                 Spacer()
-                ProgressView().tint(.tPrimary)
+                TLoader()
                 Spacer()
             } else if let err = errorMsg {
                 Spacer()
-                Text(err).foregroundColor(.tDanger).fontWeight(.semibold)
+                TEmptyState(icon: "exclamationmark.triangle", title: err)
                 Spacer()
             } else if categories.isEmpty {
                 Spacer()
-                Text(store.t("no_result")).foregroundColor(.tMuted)
+                TEmptyState(icon: "magnifyingglass", title: store.t("no_result"))
                 Spacer()
             } else {
                 ScrollView {
-                    LazyVGrid(columns: columns, spacing: 12) {
+                    LazyVGrid(columns: columns, spacing: TSpace.md) {
                         ForEach(categories) { cat in
                             CategoryCardView(category: cat) { selected = cat }
                         }
                     }
-                    .padding(.horizontal, 16).padding(.top, 12)
+                    .padding(.horizontal, TSpace.lg)
+                    .padding(.top, TSpace.md)
 
                     // Pagination : uniquement sur le Top (la recherche n'en a pas).
                     if cursor != nil && search.isEmpty {
-                        Button { Task { await loadMore() } } label: {
-                            Group {
-                                if loadingMore { ProgressView().tint(.tPrimary) }
-                                else {
-                                    Text(store.t("load_more"))
-                                        .font(.system(size: 13, weight: .bold))
-                                        .foregroundColor(.tPrimary)
-                                }
-                            }
-                            .frame(maxWidth: .infinity).padding(.vertical, 12)
-                            .background(Color.tPrimary.opacity(0.1))
-                            .cornerRadius(10)
-                        }
-                        .disabled(loadingMore)
-                        .padding(.horizontal, 16).padding(.top, 12)
+                        TLoadMoreButton(busy: loadingMore) { Task { await loadMore() } }
                     }
 
                     Spacer(minLength: 40)
@@ -185,37 +160,6 @@ struct CategoriesView: View {
     }
 }
 
-// MARK: – Carte d'une catégorie
-struct CategoryCardView: View {
-    let category: TwitchCategory
-    let onPress: () -> Void
-
-    var body: some View {
-        Button(action: onPress) {
-            VStack(alignment: .leading, spacing: 0) {
-                AsyncImage(url: URL(string: category.boxArtURL)) { img in
-                    img.resizable().aspectRatio(3/4, contentMode: .fill)
-                } placeholder: {
-                    Color(hex: "111111").aspectRatio(3/4, contentMode: .fill)
-                }
-                .clipped()
-
-                Text(category.name)
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundColor(.tText)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.leading)
-                    .frame(height: 36, alignment: .top)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(10)
-            }
-            .background(Color.tSurface)
-            .cornerRadius(12)
-        }
-        .buttonStyle(.plain)
-    }
-}
-
 // MARK: – Lives d'une catégorie
 struct CategoryStreamsView: View {
     let category: TwitchCategory
@@ -239,78 +183,61 @@ struct CategoryStreamsView: View {
         VStack(spacing: 0) {
 
             // ── En-tête : retour + nom de la catégorie ──────────────
-            HStack(spacing: 10) {
+            HStack(spacing: TSpace.sm) {
                 Button(action: onBack) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "chevron.left").font(.system(size: 12, weight: .bold))
-                        Text(store.t("categories")).font(.system(size: 13, weight: .bold))
+                    HStack(spacing: TSpace.xs) {
+                        Image(systemName: "chevron.left").font(.system(size: 13, weight: .bold))
+                        Text(store.t("categories")).font(.tLabel)
                     }
                     .foregroundColor(.tPrimary)
                 }
+                .buttonStyle(.plain)
+
                 Text(category.name)
-                    .font(.system(size: 15, weight: .heavy))
+                    .font(.tSection)
                     .foregroundColor(.tText)
                     .lineLimit(1)
                 Spacer(minLength: 0)
             }
-            .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 8)
+            .padding(.horizontal, TSpace.lg)
+            .padding(.top, TSpace.md)
+            .padding(.bottom, TSpace.sm)
 
             // ── Tri ─────────────────────────────────────────────────
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
+                HStack(spacing: TSpace.sm) {
                     ForEach(StreamSort.allCases) { s in
-                        Button { sort = s } label: {
-                            Text(s.label(store))
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundColor(sort == s ? .white : .tMuted)
-                                .lineLimit(1)
-                                .padding(.horizontal, 12).padding(.vertical, 6)
-                                .background(sort == s ? Color.tPrimary : Color.tSurface)
-                                .cornerRadius(8)
-                        }
+                        TChip(title: s.label(store), icon: s.icon, isOn: sort == s) { sort = s }
                     }
                 }
-                .padding(.horizontal, 16)
+                .padding(.horizontal, TSpace.lg)
             }
-            .padding(.bottom, 10)
+            .padding(.bottom, TSpace.md)
 
             if loading {
                 Spacer()
-                ProgressView().tint(.tPrimary)
+                TLoader()
                 Spacer()
             } else if let err = errorMsg {
                 Spacer()
-                Text(err).foregroundColor(.tDanger).fontWeight(.semibold)
+                TEmptyState(icon: "exclamationmark.triangle", title: err)
                 Spacer()
             } else if streams.isEmpty {
                 Spacer()
-                Text(store.t("no_live")).foregroundColor(.tMuted)
+                TEmptyState(icon: "antenna.radiowaves.left.and.right",
+                            title: store.t("no_live"))
                 Spacer()
             } else {
                 ScrollView {
-                    LazyVGrid(columns: columns, spacing: 12) {
+                    LazyVGrid(columns: columns, spacing: TSpace.md) {
                         ForEach(sorted) { stream in
                             StreamCardView(stream: stream) { onPlayStream(stream.userLogin) }
                         }
                     }
-                    .padding(.horizontal, 16)
+                    .padding(.horizontal, TSpace.lg)
 
                     if cursor != nil {
-                        Button { Task { await loadMore() } } label: {
-                            Group {
-                                if loadingMore { ProgressView().tint(.tPrimary) }
-                                else {
-                                    Text(store.t("load_more"))
-                                        .font(.system(size: 13, weight: .bold))
-                                        .foregroundColor(.tPrimary)
-                                }
-                            }
-                            .frame(maxWidth: .infinity).padding(.vertical, 12)
-                            .background(Color.tPrimary.opacity(0.1))
-                            .cornerRadius(10)
-                        }
-                        .disabled(loadingMore)
-                        .padding(.horizontal, 16).padding(.top, 12)
+                        TLoadMoreButton(busy: loadingMore) { Task { await loadMore() } }
                     }
 
                     Spacer(minLength: 40)

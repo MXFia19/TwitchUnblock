@@ -11,31 +11,35 @@ struct SettingsView: View {
     @State private var cacheBytes: Int64 = 0
     @State private var cacheFiles      = 0
     @ObservedObject private var sleepTimer = SleepTimerService.shared
+    @Environment(\.dismiss) private var dismiss
     @State private var showSleepSheet  = false
 
     private var vodCount:     Int { store.history.filter { $0.type == .vod }.count }
     private var channelCount: Int { store.history.filter { $0.type == .channel }.count }
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 12) {
+        VStack(spacing: 0) {
 
-                // ── Header ──────────────────────────────────────────
-                HStack(spacing: 10) {
-                    Text("⚙️")
-                        .font(.system(size: 28))
-                    Text(store.t("settings"))
-                        .font(.system(size: 26, weight: .heavy))
-                        .foregroundColor(.tPurple)
-                    Spacer()
-                }
-                .padding(.horizontal, 16)
-                .padding(.top, 8)
+            // ── En-tête de la feuille ───────────────────────────────
+            HStack(spacing: TSpace.md) {
+                Text(store.t("settings"))
+                    .font(.tScreenTitle)
+                    .foregroundColor(.tText)
+                Spacer()
+                TIconButton(icon: "xmark") { dismiss() }
+            }
+            .padding(.horizontal, TSpace.lg)
+            .padding(.top, TSpace.lg)
+            .padding(.bottom, TSpace.md)
+            .background(Color.tDark)
+
+            ScrollView {
+            VStack(spacing: 12) {
 
                 // ── Langue ──────────────────────────────────────────
                 settingCard {
                     VStack(alignment: .leading, spacing: 12) {
-                        label("🌐", store.t("language"))
+                        label("globe", store.t("language"))
                         VStack(spacing: 8) {
                             ForEach(Lang.allCases) { lang in
                                 langButton(lang)
@@ -47,14 +51,14 @@ struct SettingsView: View {
                 // ── Auto-claim coffres ──────────────────────────────
                 settingCard {
                     VStack(alignment: .leading, spacing: 8) {
-                        label("🎁", store.t("auto_claim"))
+                        label("gift.fill", store.t("auto_claim"))
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(store.t("auto_claim"))
-                                    .font(.system(size: 15, weight: .semibold))
+                                    .font(.tCardTitle)
                                     .foregroundColor(.tText)
                                 Text(store.t("auto_claim_sub"))
-                                    .font(.system(size: 12))
+                                    .font(.tMeta)
                                     .foregroundColor(.tMuted)
                                     .fixedSize(horizontal: false, vertical: true)
                             }
@@ -72,7 +76,7 @@ struct SettingsView: View {
                 // ── Personnalisation chat & lecteur ─────────────────
                 settingCard {
                     VStack(alignment: .leading, spacing: 14) {
-                        label("🎨", store.t("customize"))
+                        label("paintbrush.fill", store.t("customize"))
                         toggleRow(store.t("cfg_pinned"), store.t("cfg_pinned_sub"),
                                   $store.showPinnedMessages, log: "Messages épinglés")
                         Divider().background(Color.tBorder)
@@ -93,7 +97,7 @@ struct SettingsView: View {
                 // ── Lecteur vidéo ───────────────────────────────────
                 settingCard {
                     VStack(alignment: .leading, spacing: 14) {
-                        label("📺", store.t("player_section"))
+                        label("play.tv.fill", store.t("player_section"))
                         toggleRow(store.t("low_latency"), store.t("low_latency_sub"),
                                   $store.lowLatency, log: "Mode faible latence")
                     }
@@ -104,18 +108,18 @@ struct SettingsView: View {
                 // la même feuille que depuis le lecteur : une seule UI à maintenir.
                 settingCard {
                     VStack(alignment: .leading, spacing: 12) {
-                        label("🌙", store.t("sleep_timer"))
+                        label("moon.zzz.fill", store.t("sleep_timer"))
                         HStack(spacing: 12) {
                             VStack(alignment: .leading, spacing: 2) {
                                 if sleepTimer.isActive {
                                     Text(store.t("sleep_remaining"))
-                                        .font(.system(size: 12)).foregroundColor(.tMuted)
+                                        .font(.tMeta).foregroundColor(.tMuted)
                                     Text(sleepTimer.label)
-                                        .font(.system(size: 26, weight: .heavy).monospacedDigit())
+                                        .font(.system(size: 26, weight: .bold).monospacedDigit())
                                         .foregroundColor(.tPurple)
                                 } else {
                                     Text(store.t("sleep_timer_sub"))
-                                        .font(.system(size: 12)).foregroundColor(.tMuted)
+                                        .font(.tMeta).foregroundColor(.tMuted)
                                         .fixedSize(horizontal: false, vertical: true)
                                 }
                             }
@@ -123,7 +127,7 @@ struct SettingsView: View {
                             Button { showSleepSheet = true } label: {
                                 Text(sleepTimer.isActive ? store.t("sleep_edit")
                                                          : store.t("sleep_set"))
-                                    .font(.system(size: 13, weight: .bold))
+                                    .font(.tLabel)
                                     .foregroundColor(.tPrimary)
                                     .fixedSize()
                                     .padding(.horizontal, 14).padding(.vertical, 8)
@@ -139,14 +143,14 @@ struct SettingsView: View {
                 // ── Cache emotes & badges ───────────────────────────
                 settingCard {
                     VStack(alignment: .leading, spacing: 14) {
-                        label("🗂", store.t("cache_section"))
+                        label("externaldrive.fill", store.t("cache_section"))
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(store.t("cache_size"))
-                                    .font(.system(size: 15, weight: .semibold))
+                                    .font(.tCardTitle)
                                     .foregroundColor(.tText)
                                 Text("\(cacheSizeText) · \(cacheFiles) \(store.t("cache_files"))")
-                                    .font(.system(size: 12))
+                                    .font(.tMeta)
                                     .foregroundColor(.tMuted)
                             }
                             Spacer(minLength: 8)
@@ -157,7 +161,7 @@ struct SettingsView: View {
                                 HStack(spacing: 5) {
                                     Image(systemName: "trash")
                                     Text(store.t("cache_clear"))
-                                        .font(.system(size: 13, weight: .bold))
+                                        .font(.tLabel)
                                 }
                                 .foregroundColor(.tDanger)
                                 .fixedSize()
@@ -179,7 +183,7 @@ struct SettingsView: View {
                 // ── Compte Twitch ───────────────────────────────────
                 settingCard {
                     VStack(alignment: .leading, spacing: 14) {
-                        label("💜", store.t("twitch_account"))
+                        label("person.crop.circle.fill", store.t("twitch_account"))
 
                         // Connexion API (OAuth) — chat + chaînes suivies
                         accountRow(
@@ -218,26 +222,15 @@ struct SettingsView: View {
                 // ── Historique ──────────────────────────────────────
                 settingCard {
                     VStack(alignment: .leading, spacing: 12) {
-                        label("📋", store.t("history"))
-                        HStack(spacing: 10) {
-                            statBox(value: vodCount, label: "VODs", icon: "🎬")
-                            statBox(value: channelCount, label: store.t("channels"), icon: "👤")
+                        label("chart.bar.fill", store.t("history"))
+                        HStack(spacing: TSpace.sm) {
+                            statBox(value: vodCount, label: store.t("vods"), icon: "film")
+                            statBox(value: channelCount, label: store.t("channels"), icon: "person.fill")
                         }
                         if vodCount > 0 || channelCount > 0 {
-                            Button {
+                            TSecondaryButton(title: store.t("btn_clear"), icon: "trash",
+                                             tint: .tDanger, fullWidth: true) {
                                 showClearAlert = true
-                            } label: {
-                                HStack {
-                                    Image(systemName: "trash")
-                                    Text(store.t("btn_clear"))
-                                }
-                                .font(.system(size: 13, weight: .bold))
-                                .foregroundColor(.tDanger)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 10)
-                                .background(Color.tDanger.opacity(0.1))
-                                .cornerRadius(10)
-                                .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.tDanger.opacity(0.4), lineWidth: 1))
                             }
                         }
                     }
@@ -246,9 +239,9 @@ struct SettingsView: View {
                 // ── Débogage (temporaire) ───────────────────────────
                 settingCard {
                     VStack(alignment: .leading, spacing: 14) {
-                        label("🛠", store.t("debug_section"))
+                        label("wrench.and.screwdriver.fill", store.t("debug_section"))
                         Text(store.t("debug_note"))
-                            .font(.system(size: 11))
+                            .font(.tMeta)
                             .foregroundColor(.tMuted)
                             .fixedSize(horizontal: false, vertical: true)
                         toggleRow(store.t("dbg_latency"), store.t("dbg_latency_sub"),
@@ -262,52 +255,53 @@ struct SettingsView: View {
                 // ── À propos / Logs ─────────────────────────────────
                 settingCard {
                     VStack(alignment: .leading, spacing: 12) {
-                        label("ℹ️", store.t("about"))
+                        label("info.circle.fill", store.t("about"))
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("TwitchUnblock")
-                                    .font(.system(size: 16, weight: .heavy))
-                                    .foregroundColor(.white)
+                                    .font(.tSection)
+                                    .foregroundColor(.tText)
                                 Text(store.t("version"))
-                                    .font(.system(size: 12))
+                                    .font(.tMeta)
                                     .foregroundColor(.tMuted)
                             }
                             Spacer()
-                            Text("🟣")
-                                .font(.system(size: 28))
+                            Circle().fill(Color.tPrimary).frame(width: 26, height: 26)
                         }
                         Text(store.t("about_desc"))
-                            .font(.system(size: 13))
+                            .font(.tMeta)
                             .foregroundColor(.tMuted)
                             .fixedSize(horizontal: false, vertical: true)
 
                         Button {
                             showLogs = true
                         } label: {
-                            HStack {
+                            HStack(spacing: TSpace.sm) {
                                 Image(systemName: "terminal")
-                                Text(store.t("show_logs"))
+                                    .font(.system(size: 13, weight: .semibold))
+                                Text(store.t("show_logs")).font(.tLabel)
                                 Spacer()
                                 Text("\(AppLogger.shared.logs.count)")
-                                    .font(.system(size: 11, weight: .bold))
+                                    .font(.tBadge)
                                     .foregroundColor(.white)
                                     .padding(.horizontal, 8).padding(.vertical, 3)
                                     .background(Color.tPrimary)
                                     .cornerRadius(8)
                             }
-                            .font(.system(size: 14, weight: .semibold))
                             .foregroundColor(.tPrimary)
-                            .padding(.vertical, 12).padding(.horizontal, 14)
-                            .background(Color.tPrimary.opacity(0.1))
-                            .cornerRadius(10)
-                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.tPrimary.opacity(0.3), lineWidth: 1))
+                            .padding(.horizontal, TSpace.md)
+                            .frame(height: 44)
+                            .background(Color.tPrimary.opacity(0.12))
+                            .cornerRadius(TRadius.control)
                         }
+                        .buttonStyle(.plain)
                     }
                 }
 
                 Spacer(minLength: 32)
             }
             .padding(.horizontal, 12)
+            }
         }
         .background(Color.tDark)
         .onAppear { refreshCacheInfo() }
@@ -355,8 +349,8 @@ struct SettingsView: View {
                     HStack(spacing: 8) {
                         Image(systemName: "terminal.fill")
                             .foregroundColor(.tPrimary)
-                        Text("Logs Système")
-                            .font(.system(size: 16, weight: .bold)).foregroundColor(.white)
+                        Text("Logs")
+                            .font(.tSection).foregroundColor(.tText)
                     }
                     Spacer()
                     Button("Fermer") { showLogs = false }
@@ -407,10 +401,7 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 0) {
             content()
         }
-        .padding(16)
-        .background(Color.tCard)
-        .cornerRadius(16)
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.tBorder, lineWidth: 1))
+        .tCard()
     }
 
     @ViewBuilder
@@ -419,10 +410,10 @@ struct SettingsView: View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.tCardTitle)
                     .foregroundColor(.tText)
                 Text(sub)
-                    .font(.system(size: 12))
+                    .font(.tMeta)
                     .foregroundColor(.tMuted)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -440,13 +431,15 @@ struct SettingsView: View {
     private func accountRow(title: String, sub: String, connected: Bool, busy: Bool,
                            actionLabel: String, action: @escaping () -> Void) -> some View {
         HStack(spacing: 12) {
-            Text(connected ? "✅" : "⚪").font(.system(size: 16))
+            Image(systemName: connected ? "checkmark.circle.fill" : "circle")
+                .font(.system(size: 17))
+                .foregroundColor(connected ? .tSuccess : .tMuted)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.system(size: 15, weight: .bold))
+                    .font(.tCardTitle)
                     .foregroundColor(.tText)
                 Text(connected ? store.t("connected") : sub)
-                    .font(.system(size: 11))
+                    .font(.tMeta)
                     .foregroundColor(connected ? .tSuccess : .tMuted)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -456,7 +449,7 @@ struct SettingsView: View {
                     if busy {
                         ProgressView().tint(.tPrimary)
                     } else {
-                        Text(actionLabel).font(.system(size: 13, weight: .bold))
+                        Text(actionLabel).font(.tLabel)
                     }
                 }
                 .foregroundColor(connected ? .tDanger : .tPrimary)
@@ -470,14 +463,16 @@ struct SettingsView: View {
         }
     }
 
+    /// Titre d'une carte de réglages.
     @ViewBuilder
-    private func label(_ emoji: String, _ text: String) -> some View {
-        HStack(spacing: 6) {
-            Text(emoji).font(.system(size: 14))
-            Text(text.uppercased())
-                .font(.system(size: 11, weight: .bold))
-                .foregroundColor(.tPurple)
-                .tracking(0.8)
+    private func label(_ icon: String, _ text: String) -> some View {
+        HStack(spacing: TSpace.sm) {
+            Image(systemName: icon)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(.tPrimary)
+            Text(text)
+                .font(.tSection)
+                .foregroundColor(.tText)
         }
     }
 
@@ -491,7 +486,7 @@ struct SettingsView: View {
             HStack(spacing: 12) {
                 Text(lang.flag).font(.system(size: 22))
                 Text(lang.label)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.tCardTitle)
                     .foregroundColor(isSelected ? .tPrimary : .tText)
                 Spacer()
                 if isSelected {
@@ -510,18 +505,20 @@ struct SettingsView: View {
 
     @ViewBuilder
     private func statBox(value: Int, label: String, icon: String) -> some View {
-        VStack(spacing: 6) {
-            Text(icon).font(.system(size: 22))
+        VStack(spacing: TSpace.xs) {
+            Image(systemName: icon)
+                .font(.system(size: 16))
+                .foregroundColor(.tMuted)
             Text("\(value)")
-                .font(.system(size: 26, weight: .heavy))
+                .font(.system(size: 26, weight: .bold))
                 .foregroundColor(.tPrimary)
             Text(label)
-                .font(.system(size: 11, weight: .semibold))
+                .font(.tMeta)
                 .foregroundColor(.tMuted)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 16)
+        .padding(.vertical, TSpace.lg)
         .background(Color.tSurface)
-        .cornerRadius(12)
+        .cornerRadius(TRadius.control)
     }
 }

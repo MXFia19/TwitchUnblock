@@ -2,7 +2,7 @@ import SwiftUI
 
 struct MainTabView: View {
     @EnvironmentObject private var store: AppStore
-    @State private var activeTab: TabName = .discovery
+    @State private var activeTab: TabName = .home
 
     // ── Player state ─────────────────────────────────────────────────────
     @State private var playerMode: PlayerMode? = nil
@@ -39,6 +39,7 @@ struct MainTabView: View {
     // ── Minuteur de veille ────────────────────────────────────────────────
     @ObservedObject private var sleepTimer = SleepTimerService.shared
     @State private var showSleepSheet = false
+    @State private var showSettings   = false
 
     /// Décalage à appliquer au chat : la latence mesurée, si la synchro est active.
     private var chatDelay: Double {
@@ -46,18 +47,30 @@ struct MainTabView: View {
         return max(0, min(liveLatency, 60))   // borne haute : évite un décalage absurde
     }
 
+    /// Trois destinations seulement. « Streamer » et « Lien / ID » ont fusionné
+    /// dans Recherche, et les Réglages sont passés derrière l'avatar de l'en-tête.
     enum TabName: String, CaseIterable {
-        case discovery, streamer, history, direct, settings
+        case home, search, library
+
         var icon: String {
-            switch self { case .discovery: "🌟"; case .streamer: "👤"; case .history: "🕒"; case .direct: "🔗"; case .settings: "⚙️" }
+            switch self {
+            case .home:    return "play.tv"
+            case .search:  return "magnifyingglass"
+            case .library: return "clock.arrow.circlepath"
+            }
+        }
+        var iconFilled: String {
+            switch self {
+            case .home:    return "play.tv.fill"
+            case .search:  return "magnifyingglass"
+            case .library: return "clock.arrow.circlepath"
+            }
         }
         func label(_ store: AppStore) -> String {
             switch self {
-            case .discovery: store.t("tab_discovery")
-            case .streamer:  store.t("tab_streamer")
-            case .history:   store.t("tab_history")
-            case .direct:    store.t("tab_direct")
-            case .settings:  store.t("settings")
+            case .home:    return store.t("tab_home")
+            case .search:  return store.t("tab_search")
+            case .library: return store.t("tab_library")
             }
         }
     }
@@ -67,15 +80,14 @@ struct MainTabView: View {
             Color.tDark.ignoresSafeArea()
 
             VStack(spacing: 0) {
-                HeaderView().zIndex(10)
+                HeaderView(title: activeTab.label(store)) { showSettings = true }
+                    .zIndex(10)
 
                 Group {
                     switch activeTab {
-                    case .discovery: DiscoveryView(onPlayStream: playLive)
-                    case .streamer:  StreamerView(onPlayVod: playVod, onPlayLive: playLive)
-                    case .history:   HistoryView(onPlayVod: playVod)
-                    case .direct:    DirectView(onPlayVod: playVod)
-                    case .settings:  SettingsView()
+                    case .home:    HomeView(onPlayStream: playLive)
+                    case .search:  SearchView(onPlayVod: playVod, onPlayLive: playLive)
+                    case .library: LibraryView(onPlayVod: playVod)
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -98,6 +110,10 @@ struct MainTabView: View {
                     .transition(.opacity)
             }
         }
+        // Réglages : ouverts depuis l'avatar de l'en-tête.
+        .sheet(isPresented: $showSettings) {
+            SettingsView()
+        }
         // Réglage rapide du minuteur depuis le lecteur.
         .sheet(isPresented: $showSleepSheet) {
             SleepTimerSheet()
@@ -119,25 +135,29 @@ struct MainTabView: View {
 
             VStack(spacing: 0) {
 
-                // ── Header fixe ─────────────────────────────────────
-                // Espacement serré : avec le chat ouvert la barre porte déjà les
-                // stats live, le minuteur, « Chat » et la croix.
-                HStack(spacing: 8) {
-                    Button(store.t("reduce")) { withAnimation { playerVisible = false } }
-                        .font(.system(size: 15, weight: .bold))
+                // ── Barre du lecteur ────────────────────────────────
+                HStack(spacing: TSpace.sm) {
+                    Button { withAnimation { playerVisible = false } } label: {
+                        HStack(spacing: TSpace.xs) {
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 12, weight: .bold))
+                            Text(store.t("reduce")).font(.tLabel)
+                        }
                         .foregroundColor(.tPrimary)
+                    }
+                    .buttonStyle(.plain)
 
-                    // Live + chat ouvert : stats live (le nom de chaîne est déjà affiché
-                    // « #chaine » dans la barre du chat). Sinon : le titre.
-                    // NB : ce Group ne doit JAMAIS être vide — une EmptyView ignore
-                    // .frame(maxWidth:.infinity) et la barre du header se rétracte.
+                    // Chat ouvert : stats du direct (le nom de chaîne est déjà
+                    // dans la barre du chat). Sinon : le titre, dépliable au toucher.
+                    // Ce Group ne doit jamais être vide — une EmptyView ignore
+                    // .frame(maxWidth:.infinity) et la barre se rétracte.
                     Group {
                         if showChat, isLivePlaying {
                             headerLiveStats
                         } else {
                             Text(modeTitle)
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundColor(.white)
+                                .font(.tCardTitle)
+                                .foregroundColor(.tText)
                                 .lineLimit(titleExpanded ? nil : 1)
                                 .fixedSize(horizontal: false, vertical: true)
                                 .contentShape(Rectangle())
@@ -150,80 +170,65 @@ struct MainTabView: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                    // Minuteur de veille : compte à rebours si armé, sinon simple accès
+                    // Minuteur de veille : compte à rebours si armé, sinon accès simple.
                     Button { showSleepSheet = true } label: {
                         HStack(spacing: 3) {
-                            Image(systemName: "moon.zzz.fill").font(.system(size: 10))
-                            // Le compte à rebours n'est affiché que si la place le
-                            // permet : chat ouvert, les stats live occupent la barre.
+                            Image(systemName: "moon.zzz.fill").font(.system(size: 11))
+                            // Le compte à rebours n'est affiché que s'il reste de la
+                            // place : chat ouvert, les stats occupent la barre.
                             if sleepTimer.isActive, !showChat {
                                 Text(sleepTimer.label)
-                                    .font(.system(size: 10, weight: .bold).monospacedDigit())
+                                    .font(.system(size: 11, weight: .bold).monospacedDigit())
                             }
                         }
                         .foregroundColor(sleepTimer.isActive ? .tPurple : .tMuted)
                         .fixedSize()
-                        .padding(.horizontal, 7).padding(.vertical, 5)
-                        .background(sleepTimer.isActive ? Color.tPurple.opacity(0.15) : Color.tSurface)
-                        .cornerRadius(6)
+                        .padding(.horizontal, TSpace.sm)
+                        .frame(height: 32)
+                        .background(sleepTimer.isActive ? Color.tPurple.opacity(0.18) : Color.tSurface)
+                        .cornerRadius(TRadius.chip)
                     }
+                    .buttonStyle(.plain)
 
-                    // Fermer le chat (revenir au lecteur + infos complètes)
                     if showChat {
                         Button {
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
                                 showChat = false
                             }
                         } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: "xmark").font(.system(size: 10, weight: .bold))
-                                Text("Chat").font(.system(size: 12, weight: .bold))
-                            }
-                            .foregroundColor(.tPrimary)
-                            .padding(.horizontal, 8).padding(.vertical, 6)
-                            .background(Color.tPrimary.opacity(0.15))
-                            .cornerRadius(8)
-                            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.tPrimary, lineWidth: 1))
+                            Image(systemName: "bubble.left.fill")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, TSpace.sm)
+                                .frame(height: 32)
+                                .background(Color.tPrimary)
+                                .cornerRadius(TRadius.chip)
                         }
+                        .buttonStyle(.plain)
                     }
 
-                    Button { stopPlayer() } label: {
-                        Text("✕")
-                            .foregroundColor(.tMuted)
-                            .font(.system(size: 14, weight: .bold))
-                            .frame(width: 32, height: 32)
-                            .background(Color.tSurface)
-                            .clipShape(Circle())
-                    }
+                    TIconButton(icon: "xmark", size: 32) { stopPlayer() }
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 6)
-                .padding(.bottom, 12)
+                .padding(.horizontal, TSpace.lg)
+                .padding(.top, TSpace.sm)
+                .padding(.bottom, TSpace.md)
                 .background(Color.tCard)
                 .overlay(Divider().background(Color.tBorder), alignment: .bottom)
 
                 // ── Contenu ──────────────────────────────────────────
                 if loading {
                     Spacer()
-                    VStack(spacing: 16) {
-                        ProgressView().tint(.tPrimary).scaleEffect(1.4)
+                    VStack(spacing: TSpace.md) {
+                        ProgressView().tint(.tPrimary).scaleEffect(1.3)
                         Text(store.t("loading_vod"))
-                            .foregroundColor(.tWarning).fontWeight(.semibold)
+                            .font(.tCardTitle).foregroundColor(.tMuted)
                     }
                     Spacer()
 
                 } else if let err = errorMsg {
                     Spacer()
-                    VStack(spacing: 20) {
-                        Text(err)
-                            .foregroundColor(.tDanger).fontWeight(.semibold)
-                            .multilineTextAlignment(.center)
-                        Button(store.t("back")) { stopPlayer() }
-                            .foregroundColor(.white).fontWeight(.bold)
-                            .padding(.horizontal, 24).padding(.vertical, 12)
-                            .background(Color.tSurface).cornerRadius(10)
-                    }
-                    .padding(.horizontal, 24)
+                    TEmptyState(icon: "exclamationmark.triangle", title: err,
+                                actionTitle: store.t("back"), action: { stopPlayer() })
                     Spacer()
 
                 } else if let links = qualityLinks {
@@ -247,8 +252,8 @@ struct MainTabView: View {
                         onRewind: rewindAction,
                         onBackToLive: backToLiveAction
                     )
-                    .padding(.horizontal, 12)
-                    .padding(.top, 12)
+                    .padding(.horizontal, TSpace.md)
+                    .padding(.top, TSpace.md)
 
                     if showChat, let channel = currentChannelName {
                         // ── Mode chat ouvert ─────────────────────────
@@ -267,9 +272,9 @@ struct MainTabView: View {
                         )
                         .id(channel)   // change de chaîne (raid) → ChatView reconstruit à neuf
                         .frame(maxHeight: .infinity)
-                        .cornerRadius(12)
-                        .padding(.horizontal, 12)
-                        .padding(.bottom, 12)
+                        .cornerRadius(TRadius.card)
+                        .padding(.horizontal, TSpace.md)
+                        .padding(.bottom, TSpace.md)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
 
                     } else if showChat, let vid = currentVodId {
@@ -277,16 +282,16 @@ struct MainTabView: View {
                         VodChatView(videoId: vid, playbackTime: vodPlaybackTime)
                             .id(vid)
                             .frame(maxHeight: .infinity)
-                            .cornerRadius(12)
-                            .padding(.horizontal, 12)
-                            .padding(.bottom, 12)
+                            .cornerRadius(TRadius.card)
+                            .padding(.horizontal, TSpace.md)
+                            .padding(.bottom, TSpace.md)
                             .transition(.move(edge: .bottom).combined(with: .opacity))
 
                     } else {
                         // ── Mode normal ──────────────────────────────
                         fullInfoBox
-                            .padding(.horizontal, 12)
-                            .padding(.top, 12)
+                            .padding(.horizontal, TSpace.md)
+                            .padding(.top, TSpace.md)
                             .transition(.opacity)
 
                         Spacer()
@@ -333,130 +338,83 @@ struct MainTabView: View {
 
     @ViewBuilder
     private var headerLiveStats: some View {
-        HStack(spacing: 8) {
-            Text(store.t("live_badge"))
-                .font(.system(size: 9, weight: .bold))
-                .foregroundColor(.white)
-                .padding(.horizontal, 5).padding(.vertical, 2)
-                .background(Color.tLive).cornerRadius(3)
-                .fixedSize()
-
+        HStack(spacing: TSpace.sm) {
+            TLiveBadge(compact: true)
             if liveViewerCount > 0 {
-                HStack(spacing: 3) {
-                    Image(systemName: "eye.fill").font(.system(size: 9))
-                    Text(formatViewers(liveViewerCount))
-                        .font(.system(size: 11, weight: .semibold))
-                }
-                .foregroundColor(.tMuted)
-                .fixedSize()
+                TMeta(icon: "eye.fill", text: formatViewers(liveViewerCount))
             }
-
             if !liveUptimeText.isEmpty {
-                HStack(spacing: 3) {
-                    Image(systemName: "clock.fill").font(.system(size: 9))
-                    Text(liveUptimeText)
-                        .font(.system(size: 11, weight: .semibold))
-                }
-                .foregroundColor(.tMuted)
-                .fixedSize()
+                TMeta(icon: "clock.fill", text: liveUptimeText)
             }
         }
         .lineLimit(1)
     }
 
-    // MARK: – Info box complète (chat fermé)
+    // MARK: – Encart d'infos (chat fermé)
     @ViewBuilder
     private var fullInfoBox: some View {
         if let mode = playerMode {
-            // Infos en haut, actions sur leur PROPRE ligne : sinon les boutons
-            // compriment le titre et font passer les stats à la ligne.
-            VStack(alignment: .leading, spacing: 12) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(statusTitle)
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundColor(.white)
-                        .lineLimit(titleExpanded ? nil : 2)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            withAnimation(.easeInOut(duration: 0.15)) {
-                                titleExpanded.toggle()
-                            }
-                        }
-
-                    if case .vod(_, _, _, let streamer) = mode, let s = streamer {
-                        Text("\(store.t("points_by")) \(s)")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundColor(.tPrimary)
+            VStack(alignment: .leading, spacing: TSpace.sm) {
+                Text(statusTitle)
+                    .font(.tSection)
+                    .foregroundColor(.tText)
+                    .lineLimit(titleExpanded ? nil : 2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        withAnimation(.easeInOut(duration: 0.15)) { titleExpanded.toggle() }
                     }
 
-                    if case .live = mode {
-                        HStack(spacing: 8) {
-                            Text(store.t("live_badge"))
-                                .font(.system(size: 11, weight: .bold))
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 8).padding(.vertical, 3)
-                                .background(Color.tLive).cornerRadius(4)
-                                .fixedSize()
-
-                            if liveViewerCount > 0 {
-                                HStack(spacing: 3) {
-                                    Image(systemName: "eye.fill").font(.system(size: 10))
-                                    Text(formatViewers(liveViewerCount))
-                                        .font(.system(size: 12, weight: .semibold))
-                                }
-                                .foregroundColor(.tMuted)
-                                .fixedSize()
-                            }
-
-                            if !liveUptimeText.isEmpty {
-                                HStack(spacing: 3) {
-                                    Image(systemName: "clock.fill").font(.system(size: 10))
-                                    Text(liveUptimeText)
-                                        .font(.system(size: 12, weight: .semibold))
-                                }
-                                .foregroundColor(.tMuted)
-                                .fixedSize()
-                            }
-                            Spacer(minLength: 0)
-                        }
-                        .lineLimit(1)
-                    }
+                if case .vod(_, _, _, let streamer) = mode, let s = streamer {
+                    Text(s)
+                        .font(.tCardTitle)
+                        .foregroundColor(.tPurple)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
 
+                if case .live = mode {
+                    HStack(spacing: TSpace.md) {
+                        TLiveBadge()
+                        if liveViewerCount > 0 {
+                            TMeta(icon: "eye.fill", text: formatViewers(liveViewerCount))
+                        }
+                        if !liveUptimeText.isEmpty {
+                            TMeta(icon: "clock.fill", text: liveUptimeText)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .lineLimit(1)
+                }
             }
-            .padding(16)
-            .background(Color.tCard)
-            .cornerRadius(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .tCard()
         }
     }
 
-    // MARK: – Mini bar
-    private var miniBarPrefix: String {
-        guard let mode = playerMode else { return "▶️ " }
-        if case .live = mode { return "🔴 " }
-        return "▶️ "
-    }
-
+    // MARK: – Mini-barre (lecteur réduit)
     @ViewBuilder
     private var miniBar: some View {
-        HStack(spacing: 12) {
-            Text(miniBarPrefix + statusTitle)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(.white)
+        HStack(spacing: TSpace.md) {
+            Image(systemName: isLivePlaying ? "dot.radiowaves.left.and.right" : "play.fill")
+                .font(.system(size: 13, weight: .bold))
+                .foregroundColor(isLivePlaying ? .tLive : .tPrimary)
+
+            Text(statusTitle)
+                .font(.tCardTitle)
+                .foregroundColor(.tText)
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            Button { stopPlayer() } label: {
-                Text("✕").foregroundColor(.tMuted).font(.system(size: 16, weight: .bold))
-            }
+
+            TIconButton(icon: "xmark", size: 30) { stopPlayer() }
         }
-        .padding(.horizontal, 16).padding(.vertical, 12)
+        .padding(.horizontal, TSpace.md)
+        .padding(.vertical, TSpace.sm)
         .background(Color.tCard)
-        .cornerRadius(12)
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.tPrimary.opacity(0.4), lineWidth: 1))
-        .padding(.horizontal, 12)
-        .padding(.bottom, 90)
+        .cornerRadius(TRadius.card)
+        .overlay(RoundedRectangle(cornerRadius: TRadius.card)
+            .stroke(Color.tPrimary.opacity(0.4), lineWidth: 1))
+        .padding(.horizontal, TSpace.md)
+        .padding(.bottom, 92)
+        .contentShape(Rectangle())
         .onTapGesture { withAnimation { playerVisible = true } }
     }
 
@@ -601,8 +559,9 @@ struct MainTabView: View {
     }
 
     private var modeTitle: String {
+        // Le direct est déjà signalé par le badge de l'encart : ici, juste le nom.
         guard let mode = playerMode else { return statusTitle }
-        if case .live(let ch) = mode { return "🔴 \(ch)" }
+        if case .live(let ch) = mode { return ch }
         return statusTitle
     }
 }
@@ -612,33 +571,37 @@ struct CustomTabBar: View {
     @Binding var activeTab: MainTabView.TabName
     @EnvironmentObject private var store: AppStore
 
+    private var bottomInset: CGFloat {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first?.windows.first(where: { $0.isKeyWindow })?.safeAreaInsets.bottom ?? 34
+    }
+
     var body: some View {
         HStack(spacing: 0) {
             ForEach(MainTabView.TabName.allCases, id: \.self) { tab in
                 let isActive = activeTab == tab
-                Button { activeTab = tab } label: {
+                Button {
+                    withAnimation(.easeOut(duration: 0.15)) { activeTab = tab }
+                } label: {
                     VStack(spacing: 4) {
-                        ZStack {
-                            RoundedRectangle(cornerRadius: 16)
-                                .fill(isActive ? Color.tPrimary.opacity(0.2) : .clear)
-                                .frame(width: 40, height: 32)
-                            Text(tab.icon).font(.system(size: 18))
-                        }
+                        Image(systemName: isActive ? tab.iconFilled : tab.icon)
+                            .font(.system(size: 19, weight: isActive ? .semibold : .regular))
+                            .frame(height: 24)
                         Text(tab.label(store))
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundColor(isActive ? .tPrimary : .tMuted)
+                            .font(.system(size: 11, weight: isActive ? .semibold : .medium))
                             .lineLimit(1)
                     }
+                    .foregroundColor(isActive ? .tPrimary : .tMuted)
                     .frame(maxWidth: .infinity)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }
         }
         .padding(.top, 10)
-        .padding(.bottom, (UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .first?.windows.first(where: { $0.isKeyWindow })?.safeAreaInsets.bottom ?? 34) + 8)
-        .background(Color.tCard)
+        .padding(.bottom, bottomInset + 6)
+        .background(.ultraThinMaterial)
         .overlay(Divider().background(Color.tBorder), alignment: .top)
     }
 }

@@ -540,9 +540,13 @@ func formatDuration(_ seconds: Int) -> String {
 }
 
 func getTimeSince(publishedAt: String, lengthSeconds: Int, store: AppStore) -> String {
+    // Twitch date ses VODs sans fractions de seconde ("2026-09-11T18:00:00Z") :
+    // exiger .withFractionalSeconds faisait échouer le parsing, et la durée
+    // remontait vide (« Hors ligne depuis : » sans rien derrière).
     let df = ISO8601DateFormatter()
     df.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-    guard let startDate = df.date(from: publishedAt) else { return "" }
+    guard let startDate = df.date(from: publishedAt)
+            ?? ISO8601DateFormatter().date(from: publishedAt) else { return "" }
     let endDate = startDate.addingTimeInterval(TimeInterval(lengthSeconds))
     let diff = Date().timeIntervalSince(endDate)
     guard diff > 0 else { return "" }

@@ -59,8 +59,11 @@ struct SearchView: View {
 
     private var offlineSinceText: String? {
         guard liveData?.error != nil, let first = vods.first else { return nil }
-        return getTimeSince(publishedAt: first.publishedAt,
-                            lengthSeconds: first.lengthSeconds, store: store)
+        // Chaîne vide = date illisible : on préfère ne rien dire plutôt
+        // qu'afficher « Hors ligne depuis : » suivi de rien.
+        let since = getTimeSince(publishedAt: first.publishedAt,
+                                 lengthSeconds: first.lengthSeconds, store: store)
+        return since.isEmpty ? nil : since
     }
 
     var body: some View {

@@ -255,7 +255,7 @@ struct ChannelHeroView: View {
                             if viewerCount > 0 {
                                 TMeta(icon: "eye.fill", text: formatViewers(viewerCount))
                             }
-                        } else if let since = offlineSince {
+                        } else if let since = offlineSince, !since.isEmpty {
                             TMeta(icon: "moon.zzz.fill",
                                   text: "\(store.t("offline_since"))\(since)")
                         }

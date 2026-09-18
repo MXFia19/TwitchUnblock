@@ -65,6 +65,10 @@ struct LibraryView: View {
         // La ligne réagit au toucher, seule la corbeille est un vrai bouton.
         HStack(spacing: TSpace.md) {
             HStack(spacing: TSpace.md) {
+                // La taille est portée par le ZStack, pas par l'image : un
+                // GeometryReader prend toute la largeur qu'on lui propose, donc
+                // l'apparition de la barre de progression (après le chargement
+                // des métadonnées) élargissait le ZStack et décalait la ligne.
                 ZStack(alignment: .bottom) {
                     AsyncImage(url: URL(string: item.thumb ?? "")) { img in
                         img.resizable().aspectRatio(16/9, contentMode: .fill)
@@ -73,8 +77,6 @@ struct LibraryView: View {
                             .overlay(Image(systemName: "film")
                                 .font(.system(size: 16)).foregroundColor(.tMuted))
                     }
-                    .frame(width: 116, height: 65)
-                    .clipped()
 
                     if let ratio = progressRatio(item.term) {
                         GeometryReader { geo in
@@ -86,6 +88,8 @@ struct LibraryView: View {
                         .frame(height: 3)
                     }
                 }
+                .frame(width: 116, height: 65)
+                .clipped()
                 .cornerRadius(TRadius.chip)
 
                 VStack(alignment: .leading, spacing: TSpace.xs) {
@@ -127,6 +131,8 @@ struct LibraryView: View {
         return min(1, watched / Double(total))
     }
 
+    /// Durée vue / totale et nombre de vues. Les métadonnées arrivent du réseau :
+    /// la hauteur est réservée d'avance pour que la liste ne saute pas à l'arrivée.
     @ViewBuilder private func metaLine(_ vodId: String) -> some View {
         let watched = store.getVodProgress(vodId)
         let total   = metaStore.meta(vodId)?.lengthSeconds ?? 0
@@ -140,7 +146,9 @@ struct LibraryView: View {
             if views > 0 {
                 TMeta(icon: "eye.fill", text: formatViewers(views))
             }
+            Spacer(minLength: 0)
         }
         .lineLimit(1)
+        .frame(height: 16)
     }
 }

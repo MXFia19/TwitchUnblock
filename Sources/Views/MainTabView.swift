@@ -197,54 +197,76 @@ struct MainTabView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                 } else if let links = qualityLinks {
-                    if landscape && !chatOnly {
-                        landscapeLayout(links: links, width: geo.size.width)
-                    } else {
-                        portraitLayout(links: links, landscape: landscape)
-                    }
+                    playerBody(links: links, size: geo.size, landscape: landscape)
                 }
             }
         }
     }
 
-    /// Portrait : barre, vidéo, puis chat en dessous.
+    /// Une seule disposition pour les deux orientations.
+    ///
+    /// `AnyLayout` échange HStack et VStack **sans changer l'identité des vues** :
+    /// avec deux branches `if`, tourner le téléphone détruisait le lecteur, donc
+    /// son AVPlayer, et le direct se rechargeait à chaque rotation.
+    ///
+    /// Les tailles passent toutes par `frame(width:height:)` avec des optionnels
+    /// (`nil` = libre) plutôt que par des modificateurs conditionnels, pour la
+    /// même raison. En particulier on n'utilise plus `aspectRatio(nil)` en
+    /// paysage : le ratio « idéal » y était calculé à partir des contrôles, d'où
+    /// l'image réduite en vignette dès qu'on les affichait.
     @ViewBuilder
-    private func portraitLayout(links: QualityLinks, landscape: Bool) -> some View {
-        VStack(spacing: 0) {
-            // En immersif, la barre est dessinée par-dessus l'image par le
-            // lecteur lui-même : pas de bandeau séparé ici.
-            if !store.immersivePlayer || chatOnly {
-                playerTopBar
-            }
-            if !chatOnly {
-                videoSurface(links: links, landscape: landscape)
-            }
-            chatPane
-        }
-    }
+    private func playerBody(links: QualityLinks, size: CGSize, landscape: Bool) -> some View {
+        // Le mode « chat seul » n'a pas de colonne vidéo : il reste empilé.
+        let split  = landscape && !chatOnly
+        let layout = split ? AnyLayout(HStackLayout(spacing: 0))
+                           : AnyLayout(VStackLayout(spacing: 0))
+        // Portrait : hauteur 16:9 imposée, le chat prend le reste.
+        // Paysage : libre, la colonne donne toute sa hauteur à l'image.
+        let videoHeight: CGFloat? = split ? nil : size.width * 9 / 16
+        let videoMaxHeight: CGFloat? = split ? CGFloat.infinity : nil
+        // Un tiers de l'écran, borné : au-delà le chat mange l'image, en deçà les
+        // messages se hachent en mots isolés.
+        let chatWidth: CGFloat? = split ? min(max(size.width * 0.32, 260), 380) : nil
+        // Largeur réellement occupée dans la rangée : zéro quand on replie.
+        let chatColumn: CGFloat? = {
+            guard split, !showChatInLandscape else { return chatWidth }
+            return CGFloat(0)
+        }()
 
-    /// Paysage : vidéo à gauche, chat sur une colonne à droite.
-    @ViewBuilder
-    private func landscapeLayout(links: QualityLinks, width: CGFloat) -> some View {
-        HStack(spacing: 0) {
+        layout {
             VStack(spacing: 0) {
-                // Le lecteur immersif dessine sa propre barre par-dessus l'image ;
-                // le lecteur natif, lui, perdrait sinon le bouton « fermer ».
-                if !store.immersivePlayer { playerTopBar }
-                videoSurface(links: links, landscape: true)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                // En immersif, la barre est dessinée par-dessus l'image par le
+                // lecteur lui-même : pas de bandeau séparé ici.
+                if !store.immersivePlayer || chatOnly {
+                    playerTopBar
+                }
+                if !chatOnly {
+                    videoSurface(links: links, landscape: split)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .frame(height: videoHeight)
+                }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .frame(maxWidth: .infinity)
+            .frame(maxHeight: videoMaxHeight)
 
-            if showChatInLandscape {
-                chatPane
-                    // Un tiers de l'écran, borné : au-delà le chat mange l'image,
-                    // en deçà les messages se hachent en mots isolés.
-                    .frame(width: min(max(width * 0.32, 260), 380))
-                    .overlay(Divider().background(Color.tBorder), alignment: .leading)
-            }
+            // Replier le chat le réduit à une colonne de largeur nulle au lieu de
+            // le retirer de la hiérarchie : le sortir ferait mourir ChatView,
+            // donc couperait la connexion IRC à chaque appui sur le bouton.
+            // Les deux `frame` ne font pas doublon : le premier garde la mise en
+            // page des messages à sa largeur normale (à zéro, chaque message se
+            // replierait sur une colonne de caractères), le second rétrécit la
+            // colonne et `clipped` masque le débordement.
+            chatPane
+                .frame(width: chatWidth)
+                .frame(maxHeight: .infinity)
+                .frame(width: chatColumn)
+                .clipped()
+                .overlay(alignment: .leading) {
+                    if split, showChatInLandscape {
+                        Divider().background(Color.tBorder)
+                    }
+                }
         }
-        .ignoresSafeArea(edges: .bottom)
     }
 
     /// Le chat, quelle que soit la disposition.

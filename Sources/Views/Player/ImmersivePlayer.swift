@@ -282,10 +282,11 @@ struct ImmersivePlayer: View {
 
             if showControls { controls }
         }
-        // Paysage : l'image occupe toute la colonne. Portrait : on garde le 16:9
-        // pour que le chat conserve sa place sous la vidéo.
-        .aspectRatio(isLandscape ? nil : CGFloat(16.0 / 9.0), contentMode: .fit)
-        .frame(maxWidth: .infinity, maxHeight: isLandscape ? .infinity : nil)
+        // La boîte est fixée par le parent (16:9 en portrait, toute la colonne en
+        // paysage) : ici on remplit ce qu'on nous donne, sans jamais dériver la
+        // taille des contrôles. AVPlayerLayer étant en `resizeAspect`, l'image
+        // garde ses proportions quelle que soit la boîte.
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.black)
         .clipped()
         .contentShape(Rectangle())

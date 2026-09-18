@@ -98,6 +98,15 @@ Dans l'app : Réglages → **Utilisation de l'app** → *Actualiser*.
 
 ---
 
+## Autre correctif à passer en même temps
+
+`handleGetLive` appelle `getRequestHeaders(login)`, une fonction qui n'existe
+pas dans le Worker : la tentative Luminous échoue donc systématiquement et la
+route sert toujours le flux Twitch officiel, avec les publicités. Le correctif
+tient en quatre lignes — voir **fix-get-live.md**.
+
+---
+
 ## Ce qui est stocké
 
 Une clé par installation, `usage_<uuid>`, valeur vide. Tout tient dans les

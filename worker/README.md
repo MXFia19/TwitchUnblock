@@ -1,6 +1,6 @@
 # Comptage d'utilisation — mise en service
 
-Deux routes à ajouter au Worker Cloudflare déjà utilisé par l'app
+Deux routes à ajouter au Worker TwitchUnblock existant
 (`https://test2.kurzmathis4.workers.dev`) :
 
 | Route | Rôle |
@@ -8,237 +8,99 @@ Deux routes à ajouter au Worker Cloudflare déjà utilisé par l'app
 | `POST /api/ping` | Enregistre — ou efface — une installation |
 | `GET /api/stats` | Renvoie les compteurs agrégés |
 
-Tant qu'elles ne répondent pas, la carte « Utilisation de l'app » des Réglages
-affiche « le serveur n'a pas encore les routes de comptage ». Le reste de l'app
-est indifférent : aucun risque à déployer plus tard, ou jamais.
+**Rien à créer côté Cloudflare.** Pas de nouveau Worker, pas de nouveau
+stockage : le KV `TWITCH_DATA` déjà lié pour `/api/sync` sert aussi au comptage.
+Les clés sont préfixées `usage_`, celles de la sync `user_` — elles ne peuvent
+pas se marcher dessus.
 
-Suis **la voie A** si tu modifies ton Worker dans l'éditeur en ligne de
-Cloudflare, **la voie B** si tu as un projet local avec `wrangler`.
-
----
-
-## Étape 1 — Créer le stockage KV
-
-Le comptage a besoin d'un espace KV. Une seule fois.
-
-**Tableau de bord** : Cloudflare → *Storage & Databases* → *KV* → *Create a
-namespace* → nom : `USAGE` → *Add*.
-
-**En ligne de commande** :
-
-```sh
-npx wrangler kv namespace create USAGE
-```
-
-La commande affiche un `id` : garde-le pour l'étape 2B.
-
-> **Si ton Worker a déjà un espace KV** (celui qui sert `/api/sync`), tu peux le
-> réutiliser au lieu d'en créer un : passe directement à l'étape 2 et remplace
-> partout `env.USAGE` par le nom de ton binding existant. Les clés du comptage
-> sont préfixées `u:`, elles ne peuvent pas entrer en collision avec les tiennes.
+Tant que les routes ne répondent pas, la carte « Utilisation de l'app » des
+Réglages affiche « le serveur n'a pas encore les routes de comptage ». Le reste
+de l'app est indifférent : aucun risque à déployer plus tard, ou jamais.
 
 ---
 
-## Étape 2 — Lier l'espace au Worker sous le nom `USAGE`
+## Étape 1 — Ajouter les deux routes au `switch`
 
-C'est ce qui rend `env.USAGE` disponible dans le code.
-
-### Voie A — tableau de bord
-
-*Workers & Pages* → ton Worker → *Settings* → *Bindings* → *Add binding* →
-*KV namespace* :
-
-- **Variable name** : `USAGE`
-- **KV namespace** : celui créé à l'étape 1
-
-### Voie B — wrangler
-
-Dans `wrangler.toml` :
-
-```toml
-[[kv_namespaces]]
-binding = "USAGE"
-id = "<l'id renvoyé à l'étape 1>"
-```
-
----
-
-## Étape 3 — Ajouter le code
-
-### Voie A — tableau de bord (un seul fichier)
-
-L'éditeur en ligne ne gère pas les `import` entre fichiers. Colle le bloc
-ci-dessous **tel quel** à la fin de ton Worker, puis passe à l'étape 4.
+Dans `fetch()`, à côté des routes de sync :
 
 ```js
-// ─── Comptage d'utilisation ───────────────────────────────────────────────
-const USAGE_PREFIX = "u:";
-const USAGE_RETENTION_DAYS = 35;
+        // Routes Sync (Sauvegarde Cloud)
+        case "/api/sync/get":
+          return await handleSyncGet(url, env);
+        case "/api/sync/post":
+          return await handleSyncPost(request, env);
 
-function usageToday() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function usageDaysAgo(dateStr) {
-  const then = Date.parse(dateStr + "T00:00:00Z");
-  if (Number.isNaN(then)) return Infinity;
-  return Math.floor((Date.parse(usageToday() + "T00:00:00Z") - then) / 86400000);
-}
-
-function usageJson(obj, status = 200) {
-  return new Response(JSON.stringify(obj), {
-    status,
-    headers: {
-      "Content-Type": "application/json",
-      "Cache-Control": "no-store",
-      "Access-Control-Allow-Origin": "*",
-    },
-  });
-}
-
-async function handlePing(request, env) {
-  let body;
-  try {
-    body = await request.json();
-  } catch {
-    return usageJson({ error: "bad json" }, 400);
-  }
-
-  const id = String(body.id || "");
-  // On n'accepte que des UUID : pas question de laisser écrire des clés libres.
-  if (!/^[0-9a-fA-F-]{36}$/.test(id)) return usageJson({ error: "bad id" }, 400);
-
-  if (body.forget === true) {
-    await env.USAGE.delete(USAGE_PREFIX + id);
-    return usageJson({ ok: true, forgotten: true });
-  }
-
-  await env.USAGE.put(USAGE_PREFIX + id, "", {
-    expirationTtl: 60 * 60 * 24 * USAGE_RETENTION_DAYS,
-    metadata: {
-      last: usageToday(),
-      v: String(body.version || "?").slice(0, 16),
-      p: String(body.platform || "ios").slice(0, 16),
-    },
-  });
-  return usageJson({ ok: true });
-}
-
-async function handleStats(request, env) {
-  let cursor;
-  let known = 0, today = 0, week = 0, month = 0;
-  const versions = {};
-
-  do {
-    const page = await env.USAGE.list({ prefix: USAGE_PREFIX, limit: 1000, cursor });
-    for (const key of page.keys) {
-      const meta = key.metadata || {};
-      const age = usageDaysAgo(meta.last || "");
-      known++;
-      if (age === 0) today++;
-      if (age <= 7) week++;
-      if (age <= 30) {
-        month++;
-        const v = meta.v || "?";
-        versions[v] = (versions[v] || 0) + 1;
-      }
-    }
-    cursor = page.list_complete ? undefined : page.cursor;
-  } while (cursor);
-
-  return usageJson({
-    today, week, month, known,
-    versions: Object.entries(versions)
-      .map(([version, count]) => ({ version, count }))
-      .sort((a, b) => b.count - a.count),
-    generatedAt: new Date().toISOString(),
-  });
-}
+        // Comptage d'utilisation
+        case "/api/ping":
+          return await handlePing(request, env);
+        case "/api/stats":
+          return await handleStats(env);
 ```
 
-### Voie B — wrangler
+## Étape 2 — Coller les deux fonctions
 
-Copie `analytics.js` à côté de ton Worker, puis en haut du fichier principal :
+Prends tout le bloc de `analytics.js` à partir de `var USAGE_PREFIX` et colle-le
+à la fin du fichier, **avant** le bloc `export { worker_default as default }`.
 
-```js
-import { handlePing, handleStats } from "./analytics.js";
-```
+Les `__name(fn, "fn")` qui parsèment ton fichier viennent du bundler esbuild :
+inutile d'en ajouter pour ces deux fonctions, elles marchent sans.
 
----
+## Étape 3 — Déployer
 
-## Étape 4 — Brancher les routes
+Bouton *Deploy* dans l'éditeur Cloudflare, ou `npx wrangler deploy`.
 
-Dans le `fetch()` principal, **avant** tes routes existantes :
-
-```js
-const url = new URL(request.url);
-
-if (url.pathname === "/api/ping" && request.method === "POST") {
-  return handlePing(request, env);
-}
-if (url.pathname === "/api/stats" && request.method === "GET") {
-  return handleStats(request, env);
-}
-```
-
-Si ton `fetch()` construit déjà un `const url = new URL(request.url)`, réutilise-le
-plutôt que de le déclarer deux fois — sinon le Worker refusera de démarrer.
-
----
-
-## Étape 5 — Déployer et vérifier
-
-**Tableau de bord** : bouton *Deploy*.
-**wrangler** : `npx wrangler deploy`.
-
-Puis, depuis n'importe quel terminal :
+## Étape 4 — Vérifier
 
 ```sh
 curl https://test2.kurzmathis4.workers.dev/api/stats
 ```
 
-Réponse attendue au premier lancement, avant tout ping :
+Attendu avant tout ping :
 
 ```json
 {"today":0,"week":0,"month":0,"known":0,"versions":[],"generatedAt":"…"}
 ```
 
-Test complet du ping, avec un identifiant bidon :
+Aller-retour complet avec un identifiant bidon, pour valider la chaîne sans
+attendre une vraie installation :
 
 ```sh
+# 1. Enregistrer
 curl -X POST https://test2.kurzmathis4.workers.dev/api/ping \
   -H 'Content-Type: application/json' \
   -d '{"id":"00000000-0000-0000-0000-000000000001","version":"test","platform":"ios"}'
 # {"ok":true}
 
+# 2. Relire
 curl https://test2.kurzmathis4.workers.dev/api/stats
 # {"today":1,"week":1,"month":1,"known":1,"versions":[{"version":"test","count":1}],…}
-```
 
-Puis efface l'identifiant de test :
-
-```sh
+# 3. Effacer le test
 curl -X POST https://test2.kurzmathis4.workers.dev/api/ping \
   -H 'Content-Type: application/json' \
   -d '{"id":"00000000-0000-0000-0000-000000000001","forget":true}'
+# {"ok":true,"forgotten":true}
 ```
 
 Dans l'app : Réglages → **Utilisation de l'app** → *Actualiser*.
 
+> Les compteurs resteront à 0 tant qu'aucune installation ne fait tourner une
+> version de l'app contenant `UsageService` — le Worker seul ne génère rien.
+
 ### Si ça ne marche pas
 
-| Symptôme | Cause la plus probable |
+| Symptôme | Cause |
 |---|---|
-| `{"error":"bad id"}` | L'identifiant envoyé n'est pas un UUID de 36 caractères |
-| Erreur 500 sur `/api/stats` | Le binding KV ne s'appelle pas `USAGE` (étape 2) |
-| `/api/stats` renvoie du HTML ou une 404 | Les routes sont déclarées après un `return` existant : remonte-les plus haut dans le `fetch()` |
-| Les compteurs restent à 0 | Normal tant qu'aucune app à jour n'a envoyé de ping — teste avec le `curl` ci-dessus |
+| `{"error":"ID invalide"}` | L'identifiant envoyé n'est pas un UUID de 36 caractères |
+| `{"error":"KV 'TWITCH_DATA' non lié au Worker."}` | Le binding KV a été renommé ou retiré — c'est le même que pour `/api/sync` |
+| `Not Found` sur `/api/stats` | Les `case` n'ont pas été ajoutés, ou placés après le `default` |
+| `handlePing is not defined` | Le bloc de fonctions a été collé après `export { … }` — remonte-le avant |
 
 ---
 
 ## Ce qui est stocké
 
-Une clé par installation, `u:<uuid>`, valeur vide. Tout tient dans les
+Une clé par installation, `usage_<uuid>`, valeur vide. Tout tient dans les
 métadonnées : date de dernière ouverture, version de l'app, plateforme.
 
 | Stocké | Pas stocké |
@@ -257,6 +119,6 @@ efface la clé côté serveur (`{ id, forget: true }`).
 ## Coût
 
 `list()` renvoie les métadonnées sans lecture par clé : `/api/stats` coûte une
-opération de liste par tranche de 1000 installations. À l'échelle actuelle
-(environ 200 téléchargements cumulés), on reste très loin du palier gratuit
-de Cloudflare.
+opération de liste par tranche de 1000 installations, au lieu d'une lecture par
+installation. À l'échelle actuelle (environ 200 téléchargements cumulés), on
+reste très loin du palier gratuit de Cloudflare.

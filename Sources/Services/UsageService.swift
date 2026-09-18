@@ -111,8 +111,13 @@ final class UsageService: ObservableObject {
         lastError = nil
         defer { loading = false }
 
+        // Sans cette politique, « Actualiser » peut resservir la copie locale
+        // d'URLSession et afficher deux fois les mêmes chiffres.
+        var req = URLRequest(url: url)
+        req.cachePolicy = .reloadIgnoringLocalCacheData
+
         do {
-            let (data, resp) = try await URLSession.shared.data(from: url)
+            let (data, resp) = try await URLSession.shared.data(for: req)
             let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
             guard code == 200 else {
                 // 404 = le Worker n'a pas encore les routes de comptage.

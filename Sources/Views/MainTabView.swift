@@ -138,9 +138,9 @@ struct MainTabView: View {
             PlayerMenuSheet(
                 qualities: sortQualities(Array((qualityLinks ?? [:]).keys)),
                 selected: currentQuality(qualityLinks ?? [:]),
-                onSelectQuality: { q in immersiveQuality = q; showPlayerMenu = false },
                 canRewind: liveDvrVideoId != nil,
                 isDvr: dvrSourceChannel != nil,
+                onSelectQuality: { q in immersiveQuality = q; showPlayerMenu = false },
                 onRewind: { showPlayerMenu = false; rewindAction?() },
                 onBackToLive: { showPlayerMenu = false; backToLiveAction?() },
                 onSleepTimer: { showPlayerMenu = false

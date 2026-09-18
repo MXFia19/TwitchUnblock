@@ -88,6 +88,13 @@ final class AppStore: ObservableObject {
         didSet { UserDefaults.standard.set(immersivePlayer, forKey: "cfg_immersive") }
     }
 
+    // MARK: – Comptage d'utilisation
+    /// Signaler anonymement que cette installation est active.
+    /// Voir Sources/Services/UsageService.swift pour ce qui part réellement.
+    @Published var shareUsage: Bool = true {
+        didSet { UserDefaults.standard.set(shareUsage, forKey: "cfg_share_usage") }
+    }
+
     // MARK: – Débogage (section temporaire)
     /// Afficher la latence du direct par-dessus le lecteur.
     @Published var showLatency: Bool = false {
@@ -123,6 +130,7 @@ final class AppStore: ObservableObject {
         autoPurgeImageCache = ud.object(forKey: "cfg_purge_cache") as? Bool ?? true
         lowLatency         = ud.object(forKey: "cfg_low_latency") as? Bool ?? false
         immersivePlayer    = ud.object(forKey: "cfg_immersive")   as? Bool ?? false
+        shareUsage         = ud.object(forKey: "cfg_share_usage") as? Bool ?? true
         showLatency        = ud.object(forKey: "dbg_latency")    as? Bool ?? false
         autoChatDelay      = ud.object(forKey: "dbg_chat_delay") as? Bool ?? false
         if let data = ud.data(forKey: "twitch_vod_history"),

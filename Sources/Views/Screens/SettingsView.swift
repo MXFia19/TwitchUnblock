@@ -11,6 +11,7 @@ struct SettingsView: View {
     @State private var cacheBytes: Int64 = 0
     @State private var cacheFiles      = 0
     @ObservedObject private var sleepTimer = SleepTimerService.shared
+    @ObservedObject private var usage      = UsageService.shared
     @Environment(\.dismiss) private var dismiss
     @State private var showSleepSheet  = false
 
@@ -239,6 +240,62 @@ struct SettingsView: View {
                     }
                 }
 
+                // ── Utilisation de l'app ────────────────────────────
+                settingCard {
+                    VStack(alignment: .leading, spacing: 14) {
+                        label("chart.line.uptrend.xyaxis", store.t("usage_section"))
+
+                        if usage.loading {
+                            TLoader()
+                        } else if let s = usage.stats {
+                            HStack(spacing: TSpace.sm) {
+                                statBox(value: s.today, label: store.t("usage_today"),
+                                        icon: "sun.max.fill")
+                                statBox(value: s.week,  label: store.t("usage_week"),
+                                        icon: "calendar")
+                                statBox(value: s.month, label: store.t("usage_month"),
+                                        icon: "calendar.badge.clock")
+                            }
+
+                            if !s.versions.isEmpty {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text(store.t("usage_versions"))
+                                        .font(.tMeta).foregroundColor(.tMuted)
+                                    ForEach(Array(s.versions.prefix(4))) { v in
+                                        HStack {
+                                            Text(v.version)
+                                                .font(.tLabel).foregroundColor(.tText)
+                                            Spacer()
+                                            Text("\(v.count)")
+                                                .font(.tLabel).foregroundColor(.tPrimary)
+                                        }
+                                    }
+                                }
+                            }
+                        } else if usage.lastError == "worker_missing" {
+                            Text(store.t("usage_worker_missing"))
+                                .font(.tMeta).foregroundColor(.tWarning)
+                                .fixedSize(horizontal: false, vertical: true)
+                        } else if usage.lastError != nil {
+                            Text(store.t("usage_error"))
+                                .font(.tMeta).foregroundColor(.tMuted)
+                        } else {
+                            Text(store.t("usage_tap_refresh"))
+                                .font(.tMeta).foregroundColor(.tMuted)
+                        }
+
+                        TSecondaryButton(title: store.t("usage_refresh"),
+                                         icon: "arrow.clockwise", fullWidth: true) {
+                            Task { await usage.loadStats() }
+                        }
+
+                        Divider().background(Color.tBorder)
+
+                        toggleRow(store.t("usage_share"), store.t("usage_share_sub"),
+                                  $store.shareUsage, log: "Partage d'utilisation")
+                    }
+                }
+
                 // ── Débogage (temporaire) ───────────────────────────
                 settingCard {
                     VStack(alignment: .leading, spacing: 14) {
@@ -307,7 +364,18 @@ struct SettingsView: View {
             }
         }
         .background(Color.tDark)
-        .onAppear { refreshCacheInfo() }
+        .onAppear {
+            refreshCacheInfo()
+            Task { await usage.loadStats() }
+        }
+        // Retrait du comptage → on efface aussi l'identifiant côté serveur.
+        .onChange(of: store.shareUsage) { on in
+            Task {
+                if on { await usage.ping(enabled: true, force: true) }
+                else  { await usage.forget() }
+                await usage.loadStats()
+            }
+        }
         // ── Alerts ──────────────────────────────────────────────────
         .alert(store.t("btn_logout"), isPresented: $showLogoutAlert) {
             Button(store.t("cancel"), role: .cancel) {}

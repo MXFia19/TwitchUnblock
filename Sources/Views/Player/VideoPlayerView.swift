@@ -13,6 +13,11 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
     let url: URL
     let savedTime: Double
     let onProgress: (Double) -> Void
+    /// Latence mesurée du direct (nil si la playlist ne porte pas d'horodatage).
+    var onLatency: (Double?) -> Void = { _ in }
+    /// Mode faible latence : ne s'applique qu'au direct.
+    var lowLatency: Bool = false
+    var isLive: Bool = false
 
     func makeUIViewController(context: Context) -> AVPlayerViewController {
         let player = AVPlayer(url: url)
@@ -23,7 +28,9 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
         vc.showsPlaybackControls = true
         vc.delegate = context.coordinator
         context.coordinator.playerVC = vc
-        context.coordinator.setupObserver(player: player, onProgress: onProgress)
+        context.coordinator.lowLatency = lowLatency && isLive
+        context.coordinator.configureLatency(player)
+        context.coordinator.setupObserver(player: player, onProgress: onProgress, onLatency: onLatency)
         // Restore position
         if savedTime > 5 {
             player.seek(to: CMTime(seconds: savedTime, preferredTimescale: 600))
@@ -41,7 +48,9 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
             
             let player = AVPlayer(url: url)
             vc.player = player
-            context.coordinator.setupObserver(player: player, onProgress: onProgress)
+            context.coordinator.lowLatency = lowLatency && isLive
+            context.coordinator.configureLatency(player)
+            context.coordinator.setupObserver(player: player, onProgress: onProgress, onLatency: onLatency)
             if savedTime > 5 {
                 player.seek(to: CMTime(seconds: savedTime, preferredTimescale: 600))
             }
@@ -61,6 +70,59 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
         weak var playerVC: AVPlayerViewController?
         private var timeObserver: Any?
         private var playerRef: AVPlayer?
+
+        /// Mode faible latence actif (direct uniquement).
+        var lowLatency = false
+        private var lastCatchUp = Date.distantPast
+
+        /// Recul minimal par rapport au bord du direct après un rattrapage.
+        /// Viser plus près fait rejouer dans des segments non encore chargés :
+        /// le lecteur cale aussitôt et repart en arrière, en boucle.
+        private let safeOffset: Double = 10
+        /// Retard à partir duquel on recolle. Généreux volontairement : en lecture
+        /// normale, AVPlayer se tient déjà quelques segments (souvent 10-20 s)
+        /// derrière la fin de la playlist, ce n'est PAS une dérive.
+        private let catchUpThreshold: Double = 30
+        /// Au plus un rattrapage par minute.
+        private let catchUpCooldown: Double = 60
+
+        /// Prépare le direct. Le gros du mode faible latence se joue côté serveur
+        /// (playlist `low_latency`/`fast_bread`) : ici on ne force rien.
+        ///
+        /// Ne jamais remettre `automaticallyWaitsToMinimizeStalling = false` ni un
+        /// `configuredTimeOffsetFromLive` inférieur à `recommendedTimeOffsetFromLive` :
+        /// le lecteur démarre alors sans tampon et passe son temps à se recharger.
+        func configureLatency(_ player: AVPlayer) {
+            guard lowLatency else { return }
+            lastCatchUp = Date()   // laisse le flux démarrer avant tout rattrapage
+            logger.info("LIVE", "Mode faible latence actif", "playlist basse latence + rattrapage du direct")
+        }
+
+        /// Recolle au direct après une vraie dérive (pause longue, coupure réseau).
+        /// On ne bouge pas en pause : l'utilisateur a la main.
+        private func catchUpIfNeeded() {
+            guard lowLatency, let player = playerRef, player.rate > 0,
+                  let item = player.currentItem,
+                  let liveEdge = item.seekableTimeRanges.last?.timeRangeValue.end,
+                  liveEdge.isValid, liveEdge.isNumeric else { return }
+            let behind = (liveEdge - item.currentTime()).seconds
+            guard behind.isFinite, behind > catchUpThreshold,
+                  Date().timeIntervalSince(lastCatchUp) > catchUpCooldown else { return }
+
+            // Cible : le recul recommandé par le flux lui-même s'il en annonce un,
+            // jamais moins que notre marge de sécurité.
+            let recommended = item.recommendedTimeOffsetFromLive
+            let offset = max(safeOffset,
+                             recommended.isValid && recommended.isNumeric ? recommended.seconds : 0)
+            lastCatchUp = Date()
+            logger.debug("LIVE", "Rattrapage du direct",
+                         String(format: "%.0f s de retard → %.0f s du bord", behind, offset))
+            // Tolérances larges des deux côtés : le lecteur se cale sur une frontière
+            // de segment déjà disponible au lieu d'un point exact non chargé.
+            player.seek(to: liveEdge - CMTime(seconds: offset, preferredTimescale: 600),
+                        toleranceBefore: .positiveInfinity,
+                        toleranceAfter: .positiveInfinity)
+        }
 
         // MARK: Plein écran — maintient PlayerFullscreen.isActive à jour
         func playerViewController(_ playerViewController: AVPlayerViewController,
@@ -83,12 +145,23 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
             }
         }
 
-        func setupObserver(player: AVPlayer, onProgress: @escaping (Double) -> Void) {
+        func setupObserver(player: AVPlayer,
+                           onProgress: @escaping (Double) -> Void,
+                           onLatency: @escaping (Double?) -> Void = { _ in }) {
             if let existing = timeObserver { playerRef?.removeTimeObserver(existing) }
             playerRef = player
-            let interval = CMTime(seconds: 5, preferredTimescale: 600)
-            timeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { time in
+            // 1 s : assez fin pour synchroniser le chat des VODs.
+            let interval = CMTime(seconds: 1, preferredTimescale: 600)
+            timeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self, weak player] time in
                 onProgress(time.seconds)
+                // Latence = écart entre l'heure réelle et l'horodatage du segment lu
+                // (EXT-X-PROGRAM-DATE-TIME de la playlist HLS). nil si absent.
+                if let date = player?.currentItem?.currentDate() {
+                    onLatency(Date().timeIntervalSince(date))
+                } else {
+                    onLatency(nil)
+                }
+                self?.catchUpIfNeeded()
             }
         }
 
@@ -106,12 +179,24 @@ struct VideoPlayerView: View {
     /// Mode compact (chat ouvert) : masque la barre Source / le lien pour laisser
     /// un maximum de place au chat. Seul le lecteur reste visible.
     var compact: Bool = false
+    /// Position de lecture remontee au parent (utilisee par le chat des VODs).
+    var onTime: (Double) -> Void = { _ in }
+    /// Latence du direct remontee au parent (synchro auto du chat).
+    var onLatency: (Double?) -> Void = { _ in }
+    // Actions affichees a cote du bouton Source (nil = bouton masque).
+    var onChat: (() -> Void)? = nil
+    var onRewind: (() -> Void)? = nil
+    var onBackToLive: (() -> Void)? = nil
 
     @EnvironmentObject private var store: AppStore
     @State private var selectedQuality: String = ""
     @State private var showQualityPicker = false
-    @State private var showExternalSheet  = false
     @State private var currentTime: Double = 0
+    @State private var lastPersisted: Double = -99
+    @State private var latency: Double? = nil
+
+    /// Un direct n'a pas d'identifiant de VOD : c'est ce qui distingue les deux modes.
+    private var isLive: Bool { vodId == nil }
 
     private var qualities: [String] { sortQualities(Array(qualityLinks.keys)) }
     private var currentURL: URL? { qualityLinks[selectedQuality].flatMap(URL.init) }
@@ -121,45 +206,47 @@ struct VideoPlayerView: View {
 
             // ── Player ──────────────────────────────────────────────
             if let url = currentURL {
-                NativeVideoPlayer(
-                    url: url,
-                    savedTime: vodId.map { store.getVodProgress($0) } ?? 0
-                ) { time in
-                    currentTime = time
-                    if let id = vodId { store.setVodProgress(id, time: time) }
-                }
-                .aspectRatio(16/9, contentMode: .fit)
-                .background(Color.black)
+                nativePlayer(url: url)
             }
 
             // En mode compact (chat ouvert) on n'affiche que le lecteur.
             if !compact {
             // ── Options bar ─────────────────────────────────────────
+            // Tous les boutons partagent la même hauteur fixe : sinon une icône
+            // SF Symbol (taille « body » par défaut) rend son bouton plus haut
+            // que celui qui ne contient que du texte en 12 pt.
             HStack(spacing: 8) {
-                Button {
-                    showQualityPicker.toggle()
-                    showExternalSheet = false
-                } label: {
-                    Text("🎬 \(qualityLabel(selectedQuality))")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                        .background(Color.tPrimary)
-                        .cornerRadius(8)
+                // Qualité : bouton compact, il laisse la place aux actions.
+                Button { showQualityPicker.toggle() } label: {
+                    actionLabel(text: qualityLabel(selectedQuality), emoji: "🎬",
+                                fg: .white, bg: Color.tPrimary)
                 }
 
-                Button {
-                    showExternalSheet.toggle()
-                    showQualityPicker = false
-                } label: {
-                    Text("📤")
-                        .font(.system(size: 16))
-                        .frame(width: 44, height: 38)
-                        .background(Color.tSurface)
-                        .cornerRadius(8)
+                if let rewind = onRewind {
+                    Button(action: rewind) {
+                        actionLabel(text: store.t("rewind"), icon: "gobackward",
+                                    fg: .tPrimary, bg: Color.tPrimary.opacity(0.15),
+                                    border: .tPrimary)
+                    }
+                }
+
+                if let backLive = onBackToLive {
+                    Button(action: backLive) {
+                        actionLabel(text: store.t("back_to_live"), dot: true,
+                                    fg: .white, bg: Color.tLive)
+                    }
+                }
+
+                Spacer(minLength: 0)
+
+                if let chat = onChat {
+                    Button(action: chat) {
+                        actionLabel(text: "Chat", icon: "bubble.left.fill",
+                                    fg: .white, bg: Color.tPrimary)
+                    }
                 }
             }
+            .fixedSize(horizontal: false, vertical: true)
             .padding(12)
             .background(Color.tCard)
 
@@ -190,44 +277,7 @@ struct VideoPlayerView: View {
                 .cornerRadius(10)
                 .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.tBorder, lineWidth: 1))
                 .padding(.horizontal, 12)
-            }
-
-            // ── External apps sheet ─────────────────────────────────
-            if showExternalSheet, let rawURL = qualityLinks[selectedQuality] {
-                VStack(spacing: 8) {
-                    extButton("🟠 \(store.t("open_vlc"))", color: .tVLC) {
-                        open(scheme: "vlc://\(rawURL)")
-                    }
-                    extButton("🔵 \(store.t("open_outplayer"))", color: .tOutplayer) {
-                        open(scheme: "outplayer://\(rawURL)")
-                    }
-                    extButton("🔴 \(store.t("open_infuse"))", color: .tInfuse) {
-                        let encoded = rawURL.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? rawURL
-                        open(scheme: "infuse://x-callback-url/play?url=\(encoded)")
-                    }
-                    extButton("📋 \(store.t("btn_copy"))", color: .tSurface) {
-                        UIPasteboard.general.string = rawURL
-                        showExternalSheet = false
-                    }
-                    extButton("Fermer", color: Color(hex: "333333"), textColor: .tMuted) {
-                        showExternalSheet = false
-                    }
-                }
-                .padding(.horizontal, 12)
-                .padding(.bottom, 8)
-            }
-
-            // ── URL bar ─────────────────────────────────────────────
-            if let rawURL = qualityLinks[selectedQuality] {
-                Text(rawURL)
-                    .font(.system(size: 10, design: .monospaced))
-                    .foregroundColor(.tPurple)
-                    .lineLimit(1)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(10)
-                    .background(Color.tSurface)
-                    .cornerRadius(8)
-                    .padding([.horizontal, .bottom], 12)
+                .padding(.bottom, 12)
             }
             } // fin if !compact
         }
@@ -238,23 +288,83 @@ struct VideoPlayerView: View {
         }
     }
 
+    // Lecteur natif (AVPlayerViewController) avec PiP + reprise de position.
     @ViewBuilder
-    private func extButton(_ label: String, color: Color, textColor: Color = .white, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(label)
-                .font(.system(size: 14, weight: .bold))
-                .foregroundColor(textColor)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 13)
-                .background(color)
-                .cornerRadius(10)
+    private func nativePlayer(url: URL) -> some View {
+        NativeVideoPlayer(
+            url: url,
+            savedTime: vodId.map { store.getVodProgress($0) } ?? 0,
+            onProgress: { time in
+                currentTime = time
+                onTime(time)
+                // Progression persistee au plus toutes les 5 s (l'observateur tourne a 1 s,
+                // inutile d'ecrire dans UserDefaults a chaque tick).
+                if let id = vodId, abs(time - lastPersisted) >= 5 {
+                    lastPersisted = time
+                    store.setVodProgress(id, time: time)
+                }
+            },
+            onLatency: { value in
+                // Seul le direct a une latence exploitable.
+                let measured = isLive ? value : nil
+                if latency != measured { latency = measured }
+                onLatency(measured)
+            },
+            lowLatency: store.lowLatency,
+            isLive: isLive
+        )
+        .aspectRatio(16/9, contentMode: .fit)
+        .background(Color.black)
+        .overlay(alignment: .topLeading) {
+            if store.showLatency, isLive {
+                latencyChip.padding(8)
+            }
         }
     }
 
-    private func open(scheme: String) {
-        guard let url = URL(string: scheme) else { return }
-        UIApplication.shared.open(url)
-        showExternalSheet = false
+    // MARK: – Débogage : pastille de latence
+    @ViewBuilder
+    private var latencyChip: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "waveform.path.ecg").font(.system(size: 9, weight: .bold))
+            Text(latency.map { String(format: "%.1f s", max(0, $0)) } ?? "—")
+                .font(.system(size: 10, weight: .bold).monospacedDigit())
+        }
+        .foregroundColor(latencyColor)
+        .padding(.horizontal, 7).padding(.vertical, 4)
+        .background(Color.black.opacity(0.55))
+        .cornerRadius(6)
+    }
+
+    /// Vert < 8 s (faible latence), jaune < 20 s, rouge au-delà.
+    private var latencyColor: Color {
+        guard let l = latency else { return .tMuted }
+        if l < 8  { return .tSuccess }
+        if l < 20 { return .tWarning }
+        return .tDanger
+    }
+
+    // MARK: – Bouton de la barre d'actions (hauteur commune)
+    @ViewBuilder
+    private func actionLabel(text: String, emoji: String? = nil, icon: String? = nil,
+                             dot: Bool = false, fg: Color, bg: Color,
+                             border: Color? = nil) -> some View {
+        HStack(spacing: 4) {
+            if let emoji { Text(emoji).font(.system(size: 12)) }
+            if let icon  { Image(systemName: icon).font(.system(size: 12, weight: .bold)) }
+            if dot       { Circle().fill(fg).frame(width: 6, height: 6) }
+            Text(text).font(.system(size: 12, weight: .bold))
+        }
+        .foregroundColor(fg)
+        .lineLimit(1)
+        .padding(.horizontal, 12)
+        .frame(height: 36)
+        .background(bg)
+        .cornerRadius(8)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(border ?? .clear, lineWidth: border == nil ? 0 : 1)
+        )
     }
 
     private func qualityLabel(_ q: String) -> String {

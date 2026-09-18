@@ -6,10 +6,17 @@ struct ChatView: View {
     let channelId: String?
     let token: String?
     let login: String?
+    /// Décalage (s) appliqué aux messages reçus pour les recaler sur l'image.
+    var chatDelay: Double = 0
+    var onJoinChannel: (String) -> Void = { _ in }   // raid → bascule vers une autre chaîne
 
     @EnvironmentObject private var store: AppStore
     @StateObject private var chat          = ChatService()
     @StateObject private var pointsService = ChannelPointsService()
+    @StateObject private var pubsub        = ChatPubSub()
+    @StateObject private var follow        = FollowService()
+    @StateObject private var events        = LiveEventsService()
+    @StateObject private var raidService   = RaidService()
 
     @State private var autoScroll       = true
     @State private var messageText      = ""
@@ -17,9 +24,16 @@ struct ChatView: View {
     @State private var showPointsSheet  = false
     @State private var showWebLogin     = false
     @State private var webLoginClear    = false   // true = re-login forcé (token web expiré)
+    @State private var threadRoot: ChatMessage? = nil   // fil de discussion ouvert
+    @State private var pinnedCollapsed  = false   // bandeau épinglé masqué/affiché
     @State private var isSetup          = false   // chat/points déjà initialisés
     @State private var teardownWork: DispatchWorkItem? = nil   // anti-rebond plein écran
     @FocusState private var isInputFocused: Bool
+
+    @State private var sentinelVisible = true   // le bas de la liste est-il visible ?
+    @State private var isDragging      = false  // l'utilisateur fait-il défiler à la main ?
+
+    private let bottomAnchor = "chat_bottom_anchor"   // sentinelle de bas de liste
 
     private var canSendMessages: Bool { token != nil && login != nil }
     private var canSend: Bool {
@@ -39,20 +53,144 @@ struct ChatView: View {
                 Text(chat.isConnected ? store.t("chat_connected") : store.t("chat_connecting"))
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundColor(.tMuted)
-                Spacer()
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Spacer(minLength: 4)
+                // Synchro auto : décalage appliqué au chat
+                if chatDelay >= 0.5 {
+                    HStack(spacing: 2) {
+                        Image(systemName: "clock.arrow.2.circlepath").font(.system(size: 9))
+                        Text(String(format: "%.0fs", chatDelay))
+                            .font(.system(size: 10, weight: .bold).monospacedDigit())
+                    }
+                    .foregroundColor(.tOutplayer)
+                    .fixedSize()
+                    .padding(.horizontal, 6).padding(.vertical, 3)
+                    .background(Color.tOutplayer.opacity(0.15)).cornerRadius(6)
+                }
+                // Série de visionnage
+                if store.showWatchStreak, events.watchStreak > 0 {
+                    HStack(spacing: 2) {
+                        Text("🔥").font(.system(size: 10))
+                        Text("\(events.watchStreak)").font(.system(size: 10, weight: .bold))
+                    }
+                    .foregroundColor(.tWarning)
+                    .padding(.horizontal, 6).padding(.vertical, 3)
+                    .background(Color.tWarning.opacity(0.15)).cornerRadius(6)
+                }
+                // Bouton Suivre / Ne plus suivre
+                if store.showFollowButton, let following = follow.isFollowing {
+                    Button {
+                        Task { await follow.toggle(token: store.twitchWebToken) }
+                    } label: {
+                        HStack(spacing: 3) {
+                            Image(systemName: following ? "heart.fill" : "heart")
+                            Text(following ? store.t("following") : store.t("follow"))
+                                .font(.system(size: 10, weight: .bold))
+                                .lineLimit(1)
+                        }
+                        .fixedSize()
+                        .foregroundColor(following ? .tDanger : .tPrimary)
+                        .padding(.horizontal, 8).padding(.vertical, 3)
+                        .background((following ? Color.tDanger : Color.tPrimary).opacity(0.15))
+                        .cornerRadius(6)
+                        .overlay(RoundedRectangle(cornerRadius: 6)
+                            .stroke(following ? Color.tDanger : Color.tPrimary, lineWidth: 1))
+                    }
+                    .disabled(follow.busy)
+                    .opacity(follow.busy ? 0.5 : 1)
+                }
                 if chat.isAuthenticated, let l = login {
                     Text("✏️ @\(l)")
                         .font(.system(size: 10, weight: .bold))
                         .foregroundColor(.tPrimary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
                 }
                 Text("#\(channelName)")
                     .font(.system(size: 11, weight: .bold))
                     .foregroundColor(.tPrimary)
+                    .lineLimit(1)
+                    .fixedSize()
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
             .background(Color.tCard)
             .overlay(Divider().background(Color.tBorder), alignment: .bottom)
+
+            // ── Message épinglé ─────────────────────────────────────
+            if store.showPinnedMessages, let pin = pubsub.pinnedText {
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "pin.fill")
+                        .font(.system(size: 12)).foregroundColor(.tWarning)
+                        .padding(.top, 1)
+                    VStack(alignment: .leading, spacing: 2) {
+                        if let author = pubsub.pinnedAuthor {
+                            Text(author)
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundColor(.tWarning)
+                        }
+                        if !pinnedCollapsed {
+                            // Liens cliquables (détection auto d'URL) + retour à la ligne
+                            Text(linkified(pin))
+                                .font(.system(size: 12))
+                                .tint(.tOutplayer)
+                                .foregroundColor(.tText)
+                                .fixedSize(horizontal: false, vertical: true)
+                        } else {
+                            Text(pin)
+                                .font(.system(size: 12)).foregroundColor(.tMuted)
+                                .lineLimit(1).truncationMode(.tail)
+                        }
+                    }
+                    Spacer(minLength: 0)
+                    // Bouton masquer / afficher
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.15)) { pinnedCollapsed.toggle() }
+                    } label: {
+                        Image(systemName: pinnedCollapsed ? "chevron.down" : "chevron.up")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundColor(.tMuted)
+                            .frame(width: 26, height: 26)
+                    }
+                }
+                .padding(.horizontal, 12).padding(.vertical, 8)
+                .background(Color.tWarning.opacity(0.12))
+                .overlay(Divider().background(Color.tBorder), alignment: .bottom)
+            }
+
+            // ── Événements live (sondage / prédiction / hype train) ─
+            if store.showLiveEvents {
+                LiveEventsBanner(events: events)
+            }
+
+            // ── Raid sortant ────────────────────────────────────────
+            if store.enableRaids, let r = raidService.raid {
+                Button {
+                    onJoinChannel(r.targetLogin)
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "figure.run").font(.system(size: 13, weight: .bold))
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text("🚀 \(store.t("raid_to")) \(r.targetName)")
+                                .font(.system(size: 12, weight: .bold)).foregroundColor(.tText)
+                            if r.viewers > 0 {
+                                Text("\(r.viewers) \(store.t("viewers"))")
+                                    .font(.system(size: 10)).foregroundColor(.tMuted)
+                            }
+                        }
+                        Spacer(minLength: 0)
+                        Text(store.t("join")).font(.system(size: 11, weight: .bold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 10).padding(.vertical, 5)
+                            .background(Color.tPrimary).clipShape(Capsule())
+                    }
+                    .padding(.horizontal, 12).padding(.vertical, 8)
+                    .background(Color.tPrimary.opacity(0.12))
+                    .overlay(Divider().background(Color.tBorder), alignment: .bottom)
+                }
+                .buttonStyle(.plain)
+            }
 
             // ── Zone principale ─────────────────────────────────────
             if showEmotePicker && canSendMessages {
@@ -65,8 +203,8 @@ struct ChatView: View {
                 ))
             } else {
                 GeometryReader { geo in
-                    ZStack(alignment: .bottomTrailing) {
-                        ScrollViewReader { proxy in
+                    ScrollViewReader { proxy in
+                        ZStack(alignment: .bottomTrailing) {
                             ScrollView {
                                 LazyVStack(alignment: .leading, spacing: 0) {
                                     ForEach(chat.messages.reversed()) { msg in
@@ -75,31 +213,68 @@ struct ChatView: View {
                                             availableWidth: geo.size.width
                                         )
                                         .id(msg.id)
+                                        .contentShape(Rectangle())
+                                        .onTapGesture {
+                                            guard msg.userId != "system" else { return }
+                                            threadRoot = msg
+                                        }
                                     }
+                                    // Sentinelle de bas de liste : visible ⇒ on est en bas.
+                                    Color.clear
+                                        .frame(height: 1)
+                                        .id(bottomAnchor)
+                                        .onAppear {
+                                            sentinelVisible = true
+                                            autoScroll = true    // revenu en bas → on suit
+                                        }
+                                        .onDisappear {
+                                            sentinelVisible = false
+                                            // On NE coupe PAS le suivi ici : sinon une rafale
+                                            // de messages (qui pousse brièvement la sentinelle
+                                            // hors champ) l'activerait à tort. C'est le geste
+                                            // de défilement manuel qui coupe le suivi.
+                                        }
                                 }
                                 .frame(width: geo.size.width, alignment: .leading)
                                 .padding(.vertical, 4)
                             }
-                            .onChange(of: chat.messages.first?.id) { newId in
-                                guard autoScroll, let id = newId else { return }
-                                withAnimation(.linear(duration: 0.1)) {
-                                    proxy.scrollTo(id, anchor: .bottom)
-                                }
+                            // Défilement manuel de l'utilisateur → on arrête de le ramener en bas.
+                            .simultaneousGesture(
+                                DragGesture(minimumDistance: 10)
+                                    .onChanged { _ in
+                                        isDragging = true
+                                        if !sentinelVisible { autoScroll = false }
+                                    }
+                                    .onEnded { _ in isDragging = false }
+                            )
+                            .onChange(of: chat.messages.first?.id) { _ in
+                                // Suit les nouveaux messages seulement si en bas et hors défilement
+                                // manuel. Sans animation → re-cale instantané, la sentinelle reste
+                                // visible même en rafale (n'active plus le mode lecture par erreur).
+                                guard autoScroll, !isDragging else { return }
+                                proxy.scrollTo(bottomAnchor, anchor: .bottom)
                             }
-                        }
+                            // En mode lecture (remonté), on met en pause la purge des vieux
+                            // messages : sinon retirer les plus anciens (en haut) fait « descendre »
+                            // la vue pendant qu'on lit l'historique.
+                            .onChange(of: autoScroll) { chat.pauseTrim = !$0 }
 
-                        if !autoScroll {
-                            Button { autoScroll = true } label: {
-                                HStack(spacing: 4) {
-                                    Image(systemName: "arrow.down")
-                                    Text(store.t("chat_follow")).font(.system(size: 11, weight: .bold))
+                            if !autoScroll {
+                                Button {
+                                    autoScroll = true
+                                    proxy.scrollTo(bottomAnchor, anchor: .bottom)
+                                } label: {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "arrow.down")
+                                        Text(store.t("chat_follow")).font(.system(size: 11, weight: .bold))
+                                    }
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 10).padding(.vertical, 6)
+                                    .background(Color.tPrimary)
+                                    .cornerRadius(20)
                                 }
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 10).padding(.vertical, 6)
-                                .background(Color.tPrimary)
-                                .cornerRadius(20)
+                                .padding(10)
                             }
-                            .padding(10)
                         }
                     }
                 }
@@ -113,6 +288,13 @@ struct ChatView: View {
             if canSendMessages { inputBar }
         }
         .background(Color.tDark)
+        // ── Fil de discussion (répondre) ─────────────────────────────
+        .sheet(item: $threadRoot) { root in
+            ThreadSheet(root: root, chat: chat,
+                        canSend: canSendMessages,
+                        rootDisplayName: root.displayName)
+                .presentationDetents([.medium, .large])
+        }
         // ── Sheet points ─────────────────────────────────────────────
         .sheet(isPresented: $showPointsSheet) {
             ChannelPointsSheet(service: pointsService) {
@@ -162,6 +344,13 @@ struct ChatView: View {
             chat.connect(channel: channelName, token: tok, login: store.twitchLogin)
         }
         .onChange(of: store.autoClaimChest) { pointsService.autoClaim = $0 }
+        .onChange(of: chatDelay) { chat.displayDelay = $0 }
+        .onChange(of: raidService.joinTarget) { target in
+            // Raid parti → on suit automatiquement vers la chaîne raidée.
+            guard let target = target else { return }
+            raidService.disconnect()
+            onJoinChannel(target)
+        }
         .onAppear {
             // Annule un éventuel teardown différé (retour de plein écran).
             teardownWork?.cancel(); teardownWork = nil
@@ -176,7 +365,12 @@ struct ChatView: View {
             let work = DispatchWorkItem {
                 guard !PlayerFullscreen.isActive else { return }   // plein écran → on garde tout actif
                 chat.disconnect()
+                pubsub.disconnect()
+                events.stop()
+                raidService.disconnect()
                 pointsService.stopPolling()
+                // Cache emotes/badges : purge en quittant le live (si l'option est active).
+                ImageCache.shared.purgeIfNeeded()
                 isSetup = false
             }
             teardownWork = work
@@ -209,7 +403,32 @@ struct ChatView: View {
             )
         }
         chat.channelId = channelId
+        chat.displayDelay = chatDelay
         chat.connect(channel: channelName, token: token, login: login)
+
+        // Les services ci-dessous sont conditionnés par les réglages de personnalisation :
+        // on n'ouvre pas de sondage/websocket inutile si l'option est désactivée.
+        // Messages épinglés (PubSub) — nécessite un token + l'ID du canal.
+        if store.showPinnedMessages, let cid = channelId,
+           let tok = store.twitchWebToken ?? store.twitchToken {
+            pubsub.connect(channelId: cid, token: tok)
+        }
+        if let cid = channelId {
+            // Statut de suivi (nécessite le token web pour le champ self.follower)
+            if store.showFollowButton {
+                await follow.load(login: channelName, channelId: cid, token: store.twitchWebToken)
+            }
+            // Événements live (série de visionnage, sondage, prédiction, hype train)
+            if store.showWatchStreak || store.showLiveEvents {
+                events.start(login: channelName, channelId: cid,
+                             token: store.twitchWebToken,
+                             viewerId: store.twitchUserId ?? "")
+            }
+            // Raid sortant (auto-bascule vers la chaîne raidée)
+            if store.enableRaids {
+                raidService.connect(channelId: cid, token: store.twitchWebToken ?? "")
+            }
+        }
     }
 
     // MARK: – Input bar
@@ -306,6 +525,23 @@ struct ChatView: View {
         messageText += (messageText.isEmpty || messageText.hasSuffix(" ") ? "" : " ")
             + emote.name + " "
     }
+
+    /// Transforme les URLs d'un texte en liens tappables (message épinglé).
+    private func linkified(_ s: String) -> AttributedString {
+        var att = AttributedString(s)
+        if let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) {
+            let ns = s as NSString
+            for m in detector.matches(in: s, range: NSRange(location: 0, length: ns.length)) {
+                guard let url = m.url,
+                      let r = Range(m.range, in: s),
+                      let attRange = att.range(of: String(s[r])) else { continue }
+                att[attRange].link = url
+                att[attRange].underlineStyle = .single
+                att[attRange].foregroundColor = .tOutplayer
+            }
+        }
+        return att
+    }
 }
 
 // MARK: – Single Message Row
@@ -317,7 +553,9 @@ struct ChatMessageRow: View {
     private static let timeFormatter: DateFormatter = {
         let f = DateFormatter(); f.dateFormat = "HH:mm"; return f
     }()
-    private var timeString: String { Self.timeFormatter.string(from: message.timestamp) }
+    private var timeString: String {
+        message.vodOffsetLabel ?? Self.timeFormatter.string(from: message.timestamp)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -329,6 +567,19 @@ struct ChatMessageRow: View {
                 }
                 .foregroundColor(.tPurple)
                 .padding(.horizontal, 12).padding(.top, 6).padding(.bottom, 4)
+                .frame(width: availableWidth, alignment: .leading)
+            }
+
+            // Bannière USERNOTICE (abonnement, série de visionnage…)
+            if let sys = message.systemMsg {
+                HStack(spacing: 6) {
+                    Image(systemName: "star.fill").font(.system(size: 10, weight: .bold))
+                    Text(sys).font(.system(size: 11, weight: .semibold))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .foregroundColor(.tWarning)
+                .padding(.horizontal, 12).padding(.top, 6)
+                .padding(.bottom, message.tokens.isEmpty ? 6 : 2)
                 .frame(width: availableWidth, alignment: .leading)
             }
 
@@ -352,13 +603,16 @@ struct ChatMessageRow: View {
                 .frame(width: availableWidth, alignment: .leading)
             }
 
-            HStack(alignment: .top, spacing: 0) {
-                if message.isHighlight { Rectangle().fill(Color.tWarning).frame(width: 3) }
-                WrappingHStack(message: message, timeString: timeString,
-                               availableWidth: availableWidth - 24)
-                    .padding(.horizontal, 12).padding(.vertical, 4)
+            // Ligne du message (masquée si USERNOTICE sans texte écrit)
+            if message.systemMsg == nil || !message.tokens.isEmpty {
+                HStack(alignment: .top, spacing: 0) {
+                    if message.isHighlight { Rectangle().fill(Color.tWarning).frame(width: 3) }
+                    WrappingHStack(message: message, timeString: timeString,
+                                   availableWidth: availableWidth - 24)
+                        .padding(.horizontal, 12).padding(.vertical, 4)
+                }
+                .frame(width: availableWidth, alignment: .leading)
             }
-            .frame(width: availableWidth, alignment: .leading)
         }
         .frame(width: availableWidth, alignment: .leading)
         .background(
@@ -380,11 +634,8 @@ struct WrappingHStack: View {
         MessageFlowLayout(spacing: 4, lineSpacing: 4, width: availableWidth) {
             Text(timeString).font(.system(size: 11)).foregroundColor(.tMuted)
             ForEach(message.badges) { badge in
-                AsyncImage(url: URL(string: badge.url)) { phase in
-                    if let img = phase.image { img.resizable().interpolation(.medium).scaledToFit() }
-                    else { Color.clear.frame(width: 16) }
-                }
-                .frame(width: 16, height: 16)
+                CachedEmoteImage(url: badge.url, name: "", height: 16,
+                                 showsNameFallback: false)
             }
             Text(message.displayName + ":")
                 .font(.system(size: 13, weight: .bold)).foregroundColor(message.color)
@@ -396,10 +647,21 @@ struct WrappingHStack: View {
                 case .emote(let e): CachedEmoteImage(url: e.url, name: e.name)
                 case .mention(let m):
                     Text("@\(m)").font(.system(size: 13, weight: .semibold)).foregroundColor(.tPrimary)
+                case .link(let l):
+                    Text(l).font(.system(size: 13))
+                        .foregroundColor(.tOutplayer).underline()
+                        .lineLimit(1).truncationMode(.middle)
+                        .onTapGesture { openLink(l) }
                 }
             }
         }
         .frame(width: availableWidth, alignment: .leading)
+    }
+
+    private func openLink(_ raw: String) {
+        var s = raw
+        if s.lowercased().hasPrefix("www.") { s = "https://" + s }
+        if let url = URL(string: s) { UIApplication.shared.open(url) }
     }
 }
 
@@ -412,33 +674,117 @@ struct MessageFlowLayout: Layout {
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         let l = computeLayout(subviews)
         for (i, sub) in subviews.enumerated() {
-            let p = l.positions[i]; let sz = sub.sizeThatFits(.unspecified)
+            let p = l.positions[i]; let sz = l.sizes[i]
             sub.place(at: CGPoint(x: bounds.minX + p.x, y: bounds.minY + p.y + max(0,(l.lineHeights[i]-sz.height)/2)),
-                      anchor: .topLeading, proposal: .unspecified)
+                      anchor: .topLeading,
+                      proposal: ProposedViewSize(width: sz.width, height: sz.height))
         }
     }
-    private func computeLayout(_ subviews: Subviews) -> (size: CGSize, positions: [CGPoint], lineHeights: [CGFloat]) {
+    private func computeLayout(_ subviews: Subviews) -> (size: CGSize, positions: [CGPoint], lineHeights: [CGFloat], sizes: [CGSize]) {
         let W = max(width,1); var cx: CGFloat=0, cy: CGFloat=0, mh: CGFloat=0
-        var pos=[CGPoint](); var lh=[CGFloat](repeating:0,count:subviews.count); var ls=0
+        var pos=[CGPoint](); var sizes=[CGSize](); var lh=[CGFloat](repeating:0,count:subviews.count); var ls=0
         for (i,s) in subviews.enumerated() {
-            let sz=s.sizeThatFits(.unspecified)
+            var sz = s.sizeThatFits(.unspecified)
+            // Capé à la largeur dispo : un token trop large (URL, mot long) est
+            // re-mesuré borné pour ne jamais déborder du chat.
+            if sz.width > W { sz = s.sizeThatFits(ProposedViewSize(width: W, height: nil)) }
+            sizes.append(sz)
             if cx>0 && cx+sz.width>W { for j in ls..<i {lh[j]=mh}; cx=0; cy+=mh+lineSpacing; mh=0; ls=i }
             pos.append(CGPoint(x:cx,y:cy)); mh=max(mh,sz.height); cx+=sz.width+spacing
         }
         for j in ls..<subviews.count {lh[j]=mh}
-        return (CGSize(width:W,height:cy+mh),pos,lh)
+        return (CGSize(width:W,height:cy+mh),pos,lh,sizes)
     }
 }
 
-// MARK: – Cached Emote Image
-struct CachedEmoteImage: View {
-    let url: String; let name: String
+// MARK: – Fil de discussion (thread + réponse)
+struct ThreadSheet: View {
+    let root: ChatMessage
+    @ObservedObject var chat: ChatService
+    let canSend: Bool
+    let rootDisplayName: String
+
+    @EnvironmentObject private var store: AppStore
+    @Environment(\.dismiss) private var dismiss
+    @State private var replyText = ""
+    @FocusState private var focused: Bool
+
+    private var rootId: String { root.threadRootId ?? root.id }
+    private var displayed: [ChatMessage] {
+        let t = chat.threadMessages(rootId: rootId)
+        return t.isEmpty ? [root] : t
+    }
+    private var canReply: Bool { !replyText.trimmingCharacters(in: .whitespaces).isEmpty }
+
     var body: some View {
-        AsyncImage(url: URL(string: url)) { phase in
-            if let img = phase.image { img.resizable().interpolation(.medium).scaledToFit() }
-            else if phase.error != nil { Text(name).font(.system(size:11)).foregroundColor(.tMuted) }
-            else { Color.clear.frame(width:24,height:24) }
+        VStack(spacing: 0) {
+            // ── En-tête ──────────────────────────────────────────────
+            HStack(spacing: 8) {
+                Image(systemName: "bubble.left.and.bubble.right.fill")
+                    .font(.system(size: 15)).foregroundColor(.tPrimary)
+                Text(store.t("thread_title"))
+                    .font(.system(size: 16, weight: .bold)).foregroundColor(.tText)
+                Spacer()
+                Button { dismiss() } label: {
+                    Image(systemName: "xmark").font(.system(size: 14, weight: .bold))
+                        .foregroundColor(.tMuted).frame(width: 30, height: 30)
+                        .background(Color.tSurface).clipShape(Circle())
+                }
+            }
+            .padding(.horizontal, 14).padding(.vertical, 10)
+            .background(Color.tCard)
+            Divider().background(Color.tBorder)
+
+            // ── Messages du fil ──────────────────────────────────────
+            GeometryReader { geo in
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        ForEach(displayed) { m in
+                            ChatMessageRow(message: m, availableWidth: geo.size.width)
+                                .id(m.id)
+                        }
+                    }
+                    .frame(width: geo.size.width, alignment: .leading)
+                    .padding(.vertical, 4)
+                }
+            }
+
+            // ── Réponse ──────────────────────────────────────────────
+            if canSend {
+                Divider().background(Color.tBorder)
+                HStack(spacing: 8) {
+                    TextField("\(store.t("thread_reply_to")) @\(rootDisplayName)", text: $replyText)
+                        .focused($focused)
+                        .foregroundColor(.tText)
+                        .autocorrectionDisabled()
+                        .padding(.horizontal, 12).padding(.vertical, 10)
+                        .background(Color.tSurface).cornerRadius(10)
+                        .overlay(RoundedRectangle(cornerRadius: 10)
+                            .stroke(focused ? Color.tPrimary : Color.tBorder, lineWidth: 1))
+                        .submitLabel(.send).onSubmit(sendReply)
+                    Button(action: sendReply) {
+                        Image(systemName: "paperplane.fill")
+                            .font(.system(size: 15, weight: .bold)).foregroundColor(.white)
+                            .frame(width: 44, height: 44)
+                            .background(canReply ? Color.tPrimary : Color.tMuted.opacity(0.35))
+                            .cornerRadius(10)
+                    }
+                    .disabled(!canReply)
+                }
+                .padding(.horizontal, 12).padding(.vertical, 10)
+                .background(Color.tCard)
+            }
         }
-        .frame(height: 24)
+        .background(Color.tDark)
+    }
+
+    private func sendReply() {
+        let t = replyText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty else { return }
+        replyText = ""
+        Task {
+            await chat.sendMessage(t, replyParentId: root.id,
+                                   replyRootId: rootId, replyToName: rootDisplayName)
+        }
     }
 }

@@ -129,7 +129,9 @@ private struct TwitchWebLogin: UIViewRepresentable {
         func attach(_ webView: WKWebView) {
             self.webView = webView
             // Filet de sécurité : certaines connexions SPA ne déclenchent pas didFinish.
-            timer = Timer.scheduledTimer(withTimeInterval: 1.2, repeats: true) { [weak self] _ in
+            // Mode .common : le défilement de la page de connexion ne doit pas
+            // suspendre la capture du cookie.
+            timer = Timer.scheduledCommon(every: 1.2) { [weak self] _ in
                 self?.captureToken()
             }
         }

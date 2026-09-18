@@ -167,7 +167,10 @@ func getLive(channelName: String) async -> LiveData {
     query { user(login: "\(login)") {
         id
         profileImageURL(width: 70)
-        stream { title game { name } previewImageURL(width: 320, height: 180) viewersCount createdAt }
+        stream {
+            title game { name } previewImageURL(width: 320, height: 180) viewersCount createdAt
+            archiveVideo { id }
+        }
     }}
     """
     async let streamTask = twitchGQL(q)
@@ -194,6 +197,13 @@ func getLive(channelName: String) async -> LiveData {
     let game        = (stream["game"] as? [String: Any])?["name"] as? String ?? ""
     let thumbnail   = stream["previewImageURL"] as? String ?? ""
     let viewerCount = stream["viewersCount"] as? Int ?? 0
+    // VOD en cours d'enregistrement → rembobinage du live (DVR)
+    let dvrVideoId  = (stream["archiveVideo"] as? [String: Any])?["id"] as? String
+    if let d = dvrVideoId {
+        logger.success("LIVE", "Rembobinage disponible (DVR)", "vod \(d)")
+    } else {
+        logger.debug("LIVE", "Pas de rembobinage", "le streamer n'archive pas ses lives")
+    }
 
     var startedAt: Date? = nil
     if let createdAtStr = stream["createdAt"] as? String {
@@ -207,32 +217,36 @@ func getLive(channelName: String) async -> LiveData {
     let sourcePref = UserDefaults.standard.string(forKey: "liveSource") ?? "auto"
     logger.info("LIVE", "Source sélectionnée : \(sourcePref.uppercased())")
 
-    // 1 - Luminous
+    // 1 - Luminous (plusieurs miroirs : on bascule sur le suivant si l'un tombe)
     if sourcePref == "auto" || sourcePref == "luminous" {
-        logger.info("LIVE", "Tentative Luminous (Sans Pub)...")
-        var lumComps = URLComponents(string: "https://as.luminous.dev/live/\(login)")!
-        lumComps.queryItems = [
-            .init(name: "allow_source",    value: "true"),
-            .init(name: "allow_audio_only", value: "true"),
-            .init(name: "fast_bread",      value: "true")
-        ]
-        if let lumUrl = lumComps.url {
+        for host in kLuminousHosts {
+            if !links.isEmpty { break }
+            logger.info("LIVE", "Tentative Luminous (Sans Pub)…", host)
+            guard var lumComps = URLComponents(string: "https://\(host)/live/\(login)") else { continue }
+            lumComps.queryItems = [
+                .init(name: "allow_source",     value: "true"),
+                .init(name: "allow_audio_only", value: "true"),
+                // fast_bread = variante faible latence côté Twitch.
+                .init(name: "fast_bread",       value: "true")
+            ]
+            guard let lumUrl = lumComps.url else { continue }
             var req = URLRequest(url: lumUrl)
             requestHeaders.forEach { req.setValue($1, forHTTPHeaderField: $0) }
             do {
                 let (data, resp) = try await URLSession.shared.data(for: req)
-                if let httpResp = resp as? HTTPURLResponse {
-                    if httpResp.statusCode == 200, let body = String(data: data, encoding: .utf8) {
-                        links = parseM3U8(body, baseURL: lumUrl)
-                        if !links.isEmpty {
-                            logger.success("LIVE", "✅ Luminous OK : \(links.count) qualités")
-                        }
+                let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+                if code == 200, let body = String(data: data, encoding: .utf8) {
+                    links = parseM3U8(body, baseURL: lumUrl)
+                    if !links.isEmpty {
+                        logger.success("LIVE", "✅ Luminous OK (\(host))", "\(links.count) qualités")
                     } else {
-                        logger.warn("LIVE", "⚠️ Luminous échec (\(httpResp.statusCode))")
+                        logger.warn("LIVE", "⚠️ Luminous \(host) : playlist vide", "miroir suivant…")
                     }
+                } else {
+                    logger.warn("LIVE", "⚠️ Luminous \(host) échec (\(code))", "miroir suivant…")
                 }
             } catch {
-                logger.error("LIVE", "❌ Erreur Luminous", error.localizedDescription)
+                logger.error("LIVE", "❌ Erreur Luminous \(host)", error.localizedDescription)
             }
         }
     }
@@ -242,16 +256,22 @@ func getLive(channelName: String) async -> LiveData {
         if let token = token {
             logger.info("LIVE", "Tentative Twitch officiel...")
             var comps = URLComponents(string: "https://usher.ttvnw.net/api/channel/hls/\(login).m3u8")!
+            // Mode faible latence : Twitch sert alors la variante « low latency »
+            // (segments plus courts, playlist rafraîchie plus souvent).
+            let wantsLowLatency = UserDefaults.standard.bool(forKey: "cfg_low_latency")
             comps.queryItems = [
                 .init(name: "allow_source",              value: "true"),
                 .init(name: "allow_audio_only",           value: "true"),
                 .init(name: "allow_spectre",              value: "true"),
+                .init(name: "fast_bread",                 value: wantsLowLatency ? "true" : "false"),
+                .init(name: "low_latency",                value: wantsLowLatency ? "true" : "false"),
                 .init(name: "player_backend",             value: "mediaplayer"),
                 .init(name: "playlist_include_framerate", value: "true"),
                 .init(name: "segment_preference",         value: "4"),
                 .init(name: "sig",                        value: token.signature),
                 .init(name: "token",                      value: token.value),
             ]
+            if wantsLowLatency { logger.info("LIVE", "Mode faible latence demandé à Twitch") }
             if let url = comps.url,
                let (data, resp) = try? await URLSession.shared.data(from: url),
                (resp as? HTTPURLResponse)?.statusCode == 200,
@@ -279,7 +299,8 @@ func getLive(channelName: String) async -> LiveData {
     }
 
     return LiveData(title: title, game: game, thumbnail: thumbnail, avatar: avatar,
-                    userId: userId, links: links, viewerCount: viewerCount, startedAt: startedAt)
+                    userId: userId, links: links, viewerCount: viewerCount,
+                    startedAt: startedAt, dvrVideoId: dvrVideoId)
 }
 
 // MARK: – getStreamStats (rafraîchissement LÉGER viewers/uptime, sans re-fetch des liens)
@@ -396,6 +417,70 @@ func getTopStreams(token: String, lang: String? = nil) async throws -> [TwitchSt
     return arr.map { streamFromDict($0) }
 }
 
+// MARK: – Catégories (Helix)
+/// Top des catégories, triées par audience décroissante côté Twitch.
+func getTopCategories(token: String, cursor: String? = nil) async throws -> (categories: [TwitchCategory], cursor: String?) {
+    var urlStr = "https://api.twitch.tv/helix/games/top?first=100"
+    if let cursor { urlStr += "&after=\(cursor)" }
+    guard let url = URL(string: urlStr) else { return ([], nil) }
+    var req = URLRequest(url: url)
+    req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+    req.setValue(kHelixClientID, forHTTPHeaderField: "Client-Id")
+    let (data, resp) = try await URLSession.shared.data(for: req)
+    guard (resp as? HTTPURLResponse)?.statusCode == 200 else { throw URLError(.badServerResponse) }
+    let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+    let arr  = json?["data"] as? [[String: Any]] ?? []
+    let next = (json?["pagination"] as? [String: Any])?["cursor"] as? String
+    logger.success("HELIX", "\(arr.count) catégories chargées")
+    return (arr.map { categoryFromDict($0) }, arr.isEmpty ? nil : next)
+}
+
+/// Recherche de catégories par nom (barre de recherche de l'onglet Catégories).
+func searchCategories(token: String, query: String) async throws -> [TwitchCategory] {
+    let q = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? query
+    guard !q.isEmpty,
+          let url = URL(string: "https://api.twitch.tv/helix/search/categories?first=50&query=\(q)")
+    else { return [] }
+    var req = URLRequest(url: url)
+    req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+    req.setValue(kHelixClientID, forHTTPHeaderField: "Client-Id")
+    let (data, resp) = try await URLSession.shared.data(for: req)
+    guard (resp as? HTTPURLResponse)?.statusCode == 200 else { throw URLError(.badServerResponse) }
+    let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+    let arr  = json?["data"] as? [[String: Any]] ?? []
+    logger.success("HELIX", "\(arr.count) catégories pour « \(query) »")
+    return arr.map { categoryFromDict($0) }
+}
+
+/// Lives d'une catégorie. Twitch les renvoie déjà par audience décroissante ;
+/// les autres tris sont appliqués côté app (voir CategoriesView).
+func getStreamsByCategory(token: String, gameId: String, cursor: String? = nil) async throws -> (streams: [TwitchStream], cursor: String?) {
+    var urlStr = "https://api.twitch.tv/helix/streams?first=100&game_id=\(gameId)"
+    if let cursor { urlStr += "&after=\(cursor)" }
+    guard let url = URL(string: urlStr) else { return ([], nil) }
+    var req = URLRequest(url: url)
+    req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+    req.setValue(kHelixClientID, forHTTPHeaderField: "Client-Id")
+    let (data, resp) = try await URLSession.shared.data(for: req)
+    guard (resp as? HTTPURLResponse)?.statusCode == 200 else { throw URLError(.badServerResponse) }
+    let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+    let arr  = json?["data"] as? [[String: Any]] ?? []
+    let next = (json?["pagination"] as? [String: Any])?["cursor"] as? String
+    logger.success("HELIX", "\(arr.count) lives dans la catégorie \(gameId)")
+    return (arr.map { streamFromDict($0) }, arr.isEmpty ? nil : next)
+}
+
+private func categoryFromDict(_ d: [String: Any]) -> TwitchCategory {
+    let raw = (d["box_art_url"] as? String ?? "")
+        .replacingOccurrences(of: "{width}",  with: "144")
+        .replacingOccurrences(of: "{height}", with: "192")
+    return TwitchCategory(
+        id:   d["id"]   as? String ?? UUID().uuidString,
+        name: d["name"] as? String ?? "",
+        boxArtURL: raw
+    )
+}
+
 private func streamFromDict(_ d: [String: Any]) -> TwitchStream {
     TwitchStream(
         id: d["user_id"] as? String ?? UUID().uuidString,
@@ -424,7 +509,7 @@ func searchUsersGQL(_ query: String) async -> [AutocompleteSuggestion] {
 }
 
 func getVodMetaGQL(_ vodId: String) async -> VodMeta? {
-    let q = "query { video(id: \"\(vodId)\") { title owner { displayName } previewThumbnailURL(height: 180, width: 320) } }"
+    let q = "query { video(id: \"\(vodId)\") { title lengthSeconds viewCount owner { displayName } previewThumbnailURL(height: 180, width: 320) } }"
     guard let json = try? await twitchGQL(q) as? [String: Any],
           let data = json["data"] as? [String: Any],
           let v    = data["video"] as? [String: Any],
@@ -432,7 +517,9 @@ func getVodMetaGQL(_ vodId: String) async -> VodMeta? {
     return VodMeta(
         title: title,
         streamer: (v["owner"] as? [String: Any])?["displayName"] as? String ?? "Inconnu",
-        thumb: v["previewThumbnailURL"] as? String ?? ""
+        thumb: v["previewThumbnailURL"] as? String ?? "",
+        lengthSeconds: v["lengthSeconds"] as? Int ?? 0,
+        viewCount: v["viewCount"] as? Int ?? 0
     )
 }
 
@@ -453,9 +540,13 @@ func formatDuration(_ seconds: Int) -> String {
 }
 
 func getTimeSince(publishedAt: String, lengthSeconds: Int, store: AppStore) -> String {
+    // Twitch date ses VODs sans fractions de seconde ("2026-09-11T18:00:00Z") :
+    // exiger .withFractionalSeconds faisait échouer le parsing, et la durée
+    // remontait vide (« Hors ligne depuis : » sans rien derrière).
     let df = ISO8601DateFormatter()
     df.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-    guard let startDate = df.date(from: publishedAt) else { return "" }
+    guard let startDate = df.date(from: publishedAt)
+            ?? ISO8601DateFormatter().date(from: publishedAt) else { return "" }
     let endDate = startDate.addingTimeInterval(TimeInterval(lengthSeconds))
     let diff = Date().timeIntervalSince(endDate)
     guard diff > 0 else { return "" }

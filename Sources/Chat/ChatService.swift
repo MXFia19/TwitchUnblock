@@ -16,6 +16,49 @@ final class ChatService: NSObject, ObservableObject {
     private var pingTimer: Timer?
     private var connectionTimeoutTask: Task<Void, Never>?
     private let maxMessages = 200
+    private let maxMessagesPaused = 600   // plafond dur quand la purge est en pause (lecture)
+    /// Quand true (utilisateur remonté pour lire l'historique), on ne purge pas les
+    /// plus anciens messages : ça éviterait de faire « descendre » la vue pendant la lecture.
+    var pauseTrim = false
+
+    /// Délai (s) appliqué à l'affichage des messages reçus, pour les recaler sur
+    /// l'image (le chat arrive en temps réel, la vidéo a plusieurs secondes de retard).
+    /// 0 = affichage immédiat. Piloté par la synchro auto du chat.
+    var displayDelay: Double = 0
+
+    /// Incrémenté à chaque (re)connexion : les messages en attente d'une session
+    /// précédente sont abandonnés au lieu d'atterrir dans le nouveau canal.
+    private var generation = 0
+
+    private func trimIfNeeded() {
+        let cap = pauseTrim ? maxMessagesPaused : maxMessages
+        if messages.count > cap { messages = Array(messages.prefix(cap)) }
+    }
+
+    /// Insère un message reçu, immédiatement ou après le délai de synchro.
+    private func publish(_ message: ChatMessage) {
+        let delay = displayDelay
+        guard delay >= 0.5 else { insert(message); return }
+        let gen = generation
+        Task { [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            guard let self, !Task.isCancelled, self.generation == gen else { return }
+            self.insert(message)
+        }
+    }
+
+    private func insert(_ message: ChatMessage) {
+        // La liste est rangée du plus récent au plus ancien. Si le délai de synchro
+        // vient de baisser, un message peut arriver après un plus récent : on le
+        // replace alors à sa position chronologique au lieu de le coller en haut.
+        if let first = messages.first, message.timestamp < first.timestamp {
+            let idx = messages.firstIndex { $0.timestamp <= message.timestamp } ?? messages.count
+            messages.insert(message, at: idx)
+        } else {
+            messages.insert(message, at: 0)
+        }
+        trimIfNeeded()
+    }
 
     // Infos du compte connecté (GLOBALUSERSTATE / USERSTATE)
     private var localLogin       = ""
@@ -56,13 +99,14 @@ final class ChatService: NSObject, ObservableObject {
             await receive()
         }
 
-        pingTimer = Timer.scheduledTimer(withTimeInterval: 240, repeats: true) { [weak self] _ in
+        pingTimer = Timer.scheduledCommon(every: 240) { [weak self] _ in
             Task { await self?.send("PING :tmi.twitch.tv") }
         }
     }
 
     // MARK: – Disconnect
     func disconnect() {
+        generation &+= 1   // abandonne les messages encore en attente de synchro
         connectionTimeoutTask?.cancel(); connectionTimeoutTask = nil
         pingTimer?.invalidate(); pingTimer = nil
         webSocketTask?.cancel(with: .normalClosure, reason: nil); webSocketTask = nil
@@ -85,19 +129,26 @@ final class ChatService: NSObject, ObservableObject {
         await send("CAP REQ :twitch.tv/tags twitch.tv/commands twitch.tv/membership")
         await send("NICK justinfan\(Int.random(in: 10000...99999))")
         await send("JOIN #\(channelName)")
-        pingTimer = Timer.scheduledTimer(withTimeInterval: 240, repeats: true) { [weak self] _ in
+        pingTimer = Timer.scheduledCommon(every: 240) { [weak self] _ in
             Task { await self?.send("PING :tmi.twitch.tv") }
         }
         await receive()
     }
 
     // MARK: – Send message
-    func sendMessage(_ text: String) async {
+    func sendMessage(_ text: String,
+                     replyParentId: String? = nil,
+                     replyRootId: String? = nil,
+                     replyToName: String? = nil) async {
         let sanitized = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !sanitized.isEmpty, sanitized.count <= 500,
               isAuthenticated, isConnected else { return }
 
-        await send("PRIVMSG #\(channelName) :\(sanitized)")
+        if let pid = replyParentId {
+            await send("@reply-parent-msg-id=\(pid) PRIVMSG #\(channelName) :\(sanitized)")
+        } else {
+            await send("PRIVMSG #\(channelName) :\(sanitized)")
+        }
         logger.info("CHAT", "Message envoyé → #\(channelName)", String(sanitized.prefix(80)))
 
         let tokens = await tokenizeText(sanitized, channelId: channelId)
@@ -107,10 +158,22 @@ final class ChatService: NSObject, ObservableObject {
             displayName: localDisplayName.isEmpty ? localLogin : localDisplayName,
             color: localColor, badges: localBadges, tokens: tokens,
             timestamp: Date(), isAction: false, isHighlight: false,
-            isFirstMessage: false, replyTo: nil, replyBody: nil
+            isFirstMessage: false,
+            replyTo: replyToName, replyBody: nil,
+            systemMsg: nil,
+            parentMsgId: replyParentId,
+            threadRootId: replyRootId ?? replyParentId
         )
-        messages.insert(localMsg, at: 0)
-        if messages.count > maxMessages { messages = Array(messages.prefix(maxMessages)) }
+        // Message envoyé par nous : affiché tout de suite, jamais retardé.
+        insert(localMsg)
+    }
+
+    // MARK: – Fil de discussion (thread)
+    /// Messages appartenant au fil dont la racine est `rootId`, du plus ancien au plus récent.
+    func threadMessages(rootId: String) -> [ChatMessage] {
+        messages
+            .filter { $0.id == rootId || $0.threadRootId == rootId }
+            .sorted { $0.timestamp < $1.timestamp }
     }
 
     // MARK: – Send raw IRC
@@ -154,6 +217,8 @@ final class ChatService: NSObject, ObservableObject {
                 await send("PONG :tmi.twitch.tv")
             case "PRIVMSG":
                 await handlePrivmsg(irc)
+            case "USERNOTICE":
+                await handleUsernotice(irc)
             case "GLOBALUSERSTATE":
                 handleUserInfo(irc)
             case "USERSTATE":
@@ -177,7 +242,7 @@ final class ChatService: NSObject, ObservableObject {
     private func handleUserInfo(_ irc: IRCMessage) {
         if let name = irc.tags["display-name"], !name.isEmpty { localDisplayName = name }
         if let hex  = irc.tags["color"], !hex.isEmpty {
-            localColor = Color(hex: hex.trimmingCharacters(in: CharacterSet(charactersIn: "#")))
+            localColor = Color.readableChat(hex: hex.trimmingCharacters(in: CharacterSet(charactersIn: "#")))
         }
     }
 
@@ -215,7 +280,7 @@ final class ChatService: NSObject, ObservableObject {
             userId: irc.userId,
             userName: irc.tags["login"] ?? "",
             displayName: irc.displayName,
-            color: Color(hex: hexColor),
+            color: Color.readableChat(hex: hexColor),
             // ← badges résolus via BadgeService
             badges: await parseBadges(irc.badgesRaw, channelId: channelId),
             tokens: tokens,
@@ -224,11 +289,58 @@ final class ChatService: NSObject, ObservableObject {
             isHighlight: irc.tags["msg-id"] == "highlighted-message",
             isFirstMessage: irc.tags["first-msg"] == "1",
             replyTo: irc.replyUser,
-            replyBody: irc.replyParentBody
+            replyBody: irc.replyParentBody,
+            systemMsg: nil,
+            parentMsgId: irc.replyParentMsgId,
+            threadRootId: irc.replyThreadRootId
         )
 
-        messages.insert(message, at: 0)
-        if messages.count > maxMessages { messages = Array(messages.prefix(maxMessages)) }
+        publish(message)
+    }
+
+    // MARK: – USERNOTICE (abonnements, séries de visionnage, raids…)
+    private func handleUsernotice(_ irc: IRCMessage) async {
+        let systemMsg = ircUnescape(irc.tags["system-msg"] ?? "")
+
+        // Message écrit par l'utilisateur (resub avec texte), optionnel.
+        var tokens: [MessageToken] = []
+        if let text = irc.text, !text.isEmpty {
+            let emoteRanges = IRCParser.parseEmoteRanges(raw: irc.emotesRaw, text: text)
+            var byRange: [Range<String.Index>: TwitchEmote] = [:]
+            for (emoteId, range) in emoteRanges {
+                let name = String(text[range])
+                byRange[range] = TwitchEmote(
+                    id: emoteId, name: name,
+                    url: "https://static-cdn.jtvnw.net/emoticons/v2/\(emoteId)/default/dark/2.0",
+                    source: .twitch)
+                await EmoteService.shared.registerTwitchEmote(id: emoteId, name: name)
+            }
+            tokens = await tokenize(text: text, twitchRanges: byRange, channelId: channelId)
+        }
+
+        guard !systemMsg.isEmpty || !tokens.isEmpty else { return }
+
+        let hexColor = irc.color.isEmpty
+            ? "9146ff"
+            : irc.color.trimmingCharacters(in: CharacterSet(charactersIn: "#"))
+
+        let message = ChatMessage(
+            id: irc.msgId,
+            userId: irc.userId,
+            userName: irc.tags["login"] ?? "",
+            displayName: irc.displayName,
+            color: Color.readableChat(hex: hexColor),
+            badges: await parseBadges(irc.badgesRaw, channelId: channelId),
+            tokens: tokens,
+            timestamp: Date(),
+            isAction: false,
+            isHighlight: true,
+            isFirstMessage: false,
+            replyTo: nil, replyBody: nil,
+            systemMsg: systemMsg.isEmpty ? nil : systemMsg
+        )
+        publish(message)
+        logger.debug("CHAT", "USERNOTICE \(irc.tags["msg-id"] ?? "")", systemMsg)
     }
 
     // MARK: – Badge parsing (async → BadgeService)
@@ -311,18 +423,7 @@ final class ChatService: NSObject, ObservableObject {
     }
 
     private func tokenizeText(_ segment: String, channelId: String?) async -> [MessageToken] {
-        var tokens: [MessageToken] = []
-        for word in segment.components(separatedBy: " ") {
-            guard !word.isEmpty else { continue }
-            if word.hasPrefix("@") && word.count > 1 {
-                tokens.append(.mention(String(word.dropFirst())))
-            } else if let emote = await EmoteService.shared.resolve(name: word, channelId: channelId) {
-                tokens.append(.emote(emote))
-            } else {
-                tokens.append(.text(word))
-            }
-        }
-        return tokens
+        await tokenizeChatSegment(segment, channelId: channelId)
     }
 
     // MARK: – Moderation

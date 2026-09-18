@@ -12,6 +12,9 @@ struct LiveData {
     var links: QualityLinks?
     var viewerCount: Int = 0
     var startedAt: Date? = nil
+    /// ID du VOD en cours d'enregistrement (DVR) : permet de rembobiner le live.
+    /// nil si le streamer n'archive pas ses lives.
+    var dvrVideoId: String? = nil
     var error: String?
 }
 
@@ -44,6 +47,14 @@ struct TwitchStream: Identifiable {
     let thumbnailURL: String
 }
 
+/// Catégorie / jeu Twitch (onglet Catégories).
+struct TwitchCategory: Identifiable, Hashable {
+    let id: String          // game_id
+    let name: String
+    /// URL de la jaquette, avec les gabarits {width}/{height} déjà remplacés.
+    let boxArtURL: String
+}
+
 struct TwitchUser {
     let id: String
     let login: String
@@ -62,6 +73,8 @@ struct VodMeta {
     let title: String
     let streamer: String
     let thumb: String
+    var lengthSeconds: Int = 0
+    var viewCount: Int = 0
 }
 
 // MARK: – App Models

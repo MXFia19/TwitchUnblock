@@ -98,6 +98,9 @@ struct SettingsView: View {
                 settingCard {
                     VStack(alignment: .leading, spacing: 14) {
                         label("play.tv.fill", store.t("player_section"))
+                        toggleRow(store.t("immersive_player"), store.t("immersive_player_sub"),
+                                  $store.immersivePlayer, log: "Lecteur immersif")
+                        Divider().background(Color.tBorder)
                         toggleRow(store.t("low_latency"), store.t("low_latency_sub"),
                                   $store.lowLatency, log: "Mode faible latence")
                     }

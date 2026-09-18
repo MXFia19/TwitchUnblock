@@ -104,6 +104,20 @@ final class ChatService: NSObject, ObservableObject {
         }
     }
 
+    /// Relance la connexion IRC sans quitter le direct (menu du chat).
+    func reconnect(token: String?, login: String?) {
+        guard !channelName.isEmpty else { return }
+        logger.info("CHAT", "Reconnexion demandée → #\(channelName)")
+        connect(channel: channelName, token: token, login: login)
+    }
+
+    /// Envoie une commande de chat telle quelle (/color, /me…).
+    func sendCommand(_ command: String) async {
+        guard isAuthenticated, isConnected, !channelName.isEmpty else { return }
+        await send("PRIVMSG #\(channelName) :\(command)")
+        logger.info("CHAT", "Commande envoyée", command)
+    }
+
     // MARK: – Disconnect
     func disconnect() {
         generation &+= 1   // abandonne les messages encore en attente de synchro

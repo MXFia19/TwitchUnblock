@@ -82,6 +82,12 @@ final class AppStore: ObservableObject {
         didSet { UserDefaults.standard.set(lowLatency, forKey: "cfg_low_latency") }
     }
 
+    /// Lecteur immersif : commandes par-dessus l'image, comme sur Twitch.
+    /// Désactivé = lecteur natif Apple (PiP et plein écran système).
+    @Published var immersivePlayer: Bool = false {
+        didSet { UserDefaults.standard.set(immersivePlayer, forKey: "cfg_immersive") }
+    }
+
     // MARK: – Débogage (section temporaire)
     /// Afficher la latence du direct par-dessus le lecteur.
     @Published var showLatency: Bool = false {
@@ -116,6 +122,7 @@ final class AppStore: ObservableObject {
         enableRaids        = ud.object(forKey: "cfg_raids")  as? Bool ?? true
         autoPurgeImageCache = ud.object(forKey: "cfg_purge_cache") as? Bool ?? true
         lowLatency         = ud.object(forKey: "cfg_low_latency") as? Bool ?? false
+        immersivePlayer    = ud.object(forKey: "cfg_immersive")   as? Bool ?? false
         showLatency        = ud.object(forKey: "dbg_latency")    as? Bool ?? false
         autoChatDelay      = ud.object(forKey: "dbg_chat_delay") as? Bool ?? false
         if let data = ud.data(forKey: "twitch_vod_history"),

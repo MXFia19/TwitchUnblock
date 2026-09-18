@@ -8,6 +8,8 @@ struct ChatView: View {
     let login: String?
     /// Décalage (s) appliqué aux messages reçus pour les recaler sur l'image.
     var chatDelay: Double = 0
+    /// Mode « chat seul » : la vidéo est masquée, le parent en a besoin.
+    @Binding var chatOnly: Bool
     var onJoinChannel: (String) -> Void = { _ in }   // raid → bascule vers une autre chaîne
 
     @EnvironmentObject private var store: AppStore
@@ -21,6 +23,7 @@ struct ChatView: View {
     @State private var autoScroll       = true
     @State private var messageText      = ""
     @State private var showEmotePicker  = false
+    @State private var showChatMenu     = false
     @State private var showPointsSheet  = false
     @State private var showWebLogin     = false
     @State private var webLoginClear    = false   // true = re-login forcé (token web expiré)
@@ -295,6 +298,20 @@ struct ChatView: View {
                         rootDisplayName: root.displayName)
                 .presentationDetents([.medium, .large])
         }
+        // ── Menu « … » du chat ───────────────────────────────────────
+        .sheet(isPresented: $showChatMenu) {
+            ChatMenuSheet(
+                channelName: channelName,
+                isAuthenticated: chat.isAuthenticated,
+                chatOnly: $chatOnly,
+                onReloadEmotes: { Task { await reloadEmotesAndBadges() } },
+                onReconnect: {
+                    chat.reconnect(token: token, login: login)
+                },
+                onCommand: { cmd in Task { await chat.sendCommand(cmd) } }
+            )
+            .presentationDetents([.medium, .large])
+        }
         // ── Sheet points ─────────────────────────────────────────────
         .sheet(isPresented: $showPointsSheet) {
             ChannelPointsSheet(service: pointsService) {
@@ -431,6 +448,24 @@ struct ChatView: View {
         }
     }
 
+    /// Vide puis recharge emotes et badges du canal (menu du chat).
+    private func reloadEmotesAndBadges() async {
+        await EmoteService.shared.reset()
+        await BadgeService.shared.reset()
+        ImageCache.shared.purge()
+        await EmoteService.shared.loadGlobals()
+        if let cid = channelId {
+            await EmoteService.shared.loadChannel(channelId: cid, channelName: channelName)
+        }
+        if let tok = token {
+            await BadgeService.shared.loadGlobal(token: tok)
+            if let cid = channelId {
+                await BadgeService.shared.loadChannel(channelId: cid, token: tok)
+            }
+        }
+        logger.success("CHAT", "Emotes et badges rechargés", "#\(channelName)")
+    }
+
     // MARK: – Input bar
     @ViewBuilder
     private var inputBar: some View {
@@ -497,6 +532,18 @@ struct ChatView: View {
                             .cornerRadius(10)
                     }
                     .disabled(!canSend)
+
+                    // Menu « … » : actions du chat
+                    Button {
+                        isInputFocused = false
+                        showChatMenu = true
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundColor(.tMuted)
+                            .frame(width: 32, height: 44)
+                    }
+                    .buttonStyle(.plain)
                 }
 
                 if messageText.count > 400 {

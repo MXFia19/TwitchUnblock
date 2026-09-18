@@ -48,6 +48,16 @@ actor EmoteService {
     }
 
     // MARK: – Register Twitch emote from chat tag
+    /// Vide les emotes chargées pour forcer un rechargement complet
+    /// (action « Recharger emotes et badges » du menu du chat).
+    func reset() {
+        globalBTTV.removeAll(); globalFFZ.removeAll(); global7TV.removeAll()
+        channelBTTV.removeAll(); channelFFZ.removeAll(); channel7TV.removeAll()
+        loadedChannels.removeAll()
+        // twitchById est alimenté au fil des messages reçus : on le garde,
+        // sinon les emotes Twitch des messages déjà affichés disparaîtraient.
+    }
+
     func registerTwitchEmote(id: String, name: String) {
         if twitchById[id] == nil {
             twitchById[id] = TwitchEmote(

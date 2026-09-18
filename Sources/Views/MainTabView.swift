@@ -11,12 +11,11 @@ struct MainTabView: View {
     @State private var loading = false
     @State private var errorMsg: String? = nil
     @State private var statusTitle = ""
-    /// Titre déplié : un titre long est tronqué, on le déplie au toucher.
-    @State private var titleExpanded = false
 
     // ── Chat state ───────────────────────────────────────────────────────
-    @State private var showChat = false
-    @State private var keepChatOnLoad = false   // raid → rouvrir le chat sur la chaîne raidée
+    /// Le chat est affiché en permanence sous le lecteur (comme sur Twitch) ;
+    /// « chat seul » masque la vidéo et lui laisse tout l'écran.
+    @State private var chatOnly = false
     @State private var vodPlaybackTime: Double = 0   // pilote le chat des VODs
     // ── DVR (rembobiner un live) ─────────────────────────────────────────
     @State private var liveDvrVideoId: String? = nil    // VOD en cours du live regardé
@@ -27,6 +26,8 @@ struct MainTabView: View {
 
     // ── Live stats ────────────────────────────────────────────────────────
     @State private var liveViewerCount: Int = 0
+    @State private var liveAvatar: String? = nil
+    @State private var liveGame: String = ""
     @State private var liveStartedAt: Date? = nil
     @State private var liveUptimeText: String = ""
     @State private var refreshTimer: Timer? = nil
@@ -38,13 +39,35 @@ struct MainTabView: View {
 
     // ── Minuteur de veille ────────────────────────────────────────────────
     @ObservedObject private var sleepTimer = SleepTimerService.shared
-    @State private var showSleepSheet = false
-    @State private var showSettings   = false
+    @State private var showSleepSheet  = false
+    @State private var showSettings    = false
+    @State private var showPlayerMenu  = false
+    /// Qualité retenue par le lecteur immersif (vide = meilleure disponible).
+    @State private var immersiveQuality = ""
 
     /// Décalage à appliquer au chat : la latence mesurée, si la synchro est active.
     private var chatDelay: Double {
         guard store.autoChatDelay, isLivePlaying else { return 0 }
         return max(0, min(liveLatency, 60))   // borne haute : évite un décalage absurde
+    }
+
+    /// Infos affichées par-dessus l'image en mode immersif.
+    private var overlayInfo: PlayerOverlayInfo {
+        PlayerOverlayInfo(
+            channel: currentChannelName ?? statusTitle,
+            avatar:  liveAvatar,
+            title:   isLivePlaying ? statusTitle : "",
+            game:    liveGame,
+            viewers: liveViewerCount,
+            uptime:  liveUptimeText,
+            latency: liveLatency > 0 ? liveLatency : nil
+        )
+    }
+
+    /// Y a-t-il un chat à afficher sous le lecteur ?
+    private var chatTarget: String? {
+        if let ch = currentChannelName { return ch }
+        return currentVodId
     }
 
     /// Trois destinations seulement. « Streamer » et « Lien / ID » ont fusionné
@@ -110,6 +133,25 @@ struct MainTabView: View {
                     .transition(.opacity)
             }
         }
+        // Menu « ⋯ » du lecteur immersif.
+        .sheet(isPresented: $showPlayerMenu) {
+            PlayerMenuSheet(
+                qualities: sortQualities(Array((qualityLinks ?? [:]).keys)),
+                selected: currentQuality(qualityLinks ?? [:]),
+                onSelectQuality: { q in immersiveQuality = q; showPlayerMenu = false },
+                canRewind: liveDvrVideoId != nil,
+                isDvr: dvrSourceChannel != nil,
+                onRewind: { showPlayerMenu = false; rewindAction?() },
+                onBackToLive: { showPlayerMenu = false; backToLiveAction?() },
+                onSleepTimer: { showPlayerMenu = false
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                                    showSleepSheet = true } },
+                onSettings: { showPlayerMenu = false
+                              DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                                  showSettings = true } }
+            )
+            .presentationDetents([.medium])
+        }
         // Réglages : ouverts depuis l'avatar de l'en-tête.
         .sheet(isPresented: $showSettings) {
             SettingsView()
@@ -127,7 +169,7 @@ struct MainTabView: View {
         }
     }
 
-    // MARK: – Player Overlay (non scrollable)
+    // MARK: – Lecteur (plein écran, non scrollable)
     @ViewBuilder
     private var playerOverlay: some View {
         ZStack(alignment: .top) {
@@ -135,87 +177,12 @@ struct MainTabView: View {
 
             VStack(spacing: 0) {
 
-                // ── Barre du lecteur ────────────────────────────────
-                HStack(spacing: TSpace.sm) {
-                    Button { withAnimation { playerVisible = false } } label: {
-                        HStack(spacing: TSpace.xs) {
-                            Image(systemName: "chevron.down")
-                                .font(.system(size: 12, weight: .bold))
-                            Text(store.t("reduce")).font(.tLabel)
-                        }
-                        .foregroundColor(.tPrimary)
-                    }
-                    .buttonStyle(.plain)
-
-                    // Chat ouvert : stats du direct (le nom de chaîne est déjà
-                    // dans la barre du chat). Sinon : le titre, dépliable au toucher.
-                    // Ce Group ne doit jamais être vide — une EmptyView ignore
-                    // .frame(maxWidth:.infinity) et la barre se rétracte.
-                    Group {
-                        if showChat, isLivePlaying {
-                            headerLiveStats
-                        } else {
-                            Text(modeTitle)
-                                .font(.tCardTitle)
-                                .foregroundColor(.tText)
-                                .lineLimit(titleExpanded ? nil : 1)
-                                .fixedSize(horizontal: false, vertical: true)
-                                .contentShape(Rectangle())
-                                .onTapGesture {
-                                    withAnimation(.easeInOut(duration: 0.15)) {
-                                        titleExpanded.toggle()
-                                    }
-                                }
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                    // Minuteur de veille : compte à rebours si armé, sinon accès simple.
-                    Button { showSleepSheet = true } label: {
-                        HStack(spacing: 3) {
-                            Image(systemName: "moon.zzz.fill").font(.system(size: 11))
-                            // Le compte à rebours n'est affiché que s'il reste de la
-                            // place : chat ouvert, les stats occupent la barre.
-                            if sleepTimer.isActive, !showChat {
-                                Text(sleepTimer.label)
-                                    .font(.system(size: 11, weight: .bold).monospacedDigit())
-                            }
-                        }
-                        .foregroundColor(sleepTimer.isActive ? .tPurple : .tMuted)
-                        .fixedSize()
-                        .padding(.horizontal, TSpace.sm)
-                        .frame(height: 32)
-                        .background(sleepTimer.isActive ? Color.tPurple.opacity(0.18) : Color.tSurface)
-                        .cornerRadius(TRadius.chip)
-                    }
-                    .buttonStyle(.plain)
-
-                    if showChat {
-                        Button {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-                                showChat = false
-                            }
-                        } label: {
-                            Image(systemName: "bubble.left.fill")
-                                .font(.system(size: 12, weight: .bold))
-                                .foregroundColor(.white)
-                                .padding(.horizontal, TSpace.sm)
-                                .frame(height: 32)
-                                .background(Color.tPrimary)
-                                .cornerRadius(TRadius.chip)
-                        }
-                        .buttonStyle(.plain)
-                    }
-
-                    TIconButton(icon: "xmark", size: 32) { stopPlayer() }
+                // En mode immersif, la barre d'en-tête est dessinée PAR-DESSUS
+                // l'image par le lecteur lui-même : pas de bandeau ici.
+                if !store.immersivePlayer || chatOnly || qualityLinks == nil {
+                    playerTopBar
                 }
-                .padding(.horizontal, TSpace.lg)
-                .padding(.top, TSpace.sm)
-                .padding(.bottom, TSpace.md)
-                .background(Color.tCard)
-                .overlay(Divider().background(Color.tBorder), alignment: .bottom)
 
-                // ── Contenu ──────────────────────────────────────────
                 if loading {
                     Spacer()
                     VStack(spacing: TSpace.md) {
@@ -233,67 +200,33 @@ struct MainTabView: View {
 
                 } else if let links = qualityLinks {
 
-                    // Vidéo fixe 16:9
-                    VideoPlayerView(
-                        qualityLinks: links,
-                        vodId: {
-                            if case .vod(let id, _, _, _) = playerMode { return id }
-                            return nil
-                        }(),
-                        compact: showChat,  // chat ouvert → masque Source/lien, place au chat
-                        onTime: { vodPlaybackTime = $0 },
-                        onLatency: { value in
-                            // Arrondi à la seconde : sinon la vue se recalculerait
-                            // à chaque tick de l'observateur (1 s) pour rien.
-                            let rounded = (value ?? 0).rounded()
-                            if abs(rounded - liveLatency) >= 1 { liveLatency = rounded }
-                        },
-                        onChat: chatAction,
-                        onRewind: rewindAction,
-                        onBackToLive: backToLiveAction
-                    )
-                    .padding(.horizontal, TSpace.md)
-                    .padding(.top, TSpace.md)
+                    // ── Vidéo (masquée en « chat seul ») ─────────────
+                    if !chatOnly {
+                        videoSurface(links: links)
+                    }
 
-                    if showChat, let channel = currentChannelName {
-                        // ── Mode chat ouvert ─────────────────────────
-                        // (les stats live sont remontées dans le header pour laisser
-                        //  un maximum de place au chat)
+                    // ── Chat, pleine largeur, collé sous la vidéo ────
+                    if let channel = currentChannelName {
                         ChatView(
                             channelName: channel,
-                            channelId: currentChannelId,   // ← userId Twitch du canal
+                            channelId: currentChannelId,
                             token: store.twitchToken,
                             login: store.twitchLogin,
                             chatDelay: chatDelay,
-                            onJoinChannel: { target in    // raid → suit la chaîne raidée
-                                keepChatOnLoad = true
+                            chatOnly: $chatOnly,
+                            onJoinChannel: { target in   // raid → suit la chaîne raidée
                                 playLive(target)
                             }
                         )
-                        .id(channel)   // change de chaîne (raid) → ChatView reconstruit à neuf
+                        .id(channel)   // changement de chaîne → chat reconstruit à neuf
                         .frame(maxHeight: .infinity)
-                        .cornerRadius(TRadius.card)
-                        .padding(.horizontal, TSpace.md)
-                        .padding(.bottom, TSpace.md)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
 
-                    } else if showChat, let vid = currentVodId {
-                        // ── Chat de VOD (relecture synchronisée) ─────
+                    } else if let vid = currentVodId {
                         VodChatView(videoId: vid, playbackTime: vodPlaybackTime)
                             .id(vid)
                             .frame(maxHeight: .infinity)
-                            .cornerRadius(TRadius.card)
-                            .padding(.horizontal, TSpace.md)
-                            .padding(.bottom, TSpace.md)
-                            .transition(.move(edge: .bottom).combined(with: .opacity))
 
                     } else {
-                        // ── Mode normal ──────────────────────────────
-                        fullInfoBox
-                            .padding(.horizontal, TSpace.md)
-                            .padding(.top, TSpace.md)
-                            .transition(.opacity)
-
                         Spacer()
                     }
                 }
@@ -301,14 +234,134 @@ struct MainTabView: View {
         }
     }
 
-    // MARK: – Actions du lecteur (nil ⇒ bouton masqué)
-    private var chatAction: (() -> Void)? {
-        guard currentChannelName != nil || currentVodId != nil else { return nil }
-        return {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { showChat = true }
+    /// Surface vidéo : lecteur natif (contrôles Apple) ou immersif (contrôles maison).
+    @ViewBuilder
+    private func videoSurface(links: QualityLinks) -> some View {
+        if store.immersivePlayer {
+            ImmersivePlayer(
+                url: URL(string: links[currentQuality(links)] ?? "") ?? URL(string: "about:blank")!,
+                isLive: isLivePlaying,
+                dvrEnabled: isLivePlaying,
+                savedTime: currentVodId.map { store.getVodProgress($0) } ?? 0,
+                info: overlayInfo,
+                onProgress: { time in
+                    vodPlaybackTime = time
+                    if let id = currentVodId { store.setVodProgress(id, time: time) }
+                },
+                onLatency: { updateLatency($0) },
+                onReduce: { withAnimation { playerVisible = false } },
+                onClose:  { stopPlayer() },
+                onMenu:   { showPlayerMenu = true },
+                onRefresh: { reloadCurrent() }
+            )
+        } else {
+            VideoPlayerView(
+                qualityLinks: links,
+                vodId: currentVodId,
+                compact: false,  // garde qualité / rembobiner ; le bouton Chat, lui,
+                                 // n'a plus lieu d'être (le chat est toujours affiché)
+                onTime: { vodPlaybackTime = $0 },
+                onLatency: { updateLatency($0) },
+                onChat: nil,
+                onRewind: rewindAction,
+                onBackToLive: backToLiveAction
+            )
         }
     }
 
+    /// Bandeau au-dessus de la vidéo (mode natif) : qui regarde-t-on, et quoi.
+    @ViewBuilder
+    private var playerTopBar: some View {
+        HStack(spacing: TSpace.sm) {
+            Button { withAnimation { playerVisible = false } } label: {
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(.tPrimary)
+                    .frame(width: 32, height: 32)
+            }
+            .buttonStyle(.plain)
+
+            if isLivePlaying, let avatar = liveAvatar {
+                AsyncImage(url: URL(string: avatar)) { img in
+                    img.resizable().scaledToFill()
+                } placeholder: {
+                    Circle().fill(Color.tSurface)
+                }
+                .frame(width: 28, height: 28)
+                .clipShape(Circle())
+            }
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(currentChannelName ?? statusTitle)
+                    .font(.tCardTitle).foregroundColor(.tText).lineLimit(1)
+
+                HStack(spacing: TSpace.sm) {
+                    if isLivePlaying {
+                        if !liveUptimeText.isEmpty {
+                            TMeta(icon: "dot.radiowaves.left.and.right",
+                                  text: liveUptimeText, tint: .tLive)
+                        }
+                        if liveViewerCount > 0 {
+                            TMeta(icon: "eye.fill", text: formatViewers(liveViewerCount))
+                        }
+                        if store.showLatency, liveLatency > 0 {
+                            TMeta(icon: "waveform.path.ecg",
+                                  text: String(format: "%.0f s", liveLatency))
+                        }
+                    } else {
+                        Text(statusTitle).font(.tMeta).foregroundColor(.tMuted).lineLimit(1)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            // Minuteur de veille
+            Button { showSleepSheet = true } label: {
+                HStack(spacing: 3) {
+                    Image(systemName: "moon.zzz.fill").font(.system(size: 11))
+                    if sleepTimer.isActive {
+                        Text(sleepTimer.label)
+                            .font(.system(size: 11, weight: .bold).monospacedDigit())
+                    }
+                }
+                .foregroundColor(sleepTimer.isActive ? .tPurple : .tMuted)
+                .fixedSize()
+                .padding(.horizontal, TSpace.sm)
+                .frame(height: 32)
+                .background(sleepTimer.isActive ? Color.tPurple.opacity(0.18) : Color.tSurface)
+                .cornerRadius(TRadius.chip)
+            }
+            .buttonStyle(.plain)
+
+            TIconButton(icon: "xmark", size: 32) { stopPlayer() }
+        }
+        .padding(.horizontal, TSpace.md)
+        .padding(.top, TSpace.sm)
+        .padding(.bottom, TSpace.sm)
+        .background(Color.tCard)
+        .overlay(Divider().background(Color.tBorder), alignment: .bottom)
+    }
+
+    /// Qualité en cours pour le lecteur immersif : celle choisie, sinon la meilleure.
+    private func currentQuality(_ links: QualityLinks) -> String {
+        if !immersiveQuality.isEmpty, links[immersiveQuality] != nil { return immersiveQuality }
+        return sortQualities(Array(links.keys)).first ?? ""
+    }
+
+    /// Arrondi à la seconde : sinon la vue se recalculerait à chaque tick.
+    private func updateLatency(_ value: Double?) {
+        let rounded = (value ?? 0).rounded()
+        if abs(rounded - liveLatency) >= 1 { liveLatency = rounded }
+    }
+
+    /// Recharge le flux courant (bouton ⟳ du lecteur).
+    private func reloadCurrent() {
+        guard let mode = playerMode else { return }
+        logger.info("LECTEUR", "Rechargement du flux demandé", nil)
+        startPlayback(mode)
+    }
+
+    // MARK: – Actions du lecteur (nil ⇒ bouton masqué)
     /// Rembobiner un live : lit le VOD en cours d'enregistrement.
     private var rewindAction: (() -> Void)? {
         guard let ch = currentChannelName, let dvr = liveDvrVideoId else { return nil }
@@ -329,65 +382,11 @@ struct MainTabView: View {
         return nil
     }
 
-    // MARK: – Stats live (remontées dans le header quand le chat est ouvert)
+    // MARK: – Nature de la lecture en cours
     private var isLivePlaying: Bool {
         guard let mode = playerMode else { return false }
         if case .live = mode { return true }
         return false
-    }
-
-    @ViewBuilder
-    private var headerLiveStats: some View {
-        HStack(spacing: TSpace.sm) {
-            TLiveBadge(compact: true)
-            if liveViewerCount > 0 {
-                TMeta(icon: "eye.fill", text: formatViewers(liveViewerCount))
-            }
-            if !liveUptimeText.isEmpty {
-                TMeta(icon: "clock.fill", text: liveUptimeText)
-            }
-        }
-        .lineLimit(1)
-    }
-
-    // MARK: – Encart d'infos (chat fermé)
-    @ViewBuilder
-    private var fullInfoBox: some View {
-        if let mode = playerMode {
-            VStack(alignment: .leading, spacing: TSpace.sm) {
-                Text(statusTitle)
-                    .font(.tSection)
-                    .foregroundColor(.tText)
-                    .lineLimit(titleExpanded ? nil : 2)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        withAnimation(.easeInOut(duration: 0.15)) { titleExpanded.toggle() }
-                    }
-
-                if case .vod(_, _, _, let streamer) = mode, let s = streamer {
-                    Text(s)
-                        .font(.tCardTitle)
-                        .foregroundColor(.tPurple)
-                }
-
-                if case .live = mode {
-                    HStack(spacing: TSpace.md) {
-                        TLiveBadge()
-                        if liveViewerCount > 0 {
-                            TMeta(icon: "eye.fill", text: formatViewers(liveViewerCount))
-                        }
-                        if !liveUptimeText.isEmpty {
-                            TMeta(icon: "clock.fill", text: liveUptimeText)
-                        }
-                        Spacer(minLength: 0)
-                    }
-                    .lineLimit(1)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .tCard()
-        }
     }
 
     // MARK: – Mini-barre (lecteur réduit)
@@ -449,11 +448,13 @@ struct MainTabView: View {
         loading       = true
         errorMsg      = nil
         qualityLinks  = nil
-        showChat      = false
+        chatOnly      = false
         vodPlaybackTime = 0
-        titleExpanded   = false
         liveDvrVideoId  = nil
         liveLatency     = 0
+        liveAvatar      = nil
+        liveGame        = ""
+        immersiveQuality = ""
         // Un VOD lancé depuis le bouton Rembobiner garde le lien vers sa chaîne,
         // pour pouvoir revenir au direct. Un VOD normal, non.
         if case .live = mode { dvrSourceChannel = nil }
@@ -485,7 +486,7 @@ struct MainTabView: View {
             case .live(let channel):
                 let data = await getLive(channelName: channel)
                 if let err = data.error, err != "offline" {
-                    await MainActor.run { errorMsg = err; loading = false; keepChatOnLoad = false }
+                    await MainActor.run { errorMsg = err; loading = false }
                 } else if let links = data.links, !links.isEmpty {
                     await MainActor.run {
                         qualityLinks      = links
@@ -493,13 +494,14 @@ struct MainTabView: View {
                         liveViewerCount   = data.viewerCount
                         liveStartedAt     = data.startedAt
                         currentChannelId  = data.userId   // ← userId Twitch → emotes canal
+                        liveAvatar        = data.avatar
+                        liveGame          = data.game
                         liveDvrVideoId    = data.dvrVideoId
                         loading           = false
-                        if keepChatOnLoad { showChat = true; keepChatOnLoad = false }
                         startLiveTimers(channel: channel)
                     }
                 } else {
-                    await MainActor.run { errorMsg = store.t("offline_msg"); loading = false; keepChatOnLoad = false }
+                    await MainActor.run { errorMsg = store.t("offline_msg"); loading = false }
                 }
             }
         }
@@ -508,7 +510,7 @@ struct MainTabView: View {
     private func stopPlayer() {
         UIApplication.shared.isIdleTimerDisabled = false   // ré-autorise la veille
         stopLiveTimers()
-        showChat           = false
+        chatOnly           = false
         currentChannelName = nil
         currentChannelId   = nil
         liveDvrVideoId     = nil
@@ -518,6 +520,8 @@ struct MainTabView: View {
         liveStartedAt      = nil
         liveUptimeText     = ""
         liveLatency        = 0
+        liveAvatar         = nil
+        liveGame           = ""
         withAnimation {
             playerVisible = false
             playerMode    = nil

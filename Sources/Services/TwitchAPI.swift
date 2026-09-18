@@ -371,6 +371,43 @@ func getChannelVideos(channelName: String, cursor: String? = nil) async -> (vide
     return (videos: videos, avatar: avatar, error: nil, cursor: nextCursor)
 }
 
+// MARK: – Chatteurs (GQL)
+/// Personnes présentes dans le chat, par rôle. C'est la requête qu'utilise le
+/// site Twitch : l'ancien endpoint tmi.twitch.tv/group/user/…/chatters est fermé.
+func getChatters(channelName: String) async -> ChattersData? {
+    let login = channelName.lowercased()
+    let q = """
+    query { channel(name: "\(login)") { chatters {
+        count
+        broadcasters { login }
+        moderators   { login }
+        vips         { login }
+        viewers      { login }
+    } } }
+    """
+    guard let json = try? await twitchGQL(q) as? [String: Any],
+          let data = json["data"] as? [String: Any],
+          let channel = data["channel"] as? [String: Any],
+          let chatters = channel["chatters"] as? [String: Any] else {
+        logger.warn("CHAT", "Liste des chatteurs indisponible", login)
+        return nil
+    }
+    func logins(_ key: String) -> [String] {
+        ((chatters[key] as? [[String: Any]]) ?? [])
+            .compactMap { $0["login"] as? String }
+            .sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+    }
+    let result = ChattersData(
+        count:        chatters["count"] as? Int ?? 0,
+        broadcasters: logins("broadcasters"),
+        moderators:   logins("moderators"),
+        vips:         logins("vips"),
+        viewers:      logins("viewers")
+    )
+    logger.success("CHAT", "\(result.count) personnes dans le chat de \(login)")
+    return result
+}
+
 // MARK: – Helix
 func getTwitchUser(token: String) async -> TwitchUser? {
     guard let url = URL(string: "https://api.twitch.tv/helix/users") else { return nil }

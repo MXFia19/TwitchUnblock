@@ -55,6 +55,15 @@ struct TwitchCategory: Identifiable, Hashable {
     let boxArtURL: String
 }
 
+/// Personnes présentes dans un chat, regroupées par rôle.
+struct ChattersData {
+    let count: Int
+    let broadcasters: [String]
+    let moderators:   [String]
+    let vips:         [String]
+    let viewers:      [String]
+}
+
 struct TwitchUser {
     let id: String
     let login: String

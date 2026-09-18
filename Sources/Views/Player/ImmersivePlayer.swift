@@ -204,8 +204,8 @@ struct ImmersivePlayer: View {
 
     /// Compte à rebours du minuteur de veille, nil s'il n'est pas armé.
     var sleepLabel: String? = nil
-    /// Le chat occupe-t-il une colonne à droite (paysage) ?
-    var chatShown: Bool = true
+    /// Place du chat en paysage : colonne, superposé, ou replié.
+    var chatMode: LandscapeChat = .column
     /// Orientation, fournie par le parent : lue sur UIApplication elle ne serait
     /// pas observable, et la vue ne se redessinerait pas à la rotation.
     var isLandscape: Bool = false
@@ -230,7 +230,7 @@ struct ImmersivePlayer: View {
     init(url: URL, isLive: Bool, dvrEnabled: Bool, savedTime: Double,
          info: PlayerOverlayInfo,
          sleepLabel: String? = nil,
-         chatShown: Bool = true,
+         chatMode: LandscapeChat = .column,
          isLandscape: Bool = false,
          onProgress: @escaping (Double) -> Void = { _ in },
          onLatency:  @escaping (Double?) -> Void = { _ in },
@@ -243,7 +243,7 @@ struct ImmersivePlayer: View {
         self.url = url; self.isLive = isLive; self.dvrEnabled = dvrEnabled
         self.savedTime = savedTime; self.info = info
         self.onProgress = onProgress; self.onLatency = onLatency
-        self.sleepLabel = sleepLabel; self.chatShown = chatShown
+        self.sleepLabel = sleepLabel; self.chatMode = chatMode
         self.isLandscape = isLandscape
         self.onReduce = onReduce; self.onClose = onClose
         self.onMenu = onMenu; self.onRefresh = onRefresh
@@ -451,11 +451,14 @@ struct ImmersivePlayer: View {
                 }
                 overlayButton(icon: "arrow.clockwise") { onRefresh() }
 
-                // En paysage seulement : replier la colonne de chat pour rendre
-                // toute la largeur à l'image.
+                // En paysage seulement : colonne → superposé → replié, en boucle.
+                // Un libellé apparaît brièvement, sinon trois icônes muettes ne
+                // disent pas dans quel état on vient d'entrer.
                 if isLandscape {
-                    overlayButton(icon: chatShown ? "sidebar.right" : "bubble.left.fill") {
-                        onToggleChat(); scheduleAutoHide()
+                    overlayButton(icon: chatMode.icon) {
+                        onToggleChat()
+                        flash(store.t(chatMode.next.labelKey))
+                        scheduleAutoHide()
                     }
                 }
 
@@ -500,12 +503,17 @@ struct ImmersivePlayer: View {
             .contentShape(Rectangle())
             .onTapGesture(count: 2) {
                 model.seekBy(seconds)
-                withAnimation(.easeOut(duration: 0.15)) { seekFlash = label }
-                Task {
-                    try? await Task.sleep(nanoseconds: 700_000_000)
-                    withAnimation(.easeOut(duration: 0.2)) { seekFlash = nil }
-                }
+                flash(label)
             }
+    }
+
+    /// Bandeau fugace au centre de l'image (±10 s, changement de mode du chat).
+    private func flash(_ text: String) {
+        withAnimation(.easeOut(duration: 0.15)) { seekFlash = text }
+        Task {
+            try? await Task.sleep(nanoseconds: 700_000_000)
+            withAnimation(.easeOut(duration: 0.2)) { seekFlash = nil }
+        }
     }
 
     // MARK: – Affichage des commandes

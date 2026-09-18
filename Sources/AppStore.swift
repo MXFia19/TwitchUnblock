@@ -88,6 +88,12 @@ final class AppStore: ObservableObject {
         didSet { UserDefaults.standard.set(immersivePlayer, forKey: "cfg_immersive") }
     }
 
+    /// Place du chat en paysage : colonne, superposé à l'image, ou replié.
+    /// Mémorisé, parce qu'on choisit ça une fois puis on n'y revient plus.
+    @Published var landscapeChat: LandscapeChat = .column {
+        didSet { UserDefaults.standard.set(landscapeChat.rawValue, forKey: "cfg_landscape_chat") }
+    }
+
     // MARK: – Comptage d'utilisation
     /// Signaler anonymement que cette installation est active.
     /// Voir Sources/Services/UsageService.swift pour ce qui part réellement.
@@ -130,6 +136,8 @@ final class AppStore: ObservableObject {
         autoPurgeImageCache = ud.object(forKey: "cfg_purge_cache") as? Bool ?? true
         lowLatency         = ud.object(forKey: "cfg_low_latency") as? Bool ?? false
         immersivePlayer    = ud.object(forKey: "cfg_immersive")   as? Bool ?? false
+        landscapeChat      = LandscapeChat(rawValue: ud.string(forKey: "cfg_landscape_chat") ?? "")
+                             ?? .column
         shareUsage         = ud.object(forKey: "cfg_share_usage") as? Bool ?? true
         showLatency        = ud.object(forKey: "dbg_latency")    as? Bool ?? false
         autoChatDelay      = ud.object(forKey: "dbg_chat_delay") as? Bool ?? false

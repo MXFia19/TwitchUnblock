@@ -44,9 +44,6 @@ struct MainTabView: View {
     @State private var showPlayerMenu  = false
     /// Qualité retenue par le lecteur immersif (vide = meilleure disponible).
     @State private var immersiveQuality = ""
-    /// En paysage, le chat occupe une colonne à droite ; on peut la replier
-    /// pour rendre toute la largeur à l'image.
-    @State private var showChatInLandscape = true
 
     /// Décalage à appliquer au chat : la latence mesurée, si la synchro est active.
     private var chatDelay: Double {
@@ -218,6 +215,7 @@ struct MainTabView: View {
     private func playerBody(links: QualityLinks, size: CGSize, landscape: Bool) -> some View {
         // Le mode « chat seul » n'a pas de colonne vidéo : il reste empilé.
         let split  = landscape && !chatOnly
+        let mode   = store.landscapeChat
         let layout = split ? AnyLayout(HStackLayout(spacing: 0))
                            : AnyLayout(VStackLayout(spacing: 0))
         // Portrait : hauteur 16:9 imposée, le chat prend le reste.
@@ -227,11 +225,21 @@ struct MainTabView: View {
         // Un tiers de l'écran, borné : au-delà le chat mange l'image, en deçà les
         // messages se hachent en mots isolés.
         let chatWidth: CGFloat? = split ? min(max(size.width * 0.32, 260), 380) : nil
-        // Largeur réellement occupée dans la rangée : zéro quand on replie.
+        // Place prise dans la rangée : seule la disposition « colonne » en
+        // réclame. Superposé et replié laissent toute la largeur à l'image.
         let chatColumn: CGFloat? = {
-            guard split, !showChatInLandscape else { return chatWidth }
+            guard split, mode != .column else { return chatWidth }
             return CGFloat(0)
         }()
+        let chatVisible = !split || mode != .hidden
+        let chatStyle: ChatStyle = !split ? .standard
+                                 : (mode == .overlay ? .overlay : .compact)
+        // Superposé, le chat flotte entre les deux barres du lecteur. Sans cette
+        // réserve il recouvrirait leurs boutons — dont celui qui sert justement à
+        // quitter ce mode.
+        let overlaying = split && mode == .overlay
+        let chatInsetTop:    CGFloat = overlaying ? 60 : 0
+        let chatInsetBottom: CGFloat = overlaying ? 80 : 0
 
         layout {
             VStack(spacing: 0) {
@@ -249,20 +257,28 @@ struct MainTabView: View {
             .frame(maxWidth: .infinity)
             .frame(maxHeight: videoMaxHeight)
 
-            // Replier le chat le réduit à une colonne de largeur nulle au lieu de
-            // le retirer de la hiérarchie : le sortir ferait mourir ChatView,
-            // donc couperait la connexion IRC à chaque appui sur le bouton.
-            // Les deux `frame` ne font pas doublon : le premier garde la mise en
-            // page des messages à sa largeur normale (à zéro, chaque message se
-            // replierait sur une colonne de caractères), le second rétrécit la
-            // colonne et `clipped` masque le débordement.
-            chatPane
+            // Le chat n'est jamais retiré de la hiérarchie : le sortir ferait
+            // mourir ChatView, donc couperait la connexion IRC à chaque bascule.
+            // Les trois `frame` ne font pas doublon. Le premier fixe la largeur
+            // de mise en page des messages (à zéro, chacun se replierait sur une
+            // colonne d'un caractère). Le second donne la hauteur. Le troisième
+            // fixe la place prise dans la rangée : à zéro et aligné à droite, le
+            // contenu déborde vers la gauche — c'est ce qui le pose sur l'image
+            // en mode superposé, sans que la vidéo ne rétrécisse.
+            //
+            // Replié, `opacity` le masque et `allowsHitTesting` coupe les
+            // touchers : sans ça on appuyait encore sur un chat invisible, un
+            // cadrage nul ne bornant pas les zones tactiles.
+            chatPane(style: chatStyle)
                 .frame(width: chatWidth)
+                .padding(.top, chatInsetTop)
+                .padding(.bottom, chatInsetBottom)
                 .frame(maxHeight: .infinity)
-                .frame(width: chatColumn)
-                .clipped()
+                .frame(width: chatColumn, alignment: .trailing)
+                .opacity(chatVisible ? 1 : 0)
+                .allowsHitTesting(chatVisible)
                 .overlay(alignment: .leading) {
-                    if split, showChatInLandscape {
+                    if split, mode == .column {
                         Divider().background(Color.tBorder)
                     }
                 }
@@ -271,7 +287,7 @@ struct MainTabView: View {
 
     /// Le chat, quelle que soit la disposition.
     @ViewBuilder
-    private var chatPane: some View {
+    private func chatPane(style: ChatStyle) -> some View {
         if let channel = currentChannelName {
             ChatView(
                 channelName: channel,
@@ -280,6 +296,7 @@ struct MainTabView: View {
                 login: store.twitchLogin,
                 chatDelay: chatDelay,
                 chatOnly: $chatOnly,
+                style: style,
                 onJoinChannel: { target in   // raid → suit la chaîne raidée
                     playLive(target)
                 }
@@ -288,7 +305,7 @@ struct MainTabView: View {
             .frame(maxHeight: .infinity)
 
         } else if let vid = currentVodId {
-            VodChatView(videoId: vid, playbackTime: vodPlaybackTime)
+            VodChatView(videoId: vid, playbackTime: vodPlaybackTime, style: style)
                 .id(vid)
                 .frame(maxHeight: .infinity)
 
@@ -308,7 +325,7 @@ struct MainTabView: View {
                 savedTime: currentVodId.map { store.getVodProgress($0) } ?? 0,
                 info: overlayInfo,
                 sleepLabel: sleepTimer.isActive ? sleepTimer.label : nil,
-                chatShown: showChatInLandscape,
+                chatMode: store.landscapeChat,
                 isLandscape: landscape,
                 onProgress: { time in
                     vodPlaybackTime = time
@@ -319,7 +336,7 @@ struct MainTabView: View {
                 onClose:  { stopPlayer() },
                 onMenu:   { showPlayerMenu = true },
                 onRefresh: { reloadCurrent() },
-                onToggleChat: { withAnimation { showChatInLandscape.toggle() } },
+                onToggleChat: { withAnimation { store.landscapeChat = store.landscapeChat.next } },
                 onSleep: { showSleepSheet = true }
             )
         } else {

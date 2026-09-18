@@ -10,6 +10,8 @@ struct ChatView: View {
     var chatDelay: Double = 0
     /// Mode « chat seul » : la vidéo est masquée, le parent en a besoin.
     @Binding var chatOnly: Bool
+    /// Présentation : plein cadre, colonne étroite, ou calque sur l'image.
+    var style: ChatStyle = .standard
     var onJoinChannel: (String) -> Void = { _ in }   // raid → bascule vers une autre chaîne
 
     @EnvironmentObject private var store: AppStore
@@ -45,7 +47,10 @@ struct ChatView: View {
         messageText.count <= 500
     }
 
-    var body: some View {
+    /// Décor autour des messages : statut de connexion, épinglés, sondages,
+    /// raids. En paysage la colonne est étroite et ce bandeau lui mangeait la
+    /// moitié de la hauteur utile — d'où `ChatStyle.showsChrome`.
+    @ViewBuilder private var chrome: some View {
         VStack(spacing: 0) {
 
             // ── Barre de statut ─────────────────────────────────────
@@ -195,6 +200,14 @@ struct ChatView: View {
                 .buttonStyle(.plain)
             }
 
+        }
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+
+            if style.showsChrome { chrome }
+
             // ── Zone principale ─────────────────────────────────────
             if showEmotePicker && canSendMessages {
                 EmotePickerView(channelId: channelId) { emote in
@@ -213,7 +226,8 @@ struct ChatView: View {
                                     ForEach(chat.messages.reversed()) { msg in
                                         ChatMessageRow(
                                             message: msg,
-                                            availableWidth: geo.size.width
+                                            availableWidth: geo.size.width,
+                                            style: style
                                         )
                                         .id(msg.id)
                                         .contentShape(Rectangle())
@@ -290,7 +304,18 @@ struct ChatView: View {
             // ── Barre d'envoi ───────────────────────────────────────
             if canSendMessages { inputBar }
         }
-        .background(Color.tDark)
+        // Superposé à l'image : pas de fond opaque, mais un dégradé qui assombrit
+        // le bas de l'image, là où les messages s'accumulent. Sans lui, du texte
+        // blanc sur une scène claire devient illisible.
+        .background {
+            if style.translucent {
+                LinearGradient(colors: [.black.opacity(0.0), .black.opacity(0.55)],
+                               startPoint: .top, endPoint: .bottom)
+                    .allowsHitTesting(false)
+            } else {
+                Color.tDark
+            }
+        }
         // ── Fil de discussion (répondre) ─────────────────────────────
         .sheet(item: $threadRoot) { root in
             ThreadSheet(root: root, chat: chat,
@@ -470,14 +495,17 @@ struct ChatView: View {
     @ViewBuilder
     private var inputBar: some View {
         VStack(spacing: 0) {
-            Divider().background(Color.tBorder)
+            if !style.translucent { Divider().background(Color.tBorder) }
             VStack(spacing: 4) {
                 HStack(spacing: 6) {
 
-                    // 🎁 Points de chaîne
-                    ChannelPointsButton(service: pointsService) {
-                        showEmotePicker = false
-                        showPointsSheet = true
+                    // 🎁 Points de chaîne — le jeton prend de la place et n'a rien
+                    // d'urgent : en colonne étroite il cède le pas au champ texte.
+                    if style.showsChrome {
+                        ChannelPointsButton(service: pointsService) {
+                            showEmotePicker = false
+                            showPointsSheet = true
+                        }
                     }
 
                     // 😊 Emote picker
@@ -558,8 +586,10 @@ struct ChatView: View {
                     }
                 }
             }
-            .padding(.horizontal, 12).padding(.top, 8).padding(.bottom, 10)
-            .background(Color.tCard)
+            .padding(.horizontal, style.showsChrome ? 12 : 8)
+            .padding(.top, style.showsChrome ? 8 : 4)
+            .padding(.bottom, style.showsChrome ? 10 : 6)
+            .background(style.translucent ? Color.black.opacity(0.45) : Color.tCard)
         }
     }
 
@@ -598,6 +628,7 @@ struct ChatView: View {
 struct ChatMessageRow: View {
     let message: ChatMessage
     let availableWidth: CGFloat
+    var style: ChatStyle = .standard
     @EnvironmentObject private var store: AppStore
 
     private static let timeFormatter: DateFormatter = {
@@ -658,8 +689,10 @@ struct ChatMessageRow: View {
                 HStack(alignment: .top, spacing: 0) {
                     if message.isHighlight { Rectangle().fill(Color.tWarning).frame(width: 3) }
                     WrappingHStack(message: message, timeString: timeString,
-                                   availableWidth: availableWidth - 24)
-                        .padding(.horizontal, 12).padding(.vertical, 4)
+                                   availableWidth: availableWidth - 24,
+                                   style: style)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, style.rowPadding)
                 }
                 .frame(width: availableWidth, alignment: .leading)
             }
@@ -670,6 +703,9 @@ struct ChatMessageRow: View {
             message.isFirstMessage ? Color.tPrimary.opacity(0.05) :
                                      Color.clear
         )
+        // Sur l'image, une ombre portée fait tenir le texte clair au-dessus
+        // d'une scène claire sans avoir à assombrir toute la vidéo.
+        .shadow(color: .black.opacity(style.translucent ? 0.95 : 0), radius: 2, x: 0, y: 1)
     }
 }
 
@@ -678,27 +714,35 @@ struct WrappingHStack: View {
     let message: ChatMessage
     let timeString: String
     let availableWidth: CGFloat
+    var style: ChatStyle = .standard
 
     var body: some View {
         let blocks = message.tokens.enumerated().map { i, t in TokenBlock(id: i, content: t) }
+        let size = style.fontSize
+        // Les emotes suivent le texte : à 12 pt elles ne doivent pas rester
+        // à la hauteur d'origine, sinon la ligne reste aussi haute qu'avant.
+        let emoteHeight = size + 11
         MessageFlowLayout(spacing: 4, lineSpacing: 4, width: availableWidth) {
-            Text(timeString).font(.system(size: 11)).foregroundColor(.tMuted)
+            if style.showsTimestamp {
+                Text(timeString).font(.system(size: size - 2)).foregroundColor(.tMuted)
+            }
             ForEach(message.badges) { badge in
-                CachedEmoteImage(url: badge.url, name: "", height: 16,
+                CachedEmoteImage(url: badge.url, name: "", height: size + 3,
                                  showsNameFallback: false)
             }
             Text(message.displayName + ":")
-                .font(.system(size: 13, weight: .bold)).foregroundColor(message.color)
+                .font(.system(size: size, weight: .bold)).foregroundColor(message.color)
             ForEach(blocks) { block in
                 switch block.content {
                 case .text(let t):
-                    Text(t).font(.system(size: 13))
+                    Text(t).font(.system(size: size))
                         .foregroundColor(message.isAction ? message.color : .tText)
-                case .emote(let e): CachedEmoteImage(url: e.url, name: e.name)
+                case .emote(let e):
+                    CachedEmoteImage(url: e.url, name: e.name, height: emoteHeight)
                 case .mention(let m):
-                    Text("@\(m)").font(.system(size: 13, weight: .semibold)).foregroundColor(.tPrimary)
+                    Text("@\(m)").font(.system(size: size, weight: .semibold)).foregroundColor(.tPrimary)
                 case .link(let l):
-                    Text(l).font(.system(size: 13))
+                    Text(l).font(.system(size: size))
                         .foregroundColor(.tOutplayer).underline()
                         .lineLimit(1).truncationMode(.middle)
                         .onTapGesture { openLink(l) }

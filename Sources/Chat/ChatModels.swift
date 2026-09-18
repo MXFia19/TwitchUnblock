@@ -1,6 +1,70 @@
 import Foundation
 import SwiftUI
 
+// MARK: – Place du chat en paysage
+/// Trois états, parcourus par le même bouton du lecteur.
+enum LandscapeChat: String, CaseIterable {
+    /// Colonne à droite : l'image rétrécit d'autant.
+    case column
+    /// Superposé à l'image, fond transparent : l'image garde toute la largeur.
+    case overlay
+    /// Replié : l'image seule.
+    case hidden
+
+    var next: LandscapeChat {
+        switch self {
+        case .column:  return .overlay
+        case .overlay: return .hidden
+        case .hidden:  return .column
+        }
+    }
+
+    /// Trois symboles sûrs depuis iOS 13 : un nom inconnu ne planterait pas mais
+    /// laisserait un bouton vide.
+    var icon: String {
+        switch self {
+        case .column:  return "sidebar.right"
+        case .overlay: return "rectangle.on.rectangle"
+        case .hidden:  return "bubble.left"
+        }
+    }
+
+    /// Clé de traduction du libellé affiché brièvement au changement.
+    var labelKey: String {
+        switch self {
+        case .column:  return "chat_mode_column"
+        case .overlay: return "chat_mode_overlay"
+        case .hidden:  return "chat_mode_hidden"
+        }
+    }
+}
+
+// MARK: – Présentation du chat
+/// Regroupe ce qui change entre le chat plein cadre, la colonne étroite du
+/// paysage et le calque posé sur l'image. Passer un seul objet évite de
+/// promener cinq drapeaux jusqu'aux lignes de message.
+struct ChatStyle: Equatable {
+    /// Barre d'état, épinglés, sondages, raids — tout le décor autour des messages.
+    var showsChrome = true
+    /// Horodatage devant chaque message.
+    var showsTimestamp = true
+    var fontSize: CGFloat = 13
+    var rowPadding: CGFloat = 4
+    /// Fond transparent et texte ombré, pour rester lisible sur l'image.
+    var translucent = false
+
+    static let standard = ChatStyle()
+
+    /// Colonne étroite : le décor mange la moitié de la hauteur utile, on le
+    /// retire et on resserre les lignes.
+    static let compact = ChatStyle(showsChrome: false, showsTimestamp: false,
+                                   fontSize: 12, rowPadding: 2)
+
+    /// Posé sur la vidéo : compact, sans fond, avec une ombre portée.
+    static let overlay = ChatStyle(showsChrome: false, showsTimestamp: false,
+                                   fontSize: 12, rowPadding: 2, translucent: true)
+}
+
 // MARK: – Emote
 struct TwitchEmote: Identifiable, Hashable {
     let id: String

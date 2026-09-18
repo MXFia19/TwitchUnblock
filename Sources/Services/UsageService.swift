@@ -26,6 +26,20 @@ struct UsageVersion: Identifiable {
     let count: Int
 }
 
+/// Fidélité : combien de JOURS DISTINCTS chaque installation a été utilisée.
+struct UsageLoyalty {
+    /// Ouverte un seul jour — quelqu'un qui a essayé puis n'est pas revenu.
+    let once: Int
+    /// 2 à 6 jours.
+    let few: Int
+    /// 7 à 29 jours.
+    let regular: Int
+    /// 30 jours et plus.
+    let daily: Int
+
+    var total: Int { once + few + regular + daily }
+}
+
 struct UsageStats {
     /// Identifiants distincts vus aujourd'hui / sur 7 jours / sur 30 jours.
     let today: Int
@@ -33,8 +47,22 @@ struct UsageStats {
     let month: Int
     /// Installations connues sur la fenêtre de rétention (35 jours).
     let known: Int
+    /// Installations revues au moins un deuxième jour.
+    let returning: Int
+    /// Répartition par nombre de jours d'utilisation.
+    let loyalty: UsageLoyalty
+    /// Moyenne de jours d'utilisation par installation.
+    let avgDays: Double
+    /// Date de la plus ancienne installation encore comptée (AAAA-MM-JJ).
+    let oldestFirst: String?
     /// Répartition par version, la plus répandue en tête.
     let versions: [UsageVersion]
+
+    /// Part des installations qui sont revenues au moins une fois, en %.
+    var returnRate: Int {
+        guard known > 0 else { return 0 }
+        return Int((Double(returning) / Double(known) * 100).rounded())
+    }
 }
 
 @MainActor
@@ -133,11 +161,23 @@ final class UsageService: ObservableObject {
                       let n = v["count"] as? Int else { return nil }
                 return UsageVersion(version: name, count: n)
             }
+            // Champs absents si le Worker n'a pas encore la mesure de fidélité :
+            // tout retombe alors sur zéro plutôt que d'échouer.
+            let l = json["loyalty"] as? [String: Any] ?? [:]
             stats = UsageStats(
                 today: json["today"] as? Int ?? 0,
                 week:  json["week"]  as? Int ?? 0,
                 month: json["month"] as? Int ?? 0,
                 known: json["known"] as? Int ?? 0,
+                returning: json["returning"] as? Int ?? 0,
+                loyalty: UsageLoyalty(
+                    once:    l["once"]    as? Int ?? 0,
+                    few:     l["few"]     as? Int ?? 0,
+                    regular: l["regular"] as? Int ?? 0,
+                    daily:   l["daily"]   as? Int ?? 0
+                ),
+                avgDays: json["avgDays"] as? Double ?? 0,
+                oldestFirst: json["oldestFirst"] as? String,
                 versions: versions
             )
             logger.success("USAGE", "Compteurs reçus",

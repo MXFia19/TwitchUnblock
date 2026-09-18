@@ -56,18 +56,37 @@ async function handlePing(request, env) {
     return jsonResponse({ ok: true, forgotten: true });
   }
 
+  const day = new Date().toISOString().slice(0, 10);
+
+  // Relecture des métadonnées existantes pour savoir si cette installation a
+  // déjà été vue, et quand. C'est ce qui distingue « ouvert une fois » de
+  // « utilisé tous les jours » : sans ça, on écrase la date et on perd l'info.
+  // Coût : une lecture par ping, donc au pire une par installation et par heure.
+  let prev = {};
+  try {
+    const stored = await env.TWITCH_DATA.getWithMetadata(USAGE_PREFIX + id);
+    prev = stored.metadata || {};
+  } catch (e) {
+    // Première fois, ou lecture indisponible : on repart d'un état vierge.
+  }
+
+  // Un même jour ne compte qu'une fois, quel que soit le nombre d'ouvertures.
+  const days = prev.last === day ? (prev.days || 1) : (prev.days || 0) + 1;
+
   // Valeur vide : tout tient dans les métadonnées, que list() renvoie
   // sans lecture supplémentaire (voir handleStats).
   await env.TWITCH_DATA.put(USAGE_PREFIX + id, "", {
     expirationTtl: 60 * 60 * 24 * USAGE_RETENTION_DAYS,
     metadata: {
-      last: new Date().toISOString().slice(0, 10),
+      first: prev.first || day,
+      last: day,
+      days,
       v: String(body.version || "?").slice(0, 16),
       p: String(body.platform || "ios").slice(0, 16)
     }
   });
 
-  return jsonResponse({ ok: true });
+  return jsonResponse({ ok: true, days });
 }
 
 // ── GET /api/stats ────────────────────────────────────────────────────────
@@ -77,6 +96,13 @@ async function handleStats(env) {
   const todayMs = Date.parse(new Date().toISOString().slice(0, 10) + "T00:00:00Z");
   let cursor, known = 0, today = 0, week = 0, month = 0;
   const versions = {};
+
+  // Fidélité : combien de JOURS DISTINCTS chaque installation a été utilisée.
+  // once = ouverte un seul jour, few = 2 à 6, regular = 7 à 29, daily = 30+.
+  const loyalty = { once: 0, few: 0, regular: 0, daily: 0 };
+  let returning = 0;      // vues au moins deux jours différents
+  let totalDays = 0;      // pour la moyenne
+  let oldestFirst = null; // première installation connue
 
   // list() plafonne à 1000 clés par page : on pagine pour rester juste.
   do {
@@ -99,6 +125,19 @@ async function handleStats(env) {
         const v = meta.v || "?";
         versions[v] = (versions[v] || 0) + 1;
       }
+
+      // Installations d'avant ce changement : pas de compteur, on suppose 1 jour.
+      const d = meta.days || 1;
+      totalDays += d;
+      if (d >= 2) returning++;
+      if (d === 1) loyalty.once++;
+      else if (d < 7) loyalty.few++;
+      else if (d < 30) loyalty.regular++;
+      else loyalty.daily++;
+
+      if (meta.first && (!oldestFirst || meta.first < oldestFirst)) {
+        oldestFirst = meta.first;
+      }
     }
 
     cursor = page.list_complete ? undefined : page.cursor;
@@ -109,6 +148,10 @@ async function handleStats(env) {
     week,
     month,
     known,
+    returning,
+    loyalty,
+    avgDays: known ? Math.round((totalDays / known) * 10) / 10 : 0,
+    oldestFirst,
     versions: Object.entries(versions)
       .map(([version, count]) => ({ version, count }))
       .sort((a, b) => b.count - a.count),

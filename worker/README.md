@@ -98,6 +98,38 @@ Dans l'app : Réglages → **Utilisation de l'app** → *Actualiser*.
 
 ---
 
+## Mise à jour — mesure de fidélité
+
+Une seconde version d'`analytics.js` ajoute trois informations par installation :
+date de **première** ouverture, date de **dernière** ouverture, et nombre de
+**jours distincts** d'utilisation. C'est ce qui distingue « quelqu'un a essayé
+l'app une fois » de « quelqu'un s'en sert tous les jours ».
+
+Pour l'appliquer : recolle simplement le bloc d'`analytics.js` par-dessus
+l'ancien, et redéploie. Rien d'autre à changer — ni route, ni binding.
+
+`handlePing` fait désormais une lecture (`getWithMetadata`) avant d'écrire, pour
+savoir si l'installation a déjà été vue et quel jour. Ça coûte une lecture KV
+par ping, donc au pire une par installation et par heure : sans commune mesure
+avec le palier gratuit de 100 000 lectures par jour.
+
+Les installations enregistrées avant cette mise à jour n'ont pas de compteur :
+elles sont comptées comme « 1 seul jour » jusqu'à leur prochaine ouverture, où
+elles repartent proprement.
+
+`/api/stats` renvoie en plus :
+
+```json
+{
+  "returning": 3,
+  "loyalty": { "once": 5, "few": 2, "regular": 1, "daily": 0 },
+  "avgDays": 2.4,
+  "oldestFirst": "2026-09-18"
+}
+```
+
+---
+
 ## Autre correctif à passer en même temps
 
 `handleGetLive` appelle `getRequestHeaders(login)`, une fonction qui n'existe

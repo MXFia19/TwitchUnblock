@@ -257,6 +257,13 @@ struct SettingsView: View {
                                         icon: "calendar.badge.clock")
                             }
 
+                            // Fidélité : la question n'est pas « combien ont
+                            // installé » mais « combien reviennent ».
+                            if s.loyalty.total > 0 {
+                                Divider().background(Color.tBorder)
+                                loyaltyBlock(s)
+                            }
+
                             if !s.versions.isEmpty {
                                 VStack(alignment: .leading, spacing: 6) {
                                     Text(store.t("usage_versions"))
@@ -433,6 +440,61 @@ struct SettingsView: View {
                 LogsView()
             }
             .background(Color.tDark)
+        }
+    }
+
+    // MARK: – Fidélité des installations
+    @ViewBuilder
+    private func loyaltyBlock(_ s: UsageStats) -> some View {
+        VStack(alignment: .leading, spacing: TSpace.sm) {
+            HStack {
+                Text(store.t("usage_returning"))
+                    .font(.tCardTitle).foregroundColor(.tText)
+                Spacer()
+                Text("\(s.returning) / \(s.known)  ·  \(s.returnRate) %")
+                    .font(.tLabel).foregroundColor(.tPrimary)
+            }
+
+            // Une ligne par tranche, avec la barre ET le chiffre : la longueur
+            // seule se compare mal quand les effectifs sont petits.
+            loyaltyRow(store.t("usage_loyalty_once"),    s.loyalty.once,    s.loyalty.total, .tMuted)
+            loyaltyRow(store.t("usage_loyalty_few"),     s.loyalty.few,     s.loyalty.total, .tOutplayer)
+            loyaltyRow(store.t("usage_loyalty_regular"), s.loyalty.regular, s.loyalty.total, .tPurple)
+            loyaltyRow(store.t("usage_loyalty_daily"),   s.loyalty.daily,   s.loyalty.total, .tSuccess)
+
+            HStack(spacing: TSpace.md) {
+                TMeta(icon: "calendar",
+                      text: "\(store.t("usage_avg_days")) \(String(format: "%.1f", s.avgDays))")
+                if let first = s.oldestFirst {
+                    TMeta(icon: "clock.arrow.circlepath",
+                          text: "\(store.t("usage_since")) \(first)")
+                }
+            }
+            .padding(.top, 2)
+        }
+    }
+
+    @ViewBuilder
+    private func loyaltyRow(_ title: String, _ value: Int,
+                            _ total: Int, _ tint: Color) -> some View {
+        let ratio = total > 0 ? Double(value) / Double(total) : 0
+        HStack(spacing: TSpace.sm) {
+            Text(title)
+                .font(.tMeta).foregroundColor(.tMuted)
+                .frame(width: 92, alignment: .leading)
+
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Color.tSurface)
+                    Capsule().fill(tint)
+                        .frame(width: max(value > 0 ? 4 : 0, geo.size.width * ratio))
+                }
+            }
+            .frame(height: 8)
+
+            Text("\(value)")
+                .font(.tLabel).foregroundColor(value > 0 ? .tText : .tMuted)
+                .frame(width: 28, alignment: .trailing)
         }
     }
 

@@ -17,7 +17,9 @@ final class TwitchAuthManager: NSObject, ASWebAuthenticationPresentationContextP
             .init(name: "client_id",     value: kHelixClientID),
             .init(name: "redirect_uri",  value: kRedirectURI),
             .init(name: "response_type", value: "token"),
-            .init(name: "scope",         value: "user:read:follows chat:read chat:edit"),
+            // user:manage:chat_color : Twitch a retiré les commandes /color de l'IRC
+            // en 2023, la couleur passe désormais par l'API Helix.
+            .init(name: "scope",         value: "user:read:follows chat:read chat:edit user:manage:chat_color"),
             .init(name: "force_verify",  value: forceVerify ? "true" : "false"),
         ]
         guard let authURL = comps.url else { return nil }

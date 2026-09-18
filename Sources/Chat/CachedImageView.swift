@@ -44,15 +44,21 @@ struct CachedEmoteImage: View {
     let height: CGFloat
     /// Repli textuel si le chargement échoue (utile en chat, pas pour les badges).
     let showsNameFallback: Bool
+    /// Jouer l'animation. Le sélecteur d'emotes en affiche des centaines
+    /// simultanément : autant de UIImageView qui tournent en boucle, et
+    /// l'interface se traîne. Il n'en affiche donc que la première image.
+    let animated: Bool
 
     @State private var img: CachedImage?
     @State private var failed = false
 
-    init(url: String, name: String, height: CGFloat = 24, showsNameFallback: Bool = true) {
+    init(url: String, name: String, height: CGFloat = 24,
+         showsNameFallback: Bool = true, animated: Bool = true) {
         self.url = url
         self.name = name
         self.height = height
         self.showsNameFallback = showsNameFallback
+        self.animated = animated
         // Chemin rapide : déjà en mémoire ⇒ affiché dès la première frame,
         // sans passer par un état de chargement (c'est ça qui supprime la latence
         // et le clignotement quand le chat défile vite).
@@ -62,7 +68,7 @@ struct CachedEmoteImage: View {
     var body: some View {
         Group {
             if let img {
-                if img.isAnimated {
+                if img.isAnimated, animated {
                     AnimatedImageView(image: img)
                         .frame(width: height * img.aspect, height: height)
                 } else if let ui = img.first {

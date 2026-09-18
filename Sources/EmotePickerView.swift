@@ -9,21 +9,29 @@ struct EmotePickerView: View {
     @State private var searchText   = ""
     @State private var isLoading    = true
 
+    /// Index de recherche : toutes les emotes dédupliquées, nom déjà en
+    /// minuscules. Sans lui, chaque frappe relançait un
+    /// `localizedCaseInsensitiveContains` (comparaison sensible à la locale, donc
+    /// coûteuse) sur plusieurs milliers d'emotes — d'où les à-coups.
+    @State private var searchIndex: [(emote: TwitchEmote, lower: String)] = []
+
     // 6 colonnes fixes — bon équilibre taille / densité
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 2), count: 6)
 
     // Emotes à afficher : recherche globale OU onglet courant
     private var displayed: [TwitchEmote] {
         guard !groups.isEmpty else { return [] }
-        if !searchText.isEmpty {
-            var seen = Set<String>()
-            return groups
-                .flatMap { $0.emotes }
-                .filter {
-                    $0.name.localizedCaseInsensitiveContains(searchText)
-                    && seen.insert($0.id).inserted
-                }
-                .sorted { $0.name.lowercased() < $1.name.lowercased() }
+        let kw = searchText.trimmingCharacters(in: .whitespaces).lowercased()
+        if !kw.isEmpty {
+            // 200 résultats suffisent largement à la saisie ; au-delà on ne fait
+            // que construire des cellules que personne ne fera défiler.
+            var out: [TwitchEmote] = []
+            out.reserveCapacity(200)
+            for entry in searchIndex where entry.lower.contains(kw) {
+                out.append(entry.emote)
+                if out.count == 200 { break }
+            }
+            return out
         }
         return groups.indices.contains(selectedTab) ? groups[selectedTab].emotes : []
     }
@@ -135,8 +143,16 @@ struct EmotePickerView: View {
         }
         .background(Color.tCard)
         .task {
-            groups    = await EmoteService.shared.groupedEmotes(channelId: channelId)
-            isLoading = false
+            let loaded = await EmoteService.shared.groupedEmotes(channelId: channelId)
+            // Index bâti une seule fois, trié ici plutôt qu'à chaque frappe.
+            var seen = Set<String>()
+            let index = loaded.flatMap { $0.emotes }
+                .filter { seen.insert($0.id).inserted }
+                .map { (emote: $0, lower: $0.name.lowercased()) }
+                .sorted { $0.lower < $1.lower }
+            groups      = loaded
+            searchIndex = index
+            isLoading   = false
         }
     }
 }
@@ -146,13 +162,13 @@ private struct EmoteCell: View {
     let emote: TwitchEmote
     let onTap: () -> Void
 
-    @State private var isPressed = false
-
     var body: some View {
         Button(action: onTap) {
             VStack(spacing: 3) {
+                // animated: false — des centaines d'emotes animées en même temps
+                // saturent le processeur et rendent la grille inutilisable.
                 CachedEmoteImage(url: emote.url, name: String(emote.name.prefix(3)),
-                                 height: 34)
+                                 height: 34, animated: false)
                     .frame(width: 34, height: 34)
 
                 Text(emote.name)
@@ -164,14 +180,8 @@ private struct EmoteCell: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 6)
-            .background(isPressed ? Color.tPrimary.opacity(0.15) : Color.clear)
-            .cornerRadius(8)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { _ in isPressed = true }
-                .onEnded   { _ in isPressed = false }
-        )
     }
 }

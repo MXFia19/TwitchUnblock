@@ -371,42 +371,49 @@ func getChannelVideos(channelName: String, cursor: String? = nil) async -> (vide
     return (videos: videos, avatar: avatar, error: nil, cursor: nextCursor)
 }
 
-// MARK: – Chatteurs (GQL)
-/// Personnes présentes dans le chat, par rôle. C'est la requête qu'utilise le
-/// site Twitch : l'ancien endpoint tmi.twitch.tv/group/user/…/chatters est fermé.
-func getChatters(channelName: String) async -> ChattersData? {
-    let login = channelName.lowercased()
-    let q = """
-    query { channel(name: "\(login)") { chatters {
-        count
-        broadcasters { login }
-        moderators   { login }
-        vips         { login }
-        viewers      { login }
-    } } }
-    """
-    guard let json = try? await twitchGQL(q) as? [String: Any],
-          let data = json["data"] as? [String: Any],
-          let channel = data["channel"] as? [String: Any],
-          let chatters = channel["chatters"] as? [String: Any] else {
-        logger.warn("CHAT", "Liste des chatteurs indisponible", login)
+// MARK: – Couleur du pseudo (Helix)
+/// Change la couleur du pseudo dans le chat.
+///
+/// Les commandes de modération et de compte (`/color`, `/ban`…) ont été
+/// retirées de l'IRC par Twitch en 2023 : les envoyer en PRIVMSG renvoie
+/// « Unrecognized command ». Tout passe maintenant par Helix.
+///
+/// Renvoie nil si tout s'est bien passé, sinon une clé de message d'erreur.
+func setChatColor(token: String, userId: String, color: String) async -> String? {
+    guard !userId.isEmpty,
+          let url = URL(string: "https://api.twitch.tv/helix/chat/color?user_id=\(userId)&color=\(color)")
+    else { return "color_bad_request" }
+
+    var req = URLRequest(url: url)
+    req.httpMethod = "PUT"
+    req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+    req.setValue(kHelixClientID, forHTTPHeaderField: "Client-Id")
+
+    guard let (_, resp) = try? await URLSession.shared.data(for: req) else {
+        return "color_network"
+    }
+    let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+    switch code {
+    case 204, 200:
+        logger.success("CHAT", "Couleur du pseudo changée", color)
         return nil
+    case 401:
+        // Jeton émis avant l'ajout du scope user:manage:chat_color.
+        logger.warn("CHAT", "Couleur refusée : scope manquant", "reconnexion nécessaire")
+        return "color_needs_relogin"
+    default:
+        logger.warn("CHAT", "Couleur refusée", "HTTP \(code)")
+        return "color_failed"
     }
-    func logins(_ key: String) -> [String] {
-        ((chatters[key] as? [[String: Any]]) ?? [])
-            .compactMap { $0["login"] as? String }
-            .sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
-    }
-    let result = ChattersData(
-        count:        chatters["count"] as? Int ?? 0,
-        broadcasters: logins("broadcasters"),
-        moderators:   logins("moderators"),
-        vips:         logins("vips"),
-        viewers:      logins("viewers")
-    )
-    logger.success("CHAT", "\(result.count) personnes dans le chat de \(login)")
-    return result
 }
+
+// MARK: – Chatteurs
+//  Il n'existe plus d'API publique pour lister les personnes présentes :
+//    • tmi.twitch.tv/group/user/<canal>/chatters a été fermé en 2023 ;
+//    • la requête GQL `channel { chatters }` répond « failed integrity check »,
+//      elle exige un jeton signé obtenu par un défi JavaScript ;
+//    • Helix /chat/chatters impose d'être modérateur du canal.
+//  La liste est donc constituée depuis l'IRC (voir ChatService.presentUsers).
 
 // MARK: – Helix
 func getTwitchUser(token: String) async -> TwitchUser? {

@@ -30,6 +30,16 @@ final class ChatService: NSObject, ObservableObject {
     /// précédente sont abandonnés au lieu d'atterrir dans le nouveau canal.
     private var generation = 0
 
+    /// Personnes présentes dans le chat, tenues à jour depuis l'IRC.
+    ///
+    /// C'est la seule source qui reste : l'endpoint tmi.twitch.tv des chatters
+    /// est fermé, la requête GQL exige un jeton d'intégrité signé, et Helix
+    /// impose d'être modérateur du canal. Twitch n'envoie NAMES/JOIN/PART que
+    /// pour les canaux de taille modeste — d'où `presenceSupported`.
+    @Published private(set) var presentUsers: Set<String> = []
+    /// Twitch a-t-il envoyé au moins une liste de noms pour ce canal ?
+    @Published private(set) var presenceSupported = false
+
     private func trimIfNeeded() {
         let cap = pauseTrim ? maxMessagesPaused : maxMessages
         if messages.count > cap { messages = Array(messages.prefix(cap)) }
@@ -121,6 +131,8 @@ final class ChatService: NSObject, ObservableObject {
     // MARK: – Disconnect
     func disconnect() {
         generation &+= 1   // abandonne les messages encore en attente de synchro
+        presentUsers.removeAll()
+        presenceSupported = false
         connectionTimeoutTask?.cancel(); connectionTimeoutTask = nil
         pingTimer?.invalidate(); pingTimer = nil
         webSocketTask?.cancel(with: .normalClosure, reason: nil); webSocketTask = nil
@@ -241,6 +253,23 @@ final class ChatService: NSObject, ObservableObject {
                     // ← badges résolu via BadgeService (URLs Helix réelles)
                     localBadges = await parseBadges(raw, channelId: channelId)
                 }
+            case "353":
+                // RPL_NAMREPLY : liste des présents, envoyée à l'arrivée.
+                // Format : <nous> = #canal :nom1 nom2 nom3…
+                // Le pseudo et le canal occupent params[0...2] : la liste est le
+                // dernier paramètre, pas `text` (qui vaudrait « = » ici).
+                if irc.params.count >= 4, let names = irc.params.last {
+                    let logins = names.split(separator: " ").map { $0.lowercased() }
+                    presentUsers.formUnion(logins)
+                    presenceSupported = true
+                }
+            case "366":
+                // RPL_ENDOFNAMES : Twitch a fini d'envoyer la liste (même vide).
+                presenceSupported = true
+            case "JOIN":
+                if let who = irc.tags["login"] ?? irc.prefixNick { presentUsers.insert(who.lowercased()) }
+            case "PART":
+                if let who = irc.tags["login"] ?? irc.prefixNick { presentUsers.remove(who.lowercased()) }
             case "NOTICE":
                 await handleNotice(irc)
             case "CLEARCHAT":

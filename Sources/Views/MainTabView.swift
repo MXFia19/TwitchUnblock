@@ -44,6 +44,9 @@ struct MainTabView: View {
     @State private var showPlayerMenu  = false
     /// Qualité retenue par le lecteur immersif (vide = meilleure disponible).
     @State private var immersiveQuality = ""
+    /// En paysage, le chat occupe une colonne à droite ; on peut la replier
+    /// pour rendre toute la largeur à l'image.
+    @State private var showChatInLandscape = true
 
     /// Décalage à appliquer au chat : la latence mesurée, si la synchro est active.
     private var chatDelay: Double {
@@ -169,74 +172,112 @@ struct MainTabView: View {
         }
     }
 
-    // MARK: – Lecteur (plein écran, non scrollable)
+    // MARK: – Lecteur
     @ViewBuilder
     private var playerOverlay: some View {
-        ZStack(alignment: .top) {
-            Color.tDark.ignoresSafeArea()
+        // En paysage, la vidéo et le chat se partagent la largeur : empiler
+        // verticalement ne laisserait qu'un timbre-poste à l'image.
+        GeometryReader { geo in
+            let landscape = geo.size.width > geo.size.height
 
-            VStack(spacing: 0) {
-
-                // En mode immersif, la barre d'en-tête est dessinée PAR-DESSUS
-                // l'image par le lecteur lui-même : pas de bandeau ici.
-                if !store.immersivePlayer || chatOnly || qualityLinks == nil {
-                    playerTopBar
-                }
+            ZStack(alignment: .top) {
+                Color.tDark.ignoresSafeArea()
 
                 if loading {
-                    Spacer()
                     VStack(spacing: TSpace.md) {
                         ProgressView().tint(.tPrimary).scaleEffect(1.3)
                         Text(store.t("loading_vod"))
                             .font(.tCardTitle).foregroundColor(.tMuted)
                     }
-                    Spacer()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                 } else if let err = errorMsg {
-                    Spacer()
                     TEmptyState(icon: "exclamationmark.triangle", title: err,
                                 actionTitle: store.t("back"), action: { stopPlayer() })
-                    Spacer()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                 } else if let links = qualityLinks {
-
-                    // ── Vidéo (masquée en « chat seul ») ─────────────
-                    if !chatOnly {
-                        videoSurface(links: links)
-                    }
-
-                    // ── Chat, pleine largeur, collé sous la vidéo ────
-                    if let channel = currentChannelName {
-                        ChatView(
-                            channelName: channel,
-                            channelId: currentChannelId,
-                            token: store.twitchToken,
-                            login: store.twitchLogin,
-                            chatDelay: chatDelay,
-                            chatOnly: $chatOnly,
-                            onJoinChannel: { target in   // raid → suit la chaîne raidée
-                                playLive(target)
-                            }
-                        )
-                        .id(channel)   // changement de chaîne → chat reconstruit à neuf
-                        .frame(maxHeight: .infinity)
-
-                    } else if let vid = currentVodId {
-                        VodChatView(videoId: vid, playbackTime: vodPlaybackTime)
-                            .id(vid)
-                            .frame(maxHeight: .infinity)
-
+                    if landscape && !chatOnly {
+                        landscapeLayout(links: links, width: geo.size.width)
                     } else {
-                        Spacer()
+                        portraitLayout(links: links, landscape: landscape)
                     }
                 }
             }
         }
     }
 
+    /// Portrait : barre, vidéo, puis chat en dessous.
+    @ViewBuilder
+    private func portraitLayout(links: QualityLinks, landscape: Bool) -> some View {
+        VStack(spacing: 0) {
+            // En immersif, la barre est dessinée par-dessus l'image par le
+            // lecteur lui-même : pas de bandeau séparé ici.
+            if !store.immersivePlayer || chatOnly {
+                playerTopBar
+            }
+            if !chatOnly {
+                videoSurface(links: links, landscape: landscape)
+            }
+            chatPane
+        }
+    }
+
+    /// Paysage : vidéo à gauche, chat sur une colonne à droite.
+    @ViewBuilder
+    private func landscapeLayout(links: QualityLinks, width: CGFloat) -> some View {
+        HStack(spacing: 0) {
+            VStack(spacing: 0) {
+                // Le lecteur immersif dessine sa propre barre par-dessus l'image ;
+                // le lecteur natif, lui, perdrait sinon le bouton « fermer ».
+                if !store.immersivePlayer { playerTopBar }
+                videoSurface(links: links, landscape: true)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            if showChatInLandscape {
+                chatPane
+                    // Un tiers de l'écran, borné : au-delà le chat mange l'image,
+                    // en deçà les messages se hachent en mots isolés.
+                    .frame(width: min(max(width * 0.32, 260), 380))
+                    .overlay(Divider().background(Color.tBorder), alignment: .leading)
+            }
+        }
+        .ignoresSafeArea(edges: .bottom)
+    }
+
+    /// Le chat, quelle que soit la disposition.
+    @ViewBuilder
+    private var chatPane: some View {
+        if let channel = currentChannelName {
+            ChatView(
+                channelName: channel,
+                channelId: currentChannelId,
+                token: store.twitchToken,
+                login: store.twitchLogin,
+                chatDelay: chatDelay,
+                chatOnly: $chatOnly,
+                onJoinChannel: { target in   // raid → suit la chaîne raidée
+                    playLive(target)
+                }
+            )
+            .id(channel)   // changement de chaîne → chat reconstruit à neuf
+            .frame(maxHeight: .infinity)
+
+        } else if let vid = currentVodId {
+            VodChatView(videoId: vid, playbackTime: vodPlaybackTime)
+                .id(vid)
+                .frame(maxHeight: .infinity)
+
+        } else {
+            Spacer()
+        }
+    }
+
     /// Surface vidéo : lecteur natif (contrôles Apple) ou immersif (contrôles maison).
     @ViewBuilder
-    private func videoSurface(links: QualityLinks) -> some View {
+    private func videoSurface(links: QualityLinks, landscape: Bool) -> some View {
         if store.immersivePlayer {
             ImmersivePlayer(
                 url: URL(string: links[currentQuality(links)] ?? "") ?? URL(string: "about:blank")!,
@@ -244,6 +285,9 @@ struct MainTabView: View {
                 dvrEnabled: isLivePlaying,
                 savedTime: currentVodId.map { store.getVodProgress($0) } ?? 0,
                 info: overlayInfo,
+                sleepLabel: sleepTimer.isActive ? sleepTimer.label : nil,
+                chatShown: showChatInLandscape,
+                isLandscape: landscape,
                 onProgress: { time in
                     vodPlaybackTime = time
                     if let id = currentVodId { store.setVodProgress(id, time: time) }
@@ -252,7 +296,9 @@ struct MainTabView: View {
                 onReduce: { withAnimation { playerVisible = false } },
                 onClose:  { stopPlayer() },
                 onMenu:   { showPlayerMenu = true },
-                onRefresh: { reloadCurrent() }
+                onRefresh: { reloadCurrent() },
+                onToggleChat: { withAnimation { showChatInLandscape.toggle() } },
+                onSleep: { showSleepSheet = true }
             )
         } else {
             VideoPlayerView(

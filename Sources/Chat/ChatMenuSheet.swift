@@ -10,11 +10,11 @@ struct ChatMenuSheet: View {
     /// Peut-on agir sur le compte (couleur du pseudo) ?
     let isAuthenticated: Bool
     @Binding var chatOnly: Bool
+    /// Service IRC : sert à lister les personnes présentes (tags `membership`).
+    @ObservedObject var chat: ChatService
 
     var onReloadEmotes: () -> Void
     var onReconnect:    () -> Void
-    /// Envoie une commande IRC (utilisée pour /color).
-    var onCommand: (String) -> Void
 
     @EnvironmentObject private var store: AppStore
     @Environment(\.dismiss) private var dismiss
@@ -105,17 +105,20 @@ struct ChatMenuSheet: View {
             }
         }
         .sheet(isPresented: $showChatters) {
-            ChattersSheet(channelName: channelName)
+            ChattersSheet(chat: chat)
                 .presentationDetents([.medium, .large])
         }
         .sheet(isPresented: $showColors) {
             UsernameColorSheet { color in
-                onCommand("/color \(color)")
-                showColors = false
-                busyLabel = store.t("menu_color")
-                finish()
+                // Depuis 2023 la commande IRC `/color` renvoie « Unrecognized
+                // command » : Twitch impose l'API Helix (scope
+                // user:manage:chat_color).
+                guard let token = store.twitchToken, let uid = store.twitchUserId else {
+                    return "color_needs_relogin"
+                }
+                return await setChatColor(token: token, userId: uid, color: color)
             }
-            .presentationDetents([.medium])
+            .presentationDetents([.medium, .large])
         }
     }
 
@@ -179,13 +182,18 @@ struct ChatMenuSheet: View {
 }
 
 // MARK: – Couleur du pseudo
-/// Les couleurs nommées sont acceptées par la commande IRC `/color` pour tous
-/// les comptes ; les teintes libres (hex) sont réservées aux abonnés Turbo/Prime.
+/// Les couleurs nommées sont acceptées pour tous les comptes ; les teintes
+/// libres (hex) restent réservées aux abonnés Turbo/Prime.
 struct UsernameColorSheet: View {
-    let onPick: (String) -> Void
+    /// Applique la couleur et renvoie une clé d'erreur traduisible, ou nil.
+    let apply: (String) async -> String?
 
     @EnvironmentObject private var store: AppStore
     @Environment(\.dismiss) private var dismiss
+
+    @State private var pending:  String? = nil
+    @State private var applied:  String? = nil
+    @State private var errorKey: String? = nil
 
     private let colors: [(name: String, hex: String)] = [
         ("blue", "0000FF"),          ("blue_violet", "8A2BE2"),
@@ -214,7 +222,7 @@ struct UsernameColorSheet: View {
             ScrollView {
                 LazyVGrid(columns: columns, spacing: TSpace.sm) {
                     ForEach(colors, id: \.name) { c in
-                        Button { onPick(c.name) } label: {
+                        Button { pick(c.name) } label: {
                             HStack(spacing: TSpace.sm) {
                                 Circle().fill(Color(hex: c.hex))
                                     .frame(width: 14, height: 14)
@@ -222,6 +230,14 @@ struct UsernameColorSheet: View {
                                     .font(.tMeta)
                                     .foregroundColor(.tText)
                                     .lineLimit(1)
+                                Spacer(minLength: 0)
+                                if pending == c.name {
+                                    ProgressView().scaleEffect(0.6).tint(.tMuted)
+                                } else if applied == c.name {
+                                    Image(systemName: "checkmark")
+                                        .font(.system(size: 11, weight: .bold))
+                                        .foregroundColor(.tSuccess)
+                                }
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.horizontal, TSpace.md)
@@ -230,32 +246,64 @@ struct UsernameColorSheet: View {
                             .cornerRadius(TRadius.chip)
                         }
                         .buttonStyle(.plain)
+                        .disabled(pending != nil)
                     }
                 }
                 .padding(TSpace.lg)
             }
+
+            if let errorKey {
+                Text(store.t(errorKey))
+                    .font(.tMeta).foregroundColor(.tWarning)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.horizontal, TSpace.lg)
+                    .padding(.bottom, TSpace.lg)
+            }
         }
         .background(Color.tDark)
+    }
+
+    private func pick(_ name: String) {
+        guard pending == nil else { return }
+        pending = name; errorKey = nil
+        Task {
+            let err = await apply(name)
+            await MainActor.run {
+                pending = nil
+                errorKey = err
+                if err == nil { applied = name }
+            }
+        }
     }
 }
 
 // MARK: – Liste des chatteurs
+/// Twitch n'expose plus d'API publique de présence (voir TwitchAPI.swift) : la
+/// seule source restante est la capacité IRC `membership`, que Twitch n'honore
+/// que sur les canaux de taille modeste. On affiche donc ce que le chat nous a
+/// réellement annoncé, et on le dit clairement quand il ne dit rien.
 struct ChattersSheet: View {
-    let channelName: String
+    @ObservedObject var chat: ChatService
 
     @EnvironmentObject private var store: AppStore
     @Environment(\.dismiss) private var dismiss
 
-    @State private var data: ChattersData? = nil
-    @State private var loading = true
-    @State private var filter  = ""
+    @State private var filter = ""
+
+    private var logins: [String] {
+        let kw = filter.trimmingCharacters(in: .whitespaces).lowercased()
+        let all = chat.presentUsers.sorted()
+        return kw.isEmpty ? all : all.filter { $0.contains(kw) }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: TSpace.sm) {
                 Text(store.t("menu_chatters")).font(.tSection).foregroundColor(.tText)
-                if let d = data {
-                    Text("\(d.count)")
+                if !chat.presentUsers.isEmpty {
+                    Text("\(chat.presentUsers.count)")
                         .font(.tBadge).foregroundColor(.white)
                         .padding(.horizontal, 8).padding(.vertical, 3)
                         .background(Color.tPrimary).cornerRadius(8)
@@ -267,59 +315,44 @@ struct ChattersSheet: View {
 
             Divider().background(Color.tBorder)
 
-            if loading {
+            if chat.presentUsers.isEmpty {
                 Spacer()
-                TLoader()
+                TEmptyState(
+                    icon: "person.2.slash",
+                    title: store.t(chat.presenceSupported ? "menu_chatters_empty"
+                                                          : "menu_chatters_waiting"),
+                    message: store.t("menu_chatters_note")
+                )
+                .padding(.horizontal, TSpace.lg)
                 Spacer()
-            } else if let d = data {
+            } else {
                 TSearchField(text: $filter, placeholder: store.t("menu_chatters_search"))
                     .padding(.horizontal, TSpace.lg)
                     .padding(.vertical, TSpace.md)
 
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 0) {
-                        group(store.t("role_broadcaster"), d.broadcasters, "star.fill", .tWarning)
-                        group(store.t("role_moderator"),   d.moderators,   "shield.fill", .tSuccess)
-                        group("VIP",                       d.vips,         "diamond.fill", .tPurple)
-                        group(store.t("viewers"),          d.viewers,      "person.fill", .tMuted)
+                        ForEach(logins, id: \.self) { login in
+                            HStack(spacing: TSpace.sm) {
+                                Image(systemName: "person.fill")
+                                    .font(.system(size: 11)).foregroundColor(.tMuted)
+                                Text(login).font(.tBody).foregroundColor(.tText)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, TSpace.lg)
+                            .padding(.vertical, 7)
+                        }
+
+                        Text(store.t("menu_chatters_note"))
+                            .font(.tMeta).foregroundColor(.tMuted)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.horizontal, TSpace.lg)
+                            .padding(.top, TSpace.lg)
                     }
                     .padding(.bottom, TSpace.xl)
                 }
-            } else {
-                Spacer()
-                TEmptyState(icon: "person.2.slash", title: store.t("menu_chatters_error"))
-                Spacer()
             }
         }
         .background(Color.tDark)
-        .task {
-            data = await getChatters(channelName: channelName)
-            loading = false
-        }
-    }
-
-    @ViewBuilder
-    private func group(_ title: String, _ logins: [String],
-                       _ icon: String, _ tint: Color) -> some View {
-        let kw = filter.trimmingCharacters(in: .whitespaces).lowercased()
-        let shown = kw.isEmpty ? logins : logins.filter { $0.lowercased().contains(kw) }
-
-        if !shown.isEmpty {
-            HStack(spacing: TSpace.sm) {
-                Image(systemName: icon).font(.system(size: 11)).foregroundColor(tint)
-                Text("\(title) · \(shown.count)")
-                    .font(.tLabel).foregroundColor(.tMuted)
-            }
-            .padding(.horizontal, TSpace.lg)
-            .padding(.top, TSpace.md).padding(.bottom, TSpace.xs)
-
-            ForEach(shown, id: \.self) { login in
-                Text(login)
-                    .font(.tBody).foregroundColor(.tText)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, TSpace.lg)
-                    .padding(.vertical, 6)
-            }
-        }
     }
 }

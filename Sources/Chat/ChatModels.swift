@@ -111,6 +111,14 @@ struct IRCMessage {
     let prefix: String?
 
     var channel: String? { params.first?.hasPrefix("#") == true ? String(params[0].dropFirst()) : nil }
+
+    /// Pseudo extrait du préfixe IRC `nick!user@host` (JOIN / PART n'ont pas de tags).
+    var prefixNick: String? {
+        guard let prefix, !prefix.isEmpty else { return nil }
+        let nick = prefix.split(separator: "!").first.map(String.init) ?? prefix
+        return nick.contains("@") ? nil : nick.lowercased()
+    }
+
     var text: String? { params.count > 1 ? params[1] : nil }
     var displayName: String { tags["display-name"] ?? tags["login"] ?? "" }
     var userId: String { tags["user-id"] ?? "" }

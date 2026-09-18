@@ -304,11 +304,11 @@ struct ChatView: View {
                 channelName: channelName,
                 isAuthenticated: chat.isAuthenticated,
                 chatOnly: $chatOnly,
+                chat: chat,
                 onReloadEmotes: { Task { await reloadEmotesAndBadges() } },
                 onReconnect: {
                     chat.reconnect(token: token, login: login)
-                },
-                onCommand: { cmd in Task { await chat.sendCommand(cmd) } }
+                }
             )
             .presentationDetents([.medium, .large])
         }
@@ -541,7 +541,10 @@ struct ChatView: View {
                         Image(systemName: "ellipsis")
                             .font(.system(size: 17, weight: .semibold))
                             .foregroundColor(.tMuted)
-                            .frame(width: 32, height: 44)
+                            // 44 pt : la cible tactile minimale d'Apple. À 32
+                            // de large, coincé dans le coin, on le rate une fois sur deux.
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                 }

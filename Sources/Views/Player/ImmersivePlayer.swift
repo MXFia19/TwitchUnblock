@@ -202,12 +202,22 @@ struct ImmersivePlayer: View {
     let savedTime: Double
     let info: PlayerOverlayInfo
 
+    /// Compte à rebours du minuteur de veille, nil s'il n'est pas armé.
+    var sleepLabel: String? = nil
+    /// Le chat occupe-t-il une colonne à droite (paysage) ?
+    var chatShown: Bool = true
+    /// Orientation, fournie par le parent : lue sur UIApplication elle ne serait
+    /// pas observable, et la vue ne se redessinerait pas à la rotation.
+    var isLandscape: Bool = false
+
     var onProgress: (Double) -> Void = { _ in }
     var onLatency:  (Double?) -> Void = { _ in }
     var onReduce:   () -> Void = {}
     var onClose:    () -> Void = {}
     var onMenu:     () -> Void = {}
     var onRefresh:  () -> Void = {}
+    var onToggleChat: () -> Void = {}
+    var onSleep:    () -> Void = {}
 
     @EnvironmentObject private var store: AppStore
     @StateObject private var model: ImmersivePlayerModel
@@ -219,17 +229,25 @@ struct ImmersivePlayer: View {
 
     init(url: URL, isLive: Bool, dvrEnabled: Bool, savedTime: Double,
          info: PlayerOverlayInfo,
+         sleepLabel: String? = nil,
+         chatShown: Bool = true,
+         isLandscape: Bool = false,
          onProgress: @escaping (Double) -> Void = { _ in },
          onLatency:  @escaping (Double?) -> Void = { _ in },
          onReduce:   @escaping () -> Void = {},
          onClose:    @escaping () -> Void = {},
          onMenu:     @escaping () -> Void = {},
-         onRefresh:  @escaping () -> Void = {}) {
+         onRefresh:  @escaping () -> Void = {},
+         onToggleChat: @escaping () -> Void = {},
+         onSleep:    @escaping () -> Void = {}) {
         self.url = url; self.isLive = isLive; self.dvrEnabled = dvrEnabled
         self.savedTime = savedTime; self.info = info
         self.onProgress = onProgress; self.onLatency = onLatency
+        self.sleepLabel = sleepLabel; self.chatShown = chatShown
+        self.isLandscape = isLandscape
         self.onReduce = onReduce; self.onClose = onClose
         self.onMenu = onMenu; self.onRefresh = onRefresh
+        self.onToggleChat = onToggleChat; self.onSleep = onSleep
         _model = StateObject(wrappedValue: ImmersivePlayerModel(
             url: url, isLive: isLive, savedTime: savedTime,
             onProgress: onProgress, onLatency: onLatency))
@@ -264,7 +282,10 @@ struct ImmersivePlayer: View {
 
             if showControls { controls }
         }
-        .aspectRatio(16/9, contentMode: .fit)
+        // Paysage : l'image occupe toute la colonne. Portrait : on garde le 16:9
+        // pour que le chat conserve sa place sous la vidéo.
+        .aspectRatio(isLandscape ? nil : CGFloat(16.0 / 9.0), contentMode: .fit)
+        .frame(maxWidth: .infinity, maxHeight: isLandscape ? .infinity : nil)
         .background(Color.black)
         .clipped()
         .contentShape(Rectangle())
@@ -406,11 +427,43 @@ struct ImmersivePlayer: View {
 
                 Spacer(minLength: 0)
 
+                // Minuteur de veille : visible pendant la lecture, pas seulement
+                // dans les Réglages. Un appui ouvre le réglage rapide.
+                if let sleep = sleepLabel {
+                    Button { onSleep(); scheduleAutoHide() } label: {
+                        HStack(spacing: 3) {
+                            Image(systemName: "moon.zzz.fill").font(.system(size: 10))
+                            Text(sleep)
+                                .font(.system(size: 12, weight: .semibold).monospacedDigit())
+                        }
+                        .foregroundColor(.white)
+                        .padding(.horizontal, TSpace.sm)
+                        .frame(height: 32)
+                        .background(Color.black.opacity(0.4))
+                        .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+
                 if model.pipPossible {
                     overlayButton(icon: "pip.enter") { model.togglePiP(); scheduleAutoHide() }
                 }
                 overlayButton(icon: "arrow.clockwise") { onRefresh() }
-                overlayButton(icon: "rotate.right") { rotateToLandscape(); scheduleAutoHide() }
+
+                // En paysage seulement : replier la colonne de chat pour rendre
+                // toute la largeur à l'image.
+                if isLandscape {
+                    overlayButton(icon: chatShown ? "sidebar.right" : "bubble.left.fill") {
+                        onToggleChat(); scheduleAutoHide()
+                    }
+                }
+
+                // Bascule portrait / paysage. Le même bouton fait l'aller ET le
+                // retour : sans ça, un téléphone dont la rotation est verrouillée
+                // reste coincé en paysage.
+                overlayButton(icon: isLandscape ? "rectangle.portrait.rotate" : "rectangle.landscape.rotate") {
+                    toggleOrientation(); scheduleAutoHide()
+                }
             }
         }
     }
@@ -479,10 +532,18 @@ struct ImmersivePlayer: View {
                      : String(format: "%d:%02d", m, sec)
     }
 
-    /// Bascule l'écran en paysage (l'utilisateur revient en portrait à la main).
-    private func rotateToLandscape() {
+    /// Passe en paysage, ou revient en portrait. Indispensable : avec la
+    /// rotation verrouillée sur l'iPhone, tourner le téléphone ne suffit pas
+    /// à ressortir du plein écran.
+    private func toggleOrientation() {
         guard let scene = UIApplication.shared.connectedScenes
             .compactMap({ $0 as? UIWindowScene }).first else { return }
-        scene.requestGeometryUpdate(.iOS(interfaceOrientations: .landscapeRight))
+        let target: UIInterfaceOrientationMask = isLandscape ? .portrait : .landscapeRight
+        scene.requestGeometryUpdate(.iOS(interfaceOrientations: target)) { error in
+            logger.warn("LECTEUR", "Rotation refusée", error.localizedDescription)
+        }
+        // Sans ça, iOS peut garder l'ancienne orientation tant qu'aucune vue
+        // ne redemande la mise à jour.
+        UIViewController.attemptRotationToDeviceOrientation()
     }
 }

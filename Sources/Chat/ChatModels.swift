@@ -121,6 +121,11 @@ struct ChatMessage: Identifiable {
     var threadRootId: String? = nil    // reply-thread-parent-msg-id (racine du fil)
     /// Chat de VOD : horodatage relatif à la vidéo (ex: "1:23:45") au lieu de l'heure.
     var vodOffsetLabel: String? = nil
+    /// Message repêché dans l'historique à l'arrivée, pas reçu en direct : une
+    /// petite horloge le signale, sinon on croit avoir raté la conversation.
+    var isHistorical: Bool = false
+    /// Supprimé par un modérateur mais conservé à l'écran (réglage).
+    var isDeleted: Bool = false
 }
 
 // MARK: – Tokenisation d'un segment de texte

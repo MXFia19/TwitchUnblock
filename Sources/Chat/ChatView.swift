@@ -35,6 +35,7 @@ struct ChatView: View {
     @State private var teardownWork: DispatchWorkItem? = nil   // anti-rebond plein écran
     @FocusState private var isInputFocused: Bool
 
+    @State private var emoteMatches: [TwitchEmote] = []   // autocomplétion en cours
     @State private var sentinelVisible = true   // le bas de la liste est-il visible ?
     @State private var isDragging      = false  // l'utilisateur fait-il défiler à la main ?
 
@@ -308,6 +309,7 @@ struct ChatView: View {
             // ── Barre d'envoi ───────────────────────────────────────
             if canSendMessages { inputBar }
         }
+        .task(id: messageText) { await refreshEmoteSuggestions() }
         // Superposé à l'image : pas de fond opaque, mais un dégradé qui assombrit
         // le bas de l'image, là où les messages s'accumulent. Sans lui, du texte
         // blanc sur une scène claire devient illisible.
@@ -322,10 +324,16 @@ struct ChatView: View {
         }
         // ── Fil de discussion (répondre) ─────────────────────────────
         .sheet(item: $threadRoot) { root in
-            ThreadSheet(root: root, chat: chat,
-                        canSend: canSendMessages,
-                        rootDisplayName: root.displayName)
+            MessageSheet(message: root, chat: chat,
+                         canSend: canSendMessages,
+                         style: store.chatStyle(chrome: false, translucent: false),
+                         onMention: { name in
+                             messageText += (messageText.isEmpty || messageText.hasSuffix(" ")
+                                             ? "" : " ") + "@\(name) "
+                             isInputFocused = true
+                         })
                 .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
         }
         // ── Menu « … » du chat ───────────────────────────────────────
         .sheet(isPresented: $showChatMenu) {
@@ -450,6 +458,10 @@ struct ChatView: View {
         }
         chat.channelId = channelId
         chat.displayDelay = chatDelay
+        // Réglés AVANT la connexion : c'est elle qui déclenche le rejeu de
+        // l'historique, et la modération peut frapper dès les premières secondes.
+        chat.loadRecent  = store.chatLoadRecent
+        chat.keepDeleted = store.chatShowDeleted
         chat.connect(channel: channelName, token: token, login: login)
 
         // Les services ci-dessous sont conditionnés par les réglages de personnalisation :
@@ -495,10 +507,105 @@ struct ChatView: View {
         logger.success("CHAT", "Emotes et badges rechargés", "#\(channelName)")
     }
 
+    // MARK: – Autocomplétion
+    /// Dernier mot en cours de frappe. `@pseudo` cherche parmi les gens du chat,
+    /// tout le reste parmi les emotes.
+    private var currentWord: String {
+        messageText.components(separatedBy: " ").last ?? ""
+    }
+
+    private var mentionSuggestions: [String] {
+        let word = currentWord
+        guard word.hasPrefix("@"), word.count > 1 else { return [] }
+        let kw = String(word.dropFirst()).lowercased()
+        // Les gens qui viennent d'écrire d'abord : c'est à eux qu'on répond.
+        var seen = Set<String>()
+        var out: [String] = []
+        for m in chat.messages where !m.userName.isEmpty {
+            if m.userName.lowercased().hasPrefix(kw), seen.insert(m.userName).inserted {
+                out.append(m.displayName.isEmpty ? m.userName : m.displayName)
+            }
+            if out.count == 12 { break }
+        }
+        for login in chat.presentUsers.sorted() where out.count < 12 {
+            if login.hasPrefix(kw), seen.insert(login).inserted { out.append(login) }
+        }
+        return out
+    }
+
+    /// EmoteService est un acteur : la recherche ne peut pas se faire dans le
+    /// corps de la vue. On la relance à chaque frappe et on garde le résultat.
+    private func refreshEmoteSuggestions() async {
+        let word = currentWord
+        guard store.chatAutocomplete, !word.hasPrefix("@"), word.count >= 2 else {
+            emoteMatches = []
+            return
+        }
+        emoteMatches = await EmoteService.shared.suggest(prefix: word, channelId: channelId)
+    }
+
+    @ViewBuilder
+    private var autocompleteBar: some View {
+        if store.chatAutocomplete, isInputFocused, !showEmotePicker {
+            let emotes   = emoteMatches
+            let mentions = mentionSuggestions
+            if !emotes.isEmpty || !mentions.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(mentions, id: \.self) { name in
+                            suggestionChip { complete(with: "@" + name) } content: {
+                                Text("@\(name)")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundColor(.tPrimary)
+                            }
+                        }
+                        ForEach(emotes) { emote in
+                            suggestionChip { complete(with: emote.name) } content: {
+                                HStack(spacing: 5) {
+                                    // animated: false — une rangée qui s'anime
+                                    // pendant la frappe distrait plus qu'elle n'aide.
+                                    CachedEmoteImage(url: emote.url, name: "", height: 20,
+                                                     showsNameFallback: false, animated: false)
+                                    Text(emote.name)
+                                        .font(.system(size: 12)).foregroundColor(.tText)
+                                }
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 10).padding(.vertical, 6)
+                }
+                .background(style.translucent ? Color.black.opacity(0.55) : Color.tSurface)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func suggestionChip<C: View>(action: @escaping () -> Void,
+                                         @ViewBuilder content: () -> C) -> some View {
+        Button(action: action) {
+            content()
+                .lineLimit(1)
+                .padding(.horizontal, 8)
+                .frame(height: 30)
+                .background(Color.tCard)
+                .cornerRadius(TRadius.chip)
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// Remplace le mot en cours par la proposition retenue.
+    private func complete(with replacement: String) {
+        var words = messageText.components(separatedBy: " ")
+        guard !words.isEmpty else { return }
+        words[words.count - 1] = replacement
+        messageText = words.joined(separator: " ") + " "
+    }
+
     // MARK: – Input bar
     @ViewBuilder
     private var inputBar: some View {
         VStack(spacing: 0) {
+            autocompleteBar
             if !style.translucent { Divider().background(Color.tBorder) }
             VStack(spacing: 4) {
                 HStack(spacing: 6) {
@@ -707,6 +814,10 @@ struct ChatMessageRow: View {
             message.isFirstMessage ? Color.tPrimary.opacity(0.05) :
                                      Color.clear
         )
+        // Supprimé mais conservé : barré et estompé. Le texte reste lisible —
+        // c'est tout l'intérêt du réglage — mais on voit qu'il a été retiré.
+        .strikethrough(message.isDeleted, color: .tDanger.opacity(0.8))
+        .opacity(message.isDeleted ? 0.55 : 1)
         // Sur l'image, une ombre portée fait tenir le texte clair au-dessus
         // d'une scène claire sans avoir à assombrir toute la vidéo.
         .shadow(color: .black.opacity(style.translucent ? 0.95 : 0), radius: 2, x: 0, y: 1)
@@ -729,6 +840,12 @@ struct WrappingHStack: View {
         MessageFlowLayout(spacing: 4, lineSpacing: 4, width: availableWidth) {
             if style.showsTimestamp {
                 Text(timeString).font(.system(size: size - 2)).foregroundColor(.tMuted)
+            }
+            // Repêché dans l'historique : sans ce repère on croit avoir vu la
+            // conversation se dérouler alors qu'elle a eu lieu avant l'arrivée.
+            if message.isHistorical {
+                Image(systemName: "clock.arrow.circlepath")
+                    .font(.system(size: size - 3)).foregroundColor(.tMuted)
             }
             ForEach(message.badges) { badge in
                 CachedEmoteImage(url: badge.url, name: "", height: style.badgeHeight,
@@ -792,97 +909,5 @@ struct MessageFlowLayout: Layout {
         }
         for j in ls..<subviews.count {lh[j]=mh}
         return (CGSize(width:W,height:cy+mh),pos,lh,sizes)
-    }
-}
-
-// MARK: – Fil de discussion (thread + réponse)
-struct ThreadSheet: View {
-    let root: ChatMessage
-    @ObservedObject var chat: ChatService
-    let canSend: Bool
-    let rootDisplayName: String
-
-    @EnvironmentObject private var store: AppStore
-    @Environment(\.dismiss) private var dismiss
-    @State private var replyText = ""
-    @FocusState private var focused: Bool
-
-    private var rootId: String { root.threadRootId ?? root.id }
-    private var displayed: [ChatMessage] {
-        let t = chat.threadMessages(rootId: rootId)
-        return t.isEmpty ? [root] : t
-    }
-    private var canReply: Bool { !replyText.trimmingCharacters(in: .whitespaces).isEmpty }
-
-    var body: some View {
-        VStack(spacing: 0) {
-            // ── En-tête ──────────────────────────────────────────────
-            HStack(spacing: 8) {
-                Image(systemName: "bubble.left.and.bubble.right.fill")
-                    .font(.system(size: 15)).foregroundColor(.tPrimary)
-                Text(store.t("thread_title"))
-                    .font(.system(size: 16, weight: .bold)).foregroundColor(.tText)
-                Spacer()
-                Button { dismiss() } label: {
-                    Image(systemName: "xmark").font(.system(size: 14, weight: .bold))
-                        .foregroundColor(.tMuted).frame(width: 30, height: 30)
-                        .background(Color.tSurface).clipShape(Circle())
-                }
-            }
-            .padding(.horizontal, 14).padding(.vertical, 10)
-            .background(Color.tCard)
-            Divider().background(Color.tBorder)
-
-            // ── Messages du fil ──────────────────────────────────────
-            GeometryReader { geo in
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 0) {
-                        ForEach(displayed) { m in
-                            ChatMessageRow(message: m, availableWidth: geo.size.width)
-                                .id(m.id)
-                        }
-                    }
-                    .frame(width: geo.size.width, alignment: .leading)
-                    .padding(.vertical, 4)
-                }
-            }
-
-            // ── Réponse ──────────────────────────────────────────────
-            if canSend {
-                Divider().background(Color.tBorder)
-                HStack(spacing: 8) {
-                    TextField("\(store.t("thread_reply_to")) @\(rootDisplayName)", text: $replyText)
-                        .focused($focused)
-                        .foregroundColor(.tText)
-                        .autocorrectionDisabled()
-                        .padding(.horizontal, 12).padding(.vertical, 10)
-                        .background(Color.tSurface).cornerRadius(10)
-                        .overlay(RoundedRectangle(cornerRadius: 10)
-                            .stroke(focused ? Color.tPrimary : Color.tBorder, lineWidth: 1))
-                        .submitLabel(.send).onSubmit(sendReply)
-                    Button(action: sendReply) {
-                        Image(systemName: "paperplane.fill")
-                            .font(.system(size: 15, weight: .bold)).foregroundColor(.white)
-                            .frame(width: 44, height: 44)
-                            .background(canReply ? Color.tPrimary : Color.tMuted.opacity(0.35))
-                            .cornerRadius(10)
-                    }
-                    .disabled(!canReply)
-                }
-                .padding(.horizontal, 12).padding(.vertical, 10)
-                .background(Color.tCard)
-            }
-        }
-        .background(Color.tDark)
-    }
-
-    private func sendReply() {
-        let t = replyText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !t.isEmpty else { return }
-        replyText = ""
-        Task {
-            await chat.sendMessage(t, replyParentId: root.id,
-                                   replyRootId: rootId, replyToName: rootDisplayName)
-        }
     }
 }

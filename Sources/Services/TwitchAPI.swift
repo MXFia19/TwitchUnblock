@@ -434,6 +434,38 @@ func getTwitchUser(token: String) async -> TwitchUser? {
     )
 }
 
+/// Photo de profil d'un pseudo du chat. Mise en cache pour la session : on la
+/// redemanderait sinon à chaque message ouvert, pour une image qui ne bouge pas.
+actor AvatarCache {
+    static let shared = AvatarCache()
+    private var cache: [String: String] = [:]
+
+    func avatar(login: String, token: String?) async -> String? {
+        let key = login.lowercased()
+        guard !key.isEmpty else { return nil }
+        if let hit = cache[key] { return hit.isEmpty ? nil : hit }
+
+        guard let token,
+              let url = URL(string: "https://api.twitch.tv/helix/users?login=\(key)") else {
+            return nil
+        }
+        var req = URLRequest(url: url)
+        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        req.setValue(kHelixClientID, forHTTPHeaderField: "Client-Id")
+
+        guard let (data, resp) = try? await URLSession.shared.data(for: req),
+              (resp as? HTTPURLResponse)?.statusCode == 200,
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let arr  = json["data"] as? [[String: Any]],
+              let img  = arr.first?["profile_image_url"] as? String else {
+            cache[key] = ""   // évite de re-tenter en boucle sur un compte disparu
+            return nil
+        }
+        cache[key] = img
+        return img
+    }
+}
+
 func getFollowedStreams(token: String, userId: String) async throws -> [TwitchStream] {
     guard let url = URL(string: "https://api.twitch.tv/helix/streams/followed?user_id=\(userId)&first=50") else { return [] }
     var req = URLRequest(url: url)

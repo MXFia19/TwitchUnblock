@@ -47,6 +47,10 @@ struct MainTabView: View {
     /// Les commandes du lecteur immersif sont-elles à l'écran ? Le chat posé sur
     /// l'image les recouvre : tant qu'elles sont là, elles ont la priorité.
     @State private var playerControlsVisible = true
+    /// Largeur du chat au début d'un glissement : la translation du geste est
+    /// relative à son point de départ, que la vue ne connaît plus une fois
+    /// qu'elle a commencé à rétrécir.
+    @State private var chatDragStart: Double? = nil
 
     /// Décalage à appliquer au chat : la latence mesurée, si la synchro est active.
     private var chatDelay: Double {
@@ -280,17 +284,49 @@ struct MainTabView: View {
                 .frame(maxHeight: .infinity)
                 // Un trait marque le bord du chat dans les deux dispositions :
                 // posé sur l'image, sans lui, on ne sait plus où il commence.
+                // Il sert aussi de poignée de redimensionnement.
                 .overlay(alignment: .leading) {
-                    if split {
-                        Rectangle()
-                            .fill(overlaying ? Color.tPrimary.opacity(0.75) : Color.tBorder)
-                            .frame(width: overlaying ? 2 : 1)
-                    }
+                    if split { chatResizeHandle(totalWidth: size.width) }
                 }
                 .frame(width: chatColumn, alignment: .trailing)
                 .opacity(chatVisible ? 1 : 0)
                 .allowsHitTesting(chatTappable)
         }
+    }
+
+    /// Trait de séparation vidéo / chat, qui se saisit pour régler la largeur.
+    ///
+    /// Le trait visible reste fin ; c'est une bande transparente de 24 pt qui
+    /// reçoit le geste, sous peine de viser un fil de 2 pt avec un pouce.
+    @ViewBuilder
+    private func chatResizeHandle(totalWidth: CGFloat) -> some View {
+        let overlaying = store.landscapeChat == .overlay
+        Rectangle()
+            .fill(overlaying ? Color.tPrimary.opacity(0.75) : Color.tBorder)
+            .frame(width: overlaying ? 2 : 1)
+            .overlay {
+                // Trois points : sans repère, personne ne devine qu'on peut tirer.
+                Capsule()
+                    .fill(Color.white.opacity(chatDragStart == nil ? 0.35 : 0.9))
+                    .frame(width: 4, height: 36)
+            }
+            .overlay {
+                Color.clear
+                    .frame(width: 24)
+                    .contentShape(Rectangle())
+                    .gesture(
+                        DragGesture(minimumDistance: 2)
+                            .onChanged { value in
+                                let start = chatDragStart ?? store.chatWidthRatio
+                                if chatDragStart == nil { chatDragStart = start }
+                                // Tirer vers la gauche élargit le chat.
+                                let delta = -value.translation.width / totalWidth
+                                store.chatWidthRatio =
+                                    min(max(start + Double(delta), 0.20), 0.60)
+                            }
+                            .onEnded { _ in chatDragStart = nil }
+                    )
+            }
     }
 
     /// Le chat, quelle que soit la disposition.

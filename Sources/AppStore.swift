@@ -119,6 +119,21 @@ final class AppStore: ObservableObject {
         didSet { UserDefaults.standard.set(chatWidthRatio, forKey: "cfg_chat_width") }
     }
 
+    // MARK: – Comportement du chat
+    /// Charger les derniers messages du canal à l'arrivée (API tierce
+    /// recent-messages.robotty.de : Twitch n'envoie rien d'antérieur au JOIN).
+    @Published var chatLoadRecent: Bool = true {
+        didSet { UserDefaults.standard.set(chatLoadRecent, forKey: "cfg_chat_recent") }
+    }
+    /// Proposer emotes et pseudos pendant la frappe.
+    @Published var chatAutocomplete: Bool = true {
+        didSet { UserDefaults.standard.set(chatAutocomplete, forKey: "cfg_chat_autocomplete") }
+    }
+    /// Garder les messages supprimés, barrés, au lieu de les faire disparaître.
+    @Published var chatShowDeleted: Bool = false {
+        didSet { UserDefaults.standard.set(chatShowDeleted, forKey: "cfg_chat_deleted") }
+    }
+
     /// Construit la présentation du chat : les réglages de l'utilisateur pour la
     /// taille, la disposition en cours pour le décor et la transparence.
     func chatStyle(chrome: Bool, translucent: Bool) -> ChatStyle {
@@ -181,6 +196,9 @@ final class AppStore: ObservableObject {
         chatEmoteScale     = ud.object(forKey: "cfg_chat_emote")   as? Double ?? 1
         chatTimestamps     = ud.object(forKey: "cfg_chat_time")    as? Bool   ?? true
         chatWidthRatio     = ud.object(forKey: "cfg_chat_width")   as? Double ?? 0.32
+        chatLoadRecent     = ud.object(forKey: "cfg_chat_recent")       as? Bool ?? true
+        chatAutocomplete   = ud.object(forKey: "cfg_chat_autocomplete") as? Bool ?? true
+        chatShowDeleted    = ud.object(forKey: "cfg_chat_deleted")      as? Bool ?? false
         shareUsage         = ud.object(forKey: "cfg_share_usage") as? Bool ?? true
         showLatency        = ud.object(forKey: "dbg_latency")    as? Bool ?? false
         autoChatDelay      = ud.object(forKey: "dbg_chat_delay") as? Bool ?? false

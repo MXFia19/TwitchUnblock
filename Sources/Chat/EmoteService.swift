@@ -111,6 +111,33 @@ actor EmoteService {
         return groups
     }
 
+    // MARK: – Autocomplétion
+    /// Emotes dont le nom commence par `prefix`, puis celles qui le contiennent.
+    /// Le préfixe l'emporte : en tapant « Kappa » on veut Kappa avant KappaPride.
+    func suggest(prefix: String, channelId: String?, limit: Int = 24) -> [TwitchEmote] {
+        let kw = prefix.lowercased()
+        guard !kw.isEmpty else { return [] }
+
+        var pool: [String: TwitchEmote] = [:]
+        if let cid = channelId {
+            for dict in [channel7TV[cid], channelBTTV[cid], channelFFZ[cid]] {
+                for (k, v) in dict ?? [:] { pool[k] = v }
+            }
+        }
+        for dict in [global7TV, globalBTTV, globalFFZ, twitchById] {
+            for (_, v) in dict where pool[v.name] == nil { pool[v.name] = v }
+        }
+
+        var starts: [TwitchEmote] = [], contains: [TwitchEmote] = []
+        for emote in pool.values {
+            let name = emote.name.lowercased()
+            if name.hasPrefix(kw) { starts.append(emote) }
+            else if name.contains(kw) { contains.append(emote) }
+        }
+        let byName: (TwitchEmote, TwitchEmote) -> Bool = { $0.name.lowercased() < $1.name.lowercased() }
+        return Array((starts.sorted(by: byName) + contains.sorted(by: byName)).prefix(limit))
+    }
+
     // ─────────────────────────────────────────────────────────────────────
     // MARK: – BTTV
     private func loadBTTVGlobal() async {

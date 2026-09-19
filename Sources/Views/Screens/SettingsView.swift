@@ -34,385 +34,39 @@ struct SettingsView: View {
             .padding(.bottom, TSpace.md)
             .background(Color.tDark)
 
-            ScrollView {
-            VStack(spacing: 12) {
-
-                // ── Langue ──────────────────────────────────────────
-                settingCard {
-                    VStack(alignment: .leading, spacing: 12) {
-                        label("globe", store.t("language"))
-                        VStack(spacing: 8) {
-                            ForEach(Lang.allCases) { lang in
-                                langButton(lang)
+            // Une page par domaine, plutôt qu'un rouleau unique : la liste
+            // avait atteint douze cartes, et on ne retrouvait plus rien.
+            NavigationStack {
+                ScrollView {
+                    VStack(spacing: 12) {
+                        settingCard {
+                            VStack(spacing: 0) {
+                                menuRow("person.crop.circle", store.t("twitch_account"),
+                                        .account)
                             }
                         }
-                    }
-                }
-
-                // ── Auto-claim coffres ──────────────────────────────
-                settingCard {
-                    VStack(alignment: .leading, spacing: 8) {
-                        label("gift.fill", store.t("auto_claim"))
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(store.t("auto_claim"))
-                                    .font(.tCardTitle)
-                                    .foregroundColor(.tText)
-                                Text(store.t("auto_claim_sub"))
-                                    .font(.tMeta)
-                                    .foregroundColor(.tMuted)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                            Spacer()
-                            Toggle("", isOn: $store.autoClaimChest)
-                                .labelsHidden()
-                                .tint(.tPrimary)
-                                .onChange(of: store.autoClaimChest) { val in
-                                    logger.settingChanged("Auto-claim coffres", value: val ? "activé" : "désactivé")
-                                }
-                        }
-                    }
-                }
-
-                // ── Personnalisation chat & lecteur ─────────────────
-                settingCard {
-                    VStack(alignment: .leading, spacing: 14) {
-                        label("paintbrush.fill", store.t("customize"))
-                        toggleRow(store.t("cfg_pinned"), store.t("cfg_pinned_sub"),
-                                  $store.showPinnedMessages, log: "Messages épinglés")
-                        Divider().background(Color.tBorder)
-                        toggleRow(store.t("cfg_follow"), store.t("cfg_follow_sub"),
-                                  $store.showFollowButton,   log: "Bouton suivre")
-                        Divider().background(Color.tBorder)
-                        toggleRow(store.t("cfg_streak"), store.t("cfg_streak_sub"),
-                                  $store.showWatchStreak,    log: "Série de visionnage")
-                        Divider().background(Color.tBorder)
-                        toggleRow(store.t("cfg_events"), store.t("cfg_events_sub"),
-                                  $store.showLiveEvents,     log: "Événements live")
-                        Divider().background(Color.tBorder)
-                        toggleRow(store.t("cfg_raids"),  store.t("cfg_raids_sub"),
-                                  $store.enableRaids,        log: "Système de raid")
-                    }
-                }
-
-                // ── Taille du chat ──────────────────────────────────
-                // La bonne taille dépend de l'écran, de la distance de lecture et
-                // de la vue de chacun : un aperçu en direct évite l'aller-retour
-                // « je règle, je ferme, je regarde, je reviens ».
-                settingCard {
-                    VStack(alignment: .leading, spacing: 14) {
-                        label("textformat.size", store.t("chat_sizing"))
-
-                        chatPreview
-
-                        Divider().background(Color.tBorder)
-                        toggleRow(store.t("cfg_timestamps"), store.t("cfg_timestamps_sub"),
-                                  $store.chatTimestamps, log: "Horodatage du chat")
-                        Divider().background(Color.tBorder)
-
-                        sliderRow(store.t("cfg_font_size"), value: $store.chatFontSize,
-                                  range: 10...20, step: 1) { String(format: "%.0f pt", $0) }
-                        sliderRow(store.t("cfg_msg_spacing"), value: $store.chatSpacing,
-                                  range: 0...16, step: 1) { String(format: "%.0f px", $0) }
-                        sliderRow(store.t("cfg_badge_scale"), value: $store.chatBadgeScale,
-                                  range: 0.5...2, step: 0.05) { String(format: "%.2fx", $0) }
-                        sliderRow(store.t("cfg_emote_scale"), value: $store.chatEmoteScale,
-                                  range: 0.5...2, step: 0.05) { String(format: "%.2fx", $0) }
-                        sliderRow(store.t("cfg_chat_width"), value: $store.chatWidthRatio,
-                                  range: 0.20...0.60, step: 0.01) { String(format: "%.0f %%", $0 * 100) }
-
-                        Text(store.t("cfg_chat_width_sub"))
-                            .font(.tMeta).foregroundColor(.tMuted)
-                            .fixedSize(horizontal: false, vertical: true)
-
-                        Button {
-                            store.chatFontSize   = 13
-                            store.chatSpacing    = 8
-                            store.chatBadgeScale = 1
-                            store.chatEmoteScale = 1
-                            store.chatWidthRatio = 0.32
-                            store.chatTimestamps = true
-                        } label: {
-                            Text(store.t("reset_defaults"))
-                                .font(.tLabel).foregroundColor(.tPrimary)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-
-                // ── Lecteur vidéo ───────────────────────────────────
-                settingCard {
-                    VStack(alignment: .leading, spacing: 14) {
-                        label("play.tv.fill", store.t("player_section"))
-                        toggleRow(store.t("immersive_player"), store.t("immersive_player_sub"),
-                                  $store.immersivePlayer, log: "Lecteur immersif")
-                        Divider().background(Color.tBorder)
-                        toggleRow(store.t("low_latency"), store.t("low_latency_sub"),
-                                  $store.lowLatency, log: "Mode faible latence")
-                    }
-                }
-
-                // ── Minuteur de veille ──────────────────────────────
-                // Les durées (préréglages + durée personnalisée) sont réglées dans
-                // la même feuille que depuis le lecteur : une seule UI à maintenir.
-                settingCard {
-                    VStack(alignment: .leading, spacing: 12) {
-                        label("moon.zzz.fill", store.t("sleep_timer"))
-                        HStack(spacing: 12) {
-                            VStack(alignment: .leading, spacing: 2) {
-                                if sleepTimer.isActive {
-                                    Text(store.t("sleep_remaining"))
-                                        .font(.tMeta).foregroundColor(.tMuted)
-                                    Text(sleepTimer.label)
-                                        .font(.system(size: 26, weight: .bold).monospacedDigit())
-                                        .foregroundColor(.tPurple)
-                                } else {
-                                    Text(store.t("sleep_timer_sub"))
-                                        .font(.tMeta).foregroundColor(.tMuted)
-                                        .fixedSize(horizontal: false, vertical: true)
-                                }
-                            }
-                            Spacer(minLength: 8)
-                            Button { showSleepSheet = true } label: {
-                                Text(sleepTimer.isActive ? store.t("sleep_edit")
-                                                         : store.t("sleep_set"))
-                                    .font(.tLabel)
-                                    .foregroundColor(.tPrimary)
-                                    .fixedSize()
-                                    .padding(.horizontal, 14).padding(.vertical, 8)
-                                    .background(Color.tPrimary.opacity(0.15))
-                                    .cornerRadius(8)
-                                    .overlay(RoundedRectangle(cornerRadius: 8)
-                                        .stroke(Color.tPrimary, lineWidth: 1))
-                            }
-                        }
-                    }
-                }
-
-                // ── Cache emotes & badges ───────────────────────────
-                settingCard {
-                    VStack(alignment: .leading, spacing: 14) {
-                        label("externaldrive.fill", store.t("cache_section"))
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(store.t("cache_size"))
-                                    .font(.tCardTitle)
-                                    .foregroundColor(.tText)
-                                Text("\(cacheSizeText) · \(cacheFiles) \(store.t("cache_files"))")
-                                    .font(.tMeta)
-                                    .foregroundColor(.tMuted)
-                            }
-                            Spacer(minLength: 8)
-                            Button {
-                                ImageCache.shared.purge()
-                                refreshCacheInfo()
-                            } label: {
-                                HStack(spacing: 5) {
-                                    Image(systemName: "trash")
-                                    Text(store.t("cache_clear"))
-                                        .font(.tLabel)
-                                }
-                                .foregroundColor(.tDanger)
-                                .fixedSize()
-                                .padding(.horizontal, 12).padding(.vertical, 8)
-                                .background(Color.tDanger.opacity(0.15))
-                                .cornerRadius(8)
-                                .overlay(RoundedRectangle(cornerRadius: 8)
-                                    .stroke(Color.tDanger, lineWidth: 1))
-                            }
-                            .disabled(cacheBytes == 0)
-                            .opacity(cacheBytes == 0 ? 0.4 : 1)
-                        }
-                        Divider().background(Color.tBorder)
-                        toggleRow(store.t("cache_auto"), store.t("cache_auto_sub"),
-                                  $store.autoPurgeImageCache, log: "Purge auto du cache")
-                    }
-                }
-
-                // ── Compte Twitch ───────────────────────────────────
-                settingCard {
-                    VStack(alignment: .leading, spacing: 14) {
-                        label("person.crop.circle.fill", store.t("twitch_account"))
-
-                        // Connexion API (OAuth) — chat + chaînes suivies
-                        accountRow(
-                            title: store.t("account_api"),
-                            sub: store.t("account_api_sub"),
-                            connected: store.twitchToken != nil,
-                            busy: apiLoggingIn,
-                            actionLabel: store.twitchToken != nil ? store.t("btn_logout")
-                                                                  : store.t("btn_login_twitch")
-                        ) {
-                            if store.twitchToken != nil { showLogoutAlert = true }
-                            else { Task { await handleApiLogin() } }
-                        }
-
-                        Divider().background(Color.tBorder)
-
-                        // Session web — points de chaîne (cookie auth-token)
-                        accountRow(
-                            title: store.t("account_web"),
-                            sub: store.t("account_web_sub"),
-                            connected: store.twitchWebToken != nil,
-                            busy: false,
-                            actionLabel: store.twitchWebToken != nil ? store.t("btn_logout")
-                                                                     : store.t("points_connect_btn")
-                        ) {
-                            if store.twitchWebToken != nil {
-                                logger.info("AUTH/WEB", "Déconnexion session web", nil)
-                                store.twitchWebToken = nil
-                            } else {
-                                startWebLogin()
-                            }
-                        }
-                    }
-                }
-
-                // ── Historique ──────────────────────────────────────
-                settingCard {
-                    VStack(alignment: .leading, spacing: 12) {
-                        label("chart.bar.fill", store.t("history"))
-                        HStack(spacing: TSpace.sm) {
-                            statBox(value: vodCount, label: store.t("vods"), icon: "film")
-                            statBox(value: channelCount, label: store.t("channels"), icon: "person.fill")
-                        }
-                        if vodCount > 0 || channelCount > 0 {
-                            TSecondaryButton(title: store.t("btn_clear"), icon: "trash",
-                                             tint: .tDanger, fullWidth: true) {
-                                showClearAlert = true
-                            }
-                        }
-                    }
-                }
-
-                // ── Utilisation de l'app ────────────────────────────
-                settingCard {
-                    VStack(alignment: .leading, spacing: 14) {
-                        label("chart.line.uptrend.xyaxis", store.t("usage_section"))
-
-                        if usage.loading {
-                            TLoader()
-                        } else if let s = usage.stats {
-                            HStack(spacing: TSpace.sm) {
-                                statBox(value: s.today, label: store.t("usage_today"),
-                                        icon: "sun.max.fill")
-                                statBox(value: s.week,  label: store.t("usage_week"),
-                                        icon: "calendar")
-                                statBox(value: s.month, label: store.t("usage_month"),
-                                        icon: "calendar.badge.clock")
-                            }
-
-                            // Fidélité : la question n'est pas « combien ont
-                            // installé » mais « combien reviennent ».
-                            if s.loyalty.total > 0 {
+                        settingCard {
+                            VStack(spacing: 0) {
+                                menuRow("gearshape.fill", store.t("sec_general"), .general)
                                 Divider().background(Color.tBorder)
-                                loyaltyBlock(s)
+                                menuRow("play.tv.fill", store.t("sec_player"), .player)
+                                Divider().background(Color.tBorder)
+                                menuRow("bubble.left.fill", store.t("sec_chat"), .chat)
                             }
-
-                            if !s.versions.isEmpty {
-                                VStack(alignment: .leading, spacing: 6) {
-                                    Text(store.t("usage_versions"))
-                                        .font(.tMeta).foregroundColor(.tMuted)
-                                    ForEach(Array(s.versions.prefix(4))) { v in
-                                        HStack {
-                                            Text(v.version)
-                                                .font(.tLabel).foregroundColor(.tText)
-                                            Spacer()
-                                            Text("\(v.count)")
-                                                .font(.tLabel).foregroundColor(.tPrimary)
-                                        }
-                                    }
-                                }
+                        }
+                        settingCard {
+                            VStack(spacing: 0) {
+                                menuRow("info.circle.fill", store.t("sec_other"), .other)
                             }
-                        } else if usage.lastError == "worker_missing" {
-                            Text(store.t("usage_worker_missing"))
-                                .font(.tMeta).foregroundColor(.tWarning)
-                                .fixedSize(horizontal: false, vertical: true)
-                        } else if usage.lastError != nil {
-                            Text(store.t("usage_error"))
-                                .font(.tMeta).foregroundColor(.tMuted)
-                        } else {
-                            Text(store.t("usage_tap_refresh"))
-                                .font(.tMeta).foregroundColor(.tMuted)
                         }
-
-                        TSecondaryButton(title: store.t("usage_refresh"),
-                                         icon: "arrow.clockwise", fullWidth: true) {
-                            Task { await usage.loadStats() }
-                        }
-
-                        Divider().background(Color.tBorder)
-
-                        toggleRow(store.t("usage_share"), store.t("usage_share_sub"),
-                                  $store.shareUsage, log: "Partage d'utilisation")
+                        Spacer(minLength: 32)
                     }
+                    .padding(.horizontal, 12)
                 }
-
-                // ── Débogage (temporaire) ───────────────────────────
-                settingCard {
-                    VStack(alignment: .leading, spacing: 14) {
-                        label("wrench.and.screwdriver.fill", store.t("debug_section"))
-                        Text(store.t("debug_note"))
-                            .font(.tMeta)
-                            .foregroundColor(.tMuted)
-                            .fixedSize(horizontal: false, vertical: true)
-                        toggleRow(store.t("dbg_latency"), store.t("dbg_latency_sub"),
-                                  $store.showLatency,   log: "Afficher la latence")
-                        Divider().background(Color.tBorder)
-                        toggleRow(store.t("dbg_chat_delay"), store.t("dbg_chat_delay_sub"),
-                                  $store.autoChatDelay, log: "Synchro auto du chat")
-                    }
+                .background(Color.tDark)
+                .navigationDestination(for: Page.self) { section in
+                    sectionPage(section)
                 }
-
-                // ── À propos / Logs ─────────────────────────────────
-                settingCard {
-                    VStack(alignment: .leading, spacing: 12) {
-                        label("info.circle.fill", store.t("about"))
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("TwitchUnblock")
-                                    .font(.tSection)
-                                    .foregroundColor(.tText)
-                                Text(store.t("version"))
-                                    .font(.tMeta)
-                                    .foregroundColor(.tMuted)
-                            }
-                            Spacer()
-                            Circle().fill(Color.tPrimary).frame(width: 26, height: 26)
-                        }
-                        Text(store.t("about_desc"))
-                            .font(.tMeta)
-                            .foregroundColor(.tMuted)
-                            .fixedSize(horizontal: false, vertical: true)
-
-                        Button {
-                            showLogs = true
-                        } label: {
-                            HStack(spacing: TSpace.sm) {
-                                Image(systemName: "terminal")
-                                    .font(.system(size: 13, weight: .semibold))
-                                Text(store.t("show_logs")).font(.tLabel)
-                                Spacer()
-                                Text("\(AppLogger.shared.logs.count)")
-                                    .font(.tBadge)
-                                    .foregroundColor(.white)
-                                    .padding(.horizontal, 8).padding(.vertical, 3)
-                                    .background(Color.tPrimary)
-                                    .cornerRadius(8)
-                            }
-                            .foregroundColor(.tPrimary)
-                            .padding(.horizontal, TSpace.md)
-                            .frame(height: 44)
-                            .background(Color.tPrimary.opacity(0.12))
-                            .cornerRadius(TRadius.control)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-
-                Spacer(minLength: 32)
-            }
-            .padding(.horizontal, 12)
             }
         }
         .background(Color.tDark)
@@ -485,6 +139,490 @@ struct SettingsView: View {
                 LogsView()
             }
             .background(Color.tDark)
+        }
+    }
+
+
+    // MARK: – Pages de réglages
+    /// Les cinq destinations du menu.
+    enum Page: Hashable { case account, general, player, chat, other
+
+        var titleKey: String {
+            switch self {
+            case .account: return "twitch_account"
+            case .general: return "sec_general"
+            case .player:  return "sec_player"
+            case .chat:    return "sec_chat"
+            case .other:   return "sec_other"
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func menuRow(_ icon: String, _ title: String, _ section: Page) -> some View {
+        NavigationLink(value: section) {
+            HStack(spacing: TSpace.md) {
+                Image(systemName: icon)
+                    .font(.system(size: 15)).foregroundColor(.tPrimary)
+                    .frame(width: 26)
+                Text(title).font(.tCardTitle).foregroundColor(.tText)
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold)).foregroundColor(.tMuted)
+            }
+            .padding(.vertical, TSpace.md)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    @ViewBuilder
+    private func sectionPage(_ section: Page) -> some View {
+        ScrollView {
+            VStack(spacing: 12) {
+                // Une vue par ligne : dans un ViewBuilder, deux vues séparées
+                // par un point-virgule sur la même ligne ne se composent pas.
+                switch section {
+                case .account:
+                    compteCard
+                    usageCard
+                case .general:
+                    langueCard
+                    autoclaimCard
+                    veilleCard
+                    historiqueCard
+                    cacheCard
+                case .player:
+                    lecteurCard
+                    debugCard
+                case .chat:
+                    chatBehaviorCard
+                    persoCard
+                    tailleChatCard
+                case .other:
+                    aboutCard
+                }
+                Spacer(minLength: 32)
+            }
+            .padding(.horizontal, 12)
+            .padding(.top, 12)
+        }
+        .background(Color.tDark)
+        .navigationTitle(store.t(section.titleKey))
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    @ViewBuilder private var langueCard: some View {
+        // ── Langue ──────────────────────────────────────────
+        settingCard {
+            VStack(alignment: .leading, spacing: 12) {
+                label("globe", store.t("language"))
+                VStack(spacing: 8) {
+                    ForEach(Lang.allCases) { lang in
+                        langButton(lang)
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private var autoclaimCard: some View {
+        // ── Auto-claim coffres ──────────────────────────────
+        settingCard {
+            VStack(alignment: .leading, spacing: 8) {
+                label("gift.fill", store.t("auto_claim"))
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(store.t("auto_claim"))
+                            .font(.tCardTitle)
+                            .foregroundColor(.tText)
+                        Text(store.t("auto_claim_sub"))
+                            .font(.tMeta)
+                            .foregroundColor(.tMuted)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer()
+                    Toggle("", isOn: $store.autoClaimChest)
+                        .labelsHidden()
+                        .tint(.tPrimary)
+                        .onChange(of: store.autoClaimChest) { val in
+                            logger.settingChanged("Auto-claim coffres", value: val ? "activé" : "désactivé")
+                        }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private var persoCard: some View {
+        // ── Personnalisation chat & lecteur ─────────────────
+        settingCard {
+            VStack(alignment: .leading, spacing: 14) {
+                label("paintbrush.fill", store.t("customize"))
+                toggleRow(store.t("cfg_pinned"), store.t("cfg_pinned_sub"),
+                          $store.showPinnedMessages, log: "Messages épinglés")
+                Divider().background(Color.tBorder)
+                toggleRow(store.t("cfg_follow"), store.t("cfg_follow_sub"),
+                          $store.showFollowButton,   log: "Bouton suivre")
+                Divider().background(Color.tBorder)
+                toggleRow(store.t("cfg_streak"), store.t("cfg_streak_sub"),
+                          $store.showWatchStreak,    log: "Série de visionnage")
+                Divider().background(Color.tBorder)
+                toggleRow(store.t("cfg_events"), store.t("cfg_events_sub"),
+                          $store.showLiveEvents,     log: "Événements live")
+                Divider().background(Color.tBorder)
+                toggleRow(store.t("cfg_raids"),  store.t("cfg_raids_sub"),
+                          $store.enableRaids,        log: "Système de raid")
+            }
+        }
+    }
+
+    @ViewBuilder private var chatBehaviorCard: some View {
+        // ── Comportement du chat ────────────────────────────
+        settingCard {
+            VStack(alignment: .leading, spacing: 14) {
+                label("bubble.left.and.bubble.right.fill", store.t("chat_behavior"))
+                toggleRow(store.t("cfg_recent"), store.t("cfg_recent_sub"),
+                          $store.chatLoadRecent, log: "Messages récents")
+                Divider().background(Color.tBorder)
+                toggleRow(store.t("cfg_autocomplete"), store.t("cfg_autocomplete_sub"),
+                          $store.chatAutocomplete, log: "Autocomplétion")
+                Divider().background(Color.tBorder)
+                toggleRow(store.t("cfg_deleted"), store.t("cfg_deleted_sub"),
+                          $store.chatShowDeleted, log: "Messages supprimés")
+            }
+        }
+    }
+
+    @ViewBuilder private var tailleChatCard: some View {
+        // ── Taille du chat ──────────────────────────────────
+        // La bonne taille dépend de l'écran, de la distance de lecture et
+        // de la vue de chacun : un aperçu en direct évite l'aller-retour
+        // « je règle, je ferme, je regarde, je reviens ».
+        settingCard {
+            VStack(alignment: .leading, spacing: 14) {
+                label("textformat.size", store.t("chat_sizing"))
+
+                chatPreview
+
+                Divider().background(Color.tBorder)
+                toggleRow(store.t("cfg_timestamps"), store.t("cfg_timestamps_sub"),
+                          $store.chatTimestamps, log: "Horodatage du chat")
+                Divider().background(Color.tBorder)
+
+                sliderRow(store.t("cfg_font_size"), value: $store.chatFontSize,
+                          range: 10...20, step: 1) { String(format: "%.0f pt", $0) }
+                sliderRow(store.t("cfg_msg_spacing"), value: $store.chatSpacing,
+                          range: 0...16, step: 1) { String(format: "%.0f px", $0) }
+                sliderRow(store.t("cfg_badge_scale"), value: $store.chatBadgeScale,
+                          range: 0.5...2, step: 0.05) { String(format: "%.2fx", $0) }
+                sliderRow(store.t("cfg_emote_scale"), value: $store.chatEmoteScale,
+                          range: 0.5...2, step: 0.05) { String(format: "%.2fx", $0) }
+                sliderRow(store.t("cfg_chat_width"), value: $store.chatWidthRatio,
+                          range: 0.20...0.60, step: 0.01) { String(format: "%.0f %%", $0 * 100) }
+
+                Text(store.t("cfg_chat_width_sub"))
+                    .font(.tMeta).foregroundColor(.tMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Button {
+                    store.chatFontSize   = 13
+                    store.chatSpacing    = 8
+                    store.chatBadgeScale = 1
+                    store.chatEmoteScale = 1
+                    store.chatWidthRatio = 0.32
+                    store.chatTimestamps = true
+                } label: {
+                    Text(store.t("reset_defaults"))
+                        .font(.tLabel).foregroundColor(.tPrimary)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    @ViewBuilder private var lecteurCard: some View {
+        // ── Lecteur vidéo ───────────────────────────────────
+        settingCard {
+            VStack(alignment: .leading, spacing: 14) {
+                label("play.tv.fill", store.t("player_section"))
+                toggleRow(store.t("immersive_player"), store.t("immersive_player_sub"),
+                          $store.immersivePlayer, log: "Lecteur immersif")
+                Divider().background(Color.tBorder)
+                toggleRow(store.t("low_latency"), store.t("low_latency_sub"),
+                          $store.lowLatency, log: "Mode faible latence")
+            }
+        }
+    }
+
+    @ViewBuilder private var veilleCard: some View {
+        // ── Minuteur de veille ──────────────────────────────
+        // Les durées (préréglages + durée personnalisée) sont réglées dans
+        // la même feuille que depuis le lecteur : une seule UI à maintenir.
+        settingCard {
+            VStack(alignment: .leading, spacing: 12) {
+                label("moon.zzz.fill", store.t("sleep_timer"))
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        if sleepTimer.isActive {
+                            Text(store.t("sleep_remaining"))
+                                .font(.tMeta).foregroundColor(.tMuted)
+                            Text(sleepTimer.label)
+                                .font(.system(size: 26, weight: .bold).monospacedDigit())
+                                .foregroundColor(.tPurple)
+                        } else {
+                            Text(store.t("sleep_timer_sub"))
+                                .font(.tMeta).foregroundColor(.tMuted)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    Spacer(minLength: 8)
+                    Button { showSleepSheet = true } label: {
+                        Text(sleepTimer.isActive ? store.t("sleep_edit")
+                                                 : store.t("sleep_set"))
+                            .font(.tLabel)
+                            .foregroundColor(.tPrimary)
+                            .fixedSize()
+                            .padding(.horizontal, 14).padding(.vertical, 8)
+                            .background(Color.tPrimary.opacity(0.15))
+                            .cornerRadius(8)
+                            .overlay(RoundedRectangle(cornerRadius: 8)
+                                .stroke(Color.tPrimary, lineWidth: 1))
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private var cacheCard: some View {
+        // ── Cache emotes & badges ───────────────────────────
+        settingCard {
+            VStack(alignment: .leading, spacing: 14) {
+                label("externaldrive.fill", store.t("cache_section"))
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(store.t("cache_size"))
+                            .font(.tCardTitle)
+                            .foregroundColor(.tText)
+                        Text("\(cacheSizeText) · \(cacheFiles) \(store.t("cache_files"))")
+                            .font(.tMeta)
+                            .foregroundColor(.tMuted)
+                    }
+                    Spacer(minLength: 8)
+                    Button {
+                        ImageCache.shared.purge()
+                        refreshCacheInfo()
+                    } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: "trash")
+                            Text(store.t("cache_clear"))
+                                .font(.tLabel)
+                        }
+                        .foregroundColor(.tDanger)
+                        .fixedSize()
+                        .padding(.horizontal, 12).padding(.vertical, 8)
+                        .background(Color.tDanger.opacity(0.15))
+                        .cornerRadius(8)
+                        .overlay(RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color.tDanger, lineWidth: 1))
+                    }
+                    .disabled(cacheBytes == 0)
+                    .opacity(cacheBytes == 0 ? 0.4 : 1)
+                }
+                Divider().background(Color.tBorder)
+                toggleRow(store.t("cache_auto"), store.t("cache_auto_sub"),
+                          $store.autoPurgeImageCache, log: "Purge auto du cache")
+            }
+        }
+    }
+
+    @ViewBuilder private var compteCard: some View {
+        // ── Compte Twitch ───────────────────────────────────
+        settingCard {
+            VStack(alignment: .leading, spacing: 14) {
+                label("person.crop.circle.fill", store.t("twitch_account"))
+
+                // Connexion API (OAuth) — chat + chaînes suivies
+                accountRow(
+                    title: store.t("account_api"),
+                    sub: store.t("account_api_sub"),
+                    connected: store.twitchToken != nil,
+                    busy: apiLoggingIn,
+                    actionLabel: store.twitchToken != nil ? store.t("btn_logout")
+                                                          : store.t("btn_login_twitch")
+                ) {
+                    if store.twitchToken != nil { showLogoutAlert = true }
+                    else { Task { await handleApiLogin() } }
+                }
+
+                Divider().background(Color.tBorder)
+
+                // Session web — points de chaîne (cookie auth-token)
+                accountRow(
+                    title: store.t("account_web"),
+                    sub: store.t("account_web_sub"),
+                    connected: store.twitchWebToken != nil,
+                    busy: false,
+                    actionLabel: store.twitchWebToken != nil ? store.t("btn_logout")
+                                                             : store.t("points_connect_btn")
+                ) {
+                    if store.twitchWebToken != nil {
+                        logger.info("AUTH/WEB", "Déconnexion session web", nil)
+                        store.twitchWebToken = nil
+                    } else {
+                        startWebLogin()
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private var historiqueCard: some View {
+        // ── Historique ──────────────────────────────────────
+        settingCard {
+            VStack(alignment: .leading, spacing: 12) {
+                label("chart.bar.fill", store.t("history"))
+                HStack(spacing: TSpace.sm) {
+                    statBox(value: vodCount, label: store.t("vods"), icon: "film")
+                    statBox(value: channelCount, label: store.t("channels"), icon: "person.fill")
+                }
+                if vodCount > 0 || channelCount > 0 {
+                    TSecondaryButton(title: store.t("btn_clear"), icon: "trash",
+                                     tint: .tDanger, fullWidth: true) {
+                        showClearAlert = true
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private var usageCard: some View {
+        // ── Utilisation de l'app ────────────────────────────
+        settingCard {
+            VStack(alignment: .leading, spacing: 14) {
+                label("chart.line.uptrend.xyaxis", store.t("usage_section"))
+
+                if usage.loading {
+                    TLoader()
+                } else if let s = usage.stats {
+                    HStack(spacing: TSpace.sm) {
+                        statBox(value: s.today, label: store.t("usage_today"),
+                                icon: "sun.max.fill")
+                        statBox(value: s.week,  label: store.t("usage_week"),
+                                icon: "calendar")
+                        statBox(value: s.month, label: store.t("usage_month"),
+                                icon: "calendar.badge.clock")
+                    }
+
+                    // Fidélité : la question n'est pas « combien ont
+                    // installé » mais « combien reviennent ».
+                    if s.loyalty.total > 0 {
+                        Divider().background(Color.tBorder)
+                        loyaltyBlock(s)
+                    }
+
+                    if !s.versions.isEmpty {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(store.t("usage_versions"))
+                                .font(.tMeta).foregroundColor(.tMuted)
+                            ForEach(Array(s.versions.prefix(4))) { v in
+                                HStack {
+                                    Text(v.version)
+                                        .font(.tLabel).foregroundColor(.tText)
+                                    Spacer()
+                                    Text("\(v.count)")
+                                        .font(.tLabel).foregroundColor(.tPrimary)
+                                }
+                            }
+                        }
+                    }
+                } else if usage.lastError == "worker_missing" {
+                    Text(store.t("usage_worker_missing"))
+                        .font(.tMeta).foregroundColor(.tWarning)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else if usage.lastError != nil {
+                    Text(store.t("usage_error"))
+                        .font(.tMeta).foregroundColor(.tMuted)
+                } else {
+                    Text(store.t("usage_tap_refresh"))
+                        .font(.tMeta).foregroundColor(.tMuted)
+                }
+
+                TSecondaryButton(title: store.t("usage_refresh"),
+                                 icon: "arrow.clockwise", fullWidth: true) {
+                    Task { await usage.loadStats() }
+                }
+
+                Divider().background(Color.tBorder)
+
+                toggleRow(store.t("usage_share"), store.t("usage_share_sub"),
+                          $store.shareUsage, log: "Partage d'utilisation")
+            }
+        }
+    }
+
+    @ViewBuilder private var debugCard: some View {
+        // ── Débogage (temporaire) ───────────────────────────
+        settingCard {
+            VStack(alignment: .leading, spacing: 14) {
+                label("wrench.and.screwdriver.fill", store.t("debug_section"))
+                Text(store.t("debug_note"))
+                    .font(.tMeta)
+                    .foregroundColor(.tMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+                toggleRow(store.t("dbg_latency"), store.t("dbg_latency_sub"),
+                          $store.showLatency,   log: "Afficher la latence")
+                Divider().background(Color.tBorder)
+                toggleRow(store.t("dbg_chat_delay"), store.t("dbg_chat_delay_sub"),
+                          $store.autoChatDelay, log: "Synchro auto du chat")
+            }
+        }
+    }
+
+    @ViewBuilder private var aboutCard: some View {
+        // ── À propos / Logs ─────────────────────────────────
+        settingCard {
+            VStack(alignment: .leading, spacing: 12) {
+                label("info.circle.fill", store.t("about"))
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("TwitchUnblock")
+                            .font(.tSection)
+                            .foregroundColor(.tText)
+                        Text(store.t("version"))
+                            .font(.tMeta)
+                            .foregroundColor(.tMuted)
+                    }
+                    Spacer()
+                    Circle().fill(Color.tPrimary).frame(width: 26, height: 26)
+                }
+                Text(store.t("about_desc"))
+                    .font(.tMeta)
+                    .foregroundColor(.tMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Button {
+                    showLogs = true
+                } label: {
+                    HStack(spacing: TSpace.sm) {
+                        Image(systemName: "terminal")
+                            .font(.system(size: 13, weight: .semibold))
+                        Text(store.t("show_logs")).font(.tLabel)
+                        Spacer()
+                        Text("\(AppLogger.shared.logs.count)")
+                            .font(.tBadge)
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 8).padding(.vertical, 3)
+                            .background(Color.tPrimary)
+                            .cornerRadius(8)
+                    }
+                    .foregroundColor(.tPrimary)
+                    .padding(.horizontal, TSpace.md)
+                    .frame(height: 44)
+                    .background(Color.tPrimary.opacity(0.12))
+                    .cornerRadius(TRadius.control)
+                }
+                .buttonStyle(.plain)
+            }
         }
     }
 

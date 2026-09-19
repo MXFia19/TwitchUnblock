@@ -89,8 +89,8 @@ enum LiveSource: String, CaseIterable, Identifiable, Codable {
 
     // Lit la langue actuelle choisie par l'utilisateur
     private var currentLang: Lang {
-        let saved = UserDefaults.standard.string(forKey: "lang") ?? "fr"
-        return Lang(rawValue: saved) ?? .fr
+        let saved = UserDefaults.standard.string(forKey: "lang") ?? "en"
+        return Lang(rawValue: saved) ?? .en
     }
 
     var displayName: String {
@@ -227,6 +227,11 @@ private let translations: [Lang: [String: String]] = [
         "auto_claim_sub": "Récupère les coffres de points dès qu'ils apparaissent.",
         "player_section": "Lecteur vidéo",
         "sec_general": "Général", "sec_player": "Lecteur", "sec_chat": "Chat", "sec_other": "À propos",
+        "sec_account_sub": "Connexion, session web, utilisation",
+        "sec_general_sub": "Langue, coffres, minuteur, historique, cache",
+        "sec_player_sub": "Lecteur immersif, faible latence, débogage",
+        "sec_chat_sub": "Messages récents, apparence, taille",
+        "sec_other_sub": "Version et journaux",
         "chat_behavior": "Comportement du chat",
         "cfg_recent": "Charger les messages récents",
         "cfg_recent_sub": "Twitch n'envoie rien d'antérieur à l'arrivée. Les dernières lignes sont récupérées auprès de recent-messages.robotty.de, un service tiers.",
@@ -430,6 +435,11 @@ private let translations: [Lang: [String: String]] = [
         "auto_claim_sub": "Collects point chests as soon as they appear.",
         "player_section": "Video player",
         "sec_general": "General", "sec_player": "Player", "sec_chat": "Chat", "sec_other": "About",
+        "sec_account_sub": "Sign-in, web session, usage",
+        "sec_general_sub": "Language, chests, sleep timer, history, cache",
+        "sec_player_sub": "Immersive player, low latency, debug",
+        "sec_chat_sub": "Recent messages, appearance, sizing",
+        "sec_other_sub": "Version and logs",
         "chat_behavior": "Chat behaviour",
         "cfg_recent": "Load recent messages",
         "cfg_recent_sub": "Twitch sends nothing from before you join. Recent lines are fetched from recent-messages.robotty.de, a third-party service.",
@@ -633,6 +643,11 @@ private let translations: [Lang: [String: String]] = [
         "auto_claim_sub": "Recoge los cofres de puntos en cuanto aparecen.",
         "player_section": "Reproductor de vídeo",
         "sec_general": "General", "sec_player": "Reproductor", "sec_chat": "Chat", "sec_other": "Acerca de",
+        "sec_account_sub": "Conexión, sesión web, uso",
+        "sec_general_sub": "Idioma, cofres, temporizador, historial, caché",
+        "sec_player_sub": "Reproductor inmersivo, baja latencia, depuración",
+        "sec_chat_sub": "Mensajes recientes, apariencia, tamaño",
+        "sec_other_sub": "Versión y registros",
         "chat_behavior": "Comportamiento del chat",
         "cfg_recent": "Cargar mensajes recientes",
         "cfg_recent_sub": "Twitch no envía nada anterior a tu llegada. Las últimas líneas se piden a recent-messages.robotty.de, un servicio de terceros.",

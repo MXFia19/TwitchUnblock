@@ -14,60 +14,35 @@ struct SettingsView: View {
     @ObservedObject private var usage      = UsageService.shared
     @Environment(\.dismiss) private var dismiss
     @State private var showSleepSheet  = false
+    /// Page ouverte, nil = menu racine.
+    @State private var page: Page? = nil
 
     private var vodCount:     Int { store.history.filter { $0.type == .vod }.count }
     private var channelCount: Int { store.history.filter { $0.type == .channel }.count }
 
     var body: some View {
         VStack(spacing: 0) {
+            sheetHeader
 
-            // ── En-tête de la feuille ───────────────────────────────
-            HStack(spacing: TSpace.md) {
-                Text(store.t("settings"))
-                    .font(.tScreenTitle)
-                    .foregroundColor(.tText)
-                Spacer()
-                TIconButton(icon: "xmark") { dismiss() }
-            }
-            .padding(.horizontal, TSpace.lg)
-            .padding(.top, TSpace.lg)
-            .padding(.bottom, TSpace.md)
-            .background(Color.tDark)
-
-            // Une page par domaine, plutôt qu'un rouleau unique : la liste
-            // avait atteint douze cartes, et on ne retrouvait plus rien.
-            NavigationStack {
-                ScrollView {
-                    VStack(spacing: 12) {
-                        settingCard {
-                            VStack(spacing: 0) {
-                                menuRow("person.crop.circle", store.t("twitch_account"),
-                                        .account)
-                            }
-                        }
-                        settingCard {
-                            VStack(spacing: 0) {
-                                menuRow("gearshape.fill", store.t("sec_general"), .general)
-                                Divider().background(Color.tBorder)
-                                menuRow("play.tv.fill", store.t("sec_player"), .player)
-                                Divider().background(Color.tBorder)
-                                menuRow("bubble.left.fill", store.t("sec_chat"), .chat)
-                            }
-                        }
-                        settingCard {
-                            VStack(spacing: 0) {
-                                menuRow("info.circle.fill", store.t("sec_other"), .other)
-                            }
-                        }
-                        Spacer(minLength: 32)
-                    }
-                    .padding(.horizontal, 12)
-                }
-                .background(Color.tDark)
-                .navigationDestination(for: Page.self) { section in
-                    sectionPage(section)
+            // Navigation maison plutôt qu'un NavigationStack : celui-ci posait
+            // sa propre barre grise, avec titre et « Back » en bleu système,
+            // juste sous notre en-tête. Deux barres l'une sur l'autre, dont une
+            // qui ignore la charte. Ici l'en-tête se transforme : le titre
+            // devient celui de la page et la croix cède la place à un chevron.
+            ZStack {
+                if page == nil {
+                    rootMenu
+                        .transition(.asymmetric(
+                            insertion: .move(edge: .leading).combined(with: .opacity),
+                            removal:   .move(edge: .leading).combined(with: .opacity)))
+                } else if let page {
+                    sectionPage(page)
+                        .transition(.asymmetric(
+                            insertion: .move(edge: .trailing).combined(with: .opacity),
+                            removal:   .move(edge: .trailing).combined(with: .opacity)))
                 }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .background(Color.tDark)
         .onAppear {
@@ -145,7 +120,8 @@ struct SettingsView: View {
 
     // MARK: – Pages de réglages
     /// Les cinq destinations du menu.
-    enum Page: Hashable { case account, general, player, chat, other
+    enum Page: Hashable {
+        case account, general, player, chat, other
 
         var titleKey: String {
             switch self {
@@ -156,20 +132,179 @@ struct SettingsView: View {
             case .other:   return "sec_other"
             }
         }
+        var subtitleKey: String {
+            switch self {
+            case .account: return "sec_account_sub"
+            case .general: return "sec_general_sub"
+            case .player:  return "sec_player_sub"
+            case .chat:    return "sec_chat_sub"
+            case .other:   return "sec_other_sub"
+            }
+        }
+        var icon: String {
+            switch self {
+            case .account: return "person.crop.circle.fill"
+            case .general: return "gearshape.fill"
+            case .player:  return "play.rectangle.fill"
+            case .chat:    return "bubble.left.and.bubble.right.fill"
+            case .other:   return "info.circle.fill"
+            }
+        }
+        /// Une teinte par domaine : on repère la ligne à la couleur avant
+        /// d'avoir lu le libellé.
+        var tint: Color {
+            switch self {
+            case .account: return .tPurple
+            case .general: return .tPrimary
+            case .player:  return .tOutplayer
+            case .chat:    return .tSuccess
+            case .other:   return .tMuted
+            }
+        }
+    }
+
+    /// En-tête unique, qui suit la navigation.
+    @ViewBuilder private var sheetHeader: some View {
+        HStack(spacing: TSpace.md) {
+            if let page {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.22)) { self.page = nil }
+                } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundColor(.tPrimary)
+                        .frame(width: 34, height: 34)
+                        .background(Color.tCard)
+                        .clipShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .transition(.opacity)
+
+                Text(store.t(page.titleKey))
+                    .font(.tSection)
+                    .foregroundColor(.tText)
+                    .lineLimit(1)
+            } else {
+                Text(store.t("settings"))
+                    .font(.tScreenTitle)
+                    .foregroundColor(.tText)
+            }
+            Spacer(minLength: 0)
+            TIconButton(icon: "xmark") { dismiss() }
+        }
+        .padding(.horizontal, TSpace.lg)
+        .padding(.top, TSpace.lg)
+        .padding(.bottom, TSpace.md)
+        .background(Color.tDark)
+        .overlay(alignment: .bottom) {
+            // Un filet apparaît seulement dans une page : à la racine, le grand
+            // titre se suffit et un trait l'alourdirait.
+            if page != nil { Divider().background(Color.tBorder) }
+        }
+    }
+
+    // MARK: – Menu racine
+    @ViewBuilder private var rootMenu: some View {
+        ScrollView {
+            VStack(spacing: TSpace.lg) {
+                if let login = store.twitchLogin {
+                    accountBanner(login: login)
+                }
+
+                VStack(spacing: 0) {
+                    menuRow(.account)
+                    rowSeparator
+                    menuRow(.general)
+                    rowSeparator
+                    menuRow(.player)
+                    rowSeparator
+                    menuRow(.chat)
+                    rowSeparator
+                    menuRow(.other)
+                }
+                .tCard()
+
+                Text(store.t("version"))
+                    .font(.tMeta).foregroundColor(.tMuted)
+
+                Spacer(minLength: 24)
+            }
+            .padding(.horizontal, 12)
+            .padding(.top, TSpace.sm)
+        }
+    }
+
+    /// Bandeau du compte connecté : une photo et un pseudo valent mieux qu'une
+    /// ligne « Connecté » perdue au fond d'une page.
+    @ViewBuilder
+    private func accountBanner(login: String) -> some View {
+        HStack(spacing: TSpace.md) {
+            AsyncImage(url: URL(string: store.twitchAvatar ?? "")) { img in
+                img.resizable().scaledToFill()
+            } placeholder: {
+                ZStack {
+                    Circle().fill(Color.tPrimary.opacity(0.25))
+                    Image(systemName: "person.fill")
+                        .font(.system(size: 20)).foregroundColor(.tPrimary)
+                }
+            }
+            .frame(width: 52, height: 52)
+            .clipShape(Circle())
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(login).font(.tSection).foregroundColor(.tText).lineLimit(1)
+                HStack(spacing: 5) {
+                    Circle().fill(Color.tSuccess).frame(width: 6, height: 6)
+                    Text(store.t("connected")).font(.tMeta).foregroundColor(.tMuted)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(TSpace.lg)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            LinearGradient(colors: [Color.tPrimary.opacity(0.22), Color.tCard],
+                           startPoint: .topLeading, endPoint: .bottomTrailing)
+        )
+        .cornerRadius(TRadius.card)
+        .overlay(RoundedRectangle(cornerRadius: TRadius.card)
+            .stroke(Color.tPrimary.opacity(0.35), lineWidth: 1))
+    }
+
+    private var rowSeparator: some View {
+        Divider().background(Color.tBorder).padding(.leading, 62)
     }
 
     @ViewBuilder
-    private func menuRow(_ icon: String, _ title: String, _ section: Page) -> some View {
-        NavigationLink(value: section) {
+    private func menuRow(_ section: Page) -> some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.22)) { page = section }
+        } label: {
             HStack(spacing: TSpace.md) {
-                Image(systemName: icon)
-                    .font(.system(size: 15)).foregroundColor(.tPrimary)
-                    .frame(width: 26)
-                Text(title).font(.tCardTitle).foregroundColor(.tText)
-                Spacer()
+                // Pastille teintée : plus lisible qu'un glyphe nu sur fond noir,
+                // et elle donne au menu un rythme régulier.
+                RoundedRectangle(cornerRadius: 9)
+                    .fill(section.tint.opacity(0.18))
+                    .frame(width: 34, height: 34)
+                    .overlay {
+                        Image(systemName: section.icon)
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(section.tint)
+                    }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(store.t(section.titleKey))
+                        .font(.tCardTitle).foregroundColor(.tText)
+                    Text(store.t(section.subtitleKey))
+                        .font(.tMeta).foregroundColor(.tMuted)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 0)
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold)).foregroundColor(.tMuted)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.tMuted.opacity(0.7))
             }
+            .padding(.horizontal, TSpace.lg)
             .padding(.vertical, TSpace.md)
             .contentShape(Rectangle())
         }
@@ -208,8 +343,6 @@ struct SettingsView: View {
             .padding(.top, 12)
         }
         .background(Color.tDark)
-        .navigationTitle(store.t(section.titleKey))
-        .navigationBarTitleDisplayMode(.inline)
     }
 
     @ViewBuilder private var langueCard: some View {
@@ -836,13 +969,21 @@ struct SettingsView: View {
     @ViewBuilder
     private func label(_ icon: String, _ text: String) -> some View {
         HStack(spacing: TSpace.sm) {
-            Image(systemName: icon)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(.tPrimary)
+            // Même pastille que dans le menu : les deux niveaux se répondent.
+            RoundedRectangle(cornerRadius: 7)
+                .fill(Color.tPrimary.opacity(0.16))
+                .frame(width: 26, height: 26)
+                .overlay {
+                    Image(systemName: icon)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.tPrimary)
+                }
             Text(text)
                 .font(.tSection)
                 .foregroundColor(.tText)
+            Spacer(minLength: 0)
         }
+        .padding(.bottom, 2)
     }
 
     @ViewBuilder

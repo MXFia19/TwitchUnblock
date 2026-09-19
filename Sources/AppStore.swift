@@ -4,7 +4,8 @@ import Combine
 final class AppStore: ObservableObject {
 
     // MARK: – Language
-    @Published var lang: Lang = .fr {
+    /// L'anglais par défaut : l'app n'est pas réservée à un public français.
+    @Published var lang: Lang = .en {
         didSet { UserDefaults.standard.set(lang.rawValue, forKey: "lang") }
     }
 

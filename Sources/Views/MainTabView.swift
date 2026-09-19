@@ -44,13 +44,16 @@ struct MainTabView: View {
     @State private var showPlayerMenu  = false
     /// Qualité retenue par le lecteur immersif (vide = meilleure disponible).
     @State private var immersiveQuality = ""
-    /// Les commandes du lecteur immersif sont-elles à l'écran ? Le chat posé sur
-    /// l'image les recouvre : tant qu'elles sont là, elles ont la priorité.
-    @State private var playerControlsVisible = true
     /// Largeur du chat au début d'un glissement : la translation du geste est
     /// relative à son point de départ, que la vue ne connaît plus une fois
     /// qu'elle a commencé à rétrécir.
     @State private var chatDragStart: Double? = nil
+    /// Largeur en cours de glissement. Tant qu'elle vaut nil, c'est le réglage
+    /// mémorisé qui s'applique ; pendant le geste, cet état local évite de
+    /// toucher à l'AppStore à chaque image (voir `playerBody`).
+    @State private var chatDragRatio: Double? = nil
+    /// Fermeture du lecteur en cours : le contenu survit le temps du fondu.
+    @State private var closingPlayer = false
 
     /// Décalage à appliquer au chat : la latence mesurée, si la synchro est active.
     private var chatDelay: Double {
@@ -127,7 +130,9 @@ struct MainTabView: View {
             .ignoresSafeArea()
 
             // ── Mini bar ──────────────────────────────────────────────
-            if playerMode != nil && !playerVisible && qualityLinks != nil {
+            // `!closingPlayer` : sans lui, la mini-barre apparaîtrait le temps du
+            // fondu de fermeture, le lecteur étant encore en place mais masqué.
+            if playerMode != nil && !playerVisible && qualityLinks != nil && !closingPlayer {
                 miniBar.zIndex(99)
             }
 
@@ -231,9 +236,14 @@ struct MainTabView: View {
         let videoMaxHeight: CGFloat? = split ? CGFloat.infinity : nil
         // Largeur réglable, mais jamais sous 220 pt : en deçà les messages se
         // hachent en mots isolés, quel que soit le réglage.
-        let chatWidth: CGFloat? = split
-            ? max(size.width * CGFloat(store.chatWidthRatio), 220)
-            : nil
+        //
+        // Pendant un glissement la valeur vient de `chatDragRatio`, un simple
+        // @State. Écrire dans le store à chaque image passait par un `didSet`
+        // qui enregistre dans UserDefaults — une écriture disque synchrone
+        // soixante fois par seconde — et invalidait tout ce qui observe
+        // l'AppStore, dont chaque ligne de message du chat. D'où les à-coups.
+        let ratio = chatDragRatio ?? store.chatWidthRatio
+        let chatWidth: CGFloat? = split ? max(size.width * CGFloat(ratio), 220) : nil
         // Place prise dans la rangée : seule la disposition « colonne » en
         // réclame. Superposé et replié laissent toute la largeur à l'image.
         let chatColumn: CGFloat? = {
@@ -245,11 +255,11 @@ struct MainTabView: View {
         // Le décor ne tient que dans le chat plein cadre ; la transparence ne
         // sert qu'au calque. Le reste (tailles) vient des réglages.
         let chatStyle = store.chatStyle(chrome: !split, translucent: overlaying)
-        // Posé sur l'image, le chat prend toute la hauteur — c'est ce qui le rend
-        // lisible. Il recouvre donc les boutons du lecteur ; pendant que les
-        // commandes sont affichées, ce sont elles qui reçoivent les touchers, et
-        // le chat redevient défilable dès qu'elles s'effacent.
-        let chatTappable = chatVisible && !(overlaying && playerControlsVisible)
+        // Posé sur l'image, le chat couvre la droite de l'écran. Plutôt que de
+        // se disputer les touchers avec les boutons du lecteur, on les écarte :
+        // les barres du lecteur se replient de la largeur du chat et restent
+        // donc entièrement visibles et cliquables, quelle que soit sa taille.
+        let controlsInset: CGFloat = overlaying ? (chatWidth ?? 0) : 0
 
         layout {
             VStack(spacing: 0) {
@@ -259,7 +269,8 @@ struct MainTabView: View {
                     playerTopBar
                 }
                 if !chatOnly {
-                    videoSurface(links: links, landscape: split)
+                    videoSurface(links: links, landscape: split,
+                                 controlsInset: controlsInset)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .frame(height: videoHeight)
                 }
@@ -290,7 +301,7 @@ struct MainTabView: View {
                 }
                 .frame(width: chatColumn, alignment: .trailing)
                 .opacity(chatVisible ? 1 : 0)
-                .allowsHitTesting(chatTappable)
+                .allowsHitTesting(chatVisible)
         }
     }
 
@@ -301,18 +312,20 @@ struct MainTabView: View {
     @ViewBuilder
     private func chatResizeHandle(totalWidth: CGFloat) -> some View {
         let overlaying = store.landscapeChat == .overlay
+        let dragging   = chatDragRatio != nil
         Rectangle()
-            .fill(overlaying ? Color.tPrimary.opacity(0.75) : Color.tBorder)
-            .frame(width: overlaying ? 2 : 1)
+            .fill(dragging ? Color.tPrimary
+                           : (overlaying ? Color.tPrimary.opacity(0.75) : Color.tBorder))
+            .frame(width: overlaying || dragging ? 2 : 1)
             .overlay {
-                // Trois points : sans repère, personne ne devine qu'on peut tirer.
+                // Sans repère, personne ne devine qu'on peut tirer.
                 Capsule()
-                    .fill(Color.white.opacity(chatDragStart == nil ? 0.35 : 0.9))
-                    .frame(width: 4, height: 36)
+                    .fill(Color.white.opacity(dragging ? 0.95 : 0.35))
+                    .frame(width: dragging ? 5 : 4, height: dragging ? 48 : 36)
             }
             .overlay {
                 Color.clear
-                    .frame(width: 24)
+                    .frame(width: 28)
                     .contentShape(Rectangle())
                     .gesture(
                         DragGesture(minimumDistance: 2)
@@ -321,12 +334,18 @@ struct MainTabView: View {
                                 if chatDragStart == nil { chatDragStart = start }
                                 // Tirer vers la gauche élargit le chat.
                                 let delta = -value.translation.width / totalWidth
-                                store.chatWidthRatio =
-                                    min(max(start + Double(delta), 0.20), 0.60)
+                                chatDragRatio = min(max(start + Double(delta), 0.20), 0.60)
                             }
-                            .onEnded { _ in chatDragStart = nil }
+                            .onEnded { _ in
+                                // Une seule écriture dans le store, donc un seul
+                                // enregistrement disque, à la fin du geste.
+                                if let final = chatDragRatio { store.chatWidthRatio = final }
+                                chatDragStart = nil
+                                chatDragRatio = nil
+                            }
                     )
             }
+            .animation(.easeOut(duration: 0.15), value: dragging)
     }
 
     /// Le chat, quelle que soit la disposition.
@@ -360,7 +379,8 @@ struct MainTabView: View {
 
     /// Surface vidéo : lecteur natif (contrôles Apple) ou immersif (contrôles maison).
     @ViewBuilder
-    private func videoSurface(links: QualityLinks, landscape: Bool) -> some View {
+    private func videoSurface(links: QualityLinks, landscape: Bool,
+                              controlsInset: CGFloat = 0) -> some View {
         if store.immersivePlayer {
             ImmersivePlayer(
                 url: URL(string: links[currentQuality(links)] ?? "") ?? URL(string: "about:blank")!,
@@ -371,6 +391,7 @@ struct MainTabView: View {
                 sleepLabel: sleepTimer.isActive ? sleepTimer.label : nil,
                 chatMode: store.landscapeChat,
                 isLandscape: landscape,
+                controlsInset: controlsInset,
                 onProgress: { time in
                     vodPlaybackTime = time
                     if let id = currentVodId { store.setVodProgress(id, time: time) }
@@ -381,8 +402,7 @@ struct MainTabView: View {
                 onMenu:   { showPlayerMenu = true },
                 onRefresh: { reloadCurrent() },
                 onToggleChat: { withAnimation { store.landscapeChat = store.landscapeChat.next } },
-                onSleep: { showSleepSheet = true },
-                onControlsChange: { playerControlsVisible = $0 }
+                onSleep: { showSleepSheet = true }
             )
         } else {
             VideoPlayerView(
@@ -640,23 +660,32 @@ struct MainTabView: View {
     private func stopPlayer() {
         UIApplication.shared.isIdleTimerDisabled = false   // ré-autorise la veille
         stopLiveTimers()
-        chatOnly           = false
-        currentChannelName = nil
-        currentChannelId   = nil
-        liveDvrVideoId     = nil
-        dvrSourceChannel   = nil
-        pendingDvrChannel  = nil
-        liveViewerCount    = 0
-        liveStartedAt      = nil
-        liveUptimeText     = ""
-        liveLatency        = 0
-        liveAvatar         = nil
-        liveGame           = ""
-        withAnimation {
-            playerVisible = false
-            playerMode    = nil
-            qualityLinks  = nil
-            statusTitle   = ""
+
+        // Le fondu d'abord, le ménage ensuite. Vider `qualityLinks` et
+        // `playerMode` dans la même transaction escamotait l'animation : le
+        // contenu disparaissait aussitôt et il ne restait qu'un cadre noir à
+        // estomper, d'où la fermeture « instantanée » alors que l'ouverture
+        // s'animait.
+        closingPlayer = true
+        withAnimation(.easeInOut(duration: 0.28)) { playerVisible = false }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            chatOnly           = false
+            currentChannelName = nil
+            currentChannelId   = nil
+            liveDvrVideoId     = nil
+            dvrSourceChannel   = nil
+            pendingDvrChannel  = nil
+            liveViewerCount    = 0
+            liveStartedAt      = nil
+            liveUptimeText     = ""
+            liveLatency        = 0
+            liveAvatar         = nil
+            liveGame           = ""
+            playerMode         = nil
+            qualityLinks       = nil
+            statusTitle        = ""
+            closingPlayer      = false
         }
     }
 

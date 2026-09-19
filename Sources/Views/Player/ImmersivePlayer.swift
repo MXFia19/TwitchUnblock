@@ -209,6 +209,9 @@ struct ImmersivePlayer: View {
     /// Orientation, fournie par le parent : lue sur UIApplication elle ne serait
     /// pas observable, et la vue ne se redessinerait pas à la rotation.
     var isLandscape: Bool = false
+    /// Marge droite des barres de commande : en chat superposé, le calque
+    /// occupe cette largeur, et les boutons doivent rester à sa gauche.
+    var controlsInset: CGFloat = 0
 
     var onProgress: (Double) -> Void = { _ in }
     var onLatency:  (Double?) -> Void = { _ in }
@@ -218,9 +221,6 @@ struct ImmersivePlayer: View {
     var onRefresh:  () -> Void = {}
     var onToggleChat: () -> Void = {}
     var onSleep:    () -> Void = {}
-    /// Prévient le parent quand les commandes apparaissent ou s'effacent : le
-    /// chat posé sur l'image doit leur céder les touchers pendant ce temps.
-    var onControlsChange: (Bool) -> Void = { _ in }
 
     @EnvironmentObject private var store: AppStore
     @StateObject private var model: ImmersivePlayerModel
@@ -235,6 +235,7 @@ struct ImmersivePlayer: View {
          sleepLabel: String? = nil,
          chatMode: LandscapeChat = .column,
          isLandscape: Bool = false,
+         controlsInset: CGFloat = 0,
          onProgress: @escaping (Double) -> Void = { _ in },
          onLatency:  @escaping (Double?) -> Void = { _ in },
          onReduce:   @escaping () -> Void = {},
@@ -242,17 +243,15 @@ struct ImmersivePlayer: View {
          onMenu:     @escaping () -> Void = {},
          onRefresh:  @escaping () -> Void = {},
          onToggleChat: @escaping () -> Void = {},
-         onSleep:    @escaping () -> Void = {},
-         onControlsChange: @escaping (Bool) -> Void = { _ in }) {
+         onSleep:    @escaping () -> Void = {}) {
         self.url = url; self.isLive = isLive; self.dvrEnabled = dvrEnabled
         self.savedTime = savedTime; self.info = info
         self.onProgress = onProgress; self.onLatency = onLatency
         self.sleepLabel = sleepLabel; self.chatMode = chatMode
-        self.isLandscape = isLandscape
+        self.isLandscape = isLandscape; self.controlsInset = controlsInset
         self.onReduce = onReduce; self.onClose = onClose
         self.onMenu = onMenu; self.onRefresh = onRefresh
         self.onToggleChat = onToggleChat; self.onSleep = onSleep
-        self.onControlsChange = onControlsChange
         _model = StateObject(wrappedValue: ImmersivePlayerModel(
             url: url, isLive: isLive, savedTime: savedTime,
             onProgress: onProgress, onLatency: onLatency))
@@ -297,13 +296,8 @@ struct ImmersivePlayer: View {
         .contentShape(Rectangle())
         .onTapGesture { toggleControls() }
         .onChange(of: url) { model.load(url: $0) }
-        // Un seul point d'écoute : `showControls` change depuis le tap, le
-        // masquage automatique et chaque bouton — les prévenir un par un
-        // finirait forcément par en oublier un.
-        .onChange(of: showControls) { onControlsChange($0) }
         .onAppear {
             model.lowLatency = store.lowLatency && isLive
-            onControlsChange(showControls)
             scheduleAutoHide()
         }
         .onChange(of: store.lowLatency) { model.lowLatency = $0 && isLive }
@@ -324,7 +318,8 @@ struct ImmersivePlayer: View {
                 .contentShape(Rectangle())
                 .onTapGesture { toggleControls() }
 
-            // Play / pause au centre
+            // Play / pause au centre — centré sur la partie visible de l'image,
+            // pas sur l'écran entier : le chat superposé en masque la droite.
             Button {
                 model.togglePlay(); scheduleAutoHide()
             } label: {
@@ -336,6 +331,7 @@ struct ImmersivePlayer: View {
                     .clipShape(Circle())
             }
             .buttonStyle(.plain)
+            .offset(x: -controlsInset / 2)
 
             VStack(spacing: 0) {
                 topBar
@@ -343,6 +339,13 @@ struct ImmersivePlayer: View {
                 bottomBar
             }
             .padding(TSpace.sm)
+            // Les barres se replient de la largeur du chat superposé : leurs
+            // boutons restent entièrement visibles et cliquables, et suivent
+            // la largeur du chat quand on la fait varier.
+            // Pas d'animation ici : pendant un glissement la marge doit coller
+            // au doigt. Le changement de disposition, lui, est déjà animé par
+            // le `withAnimation` du bouton qui le déclenche.
+            .padding(.trailing, controlsInset)
         }
         .transition(.opacity)
     }

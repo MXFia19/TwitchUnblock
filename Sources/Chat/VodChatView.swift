@@ -65,6 +65,7 @@ struct VodChatView: View {
                             }
                             .frame(width: geo.size.width, alignment: .leading)
                             .padding(.vertical, 4)
+                            .frame(minHeight: geo.size.height, alignment: .bottom)
                         }
                         .simultaneousGesture(
                             DragGesture(minimumDistance: 10)

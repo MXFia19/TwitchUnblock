@@ -49,20 +49,20 @@ struct ChatStyle: Equatable {
     /// Horodatage devant chaque message.
     var showsTimestamp = true
     var fontSize: CGFloat = 13
+    /// Moitié de l'espace entre deux messages (marge haute et basse de chacun).
     var rowPadding: CGFloat = 4
+    /// Badges et emotes suivent la taille du texte, puis ces facteurs : on peut
+    /// vouloir de grosses emotes avec du petit texte, ou l'inverse.
+    var badgeScale: CGFloat = 1
+    var emoteScale: CGFloat = 1
     /// Fond transparent et texte ombré, pour rester lisible sur l'image.
     var translucent = false
 
+    /// Repli quand aucun réglage n'est à portée (aperçus, feuilles isolées).
     static let standard = ChatStyle()
 
-    /// Colonne étroite : le décor mange la moitié de la hauteur utile, on le
-    /// retire et on resserre les lignes.
-    static let compact = ChatStyle(showsChrome: false, showsTimestamp: false,
-                                   fontSize: 12, rowPadding: 2)
-
-    /// Posé sur la vidéo : compact, sans fond, avec une ombre portée.
-    static let overlay = ChatStyle(showsChrome: false, showsTimestamp: false,
-                                   fontSize: 12, rowPadding: 2, translucent: true)
+    var badgeHeight: CGFloat { (fontSize + 3) * badgeScale }
+    var emoteHeight: CGFloat { (fontSize + 11) * emoteScale }
 }
 
 // MARK: – Emote

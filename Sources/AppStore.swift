@@ -94,6 +94,43 @@ final class AppStore: ObservableObject {
         didSet { UserDefaults.standard.set(landscapeChat.rawValue, forKey: "cfg_landscape_chat") }
     }
 
+    // MARK: – Apparence du chat
+    // La bonne taille dépend de l'écran, de la distance de lecture et de la vue
+    // de chacun : autant la laisser se régler plutôt que d'en imposer une.
+    @Published var chatFontSize: Double = 13 {
+        didSet { UserDefaults.standard.set(chatFontSize, forKey: "cfg_chat_font") }
+    }
+    /// Espace vertical entre deux messages, en points. Chaque message en porte
+    /// la moitié en haut et en bas : 8 reproduit l'aspect d'origine.
+    @Published var chatSpacing: Double = 8 {
+        didSet { UserDefaults.standard.set(chatSpacing, forKey: "cfg_chat_spacing") }
+    }
+    @Published var chatBadgeScale: Double = 1 {
+        didSet { UserDefaults.standard.set(chatBadgeScale, forKey: "cfg_chat_badge") }
+    }
+    @Published var chatEmoteScale: Double = 1 {
+        didSet { UserDefaults.standard.set(chatEmoteScale, forKey: "cfg_chat_emote") }
+    }
+    @Published var chatTimestamps: Bool = true {
+        didSet { UserDefaults.standard.set(chatTimestamps, forKey: "cfg_chat_time") }
+    }
+    /// Part de la largeur prise par le chat en paysage (colonne ou calque).
+    @Published var chatWidthRatio: Double = 0.32 {
+        didSet { UserDefaults.standard.set(chatWidthRatio, forKey: "cfg_chat_width") }
+    }
+
+    /// Construit la présentation du chat : les réglages de l'utilisateur pour la
+    /// taille, la disposition en cours pour le décor et la transparence.
+    func chatStyle(chrome: Bool, translucent: Bool) -> ChatStyle {
+        ChatStyle(showsChrome: chrome,
+                  showsTimestamp: chatTimestamps,
+                  fontSize: CGFloat(chatFontSize),
+                  rowPadding: CGFloat(chatSpacing) / 2,
+                  badgeScale: CGFloat(chatBadgeScale),
+                  emoteScale: CGFloat(chatEmoteScale),
+                  translucent: translucent)
+    }
+
     // MARK: – Comptage d'utilisation
     /// Signaler anonymement que cette installation est active.
     /// Voir Sources/Services/UsageService.swift pour ce qui part réellement.
@@ -138,6 +175,12 @@ final class AppStore: ObservableObject {
         immersivePlayer    = ud.object(forKey: "cfg_immersive")   as? Bool ?? false
         landscapeChat      = LandscapeChat(rawValue: ud.string(forKey: "cfg_landscape_chat") ?? "")
                              ?? .column
+        chatFontSize       = ud.object(forKey: "cfg_chat_font")    as? Double ?? 13
+        chatSpacing        = ud.object(forKey: "cfg_chat_spacing") as? Double ?? 8
+        chatBadgeScale     = ud.object(forKey: "cfg_chat_badge")   as? Double ?? 1
+        chatEmoteScale     = ud.object(forKey: "cfg_chat_emote")   as? Double ?? 1
+        chatTimestamps     = ud.object(forKey: "cfg_chat_time")    as? Bool   ?? true
+        chatWidthRatio     = ud.object(forKey: "cfg_chat_width")   as? Double ?? 0.32
         shareUsage         = ud.object(forKey: "cfg_share_usage") as? Bool ?? true
         showLatency        = ud.object(forKey: "dbg_latency")    as? Bool ?? false
         autoChatDelay      = ud.object(forKey: "dbg_chat_delay") as? Bool ?? false

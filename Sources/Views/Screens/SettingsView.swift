@@ -95,6 +95,51 @@ struct SettingsView: View {
                     }
                 }
 
+                // ── Taille du chat ──────────────────────────────────
+                // La bonne taille dépend de l'écran, de la distance de lecture et
+                // de la vue de chacun : un aperçu en direct évite l'aller-retour
+                // « je règle, je ferme, je regarde, je reviens ».
+                settingCard {
+                    VStack(alignment: .leading, spacing: 14) {
+                        label("textformat.size", store.t("chat_sizing"))
+
+                        chatPreview
+
+                        Divider().background(Color.tBorder)
+                        toggleRow(store.t("cfg_timestamps"), store.t("cfg_timestamps_sub"),
+                                  $store.chatTimestamps, log: "Horodatage du chat")
+                        Divider().background(Color.tBorder)
+
+                        sliderRow(store.t("cfg_font_size"), value: $store.chatFontSize,
+                                  range: 10...20, step: 1) { String(format: "%.0f pt", $0) }
+                        sliderRow(store.t("cfg_msg_spacing"), value: $store.chatSpacing,
+                                  range: 0...16, step: 1) { String(format: "%.0f px", $0) }
+                        sliderRow(store.t("cfg_badge_scale"), value: $store.chatBadgeScale,
+                                  range: 0.5...2, step: 0.05) { String(format: "%.2fx", $0) }
+                        sliderRow(store.t("cfg_emote_scale"), value: $store.chatEmoteScale,
+                                  range: 0.5...2, step: 0.05) { String(format: "%.2fx", $0) }
+                        sliderRow(store.t("cfg_chat_width"), value: $store.chatWidthRatio,
+                                  range: 0.20...0.60, step: 0.01) { String(format: "%.0f %%", $0 * 100) }
+
+                        Text(store.t("cfg_chat_width_sub"))
+                            .font(.tMeta).foregroundColor(.tMuted)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        Button {
+                            store.chatFontSize   = 13
+                            store.chatSpacing    = 8
+                            store.chatBadgeScale = 1
+                            store.chatEmoteScale = 1
+                            store.chatWidthRatio = 0.32
+                            store.chatTimestamps = true
+                        } label: {
+                            Text(store.t("reset_defaults"))
+                                .font(.tLabel).foregroundColor(.tPrimary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+
                 // ── Lecteur vidéo ───────────────────────────────────
                 settingCard {
                     VStack(alignment: .leading, spacing: 14) {
@@ -526,6 +571,59 @@ struct SettingsView: View {
         // Re-login forcé seulement si un token existe déjà mais est invalide.
         webLoginClear = false
         showWebLogin = true
+    }
+
+    // MARK: – Aperçu du chat
+    /// Deux lignes factices rendues par le vrai `ChatMessageRow` : ce qu'on voit
+    /// ici est exactement ce que donnera le chat.
+    private static let previewMessages: [ChatMessage] = [
+        ChatMessage(id: "p1", userId: "0", userName: "lewdolas", displayName: "Lewdolas",
+                    color: .tWarning, badges: [],
+                    tokens: [.text("ça"), .text("va"), .text("y'a"), .text("des"),
+                             .text("sourires")],
+                    timestamp: Date()),
+        ChatMessage(id: "p2", userId: "0", userName: "damonarix", displayName: "Damonarix",
+                    color: .tOutplayer, badges: [],
+                    tokens: [.text("L'honnêteté"), .text("d'un"), .text("Skaven"),
+                             .mention("toi")],
+                    timestamp: Date()),
+    ]
+
+    @ViewBuilder
+    private var chatPreview: some View {
+        let style = store.chatStyle(chrome: false, translucent: false)
+        GeometryReader { geo in
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(Self.previewMessages) { msg in
+                    ChatMessageRow(message: msg, availableWidth: geo.size.width,
+                                   style: style)
+                }
+            }
+            .frame(width: geo.size.width, alignment: .leading)
+        }
+        // Hauteur tenue à la main : un GeometryReader n'en propose aucune. Large
+        // de quatre lignes, pour le cas où les deux messages passent à la ligne
+        // aux plus grosses tailles ; `clipped` évite tout débordement.
+        .frame(height: store.chatFontSize * 4 + store.chatSpacing * 2 + 20)
+        .clipped()
+        .padding(TSpace.sm)
+        .background(Color.tDark)
+        .cornerRadius(TRadius.chip)
+    }
+
+    @ViewBuilder
+    private func sliderRow(_ title: String, value: Binding<Double>,
+                           range: ClosedRange<Double>, step: Double,
+                           format: @escaping (Double) -> String) -> some View {
+        VStack(spacing: 2) {
+            HStack {
+                Text(title).font(.tCardTitle).foregroundColor(.tText)
+                Spacer()
+                Text(format(value.wrappedValue))
+                    .font(.tMeta.monospacedDigit()).foregroundColor(.tMuted)
+            }
+            Slider(value: value, in: range, step: step).tint(.tPrimary)
+        }
     }
 
     // MARK: – Subviews

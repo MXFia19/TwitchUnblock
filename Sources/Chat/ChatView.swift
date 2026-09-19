@@ -254,6 +254,10 @@ struct ChatView: View {
                                 }
                                 .frame(width: geo.size.width, alignment: .leading)
                                 .padding(.vertical, 4)
+                                // Peu de messages : ils se collent en bas comme
+                                // sur Twitch, au lieu de flotter en haut d'un
+                                // grand vide — criant posé sur l'image.
+                                .frame(minHeight: geo.size.height, alignment: .bottom)
                             }
                             // Défilement manuel de l'utilisateur → on arrête de le ramener en bas.
                             .simultaneousGesture(
@@ -719,15 +723,15 @@ struct WrappingHStack: View {
     var body: some View {
         let blocks = message.tokens.enumerated().map { i, t in TokenBlock(id: i, content: t) }
         let size = style.fontSize
-        // Les emotes suivent le texte : à 12 pt elles ne doivent pas rester
-        // à la hauteur d'origine, sinon la ligne reste aussi haute qu'avant.
-        let emoteHeight = size + 11
+        // Badges et emotes suivent le texte : à 11 pt ils ne doivent pas rester
+        // à leur hauteur d'origine, sinon la ligne reste aussi haute qu'avant.
+        let emoteHeight = style.emoteHeight
         MessageFlowLayout(spacing: 4, lineSpacing: 4, width: availableWidth) {
             if style.showsTimestamp {
                 Text(timeString).font(.system(size: size - 2)).foregroundColor(.tMuted)
             }
             ForEach(message.badges) { badge in
-                CachedEmoteImage(url: badge.url, name: "", height: size + 3,
+                CachedEmoteImage(url: badge.url, name: "", height: style.badgeHeight,
                                  showsNameFallback: false)
             }
             Text(message.displayName + ":")

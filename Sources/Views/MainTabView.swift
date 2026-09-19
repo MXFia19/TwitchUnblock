@@ -44,6 +44,9 @@ struct MainTabView: View {
     @State private var showPlayerMenu  = false
     /// Qualité retenue par le lecteur immersif (vide = meilleure disponible).
     @State private var immersiveQuality = ""
+    /// Les commandes du lecteur immersif sont-elles à l'écran ? Le chat posé sur
+    /// l'image les recouvre : tant qu'elles sont là, elles ont la priorité.
+    @State private var playerControlsVisible = true
 
     /// Décalage à appliquer au chat : la latence mesurée, si la synchro est active.
     private var chatDelay: Double {
@@ -222,9 +225,11 @@ struct MainTabView: View {
         // Paysage : libre, la colonne donne toute sa hauteur à l'image.
         let videoHeight: CGFloat? = split ? nil : size.width * 9 / 16
         let videoMaxHeight: CGFloat? = split ? CGFloat.infinity : nil
-        // Un tiers de l'écran, borné : au-delà le chat mange l'image, en deçà les
-        // messages se hachent en mots isolés.
-        let chatWidth: CGFloat? = split ? min(max(size.width * 0.32, 260), 380) : nil
+        // Largeur réglable, mais jamais sous 220 pt : en deçà les messages se
+        // hachent en mots isolés, quel que soit le réglage.
+        let chatWidth: CGFloat? = split
+            ? max(size.width * CGFloat(store.chatWidthRatio), 220)
+            : nil
         // Place prise dans la rangée : seule la disposition « colonne » en
         // réclame. Superposé et replié laissent toute la largeur à l'image.
         let chatColumn: CGFloat? = {
@@ -232,14 +237,15 @@ struct MainTabView: View {
             return CGFloat(0)
         }()
         let chatVisible = !split || mode != .hidden
-        let chatStyle: ChatStyle = !split ? .standard
-                                 : (mode == .overlay ? .overlay : .compact)
-        // Superposé, le chat flotte entre les deux barres du lecteur. Sans cette
-        // réserve il recouvrirait leurs boutons — dont celui qui sert justement à
-        // quitter ce mode.
-        let overlaying = split && mode == .overlay
-        let chatInsetTop:    CGFloat = overlaying ? 60 : 0
-        let chatInsetBottom: CGFloat = overlaying ? 80 : 0
+        let overlaying  = split && mode == .overlay
+        // Le décor ne tient que dans le chat plein cadre ; la transparence ne
+        // sert qu'au calque. Le reste (tailles) vient des réglages.
+        let chatStyle = store.chatStyle(chrome: !split, translucent: overlaying)
+        // Posé sur l'image, le chat prend toute la hauteur — c'est ce qui le rend
+        // lisible. Il recouvre donc les boutons du lecteur ; pendant que les
+        // commandes sont affichées, ce sont elles qui reçoivent les touchers, et
+        // le chat redevient défilable dès qu'elles s'effacent.
+        let chatTappable = chatVisible && !(overlaying && playerControlsVisible)
 
         layout {
             VStack(spacing: 0) {
@@ -271,17 +277,19 @@ struct MainTabView: View {
             // cadrage nul ne bornant pas les zones tactiles.
             chatPane(style: chatStyle)
                 .frame(width: chatWidth)
-                .padding(.top, chatInsetTop)
-                .padding(.bottom, chatInsetBottom)
                 .frame(maxHeight: .infinity)
-                .frame(width: chatColumn, alignment: .trailing)
-                .opacity(chatVisible ? 1 : 0)
-                .allowsHitTesting(chatVisible)
+                // Un trait marque le bord du chat dans les deux dispositions :
+                // posé sur l'image, sans lui, on ne sait plus où il commence.
                 .overlay(alignment: .leading) {
-                    if split, mode == .column {
-                        Divider().background(Color.tBorder)
+                    if split {
+                        Rectangle()
+                            .fill(overlaying ? Color.tPrimary.opacity(0.75) : Color.tBorder)
+                            .frame(width: overlaying ? 2 : 1)
                     }
                 }
+                .frame(width: chatColumn, alignment: .trailing)
+                .opacity(chatVisible ? 1 : 0)
+                .allowsHitTesting(chatTappable)
         }
     }
 
@@ -337,7 +345,8 @@ struct MainTabView: View {
                 onMenu:   { showPlayerMenu = true },
                 onRefresh: { reloadCurrent() },
                 onToggleChat: { withAnimation { store.landscapeChat = store.landscapeChat.next } },
-                onSleep: { showSleepSheet = true }
+                onSleep: { showSleepSheet = true },
+                onControlsChange: { playerControlsVisible = $0 }
             )
         } else {
             VideoPlayerView(

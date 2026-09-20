@@ -26,8 +26,10 @@ npm run build      # typecheck strict + bundle dans dist/
 | Messages modérés | retirés, ou barrés selon le réglage du client |
 | Chat redimensionnable | poignée entre la vidéo et le chat, mémorisée |
 | Connexion | OAuth Twitch, flux implicite |
-| Accueil | chaînes suivies en direct, top France/Monde, catégories, reprise |
+| Onglets | Accueil, Catégories, Recherche |
+| Accueil | chaînes suivies en direct, top France/Monde, reprise |
 | Recherche | chaînes en direct, différée de 350 ms |
+| Réglages | apparence et comportement du chat, lecteur, données locales |
 
 ## Ce qui ne peut pas exister sur le web
 
@@ -122,6 +124,8 @@ portage, pas une réécriture :
 | `lib/badges.ts` | `Chat/BadgeService.swift` |
 | `lib/chatClient.ts` | `Chat/ChatService.swift` |
 | `lib/stream.ts` | `Services/TwitchAPI.swift` (partie Helix) |
+| `lib/discover.ts` | `Views/Screens/HomeView.swift` |
+| `lib/settings.ts` | `AppStore.swift` (mêmes valeurs par défaut) |
 
 `test/parser.test.ts` vérifie les points qui se portent mal : le paramètre
 final d'une ligne IRC, les tags contenant un `=`, la liste du `353` qui est en

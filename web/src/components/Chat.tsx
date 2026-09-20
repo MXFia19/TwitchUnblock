@@ -2,17 +2,18 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { ChatClient } from '../lib/chatClient'
 import { suggestEmotes, type Emote } from '../lib/emotes'
 import type { ChatMessage } from '../lib/message'
+import { useSettings } from '../lib/settings'
 
 interface Props {
   client: ChatClient | null
   messages: ChatMessage[]
   canSend: boolean
-  showTimestamps: boolean
-  fontSize: number
-  spacing: number
 }
 
-export function Chat({ client, messages, canSend, showTimestamps, fontSize, spacing }: Props) {
+export function Chat({ client, messages, canSend }: Props) {
+  // Lu ici plutôt que reçu en propriétés : les réglages descendraient sinon
+  // jusqu'à chaque ligne de message, à travers trois composants.
+  const s = useSettings()
   const [draft, setDraft] = useState('')
   const listRef = useRef<HTMLDivElement>(null)
   // Suivi automatique tant qu'on est en bas ; dès qu'on remonte pour lire,
@@ -34,8 +35,11 @@ export function Chat({ client, messages, canSend, showTimestamps, fontSize, spac
 
   const currentWord = draft.split(' ').at(-1) ?? ''
   const suggestions = useMemo<Emote[]>(
-    () => (currentWord.length >= 2 && !currentWord.startsWith('@') ? suggestEmotes(currentWord, 12) : []),
-    [currentWord],
+    () =>
+      s.chatAutocomplete && currentWord.length >= 2 && !currentWord.startsWith('@')
+        ? suggestEmotes(currentWord, 12)
+        : [],
+    [currentWord, s.chatAutocomplete],
   )
 
   function complete(name: string) {
@@ -53,10 +57,10 @@ export function Chat({ client, messages, canSend, showTimestamps, fontSize, spac
   }
 
   return (
-    <div className="chat" style={{ fontSize }}>
+    <div className="chat" style={{ fontSize: s.chatFontSize }}>
       <div className="chat-list" ref={listRef} onScroll={onScroll}>
         {messages.map((m) => (
-          <Row key={m.id} msg={m} showTimestamp={showTimestamps} spacing={spacing} />
+          <ChatRow key={m.id} msg={m} showTimestamp={s.chatTimestamps} spacing={s.chatSpacing} />
         ))}
       </div>
 
@@ -91,11 +95,12 @@ export function Chat({ client, messages, canSend, showTimestamps, fontSize, spac
   )
 }
 
-function Row({ msg, showTimestamp, spacing }: {
+export function ChatRow({ msg, showTimestamp, spacing }: {
   msg: ChatMessage
   showTimestamp: boolean
   spacing: number
 }) {
+  const s = useSettings()
   const time = new Date(msg.timestamp).toLocaleTimeString([], {
     hour: '2-digit',
     minute: '2-digit',
@@ -128,7 +133,8 @@ function Row({ msg, showTimestamp, spacing }: {
             conversation se dérouler alors qu'elle a eu lieu avant l'arrivée. */}
         {msg.isHistorical && <span className="msg-histo" title="Message antérieur à ton arrivée">🕘</span>}
         {msg.badges.map((b) => (
-          <img key={b.id} className="msg-badge" src={b.url} alt="" />
+          <img key={b.id} className="msg-badge" src={b.url} alt=""
+               style={{ height: `${1.2 * s.chatBadgeScale}em` }} />
         ))}
         <span className="msg-name" style={{ color: msg.color }}>
           {msg.displayName}
@@ -151,6 +157,7 @@ function Row({ msg, showTimestamp, spacing }: {
                   alt={t.emote.name}
                   title={t.emote.name}
                   loading="lazy"
+                  style={{ height: `${1.9 * s.chatEmoteScale}em` }}
                 />
               )
             case 'mention':

@@ -17,10 +17,12 @@ import { sortQualities, type QualityLinks } from '../lib/stream'
 interface Props {
   links: QualityLinks
   lowLatency: boolean
+  /** Qualité voulue ; ignorée si la chaîne ne la propose pas. */
+  preferredQuality?: string
   onLatency?: (seconds: number | null) => void
 }
 
-export function Player({ links, lowLatency, onLatency }: Props) {
+export function Player({ links, lowLatency, preferredQuality = '', onLatency }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const hlsRef = useRef<Hls | null>(null)
   const [quality, setQuality] = useState<string>('')
@@ -28,7 +30,13 @@ export function Player({ links, lowLatency, onLatency }: Props) {
   const [paused, setPaused] = useState(false)
 
   const qualities = sortQualities(Object.keys(links))
-  const current = quality && links[quality] ? quality : (qualities[0] ?? '')
+  // Priorité : choix fait dans le lecteur, puis réglage, puis la meilleure.
+  // Une chaîne qui ne diffuse pas en 1080p ne doit pas rester muette parce
+  // qu'on a demandé du 1080p dans les réglages.
+  const current =
+    (quality && links[quality] && quality) ||
+    (preferredQuality && links[preferredQuality] && preferredQuality) ||
+    (qualities[0] ?? '')
   const src = current ? links[current] : undefined
 
   const usingHls = Hls.isSupported()

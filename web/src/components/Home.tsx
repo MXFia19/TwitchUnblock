@@ -11,6 +11,7 @@ import {
   searchChannels,
   type Stream,
 } from '../lib/discover'
+import { setSetting, useSettings } from '../lib/settings'
 import { formatViewers } from '../lib/stream'
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -24,35 +25,20 @@ interface Props {
   onOpen: (login: string) => void
 }
 
-type Lang = 'fr' | 'all'
-
 export function Home({ token, userId, onOpen }: Props) {
+  const s = useSettings()
   const [followed, setFollowed] = useState<Stream[]>([])
   const [top, setTop] = useState<Stream[]>([])
-  const [lang, setLang] = useState<Lang>('fr')
-  const [categories, setCategories] = useState<Category[]>([])
   const [history, setHistory] = useState<HistoryEntry[]>(readHistory)
   const [loading, setLoading] = useState(true)
-
-  // Catégorie ouverte : on remplace la grille du haut par ses directs plutôt
-  // que d'ouvrir une page — on revient d'un clic.
-  const [openCat, setOpenCat] = useState<Category | null>(null)
-  const [catStreams, setCatStreams] = useState<Stream[]>([])
-
-  const [query, setQuery] = useState('')
-  const [results, setResults] = useState<Stream[] | null>(null)
 
   useEffect(() => {
     let alive = true
     void (async () => {
       setLoading(true)
-      const [f, c] = await Promise.all([
-        getFollowedStreams(token, userId),
-        getTopCategories(token),
-      ])
+      const f = await getFollowedStreams(token, userId)
       if (!alive) return
       setFollowed(f)
-      setCategories(c)
       setLoading(false)
     })()
     return () => { alive = false }
@@ -61,21 +47,11 @@ export function Home({ token, userId, onOpen }: Props) {
   useEffect(() => {
     let alive = true
     void (async () => {
-      const t = await getTopStreams(token, lang === 'fr' ? 'fr' : null)
+      const t = await getTopStreams(token, s.topLang === 'fr' ? 'fr' : null)
       if (alive) setTop(t)
     })()
     return () => { alive = false }
-  }, [token, lang])
-
-  // Recherche différée : une requête par frappe saturerait l'API pour rien.
-  useEffect(() => {
-    const q = query.trim()
-    if (q.length < 2) { setResults(null); return }
-    const id = setTimeout(() => {
-      void searchChannels(token, q).then(setResults)
-    }, 350)
-    return () => clearTimeout(id)
-  }, [query, token])
+  }, [token, s.topLang])
 
   function open(login: string) {
     onOpen(login)
@@ -84,11 +60,129 @@ export function Home({ token, userId, onOpen }: Props) {
     setTimeout(() => setHistory(readHistory()), 0)
   }
 
-  async function openCategory(cat: Category) {
-    setOpenCat(cat)
-    setCatStreams([])
-    setCatStreams(await getStreamsByCategory(token, cat.id))
+  return (
+    <div className="home">
+      {history.length > 0 && (
+        <Section
+          title="Repris récemment"
+          action={
+            <button className="ghost sm" onClick={() => { clearHistory(); setHistory([]) }}>
+              Effacer
+            </button>
+          }
+        >
+          <div className="chips">
+            {history.map((h) => (
+              <button key={h.login} className="chip" onClick={() => open(h.login)}>
+                {h.avatar && <img src={h.avatar} alt="" />}
+                <span>{h.displayName}</span>
+              </button>
+            ))}
+          </div>
+        </Section>
+      )}
+
+      <Section title="Tes chaînes en direct" count={followed.length}>
+        {loading
+          ? <Empty text="Chargement…" />
+          : followed.length === 0
+            ? <Empty text="Aucune de tes chaînes n'est en direct." />
+            : <Grid streams={followed} onOpen={open} />}
+      </Section>
+
+      <Section
+        title="Top des directs"
+        action={
+          <div className="toggle">
+            <button
+              className={s.topLang === 'fr' ? 'on' : ''}
+              onClick={() => setSetting('topLang', 'fr')}
+            >
+              France
+            </button>
+            <button
+              className={s.topLang === 'all' ? 'on' : ''}
+              onClick={() => setSetting('topLang', 'all')}
+            >
+              Monde
+            </button>
+          </div>
+        }
+      >
+        {top.length === 0 ? <Empty text="Chargement…" /> : <Grid streams={top} onOpen={open} />}
+      </Section>
+    </div>
+  )
+}
+
+// ── Onglet Catégories ───────────────────────────────────────────────────
+export function Categories({ token, onOpen }: { token: string; onOpen: (l: string) => void }) {
+  const [cats, setCats] = useState<Category[]>([])
+  // Une catégorie ouverte remplace la grille sur place : on revient d'un clic,
+  // sans quitter l'onglet ni perdre le défilement.
+  const [open, setOpen] = useState<Category | null>(null)
+  const [streams, setStreams] = useState<Stream[]>([])
+
+  useEffect(() => { void getTopCategories(token).then(setCats) }, [token])
+
+  useEffect(() => {
+    if (!open) return
+    let alive = true
+    setStreams([])
+    void getStreamsByCategory(token, open.id).then((r) => { if (alive) setStreams(r) })
+    return () => { alive = false }
+  }, [token, open])
+
+  if (open) {
+    return (
+      <div className="home">
+        <Section
+          title={open.name}
+          count={streams.length}
+          action={<button className="ghost sm" onClick={() => setOpen(null)}>← Catégories</button>}
+        >
+          {streams.length === 0
+            ? <Empty text="Chargement…" />
+            : <Grid streams={streams} onOpen={onOpen} />}
+        </Section>
+      </div>
+    )
   }
+
+  return (
+    <div className="home">
+      <Section title="Catégories" count={cats.length}>
+        {cats.length === 0 ? <Empty text="Chargement…" /> : (
+          <div className="cats">
+            {cats.map((c) => (
+              <button key={c.id} className="cat" onClick={() => setOpen(c)}>
+                <img src={c.boxArt} alt="" loading="lazy" />
+                <span>{c.name}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </Section>
+    </div>
+  )
+}
+
+// ── Onglet Recherche ────────────────────────────────────────────────────
+export function Search({ token, onOpen }: { token: string; onOpen: (l: string) => void }) {
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState<Stream[] | null>(null)
+  const [searching, setSearching] = useState(false)
+
+  // Recherche différée : une requête par frappe saturerait l'API pour rien.
+  useEffect(() => {
+    const q = query.trim()
+    if (q.length < 2) { setResults(null); setSearching(false); return }
+    setSearching(true)
+    const id = setTimeout(() => {
+      void searchChannels(token, q).then((r) => { setResults(r); setSearching(false) })
+    }, 350)
+    return () => clearTimeout(id)
+  }, [query, token])
 
   return (
     <div className="home">
@@ -97,6 +191,7 @@ export function Home({ token, userId, onOpen }: Props) {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Chercher une chaîne…"
+          autoFocus
           autoCapitalize="none"
           autoCorrect="off"
           spellCheck={false}
@@ -104,101 +199,13 @@ export function Home({ token, userId, onOpen }: Props) {
         {query && <button className="ghost" onClick={() => setQuery('')}>Effacer</button>}
       </div>
 
-      {results !== null && (
-        <Section title="Résultats" count={results.length}>
-          {results.length === 0
+      {results === null
+        ? <Empty text="Tape au moins deux caractères." />
+        : searching
+          ? <Empty text="Recherche…" />
+          : results.length === 0
             ? <Empty text="Aucune chaîne en direct pour cette recherche." />
-            : <Grid streams={results} onOpen={open} />}
-        </Section>
-      )}
-
-      {results === null && (
-        <>
-          {history.length > 0 && (
-            <Section
-              title="Repris récemment"
-              action={
-                <button
-                  className="ghost sm"
-                  onClick={() => { clearHistory(); setHistory([]) }}
-                >
-                  Effacer
-                </button>
-              }
-            >
-              <div className="chips">
-                {history.map((h) => (
-                  <button key={h.login} className="chip" onClick={() => open(h.login)}>
-                    {h.avatar && <img src={h.avatar} alt="" />}
-                    <span>{h.displayName}</span>
-                  </button>
-                ))}
-              </div>
-            </Section>
-          )}
-
-          <Section title="Tes chaînes en direct" count={followed.length}>
-            {loading
-              ? <Empty text="Chargement…" />
-              : followed.length === 0
-                ? <Empty text="Aucune de tes chaînes n'est en direct." />
-                : <Grid streams={followed} onOpen={open} />}
-          </Section>
-
-          {openCat ? (
-            <Section
-              title={openCat.name}
-              count={catStreams.length}
-              action={
-                <button className="ghost sm" onClick={() => setOpenCat(null)}>
-                  ← Retour
-                </button>
-              }
-            >
-              {catStreams.length === 0
-                ? <Empty text="Chargement…" />
-                : <Grid streams={catStreams} onOpen={open} />}
-            </Section>
-          ) : (
-            <>
-              <Section
-                title="Top des directs"
-                action={
-                  <div className="toggle">
-                    <button
-                      className={lang === 'fr' ? 'on' : ''}
-                      onClick={() => setLang('fr')}
-                    >
-                      France
-                    </button>
-                    <button
-                      className={lang === 'all' ? 'on' : ''}
-                      onClick={() => setLang('all')}
-                    >
-                      Monde
-                    </button>
-                  </div>
-                }
-              >
-                {top.length === 0
-                  ? <Empty text="Chargement…" />
-                  : <Grid streams={top} onOpen={open} />}
-              </Section>
-
-              <Section title="Catégories">
-                <div className="cats">
-                  {categories.map((c) => (
-                    <button key={c.id} className="cat" onClick={() => void openCategory(c)}>
-                      <img src={c.boxArt} alt="" loading="lazy" />
-                      <span>{c.name}</span>
-                    </button>
-                  ))}
-                </div>
-              </Section>
-            </>
-          )}
-        </>
-      )}
+            : <Grid streams={results} onOpen={onOpen} />}
     </div>
   )
 }

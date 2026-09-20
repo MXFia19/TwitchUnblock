@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Chat } from './components/Chat'
-import { Home } from './components/Home'
+import { Categories, Home, Search } from './components/Home'
 import { Player } from './components/Player'
+import { Settings } from './components/Settings'
 import {
   consumeRedirect,
   fetchSelf,
@@ -15,6 +16,7 @@ import {
 import { ChatClient } from './lib/chatClient'
 import { pushHistory } from './lib/discover'
 import { loadChannelEmotes, loadGlobalEmotes } from './lib/emotes'
+import { getSettings, save as saveSettings, setSetting, useSettings } from './lib/settings'
 import type { ChatMessage } from './lib/message'
 import {
   formatUptime,
@@ -24,6 +26,14 @@ import {
   type QualityLinks,
   type StreamInfo,
 } from './lib/stream'
+
+type Tab = 'home' | 'categories' | 'search'
+
+const TABS: { id: Tab; label: string; icon: string }[] = [
+  { id: 'home', label: 'Accueil', icon: '🏠' },
+  { id: 'categories', label: 'Catégories', icon: '🎮' },
+  { id: 'search', label: 'Recherche', icon: '🔍' },
+]
 
 export default function App() {
   const [token, setToken] = useState<string | null>(storedToken)
@@ -37,14 +47,10 @@ export default function App() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const clientRef = useRef<ChatClient | null>(null)
 
-  // Largeur du chat, en fraction de la fenêtre. Pendant un glissement la
-  // valeur vit dans un état local et n'est enregistrée qu'au relâcher —
-  // écrire dans localStorage à chaque image du geste hache l'animation.
-  const [chatRatio, setChatRatio] = useState(() => {
-    const saved = Number(localStorage.getItem('tu_chat_ratio'))
-    return Number.isFinite(saved) && saved >= 0.2 && saved <= 0.6 ? saved : 0.32
-  })
+  const settings = useSettings()
   const [dragging, setDragging] = useState(false)
+  const [tab, setTab] = useState<Tab>('home')
+  const [showSettings, setShowSettings] = useState(false)
 
   // ── Retour de Twitch ────────────────────────────────────────────────
   useEffect(() => {
@@ -89,8 +95,11 @@ export default function App() {
       channelId: meta.userId,
       token,
       login: user?.login ?? null,
-      loadRecent: true,
-      keepDeleted: false,
+      // Lus au moment de la connexion : ce sont des options du client IRC,
+      // pas un état qui se recalcule — d'où la note « prochaine chaîne
+      // ouverte » dans les réglages.
+      loadRecent: getSettings().chatLoadRecent,
+      keepDeleted: getSettings().chatShowDeleted,
     })
     client.onChange = () => setMessages([...client.messages])
     client.connect()
@@ -126,11 +135,12 @@ export default function App() {
     function onMove(e: PointerEvent) {
       // Tirer vers la gauche élargit le chat.
       const ratio = (window.innerWidth - e.clientX) / window.innerWidth
-      setChatRatio(Math.min(0.6, Math.max(0.2, ratio)))
+      setSetting('chatRatio', Math.min(0.6, Math.max(0.2, ratio)), false)
     }
     function onUp() {
       setDragging(false)
-      setChatRatio((r) => { localStorage.setItem('tu_chat_ratio', String(r)); return r })
+      // Une seule écriture disque, à la fin du geste.
+      saveSettings()
     }
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)
@@ -145,15 +155,36 @@ export default function App() {
   return (
     <div className="app">
       <header className="header">
-        <button className="brand" onClick={closeChannel} title="Accueil">
+        <button className="brand" onClick={() => { closeChannel(); setTab('home') }}>
           TwitchUnblock
         </button>
 
-        {info && (
-          <button className="ghost" onClick={closeChannel}>← Accueil</button>
-        )}
+        {/* Les onglets restent visibles pendant la lecture : cliquer dessus
+            ferme la chaîne et revient à la découverte, comme une barre
+            d'onglets d'application. */}
+        <nav className="tabs">
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              className={!info && tab === t.id ? 'on' : ''}
+              onClick={() => { closeChannel(); setTab(t.id) }}
+            >
+              <span className="tab-icon">{t.icon}</span>
+              <span className="tab-label">{t.label}</span>
+            </button>
+          ))}
+        </nav>
 
         <span className="spacer" />
+
+        <button
+          className={`icon-btn${showSettings ? ' on' : ''}`}
+          onClick={() => setShowSettings((v) => !v)}
+          title="Réglages"
+          aria-label="Réglages"
+        >
+          ⚙
+        </button>
         {user.avatar && <img className="avatar" src={user.avatar} alt="" />}
         <span className="me">{user.displayName}</span>
         <button className="ghost" onClick={() => { logout(); setToken(null); setUser(null) }}>
@@ -163,17 +194,34 @@ export default function App() {
 
       {error && <div className="banner">{error}</div>}
 
-      {!info && !loading ? (
-        <Home token={token} userId={user.id} onOpen={(l) => void openChannel(l)} />
+      {showSettings ? (
+        <Settings onClose={() => setShowSettings(false)} />
+      ) : !info && !loading ? (
+        <>
+          {tab === 'home' && (
+            <Home token={token} userId={user.id} onOpen={(l) => void openChannel(l)} />
+          )}
+          {tab === 'categories' && (
+            <Categories token={token} onOpen={(l) => void openChannel(l)} />
+          )}
+          {tab === 'search' && (
+            <Search token={token} onOpen={(l) => void openChannel(l)} />
+          )}
+        </>
       ) : (
-        <main className="split" style={{ ['--chat' as string]: `${chatRatio * 100}%` }}>
+        <main className="split" style={{ ['--chat' as string]: `${settings.chatRatio * 100}%` }}>
           <section className="stage">
             {loading && <div className="placeholder">Chargement…</div>}
 
             {!loading && info && (
               <>
                 {info.live && Object.keys(links).length > 0 ? (
-                  <Player links={links} lowLatency={false} onLatency={setLatency} />
+                  <Player
+                    links={links}
+                    lowLatency={settings.lowLatency}
+                    preferredQuality={settings.defaultQuality}
+                    onLatency={setLatency}
+                  />
                 ) : (
                   <div className="placeholder">
                     {info.live ? 'Flux indisponible' : `${info.displayName} est hors ligne`}
@@ -213,9 +261,6 @@ export default function App() {
               client={clientRef.current}
               messages={messages}
               canSend={Boolean(token && user)}
-              showTimestamps
-              fontSize={13}
-              spacing={8}
             />
           </aside>
         </main>

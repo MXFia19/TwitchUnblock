@@ -1,0 +1,207 @@
+/* Mêmes teintes que l'app iOS (Sources/Constants.swift) : les deux clients
+   doivent se ressembler assez pour qu'on passe de l'un à l'autre sans y penser. */
+:root {
+  --primary: #9146ff;
+  --dark: #0e0e10;
+  --card: #18181b;
+  --surface: #26262c;
+  --border: #3a3a40;
+  --text: #efeff1;
+  --muted: #888888;
+  --danger: #ff4f4d;
+  --live: #e91916;
+  --radius: 10px;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root { height: 100%; margin: 0; }
+
+body {
+  background: var(--dark);
+  color: var(--text);
+  font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+
+.app { display: flex; flex-direction: column; height: 100%; }
+.spacer { flex: 1; }
+
+/* ── En-tête ─────────────────────────────────────────────────────────── */
+.header {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 16px;
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.brand { font-weight: 800; color: var(--primary); letter-spacing: -0.2px; }
+.me { font-weight: 600; }
+
+.search { display: flex; gap: 6px; }
+.search input {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 8px 12px; min-width: 200px;
+}
+.search input:focus { outline: none; border-color: var(--primary); }
+.search button {
+  background: var(--primary); border: 0; border-radius: var(--radius);
+  padding: 8px 14px; color: #fff; font-weight: 700;
+}
+
+.ghost {
+  background: transparent; border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 7px 12px; color: var(--muted);
+}
+.ghost:hover { color: var(--text); border-color: var(--muted); }
+
+.avatar { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; }
+.avatar.lg { width: 44px; height: 44px; }
+
+.banner {
+  background: rgba(255, 79, 77, 0.12); color: var(--danger);
+  padding: 8px 16px; border-bottom: 1px solid var(--border);
+}
+
+/* ── Découpe vidéo / chat ────────────────────────────────────────────── */
+.split { display: flex; flex: 1; min-height: 0; }
+.stage { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.side { width: var(--chat, 32%); min-width: 220px; display: flex; flex-direction: column; }
+
+.gutter {
+  width: 10px; flex: 0 0 10px; cursor: col-resize;
+  display: flex; align-items: center; justify-content: center;
+  background: transparent; touch-action: none;
+}
+.gutter::before {
+  content: ''; width: 1px; height: 100%; background: var(--border);
+}
+.gutter .grip {
+  position: absolute; width: 4px; height: 36px; border-radius: 2px;
+  background: rgba(255, 255, 255, 0.35);
+}
+.gutter-active::before { width: 2px; background: var(--primary); }
+.gutter-active .grip { background: rgba(255, 255, 255, 0.95); height: 48px; }
+
+/* ── Lecteur ─────────────────────────────────────────────────────────── */
+.player { position: relative; background: #000; }
+.player-video { width: 100%; aspect-ratio: 16 / 9; display: block; background: #000; }
+
+.player-bar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px; background: var(--card);
+  border-bottom: 1px solid var(--border);
+}
+.icon-btn {
+  background: rgba(255, 255, 255, 0.08); border: 0; border-radius: 8px;
+  padding: 6px 10px; font-weight: 700; font-size: 12px;
+}
+.icon-btn:hover { background: rgba(255, 255, 255, 0.16); }
+.quality {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; padding: 5px 8px;
+}
+.player-error {
+  position: absolute; inset: 0; display: grid; place-items: center;
+  background: rgba(0, 0, 0, 0.7); color: var(--danger); font-weight: 700;
+}
+
+.placeholder {
+  flex: 1; display: grid; place-items: center;
+  color: var(--muted); padding: 40px; text-align: center;
+}
+
+.meta { display: flex; gap: 12px; padding: 14px 16px; align-items: flex-start; }
+.meta-text { min-width: 0; }
+.meta-title { font-weight: 700; margin-bottom: 2px; }
+.meta-sub { color: var(--muted); font-size: 12px; }
+
+/* ── Chat ────────────────────────────────────────────────────────────── */
+.chat {
+  display: flex; flex-direction: column; height: 100%;
+  background: var(--card); border-left: 1px solid var(--border);
+  position: relative; min-height: 0;
+}
+.chat-list { flex: 1; overflow-y: auto; overscroll-behavior: contain; }
+
+.msg { word-wrap: break-word; }
+.msg-highlight { background: rgba(230, 230, 25, 0.08); }
+.msg-first { background: rgba(145, 70, 255, 0.07); }
+/* Supprimé mais conservé : le texte reste lisible — c'est tout l'intérêt —
+   mais on voit qu'il a été retiré. */
+.msg-deleted { opacity: 0.55; text-decoration: line-through; }
+.msg-system { color: #e6e619; font-weight: 600; font-size: 0.9em; }
+
+.msg-time { color: var(--muted); font-size: 0.85em; margin-right: 4px; }
+.msg-histo { margin-right: 4px; font-size: 0.8em; opacity: 0.7; }
+.msg-badge { height: 1.2em; vertical-align: -0.2em; margin-right: 3px; }
+.msg-emote { height: 1.9em; vertical-align: -0.55em; margin: 0 2px; }
+.msg-name { font-weight: 700; }
+.msg-colon { color: var(--muted); }
+.msg-mention { color: var(--primary); font-weight: 600; }
+.msg-link { color: #007aff; }
+.msg-reply {
+  color: var(--muted); font-size: 0.85em;
+  border-left: 2px solid rgba(145, 70, 255, 0.5);
+  padding-left: 8px; margin-bottom: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+.chat-follow {
+  position: absolute; bottom: 64px; left: 50%; transform: translateX(-50%);
+  background: var(--primary); border: 0; border-radius: 20px;
+  padding: 6px 14px; color: #fff; font-size: 12px; font-weight: 700;
+}
+
+.chat-suggest {
+  display: flex; gap: 6px; overflow-x: auto;
+  padding: 6px 8px; background: var(--surface);
+  border-top: 1px solid var(--border);
+}
+.chat-suggest button {
+  display: flex; align-items: center; gap: 5px;
+  background: var(--card); border: 0; border-radius: 8px;
+  padding: 4px 8px; font-size: 12px; white-space: nowrap;
+}
+.chat-suggest img { height: 20px; }
+
+.chat-input {
+  display: flex; gap: 6px; padding: 10px;
+  border-top: 1px solid var(--border);
+}
+.chat-input input {
+  flex: 1; min-width: 0;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 9px 12px;
+}
+.chat-input input:focus { outline: none; border-color: var(--primary); }
+.chat-input button {
+  background: var(--primary); border: 0; border-radius: var(--radius);
+  padding: 0 16px; color: #fff; font-weight: 700;
+}
+.chat-input button:disabled { background: rgba(136, 136, 136, 0.35); }
+
+/* ── Connexion ───────────────────────────────────────────────────────── */
+.login {
+  height: 100%; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 14px; padding: 24px;
+  text-align: center;
+}
+.login h1 { color: var(--primary); margin: 0; }
+.login p { color: var(--muted); max-width: 380px; margin: 0; }
+.cta {
+  background: var(--primary); color: #fff; text-decoration: none;
+  padding: 12px 22px; border-radius: var(--radius); font-weight: 700;
+}
+
+/* ── Téléphone : le chat repasse sous la vidéo ───────────────────────── */
+@media (max-width: 760px) {
+  .split { flex-direction: column; }
+  .side { width: 100% !important; flex: 1; min-height: 0; }
+  .gutter { display: none; }
+  .chat { border-left: 0; border-top: 1px solid var(--border); }
+  .search input { min-width: 0; }
+}

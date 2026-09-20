@@ -48,6 +48,17 @@ jobs:
         env:
           VITE_BASE: /${{ github.event.repository.name }}/
 
+      # GitHub Pages servait jusqu'ici le contenu de la branche : auth.html
+      # (retour OAuth de l'app iOS) et apps.json (source Feather). Passer en
+      # mode « GitHub Actions » remplace TOUT par cet artefact — sans cette
+      # recopie, la connexion de l'app et le sideload tomberaient d'un coup.
+      - name: Préserver les fichiers historiques de Pages
+        working-directory: .
+        run: |
+          cp auth.html apps.json web/dist/
+          cp -r assets web/dist/
+          ls -la web/dist
+
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

@@ -53,25 +53,34 @@ masqué dans ce cas, plutôt que de proposer un bouton sans effet.
 
 Les trois options donnent une adresse gratuite en HTTPS. Rien à acheter.
 
-### GitHub Pages — le plus simple ici
-
-Tu y publies déjà `auth.html`. Le workflow `.github/workflows/web.yml` fait
-tout : `Actions → Site web → Run workflow`, puis une fois
-`Settings → Pages → Source : GitHub Actions`.
-
-Adresse : `https://<utilisateur>.github.io/<depot>/`
-
-Publie dans un sous-chemin, d'où la variable `VITE_BASE` que le workflow
-renseigne tout seul. À savoir : Pages depuis un dépôt **privé** demande un
-compte payant.
-
-### Cloudflare Pages — le plus cohérent
+### Cloudflare Pages — recommandé
 
 Ton Worker y est déjà : même compte, même tableau de bord, et l'origine à
-autoriser est sous la main. Fonctionne depuis un dépôt privé, gratuitement.
+autoriser est sous la main. Surtout, ça ne touche à rien d'existant.
 
 Connecte le dépôt, puis : racine `web`, build `npm run build`, sortie
 `web/dist`. Adresse : `https://<projet>.pages.dev`
+
+### GitHub Pages — possible, mais attention
+
+⚠️ **Pages est déjà actif sur ce dépôt**, en mode « Deploy from a branch », et
+sert deux fichiers dont dépendent des choses en production :
+
+| Fichier | Rôle |
+|---|---|
+| `auth.html` | Retour OAuth de l'app iOS — sans lui, plus de connexion |
+| `apps.json` | Source Feather — sans elle, plus de sideload |
+
+Basculer la source sur « GitHub Actions » remplace **tout** le site par la
+sortie du build. Le workflow `.github/workflows/web.yml` recopie donc
+`auth.html`, `apps.json` et `assets/` dans `dist/` avant de publier, ce qui
+garde les deux adresses en vie. Mais à partir de là, ces fichiers ne sont plus
+servis depuis la branche : **toute modification devra repasser par le
+workflow**. Si tu préfères ne pas prendre ce risque, reste sur Cloudflare.
+
+Si tu y vas : `Actions → Site web → Run workflow`, puis
+`Settings → Pages → Source : GitHub Actions`.
+Adresse : `https://mxfia19.github.io/TwitchUnblock/`
 
 ### Vercel
 
@@ -86,8 +95,8 @@ au caractère près — **barre oblique finale comprise** :
 
 | Hébergement | URL de retour |
 |---|---|
-| GitHub Pages | `https://<utilisateur>.github.io/<depot>/` |
 | Cloudflare Pages | `https://<projet>.pages.dev/` |
+| GitHub Pages | `https://mxfia19.github.io/TwitchUnblock/` |
 | Vercel | `https://<projet>.vercel.app/` |
 | Développement | `http://localhost:5173/` |
 

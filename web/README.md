@@ -26,6 +26,8 @@ npm run build      # typecheck strict + bundle dans dist/
 | Messages modérés | retirés, ou barrés selon le réglage du client |
 | Chat redimensionnable | poignée entre la vidéo et le chat, mémorisée |
 | Connexion | OAuth Twitch, flux implicite |
+| Accueil | chaînes suivies en direct, top France/Monde, catégories, reprise |
+| Recherche | chaînes en direct, différée de 350 ms |
 
 ## Ce qui ne peut pas exister sur le web
 

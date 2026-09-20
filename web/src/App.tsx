@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Chat } from './components/Chat'
+import { Home } from './components/Home'
 import { Player } from './components/Player'
 import {
   consumeRedirect,
@@ -12,6 +13,7 @@ import {
   type TwitchUser,
 } from './lib/auth'
 import { ChatClient } from './lib/chatClient'
+import { pushHistory } from './lib/discover'
 import { loadChannelEmotes, loadGlobalEmotes } from './lib/emotes'
 import type { ChatMessage } from './lib/message'
 import {
@@ -26,7 +28,6 @@ import {
 export default function App() {
   const [token, setToken] = useState<string | null>(storedToken)
   const [user, setUser] = useState<TwitchUser | null>(storedUser)
-  const [channelInput, setChannelInput] = useState('')
   const [info, setInfo] = useState<StreamInfo | null>(null)
   const [links, setLinks] = useState<QualityLinks>({})
   const [loading, setLoading] = useState(false)
@@ -79,6 +80,7 @@ export default function App() {
       return
     }
     setInfo(meta)
+    pushHistory({ login: meta.login, displayName: meta.displayName, avatar: meta.avatar })
 
     await loadChannelEmotes(meta.userId, meta.login)
 
@@ -108,6 +110,16 @@ export default function App() {
 
   useEffect(() => () => clientRef.current?.disconnect(), [])
 
+  const closeChannel = useCallback(() => {
+    clientRef.current?.disconnect()
+    clientRef.current = null
+    setMessages([])
+    setInfo(null)
+    setLinks({})
+    setError(null)
+    setLatency(null)
+  }, [])
+
   // ── Glissement de la séparation ─────────────────────────────────────
   useEffect(() => {
     if (!dragging) return
@@ -133,22 +145,13 @@ export default function App() {
   return (
     <div className="app">
       <header className="header">
-        <span className="brand">TwitchUnblock</span>
+        <button className="brand" onClick={closeChannel} title="Accueil">
+          TwitchUnblock
+        </button>
 
-        <form
-          className="search"
-          onSubmit={(e) => { e.preventDefault(); void openChannel(channelInput) }}
-        >
-          <input
-            value={channelInput}
-            onChange={(e) => setChannelInput(e.target.value)}
-            placeholder="Nom de la chaîne…"
-            autoCapitalize="none"
-            autoCorrect="off"
-            spellCheck={false}
-          />
-          <button type="submit">Regarder</button>
-        </form>
+        {info && (
+          <button className="ghost" onClick={closeChannel}>← Accueil</button>
+        )}
 
         <span className="spacer" />
         {user.avatar && <img className="avatar" src={user.avatar} alt="" />}
@@ -160,63 +163,64 @@ export default function App() {
 
       {error && <div className="banner">{error}</div>}
 
-      <main className="split" style={{ ['--chat' as string]: `${chatRatio * 100}%` }}>
-        <section className="stage">
-          {loading && <div className="placeholder">Chargement…</div>}
+      {!info && !loading ? (
+        <Home token={token} userId={user.id} onOpen={(l) => void openChannel(l)} />
+      ) : (
+        <main className="split" style={{ ['--chat' as string]: `${chatRatio * 100}%` }}>
+          <section className="stage">
+            {loading && <div className="placeholder">Chargement…</div>}
 
-          {!loading && info && (
-            <>
-              {info.live && Object.keys(links).length > 0 ? (
-                <Player links={links} lowLatency={false} onLatency={setLatency} />
-              ) : (
-                <div className="placeholder">
-                  {info.live ? 'Flux indisponible' : `${info.displayName} est hors ligne`}
-                </div>
-              )}
+            {!loading && info && (
+              <>
+                {info.live && Object.keys(links).length > 0 ? (
+                  <Player links={links} lowLatency={false} onLatency={setLatency} />
+                ) : (
+                  <div className="placeholder">
+                    {info.live ? 'Flux indisponible' : `${info.displayName} est hors ligne`}
+                  </div>
+                )}
 
-              <div className="meta">
-                {info.avatar && <img className="avatar lg" src={info.avatar} alt="" />}
-                <div className="meta-text">
-                  <div className="meta-title">{info.title || info.displayName}</div>
-                  <div className="meta-sub">
-                    <strong>{info.displayName}</strong>
-                    {info.game && <> · {info.game}</>}
-                    {info.live && <> · 👁 {formatViewers(info.viewers)}</>}
-                    {info.live && info.startedAt && <> · {formatUptime(info.startedAt)}</>}
-                    {latency !== null && <> · {latency.toFixed(0)} s de latence</>}
+                <div className="meta">
+                  {info.avatar && <img className="avatar lg" src={info.avatar} alt="" />}
+                  <div className="meta-text">
+                    <div className="meta-title">{info.title || info.displayName}</div>
+                    <div className="meta-sub">
+                      <strong>{info.displayName}</strong>
+                      {info.game && <> · {info.game}</>}
+                      {info.live && <> · 👁 {formatViewers(info.viewers)}</>}
+                      {info.live && info.startedAt && <> · {formatUptime(info.startedAt)}</>}
+                      {latency !== null && <> · {latency.toFixed(0)} s de latence</>}
+                    </div>
                   </div>
                 </div>
-              </div>
-            </>
-          )}
+              </>
+            )}
+          </section>
 
-          {!loading && !info && (
-            <div className="placeholder">Entre un nom de chaîne pour commencer.</div>
-          )}
-        </section>
+          {/* Le trait visible reste fin ; c'est une bande large qui reçoit le
+              geste, sous peine de viser deux pixels avec un pouce. */}
+          <div
+            className={`gutter${dragging ? ' gutter-active' : ''}`}
+            onPointerDown={() => setDragging(true)}
+            role="separator"
+            aria-label="Redimensionner le chat"
+          >
+            <span className="grip" />
+          </div>
 
-        {/* Le trait visible reste fin ; c'est une bande large qui reçoit le
-            geste, sous peine de viser deux pixels avec un pouce. */}
-        <div
-          className={`gutter${dragging ? ' gutter-active' : ''}`}
-          onPointerDown={() => setDragging(true)}
-          role="separator"
-          aria-label="Redimensionner le chat"
-        >
-          <span className="grip" />
-        </div>
+          <aside className="side">
+            <Chat
+              client={clientRef.current}
+              messages={messages}
+              canSend={Boolean(token && user)}
+              showTimestamps
+              fontSize={13}
+              spacing={8}
+            />
+          </aside>
+        </main>
+      )}
 
-        <aside className="side">
-          <Chat
-            client={clientRef.current}
-            messages={messages}
-            canSend={Boolean(token && user)}
-            showTimestamps
-            fontSize={13}
-            spacing={8}
-          />
-        </aside>
-      </main>
     </div>
   )
 }

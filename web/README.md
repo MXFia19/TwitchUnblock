@@ -49,17 +49,54 @@ l'URL part directement dans `<video>` et c'est Safari qui décode. La lecture
 marche, mais la latence n'est plus pilotable — le bouton « direct » est donc
 masqué dans ce cas, plutôt que de proposer un bouton sans effet.
 
-## Déploiement (Cloudflare Pages)
+## Héberger — aucun domaine nécessaire
 
-Build `npm run build`, dossier de sortie `web/dist`, racine `web`.
+Les trois options donnent une adresse gratuite en HTTPS. Rien à acheter.
 
-Deux choses à faire une fois :
+### GitHub Pages — le plus simple ici
 
-1. **Ajouter l'URL de retour** dans la console développeur Twitch, à côté de
-   celle de l'app iOS : `https://<ton-domaine>/auth` — au caractère près.
+Tu y publies déjà `auth.html`. Le workflow `.github/workflows/web.yml` fait
+tout : `Actions → Site web → Run workflow`, puis une fois
+`Settings → Pages → Source : GitHub Actions`.
 
-2. **Autoriser le domaine dans le Worker** : `/api/get-live` est appelé depuis
-   le navigateur, il lui faut donc les en-têtes CORS. Voir [WORKER.md](WORKER.md).
+Adresse : `https://<utilisateur>.github.io/<depot>/`
+
+Publie dans un sous-chemin, d'où la variable `VITE_BASE` que le workflow
+renseigne tout seul. À savoir : Pages depuis un dépôt **privé** demande un
+compte payant.
+
+### Cloudflare Pages — le plus cohérent
+
+Ton Worker y est déjà : même compte, même tableau de bord, et l'origine à
+autoriser est sous la main. Fonctionne depuis un dépôt privé, gratuitement.
+
+Connecte le dépôt, puis : racine `web`, build `npm run build`, sortie
+`web/dist`. Adresse : `https://<projet>.pages.dev`
+
+### Vercel
+
+Connecte le dépôt, racine `web`, le reste est détecté.
+Adresse : `https://<projet>.vercel.app`
+
+## Les deux réglages à faire une fois
+
+**1. Déclarer l'URL de retour** dans la console développeur Twitch, à côté de
+celle de l'app iOS. Twitch en accepte plusieurs, et exige une correspondance
+au caractère près — **barre oblique finale comprise** :
+
+| Hébergement | URL de retour |
+|---|---|
+| GitHub Pages | `https://<utilisateur>.github.io/<depot>/` |
+| Cloudflare Pages | `https://<projet>.pages.dev/` |
+| Vercel | `https://<projet>.vercel.app/` |
+| Développement | `http://localhost:5173/` |
+
+C'est la racine du site, pas une page dédiée : le jeton revient dans le
+fragment de l'URL, n'importe quelle page sait le lire. Ça évite d'exiger une
+réécriture d'URL de l'hébergeur — GitHub Pages n'en propose pas.
+
+**2. Autoriser l'origine dans le Worker** : `/api/get-live` est appelé depuis
+le navigateur, il lui faut les en-têtes CORS. Voir [WORKER.md](WORKER.md).
 
 ## Ce qui vient du Swift
 

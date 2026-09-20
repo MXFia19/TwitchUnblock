@@ -7,10 +7,16 @@ export const HELIX_CLIENT_ID = '1e68ku2ehgzy5cy0di3xvfy82sxpf6'
 /// le jeton revient dans le fragment de l'URL. Le `redirect_uri` doit être
 /// déclaré au mot près dans la console développeur Twitch.
 ///
-/// Fonction et non constante : lu au chargement du module, `location` n'existe
-/// pas hors navigateur et ferait tomber les tests comme tout rendu côté serveur.
+/// On renvoie sur la racine de l'app, pas sur une route dédiée : le jeton est
+/// dans le fragment, n'importe quelle page sait le lire. Ça évite d'exiger de
+/// l'hébergeur une réécriture d'URL — GitHub Pages n'en propose pas — et ça
+/// gère du même coup les hébergements en sous-chemin.
+///
+/// `BASE_URL` vaut « / » à la racine d'un domaine, « /TwitchUnblock/ » sur
+/// GitHub Pages. Fonction et non constante : lu au chargement du module,
+/// `location` n'existe pas hors navigateur et ferait tomber les tests.
 export function redirectURI(): string {
-  return `${location.origin}/auth`
+  return new URL(import.meta.env.BASE_URL, location.origin).href
 }
 
 export const SCOPES = [

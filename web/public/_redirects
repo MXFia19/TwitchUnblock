@@ -1,3 +1,0 @@
-# Cloudflare Pages : /auth est une route côté client (retour OAuth Twitch),
-# pas un fichier — sans cette règle un rechargement renverrait un 404.
-/auth  /index.html  200

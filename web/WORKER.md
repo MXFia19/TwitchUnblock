@@ -6,7 +6,9 @@ ne s'applique. Le site, lui, l'appelle depuis une page web, et le navigateur
 ton domaine a le droit de la lire.
 
 Symptôme : dans la console, `CORS policy: No 'Access-Control-Allow-Origin'
-header is present`. L'app iOS continue de fonctionner normalement — d'où
+header is present`. Sur GitHub Pages, l'origine est le domaine seul
+(`https://mxfia19.github.io`), **sans** le chemin du dépôt : un en-tête
+`Origin` ne contient jamais de chemin. L'app iOS continue de fonctionner normalement — d'où
 l'absence de tout signal si on ne regarde pas la console du navigateur.
 
 ## Le correctif
@@ -14,8 +16,12 @@ l'absence de tout signal si on ne regarde pas la console du navigateur.
 Dans le Worker, au retour de `/api/get-live`, ajoute l'en-tête :
 
 ```js
+// Les origines de TES pages. Pas de domaine ? Ce sont les adresses gratuites
+// que donnent les hébergeurs — une seule suffit, garde celle que tu utilises.
 const ALLOWED = new Set([
-  'https://ton-domaine.pages.dev',
+  'https://mxfia19.github.io',      // GitHub Pages
+  'https://ton-projet.pages.dev',   // Cloudflare Pages
+  'https://ton-projet.vercel.app',  // Vercel
   'http://localhost:5173',          // développement local
 ])
 

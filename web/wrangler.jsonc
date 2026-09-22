@@ -1,0 +1,20 @@
+// Déploiement du site via Workers Builds (assistant « Import a repository »
+// du tableau de bord Cloudflare).
+//
+// Pas de champ `main` : sans script d'entrée, le Worker ne fait que servir
+// les fichiers de `dist`. C'est le mode « static assets », qui ne consomme
+// pas de temps d'exécution — les fichiers sortent directement du CDN.
+//
+// À ne pas confondre avec le Worker `test2`, qui lui sert l'API : ce sont
+// deux Workers distincts, sur le même compte.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "twitchunblock",
+  "compatibility_date": "2025-01-01",
+  "assets": {
+    "directory": "./dist",
+    // Toute URL inconnue renvoie index.html : l'app est une page unique, et
+    // le retour OAuth arrive sur la racine avec un fragment.
+    "not_found_handling": "single-page-application"
+  }
+}

@@ -585,7 +585,7 @@ final class ChannelPointsService: ObservableObject {
 
     /// Traduction côté service (pas de View) : lit la langue depuis UserDefaults.
     private var lang: Lang {
-        Lang(rawValue: UserDefaults.standard.string(forKey: "lang") ?? "fr") ?? .fr
+        Lang(rawValue: UserDefaults.standard.string(forKey: "lang") ?? "en") ?? .en
     }
     func t(_ key: String) -> String { translate(key, lang) }
 

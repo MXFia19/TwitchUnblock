@@ -5,6 +5,8 @@ struct VodChatView: View {
     let videoId: String
     /// Position de lecture (secondes) fournie par le lecteur.
     let playbackTime: Double
+    /// Présentation : plein cadre, colonne étroite, ou calque sur l'image.
+    var style: ChatStyle = .standard
 
     @EnvironmentObject private var store: AppStore
     @StateObject private var vod = VodChatService()
@@ -19,29 +21,31 @@ struct VodChatView: View {
         VStack(spacing: 0) {
 
             // ── Barre de statut ─────────────────────────────────────
-            HStack(spacing: 6) {
-                Image(systemName: "clock.arrow.circlepath")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(.tPurple)
-                Text(store.t("vod_chat"))
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(.tMuted)
-                    .lineLimit(1)
-                Spacer(minLength: 4)
-                Text(VodChatService.formatOffset(playbackTime))
-                    .font(.system(size: 11, weight: .bold).monospacedDigit())
-                    .foregroundColor(.tPurple)
-                    .lineLimit(1).fixedSize()
-                if !vod.channelLogin.isEmpty {
-                    Text("#\(vod.channelLogin)")
+            if style.showsChrome {
+                HStack(spacing: 6) {
+                    Image(systemName: "clock.arrow.circlepath")
                         .font(.system(size: 11, weight: .bold))
-                        .foregroundColor(.tPrimary)
+                        .foregroundColor(.tPurple)
+                    Text(store.t("vod_chat"))
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(.tMuted)
+                        .lineLimit(1)
+                    Spacer(minLength: 4)
+                    Text(VodChatService.formatOffset(playbackTime))
+                        .font(.system(size: 11, weight: .bold).monospacedDigit())
+                        .foregroundColor(.tPurple)
                         .lineLimit(1).fixedSize()
+                    if !vod.channelLogin.isEmpty {
+                        Text("#\(vod.channelLogin)")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundColor(.tPrimary)
+                            .lineLimit(1).fixedSize()
+                    }
                 }
+                .padding(.horizontal, 12).padding(.vertical, 6)
+                .background(Color.tCard)
+                .overlay(Divider().background(Color.tBorder), alignment: .bottom)
             }
-            .padding(.horizontal, 12).padding(.vertical, 6)
-            .background(Color.tCard)
-            .overlay(Divider().background(Color.tBorder), alignment: .bottom)
 
             // ── Messages ────────────────────────────────────────────
             GeometryReader { geo in
@@ -50,7 +54,7 @@ struct VodChatView: View {
                         ScrollView {
                             LazyVStack(alignment: .leading, spacing: 0) {
                                 ForEach(vod.messages.reversed()) { msg in
-                                    ChatMessageRow(message: msg, availableWidth: geo.size.width)
+                                    ChatMessageRow(message: msg, availableWidth: geo.size.width, style: style)
                                         .id(msg.id)
                                 }
                                 Color.clear
@@ -61,6 +65,7 @@ struct VodChatView: View {
                             }
                             .frame(width: geo.size.width, alignment: .leading)
                             .padding(.vertical, 4)
+                            .frame(minHeight: geo.size.height, alignment: .bottom)
                         }
                         .simultaneousGesture(
                             DragGesture(minimumDistance: 10)
@@ -121,7 +126,15 @@ struct VodChatView: View {
                 }
             }
         }
-        .background(Color.tDark)
+        .background {
+            if style.translucent {
+                LinearGradient(colors: [.black.opacity(0.0), .black.opacity(0.55)],
+                               startPoint: .top, endPoint: .bottom)
+                    .allowsHitTesting(false)
+            } else {
+                Color.tDark
+            }
+        }
         .task(id: videoId) { await vod.start(videoId: videoId) }
         // La position de lecture pilote la libération des messages.
         .onChange(of: playbackTime) { t in

@@ -1,6 +1,70 @@
 import Foundation
 import SwiftUI
 
+// MARK: – Place du chat en paysage
+/// Trois états, parcourus par le même bouton du lecteur.
+enum LandscapeChat: String, CaseIterable {
+    /// Colonne à droite : l'image rétrécit d'autant.
+    case column
+    /// Superposé à l'image, fond transparent : l'image garde toute la largeur.
+    case overlay
+    /// Replié : l'image seule.
+    case hidden
+
+    var next: LandscapeChat {
+        switch self {
+        case .column:  return .overlay
+        case .overlay: return .hidden
+        case .hidden:  return .column
+        }
+    }
+
+    /// Trois symboles sûrs depuis iOS 13 : un nom inconnu ne planterait pas mais
+    /// laisserait un bouton vide.
+    var icon: String {
+        switch self {
+        case .column:  return "sidebar.right"
+        case .overlay: return "rectangle.on.rectangle"
+        case .hidden:  return "bubble.left"
+        }
+    }
+
+    /// Clé de traduction du libellé affiché brièvement au changement.
+    var labelKey: String {
+        switch self {
+        case .column:  return "chat_mode_column"
+        case .overlay: return "chat_mode_overlay"
+        case .hidden:  return "chat_mode_hidden"
+        }
+    }
+}
+
+// MARK: – Présentation du chat
+/// Regroupe ce qui change entre le chat plein cadre, la colonne étroite du
+/// paysage et le calque posé sur l'image. Passer un seul objet évite de
+/// promener cinq drapeaux jusqu'aux lignes de message.
+struct ChatStyle: Equatable {
+    /// Barre d'état, épinglés, sondages, raids — tout le décor autour des messages.
+    var showsChrome = true
+    /// Horodatage devant chaque message.
+    var showsTimestamp = true
+    var fontSize: CGFloat = 13
+    /// Moitié de l'espace entre deux messages (marge haute et basse de chacun).
+    var rowPadding: CGFloat = 4
+    /// Badges et emotes suivent la taille du texte, puis ces facteurs : on peut
+    /// vouloir de grosses emotes avec du petit texte, ou l'inverse.
+    var badgeScale: CGFloat = 1
+    var emoteScale: CGFloat = 1
+    /// Fond transparent et texte ombré, pour rester lisible sur l'image.
+    var translucent = false
+
+    /// Repli quand aucun réglage n'est à portée (aperçus, feuilles isolées).
+    static let standard = ChatStyle()
+
+    var badgeHeight: CGFloat { (fontSize + 3) * badgeScale }
+    var emoteHeight: CGFloat { (fontSize + 11) * emoteScale }
+}
+
 // MARK: – Emote
 struct TwitchEmote: Identifiable, Hashable {
     let id: String
@@ -57,6 +121,11 @@ struct ChatMessage: Identifiable {
     var threadRootId: String? = nil    // reply-thread-parent-msg-id (racine du fil)
     /// Chat de VOD : horodatage relatif à la vidéo (ex: "1:23:45") au lieu de l'heure.
     var vodOffsetLabel: String? = nil
+    /// Message repêché dans l'historique à l'arrivée, pas reçu en direct : une
+    /// petite horloge le signale, sinon on croit avoir raté la conversation.
+    var isHistorical: Bool = false
+    /// Supprimé par un modérateur mais conservé à l'écran (réglage).
+    var isDeleted: Bool = false
 }
 
 // MARK: – Tokenisation d'un segment de texte
@@ -111,6 +180,14 @@ struct IRCMessage {
     let prefix: String?
 
     var channel: String? { params.first?.hasPrefix("#") == true ? String(params[0].dropFirst()) : nil }
+
+    /// Pseudo extrait du préfixe IRC `nick!user@host` (JOIN / PART n'ont pas de tags).
+    var prefixNick: String? {
+        guard let prefix, !prefix.isEmpty else { return nil }
+        let nick = prefix.split(separator: "!").first.map(String.init) ?? prefix
+        return nick.contains("@") ? nil : nick.lowercased()
+    }
+
     var text: String? { params.count > 1 ? params[1] : nil }
     var displayName: String { tags["display-name"] ?? tags["login"] ?? "" }
     var userId: String { tags["user-id"] ?? "" }

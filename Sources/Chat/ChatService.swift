@@ -30,6 +30,22 @@ final class ChatService: NSObject, ObservableObject {
     /// précédente sont abandonnés au lieu d'atterrir dans le nouveau canal.
     private var generation = 0
 
+    /// Garder à l'écran les messages supprimés par la modération, barrés, au
+    /// lieu de les faire disparaître. Piloté par les réglages.
+    var keepDeleted = false
+    /// Charger au démarrage les derniers messages du canal (API tierce).
+    var loadRecent = false
+
+    /// Personnes présentes dans le chat, tenues à jour depuis l'IRC.
+    ///
+    /// C'est la seule source qui reste : l'endpoint tmi.twitch.tv des chatters
+    /// est fermé, la requête GQL exige un jeton d'intégrité signé, et Helix
+    /// impose d'être modérateur du canal. Twitch n'envoie NAMES/JOIN/PART que
+    /// pour les canaux de taille modeste — d'où `presenceSupported`.
+    @Published private(set) var presentUsers: Set<String> = []
+    /// Twitch a-t-il envoyé au moins une liste de noms pour ce canal ?
+    @Published private(set) var presenceSupported = false
+
     private func trimIfNeeded() {
         let cap = pauseTrim ? maxMessagesPaused : maxMessages
         if messages.count > cap { messages = Array(messages.prefix(cap)) }
@@ -99,14 +115,37 @@ final class ChatService: NSObject, ObservableObject {
             await receive()
         }
 
+        // En parallèle de la connexion : l'historique n'a pas à attendre l'IRC,
+        // et l'IRC n'a pas à attendre un service tiers.
+        if loadRecent {
+            let chan = channelName   // figé ici : une reconnexion le changerait
+            Task { [weak self] in await self?.loadRecentMessages(channel: chan) }
+        }
+
         pingTimer = Timer.scheduledCommon(every: 240) { [weak self] _ in
             Task { await self?.send("PING :tmi.twitch.tv") }
         }
     }
 
+    /// Relance la connexion IRC sans quitter le direct (menu du chat).
+    func reconnect(token: String?, login: String?) {
+        guard !channelName.isEmpty else { return }
+        logger.info("CHAT", "Reconnexion demandée → #\(channelName)")
+        connect(channel: channelName, token: token, login: login)
+    }
+
+    /// Envoie une commande de chat telle quelle (/color, /me…).
+    func sendCommand(_ command: String) async {
+        guard isAuthenticated, isConnected, !channelName.isEmpty else { return }
+        await send("PRIVMSG #\(channelName) :\(command)")
+        logger.info("CHAT", "Commande envoyée", command)
+    }
+
     // MARK: – Disconnect
     func disconnect() {
         generation &+= 1   // abandonne les messages encore en attente de synchro
+        presentUsers.removeAll()
+        presenceSupported = false
         connectionTimeoutTask?.cancel(); connectionTimeoutTask = nil
         pingTimer?.invalidate(); pingTimer = nil
         webSocketTask?.cancel(with: .normalClosure, reason: nil); webSocketTask = nil
@@ -176,6 +215,19 @@ final class ChatService: NSObject, ObservableObject {
             .sorted { $0.timestamp < $1.timestamp }
     }
 
+    /// Tout ce qu'une personne a écrit dans ce qu'on a en mémoire, du plus
+    /// ancien au plus récent : ouvrir un message sert surtout à voir le fil de
+    /// ce qu'elle raconte, pas ce seul message hors contexte.
+    func messagesFrom(userName: String, limit: Int = 30) -> [ChatMessage] {
+        let key = userName.lowercased()
+        guard !key.isEmpty else { return [] }
+        return messages
+            .filter { $0.userName.lowercased() == key }
+            .sorted { $0.timestamp < $1.timestamp }
+            .suffix(limit)
+            .map { $0 }
+    }
+
     // MARK: – Send raw IRC
     private func send(_ text: String) async {
         guard let task = webSocketTask else { return }
@@ -227,6 +279,23 @@ final class ChatService: NSObject, ObservableObject {
                     // ← badges résolu via BadgeService (URLs Helix réelles)
                     localBadges = await parseBadges(raw, channelId: channelId)
                 }
+            case "353":
+                // RPL_NAMREPLY : liste des présents, envoyée à l'arrivée.
+                // Format : <nous> = #canal :nom1 nom2 nom3…
+                // Le pseudo et le canal occupent params[0...2] : la liste est le
+                // dernier paramètre, pas `text` (qui vaudrait « = » ici).
+                if irc.params.count >= 4, let names = irc.params.last {
+                    let logins = names.split(separator: " ").map { $0.lowercased() }
+                    presentUsers.formUnion(logins)
+                    presenceSupported = true
+                }
+            case "366":
+                // RPL_ENDOFNAMES : Twitch a fini d'envoyer la liste (même vide).
+                presenceSupported = true
+            case "JOIN":
+                if let who = irc.tags["login"] ?? irc.prefixNick { presentUsers.insert(who.lowercased()) }
+            case "PART":
+                if let who = irc.tags["login"] ?? irc.prefixNick { presentUsers.remove(who.lowercased()) }
             case "NOTICE":
                 await handleNotice(irc)
             case "CLEARCHAT":
@@ -248,7 +317,15 @@ final class ChatService: NSObject, ObservableObject {
 
     // MARK: – PRIVMSG → ChatMessage
     private func handlePrivmsg(_ irc: IRCMessage) async {
-        guard var text = irc.text else { return }
+        guard let message = await buildMessage(irc, historical: false) else { return }
+        publish(message)
+    }
+
+    /// Analyse commune au direct et à l'historique rejoué : même format IRC,
+    /// donc même chemin — seule l'heure diffère (tag `tmi-sent-ts` pour le
+    /// rejeu, l'heure d'arrivée pour le direct, sur laquelle repose la synchro).
+    private func buildMessage(_ irc: IRCMessage, historical: Bool) async -> ChatMessage? {
+        guard var text = irc.text else { return nil }
 
         var isAction = false
         if text.hasPrefix("\u{0001}ACTION ") && text.hasSuffix("\u{0001}") {
@@ -275,16 +352,25 @@ final class ChatService: NSObject, ObservableObject {
 
         let tokens = await tokenize(text: text, twitchRanges: twitchEmotesByRange, channelId: channelId)
 
-        let message = ChatMessage(
+        // Le rejeu n'a pas de tag `login` fiable : on retombe sur le préfixe IRC.
+        let login = irc.tags["login"] ?? irc.prefixNick ?? ""
+        let sentAt: Date = {
+            guard historical, let ms = irc.tags["tmi-sent-ts"], let n = Double(ms) else {
+                return Date()
+            }
+            return Date(timeIntervalSince1970: n / 1000)
+        }()
+
+        return ChatMessage(
             id: irc.msgId,
             userId: irc.userId,
-            userName: irc.tags["login"] ?? "",
-            displayName: irc.displayName,
+            userName: login,
+            displayName: irc.displayName.isEmpty ? login : irc.displayName,
             color: Color.readableChat(hex: hexColor),
             // ← badges résolus via BadgeService
             badges: await parseBadges(irc.badgesRaw, channelId: channelId),
             tokens: tokens,
-            timestamp: Date(),
+            timestamp: sentAt,
             isAction: isAction,
             isHighlight: irc.tags["msg-id"] == "highlighted-message",
             isFirstMessage: irc.tags["first-msg"] == "1",
@@ -292,10 +378,9 @@ final class ChatService: NSObject, ObservableObject {
             replyBody: irc.replyParentBody,
             systemMsg: nil,
             parentMsgId: irc.replyParentMsgId,
-            threadRootId: irc.replyThreadRootId
+            threadRootId: irc.replyThreadRootId,
+            isHistorical: historical
         )
-
-        publish(message)
     }
 
     // MARK: – USERNOTICE (abonnements, séries de visionnage, raids…)
@@ -429,16 +514,67 @@ final class ChatService: NSObject, ObservableObject {
     // MARK: – Moderation
     private func handleClearChat(_ irc: IRCMessage) async {
         if let target = irc.params.last, !target.hasPrefix("#") {
-            messages.removeAll { $0.userName == target }
+            // Exclusion / bannissement : tous les messages de la personne.
+            mark(where: { $0.userName == target })
         } else {
+            // Purge complète du canal : même avec le réglage, garder l'écran
+            // barré de bout en bout n'aurait aucun intérêt.
             messages.removeAll()
             logger.warn("CHAT", "Chat effacé par un modérateur")
         }
     }
 
     private func handleClearMsg(_ irc: IRCMessage) async {
-        if let targetId = irc.tags["target-msg-id"] {
-            messages.removeAll { $0.id == targetId }
+        guard let targetId = irc.tags["target-msg-id"] else { return }
+        mark(where: { $0.id == targetId })
+    }
+
+    /// Retire les messages visés, ou les barre si le réglage le demande.
+    private func mark(where predicate: (ChatMessage) -> Bool) {
+        guard keepDeleted else {
+            messages.removeAll(where: predicate)
+            return
         }
+        for i in messages.indices where predicate(messages[i]) {
+            messages[i].isDeleted = true
+        }
+    }
+
+    // MARK: – Messages récents (avant notre arrivée)
+    /// Twitch n'envoie rien de ce qui précède le JOIN : on arrive dans un chat
+    /// vide même en plein débat. recent-messages.robotty.de rejoue les dernières
+    /// lignes IRC brutes, qu'on fait passer par le même analyseur que le direct.
+    ///
+    /// Service tiers, hors de notre contrôle : un échec est silencieux, le chat
+    /// démarre simplement vide comme avant.
+    private func loadRecentMessages(channel: String, limit: Int = 60) async {
+        let gen = generation
+        guard let url = URL(string:
+            "https://recent-messages.robotty.de/api/v2/recent-messages/\(channel)?limit=\(limit)")
+        else { return }
+
+        guard let (data, _) = try? await URLSession.shared.data(from: url),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let raw  = json["messages"] as? [String] else {
+            logger.warn("CHAT", "Historique du chat indisponible", channel)
+            return
+        }
+
+        var older: [ChatMessage] = []
+        for line in raw {
+            guard let irc = IRCParser.parse(line), irc.command == "PRIVMSG",
+                  let msg = await buildMessage(irc, historical: true) else { continue }
+            older.append(msg)
+        }
+        // La connexion a pu changer de canal pendant le téléchargement.
+        guard generation == gen, !older.isEmpty else { return }
+
+        // La liste va du plus récent au plus ancien ; on fusionne puis on retrie
+        // plutôt que d'insérer un par un, l'ordre d'arrivée n'étant pas garanti.
+        let known = Set(messages.map(\.id))
+        messages.append(contentsOf: older.filter { !known.contains($0.id) })
+        messages.sort { $0.timestamp > $1.timestamp }
+        trimIfNeeded()
+        logger.success("CHAT", "Historique chargé", "\(older.count) messages")
     }
 }

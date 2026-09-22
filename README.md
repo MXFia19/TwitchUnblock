@@ -1,58 +1,177 @@
 # 🟣 TwitchUnblock
-**TwitchUnblock** is an open-source iOS application designed to let you watch Twitch VODs (Video on Demand) and Live streams without needing a paid subscription. Built natively with modern SwiftUI, it offers a smooth, ad-free viewing experience with advanced features tailored for power users.
+
+**TwitchUnblock** is an open-source Twitch client that lets you watch VODs and
+live streams without a subscription, with full quality access through your own
+proxy server. Native iOS app built with SwiftUI, plus a browser version.
+
+| | |
+|---|---|
+| **iOS** | SwiftUI, iOS 16+, sideloaded |
+| **Web** | React + TypeScript — see [`web/`](web/) |
+| **Backend** | Your own Cloudflare Worker |
+
+---
 
 ## ✨ Features
-* 🚫 **No Subscription Required:** Bypass sub-only restrictions to watch any VOD or Live stream freely.
-* 📺 **Native Player & PiP:** Enjoy seamless playback with Apple's native media player and Picture-in-Picture (PiP) support.
-* ⚙️ **Quality Selector:** Choose your preferred video resolution directly within the player.
-* 🕒 **Watch History:** Keep track of your recently watched VODs and favorite channels in a dedicated tab.
-* 🔄 **Cloud Sync:** Automatically save your watch progress and history, allowing you to pick up exactly where you left off.
-* 🔗 **Third-Party Players:** Export and open streams directly in external players like **VLC**, **Outplayer**, or **Infuse**.
-* 🌐 **Custom Proxy:** Built-in proxy toggles to bypass regional restrictions or network blocks.
-* 🌙 **Modern UI:** A clean, dark-themed interface built entirely with SwiftUI for iOS 16+.
+
+### Watching
+
+* 🚫 **No subscription required** — watch any VOD or live stream at full quality.
+* 🎬 **Immersive player** — custom controls drawn over the picture, the way
+  Twitch does it. Play/pause, scrubbing, quality, refresh, orientation. Apple's
+  native player stays available as a fallback in Settings.
+* ⏩ **Double-tap to skip ±10 s** — consecutive taps add up, so three taps read
+  "+30 s" instead of three separate "+10 s".
+* 📺 **Picture-in-Picture** — keep watching while you use other apps.
+* ⚙️ **Quality selector** — every resolution the channel broadcasts, Source
+  included.
+* ⏪ **Rewind a live stream (DVR)** — when the channel archives its broadcasts,
+  the progress bar covers the *whole* stream, not just the rewindable window.
+  Scrub past that window and the recording takes over at that exact moment.
+  A **Back to live** button brings you back.
+* ⚡ **Low latency mode** — stays as close to the live edge as the connection
+  allows.
+* 🖥 **Fill the screen** — crops the video to remove the black bars in
+  landscape. Cuts off the top and bottom: 16:9 in a phone screen can't do both.
+* 🌙 **Sleep timer** — presets or a custom duration, with the countdown shown
+  right in the player.
+
+### Chat
+
+* 💬 **Full live chat** — read and send, with replies.
+* 😀 **Emotes** — Twitch, BetterTTV, FrankerFaceZ and 7TV, global and
+  per-channel, animated.
+* 🏅 **Badges** — global and channel-specific, resolved through Helix.
+* 🕘 **Recent messages** — Twitch sends nothing from before you join, so the
+  last messages are fetched from `recent-messages.robotty.de` (third party) and
+  marked with a clock.
+* ⌨️ **Autocomplete** — emotes and names suggested as you type.
+* 🗑 **Deleted messages** — optionally kept struck through instead of vanishing.
+* 🎨 **Username colour** — changed through Helix (needs a re-login after the
+  permission was added).
+* 👤 **Tap a message** — opens the person: their avatar, everything they wrote
+  in this session, reply, mention, copy.
+* 📌 **Pinned messages, polls, predictions, hype train** and **raids** — each
+  one can be switched off.
+* 🔥 **Watch streak** and a **follow / unfollow** button.
+* 🎁 **Channel points** — balance, rewards, and automatic bonus chest claiming.
+* ⏱ **Auto-sync chat delay** — offsets the chat by the measured stream latency
+  so it lines up with the picture.
+* 📼 **VOD chat** — replayed in sync with playback position.
+
+### Chat layout
+
+* 📐 **Resizable** — drag the divider between video and chat; the width is
+  remembered.
+* 🪟 **Three landscape layouts** — a column on the right, translucent over the
+  picture, or folded away. The player's buttons shift with the chat's width so
+  nothing is ever covered.
+* 🔠 **Sizing** — font size, message spacing, badge and emote scale,
+  timestamps, with a live preview.
+
+### Finding things
+
+* 🏠 **Home** — your followed channels that are live, top streams (France or
+  worldwide).
+* 🎮 **Categories** — browse by game, then the live channels in it.
+* 🔍 **Search** — by streamer name, channel link, or VOD ID.
+* 🕒 **History** — recently watched VODs and channels, each removable.
+* 🔄 **Cloud sync** — watch progress and history saved to your own Worker, so
+  you pick up where you left off on another device.
+
+### The rest
+
+* 🌍 **Three languages** — English (default), French, Spanish.
+* 🔐 **Web session check** — the Twitch web session has no known expiry date;
+  it's verified at launch, and you're told when it needs restoring instead of
+  channel points silently going quiet.
+* 📊 **Anonymous usage count** — a random install ID and the app version, at
+  most once an hour. No Twitch account, no channels watched, no IP address.
+  Switching it off erases the ID server-side. See
+  [`Sources/Services/UsageService.swift`](Sources/Services/UsageService.swift).
+* 🪵 **System logs** — everything the app does, visible in Settings.
+
+---
 
 ## 📲 Installation
-Since TwitchUnblock is not available on the App Store, you will need to sideload it onto your iOS device.
 
-### Method 1: AltStore / SideStore (Recommended)
-You can easily stay up-to-date with the latest Nightly builds by adding our official source to your sideloading app:
-1. Open AltStore or SideStore on your device.
-2. Go to the **Sources** tab.
-3. Add the following URL:
+TwitchUnblock isn't on the App Store, so it has to be sideloaded.
+
+### AltStore / SideStore / Feather (recommended)
+
+Automatic nightly builds, straight from your sideloader:
+
+1. Open AltStore, SideStore or Feather.
+2. Go to **Sources**.
+3. Add:
    ```
    https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
    ```
-4. Download and install **TwitchUnblock** directly from the app.
+4. Install **TwitchUnblock** from there.
 
-### Method 2: Manual Sideloading
-1. Go to the Releases page of this repository.
-2. Download the latest `TwitchUnblock.ipa` file.
-3. Use a sideloading tool of your choice (e.g., Sideloadly, AltStore, or TrollStore if your device is supported) to install the `.ipa` onto your iPhone or iPad.
+### Manual
 
-## 🛠️ Building from Source
-If you want to compile the app yourself, TwitchUnblock is fully configured for Xcode.
+Download the latest `TwitchUnblock.ipa` from the
+[Releases](https://github.com/MXFia19/TwitchUnblock/releases) page and install it
+with Sideloadly, AltStore, or TrollStore if your device supports it.
 
-**Requirements:**
-* macOS (Latest version recommended)
-* Xcode 16.0 or higher
-* iOS 16.0+ deployment target
+---
 
-**Steps:**
-1. Clone the repository:
-   ```
-   git clone https://github.com/MXFia19/TwitchUnblock.git
-   cd TwitchUnblock
-   ```
-2. Open `TwitchUnblock.xcodeproj` in Xcode.
-3. Select your personal development team in the *Signing & Capabilities* tab.
-4. Build and run the scheme `TwitchUnblock` on your connected device.
+## 🌐 Web version
 
-*(Note: The project uses GitHub Actions to automatically build and release Nightly IPAs directly from the main branch).*
+A browser build lives in [`web/`](web/): player, chat, discovery and settings,
+sharing the same Worker and the same Twitch application.
+
+```bash
+cd web
+npm install
+npm run dev
+```
+
+Channel points, polls and predictions are **not** in the web version and cannot
+be: they need the `twitch.tv` session cookie, which no third-party site can
+read. [`web/README.md`](web/README.md) covers hosting (no domain needed) and the
+one header to add to the Worker.
+
+---
+
+## 🛠️ Building from source
+
+**Requirements:** macOS, Xcode 16+, iOS 16.0 deployment target.
+
+```bash
+git clone https://github.com/MXFia19/TwitchUnblock.git
+cd TwitchUnblock
+open TwitchUnblock.xcodeproj
+```
+
+Pick your development team under *Signing & Capabilities*, then build the
+`TwitchUnblock` scheme onto your device.
+
+The Xcode project is generated from `project.yml` with
+[XcodeGen](https://github.com/yonaskolb/XcodeGen): run `xcodegen` after adding
+files. GitHub Actions builds and publishes nightly IPAs from `master`.
+
+### Worker
+
+The app talks to your own Cloudflare Worker for playlist resolution, cloud sync
+and the usage count. Setup notes are in [`worker/`](worker/).
+
+---
 
 ## ⚠️ Disclaimer
-This project is made for educational and personal use only. **TwitchUnblock is not affiliated with, endorsed by, or sponsored by Twitch Interactive, Inc.** All trademarks, service marks, and company names are the property of their respective owners.
 
-Please support your favorite creators whenever possible!
+Made for educational and personal use. **TwitchUnblock is not affiliated with,
+endorsed by, or sponsored by Twitch Interactive, Inc.** All trademarks and
+company names belong to their respective owners.
+
+Support your favourite creators whenever you can.
 
 ## 📜 License
-This project is licensed under the MIT License. See the `LICENSE` file for more details.
+
+MIT — see [`LICENSE`](LICENSE). Do what you want with the code, keep the
+copyright notice, and don't hold anyone liable.
+
+This covers the code in this repository, and nothing else: Twitch's
+trademarks, its API terms of service and the content on it are not ours to
+license.

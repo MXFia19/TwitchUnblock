@@ -1,0 +1,77 @@
+name: Site web
+
+# Publie web/ sur GitHub Pages. Déclenché à la main depuis n'importe quelle
+# branche (Actions → Site web → Run workflow), ou automatiquement quand web/
+# change sur master.
+# Manuel seulement. Un déclenchement automatique sur master échouerait à chaque
+# fois tant que Settings → Pages → Source reste sur « Deploy from a branch » :
+# `deploy-pages` n'a alors nulle part où publier. Et basculer la source est une
+# décision à prendre en connaissance de cause — elle transfère auth.html et
+# apps.json de la branche vers ce workflow (voir web/README.md).
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Une publication à la fois ; on laisse finir celle qui est en cours plutôt
+# que de la couper au milieu d'un déploiement.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - run: npm ci
+
+      # Le parseur IRC d'abord : s'il est cassé, inutile de publier.
+      - run: npm test
+
+      - name: Build
+        # GitHub Pages sert sur /<depot>/, d'où la base. Sur un domaine
+        # dédié ou Cloudflare Pages, cette variable n'existe pas et la base
+        # reste « / ».
+        run: npm run build
+        env:
+          VITE_BASE: /${{ github.event.repository.name }}/
+
+      # GitHub Pages servait jusqu'ici le contenu de la branche : auth.html
+      # (retour OAuth de l'app iOS) et apps.json (source Feather). Passer en
+      # mode « GitHub Actions » remplace TOUT par cet artefact — sans cette
+      # recopie, la connexion de l'app et le sideload tomberaient d'un coup.
+      - name: Préserver les fichiers historiques de Pages
+        working-directory: .
+        run: |
+          cp auth.html apps.json web/dist/
+          cp -r assets web/dist/
+          ls -la web/dist
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

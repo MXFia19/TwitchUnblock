@@ -4,7 +4,8 @@ import Combine
 final class AppStore: ObservableObject {
 
     // MARK: – Language
-    @Published var lang: Lang = .fr {
+    /// L'anglais par défaut : l'app n'est pas réservée à un public français.
+    @Published var lang: Lang = .en {
         didSet { UserDefaults.standard.set(lang.rawValue, forKey: "lang") }
     }
 
@@ -24,6 +25,25 @@ final class AppStore: ObservableObject {
         didSet {
             if let t = twitchWebToken { UserDefaults.standard.set(t, forKey: "twitch_web_token") }
             else { UserDefaults.standard.removeObject(forKey: "twitch_web_token") }
+        }
+    }
+
+    /// La session web a été rejetée par Twitch : elle a été effacée, il faut
+    /// se reconnecter. Distinct de « absente » — on ne veut pas harceler
+    /// quelqu'un qui ne s'en est jamais servi.
+    @Published var webSessionExpired = false
+
+    /// Vérifie la session web et l'efface si Twitch la refuse. Une panne
+    /// réseau ne l'efface pas : couper la session sur un wifi capricieux
+    /// serait pire que de la laisser mourir en silence.
+    @MainActor
+    func validateWebSession() async {
+        guard let token = twitchWebToken, !token.isEmpty else { return }
+        if await isWebSessionValid(token: token) {
+            webSessionExpired = false
+        } else {
+            twitchWebToken = nil
+            webSessionExpired = true
         }
     }
 
@@ -82,6 +102,85 @@ final class AppStore: ObservableObject {
         didSet { UserDefaults.standard.set(lowLatency, forKey: "cfg_low_latency") }
     }
 
+    /// Lecteur immersif : commandes par-dessus l'image, comme sur Twitch.
+    /// Désactivé = lecteur natif Apple (PiP et plein écran système).
+    /// Activé par défaut : c'est le lecteur de l'app, le natif est le repli.
+    @Published var immersivePlayer: Bool = true {
+        didSet { UserDefaults.standard.set(immersivePlayer, forKey: "cfg_immersive") }
+    }
+
+    /// Recadrer la vidéo pour remplir l'écran, au lieu de laisser des bandes
+    /// noires. Coupe le haut et le bas : du 16:9 dans un écran de téléphone en
+    /// paysage (≈2.16) ne peut pas à la fois tout montrer et tout remplir.
+    @Published var fillScreen: Bool = false {
+        didSet { UserDefaults.standard.set(fillScreen, forKey: "cfg_fill_screen") }
+    }
+
+    /// Place du chat en paysage : colonne, superposé à l'image, ou replié.
+    /// Mémorisé, parce qu'on choisit ça une fois puis on n'y revient plus.
+    @Published var landscapeChat: LandscapeChat = .column {
+        didSet { UserDefaults.standard.set(landscapeChat.rawValue, forKey: "cfg_landscape_chat") }
+    }
+
+    // MARK: – Apparence du chat
+    // La bonne taille dépend de l'écran, de la distance de lecture et de la vue
+    // de chacun : autant la laisser se régler plutôt que d'en imposer une.
+    @Published var chatFontSize: Double = 13 {
+        didSet { UserDefaults.standard.set(chatFontSize, forKey: "cfg_chat_font") }
+    }
+    /// Espace vertical entre deux messages, en points. Chaque message en porte
+    /// la moitié en haut et en bas : 8 reproduit l'aspect d'origine.
+    @Published var chatSpacing: Double = 8 {
+        didSet { UserDefaults.standard.set(chatSpacing, forKey: "cfg_chat_spacing") }
+    }
+    @Published var chatBadgeScale: Double = 1 {
+        didSet { UserDefaults.standard.set(chatBadgeScale, forKey: "cfg_chat_badge") }
+    }
+    @Published var chatEmoteScale: Double = 1 {
+        didSet { UserDefaults.standard.set(chatEmoteScale, forKey: "cfg_chat_emote") }
+    }
+    @Published var chatTimestamps: Bool = true {
+        didSet { UserDefaults.standard.set(chatTimestamps, forKey: "cfg_chat_time") }
+    }
+    /// Part de la largeur prise par le chat en paysage (colonne ou calque).
+    @Published var chatWidthRatio: Double = 0.32 {
+        didSet { UserDefaults.standard.set(chatWidthRatio, forKey: "cfg_chat_width") }
+    }
+
+    // MARK: – Comportement du chat
+    /// Charger les derniers messages du canal à l'arrivée (API tierce
+    /// recent-messages.robotty.de : Twitch n'envoie rien d'antérieur au JOIN).
+    @Published var chatLoadRecent: Bool = true {
+        didSet { UserDefaults.standard.set(chatLoadRecent, forKey: "cfg_chat_recent") }
+    }
+    /// Proposer emotes et pseudos pendant la frappe.
+    @Published var chatAutocomplete: Bool = true {
+        didSet { UserDefaults.standard.set(chatAutocomplete, forKey: "cfg_chat_autocomplete") }
+    }
+    /// Garder les messages supprimés, barrés, au lieu de les faire disparaître.
+    @Published var chatShowDeleted: Bool = false {
+        didSet { UserDefaults.standard.set(chatShowDeleted, forKey: "cfg_chat_deleted") }
+    }
+
+    /// Construit la présentation du chat : les réglages de l'utilisateur pour la
+    /// taille, la disposition en cours pour le décor et la transparence.
+    func chatStyle(chrome: Bool, translucent: Bool) -> ChatStyle {
+        ChatStyle(showsChrome: chrome,
+                  showsTimestamp: chatTimestamps,
+                  fontSize: CGFloat(chatFontSize),
+                  rowPadding: CGFloat(chatSpacing) / 2,
+                  badgeScale: CGFloat(chatBadgeScale),
+                  emoteScale: CGFloat(chatEmoteScale),
+                  translucent: translucent)
+    }
+
+    // MARK: – Comptage d'utilisation
+    /// Signaler anonymement que cette installation est active.
+    /// Voir Sources/Services/UsageService.swift pour ce qui part réellement.
+    @Published var shareUsage: Bool = true {
+        didSet { UserDefaults.standard.set(shareUsage, forKey: "cfg_share_usage") }
+    }
+
     // MARK: – Débogage (section temporaire)
     /// Afficher la latence du direct par-dessus le lecteur.
     @Published var showLatency: Bool = false {
@@ -116,6 +215,20 @@ final class AppStore: ObservableObject {
         enableRaids        = ud.object(forKey: "cfg_raids")  as? Bool ?? true
         autoPurgeImageCache = ud.object(forKey: "cfg_purge_cache") as? Bool ?? true
         lowLatency         = ud.object(forKey: "cfg_low_latency") as? Bool ?? false
+        immersivePlayer    = ud.object(forKey: "cfg_immersive")   as? Bool ?? true
+        fillScreen         = ud.object(forKey: "cfg_fill_screen") as? Bool ?? false
+        landscapeChat      = LandscapeChat(rawValue: ud.string(forKey: "cfg_landscape_chat") ?? "")
+                             ?? .column
+        chatFontSize       = ud.object(forKey: "cfg_chat_font")    as? Double ?? 13
+        chatSpacing        = ud.object(forKey: "cfg_chat_spacing") as? Double ?? 8
+        chatBadgeScale     = ud.object(forKey: "cfg_chat_badge")   as? Double ?? 1
+        chatEmoteScale     = ud.object(forKey: "cfg_chat_emote")   as? Double ?? 1
+        chatTimestamps     = ud.object(forKey: "cfg_chat_time")    as? Bool   ?? true
+        chatWidthRatio     = ud.object(forKey: "cfg_chat_width")   as? Double ?? 0.32
+        chatLoadRecent     = ud.object(forKey: "cfg_chat_recent")       as? Bool ?? true
+        chatAutocomplete   = ud.object(forKey: "cfg_chat_autocomplete") as? Bool ?? true
+        chatShowDeleted    = ud.object(forKey: "cfg_chat_deleted")      as? Bool ?? false
+        shareUsage         = ud.object(forKey: "cfg_share_usage") as? Bool ?? true
         showLatency        = ud.object(forKey: "dbg_latency")    as? Bool ?? false
         autoChatDelay      = ud.object(forKey: "dbg_chat_delay") as? Bool ?? false
         if let data = ud.data(forKey: "twitch_vod_history"),

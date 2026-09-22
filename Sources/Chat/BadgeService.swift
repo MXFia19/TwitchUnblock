@@ -11,6 +11,14 @@ actor BadgeService {
     private var globalsLoaded = false
     private var loadedChannels: Set<String> = []
 
+    /// Vide les badges chargés pour forcer un rechargement complet.
+    func reset() {
+        global.removeAll()
+        channel.removeAll()
+        globalsLoaded = false
+        loadedChannels.removeAll()
+    }
+
     // MARK: – Load global badges (Helix)
     func loadGlobal(token: String) async {
         guard !globalsLoaded else { return }

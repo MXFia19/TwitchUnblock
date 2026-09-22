@@ -491,6 +491,10 @@ struct ImmersivePlayer: View {
                 bottomBar
             }
             .padding(TSpace.sm)
+            // Un peu d'air sous la barre du bas en paysage : les commandes y
+            // descendent jusqu'au bord physique, et le trait de la barre
+            // d'accueil passerait sinon au ras des boutons.
+            .padding(.bottom, isLandscape ? TSpace.xs : 0)
             // Les barres se replient de la largeur du chat superposé : leurs
             // boutons restent entièrement visibles et cliquables, et suivent
             // la largeur du chat quand on la fait varier.
@@ -500,6 +504,15 @@ struct ImmersivePlayer: View {
             .padding(.trailing, controlsInset)
         }
         .transition(.opacity)
+        // En paysage, l'image descend jusqu'au bord physique : les commandes
+        // suivent. Sinon le voile s'arrêtait à la zone sûre et laissait une
+        // bande de vidéo en pleine lumière sous la barre, et les boutons
+        // flottaient à une trentaine de points du bord quand le haut n'en
+        // avait que huit — la barre d'accueil réserve cet espace.
+        //
+        // Verticalement seulement : sur les côtés, l'encoche rognerait le
+        // bouton retour, et la marge y est déjà celle de l'exemple.
+        .ignoresSafeArea(isLandscape ? SafeAreaRegions.all : [], edges: .vertical)
     }
 
     // ── Barre haute : qui regarde-t-on ────────────────────────────────

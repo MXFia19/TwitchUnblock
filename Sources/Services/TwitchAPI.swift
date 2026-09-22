@@ -641,3 +641,54 @@ func sortQualities(_ keys: [String]) -> [String] {
         return ai < bi
     }
 }
+
+// MARK: – Validité de la session web
+/// La session web (cookie `auth-token`) n'a pas de date d'expiration connue :
+/// elle meurt quand Twitch le décide — déconnexion ailleurs, changement de mot
+/// de passe, révocation. Sans vérification, on s'en aperçoit seulement quand
+/// les points de chaîne cessent silencieusement de répondre.
+///
+/// Renvoie `false` uniquement quand Twitch dit explicitement que le jeton ne
+/// vaut rien : une panne réseau laisse la session en place, la couper sur un
+/// wifi capricieux serait pire que le mal.
+func isWebSessionValid(token: String) async -> Bool {
+    guard !token.isEmpty, let url = URL(string: "https://gql.twitch.tv/gql") else { return false }
+
+    var req = URLRequest(url: url)
+    req.httpMethod = "POST"
+    req.setValue(kGQLClientID,       forHTTPHeaderField: "Client-ID")
+    req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    req.setValue("OAuth \(token)",   forHTTPHeaderField: "Authorization")
+    req.httpBody = try? JSONSerialization.data(
+        withJSONObject: ["query": "query { currentUser { id login } }"])
+
+    guard let (data, resp) = try? await URLSession.shared.data(for: req) else {
+        logger.debug("AUTH/WEB", "Vérification impossible", "réseau — session conservée")
+        return true
+    }
+    let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+    if code == 401 || code == 403 {
+        logger.warn("AUTH/WEB", "Session web expirée", "HTTP \(code)")
+        return false
+    }
+    guard code == 200,
+          let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+          let payload = json["data"] as? [String: Any] else {
+        return true   // réponse inattendue : on ne tranche pas
+    }
+    // `currentUser` à null = jeton rejeté, même avec un HTTP 200.
+    if payload["currentUser"] is NSNull || payload["currentUser"] == nil {
+        logger.warn("AUTH/WEB", "Session web expirée", "currentUser vide")
+        return false
+    }
+    logger.debug("AUTH/WEB", "Session web valide", nil)
+    return true
+}
+
+// MARK: – Photo de profil d'une chaîne
+/// L'avatar du bandeau du lecteur. En direct, `getLive` le ramène déjà ; pour
+/// une VOD il n'était jamais demandé, d'où le rond gris. On passe par le cache
+/// partagé avec la feuille de message : une requête par chaîne et par session.
+func channelAvatar(login: String, token: String?) async -> String? {
+    await AvatarCache.shared.avatar(login: login, token: token)
+}

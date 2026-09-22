@@ -28,6 +28,25 @@ final class AppStore: ObservableObject {
         }
     }
 
+    /// La session web a été rejetée par Twitch : elle a été effacée, il faut
+    /// se reconnecter. Distinct de « absente » — on ne veut pas harceler
+    /// quelqu'un qui ne s'en est jamais servi.
+    @Published var webSessionExpired = false
+
+    /// Vérifie la session web et l'efface si Twitch la refuse. Une panne
+    /// réseau ne l'efface pas : couper la session sur un wifi capricieux
+    /// serait pire que de la laisser mourir en silence.
+    @MainActor
+    func validateWebSession() async {
+        guard let token = twitchWebToken, !token.isEmpty else { return }
+        if await isWebSessionValid(token: token) {
+            webSessionExpired = false
+        } else {
+            twitchWebToken = nil
+            webSessionExpired = true
+        }
+    }
+
     /// Photo de profil du compte connecté, affichée dans l'en-tête.
     @Published var twitchAvatar: String? {
         didSet {
@@ -85,8 +104,16 @@ final class AppStore: ObservableObject {
 
     /// Lecteur immersif : commandes par-dessus l'image, comme sur Twitch.
     /// Désactivé = lecteur natif Apple (PiP et plein écran système).
-    @Published var immersivePlayer: Bool = false {
+    /// Activé par défaut : c'est le lecteur de l'app, le natif est le repli.
+    @Published var immersivePlayer: Bool = true {
         didSet { UserDefaults.standard.set(immersivePlayer, forKey: "cfg_immersive") }
+    }
+
+    /// Recadrer la vidéo pour remplir l'écran, au lieu de laisser des bandes
+    /// noires. Coupe le haut et le bas : du 16:9 dans un écran de téléphone en
+    /// paysage (≈2.16) ne peut pas à la fois tout montrer et tout remplir.
+    @Published var fillScreen: Bool = false {
+        didSet { UserDefaults.standard.set(fillScreen, forKey: "cfg_fill_screen") }
     }
 
     /// Place du chat en paysage : colonne, superposé à l'image, ou replié.
@@ -188,7 +215,8 @@ final class AppStore: ObservableObject {
         enableRaids        = ud.object(forKey: "cfg_raids")  as? Bool ?? true
         autoPurgeImageCache = ud.object(forKey: "cfg_purge_cache") as? Bool ?? true
         lowLatency         = ud.object(forKey: "cfg_low_latency") as? Bool ?? false
-        immersivePlayer    = ud.object(forKey: "cfg_immersive")   as? Bool ?? false
+        immersivePlayer    = ud.object(forKey: "cfg_immersive")   as? Bool ?? true
+        fillScreen         = ud.object(forKey: "cfg_fill_screen") as? Bool ?? false
         landscapeChat      = LandscapeChat(rawValue: ud.string(forKey: "cfg_landscape_chat") ?? "")
                              ?? .column
         chatFontSize       = ud.object(forKey: "cfg_chat_font")    as? Double ?? 13

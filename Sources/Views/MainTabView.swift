@@ -173,6 +173,9 @@ struct MainTabView: View {
             SleepTimerSheet()
                 .presentationDetents([.medium, .large])
         }
+        // Session web : vérifiée une fois au lancement. Sans ça on ne s'aperçoit
+        // de son expiration que quand les points cessent de répondre.
+        .task { await store.validateWebSession() }
         // Minuteur de veille écoulé → on coupe la lecture.
         .onChange(of: sleepTimer.fireCount) { _ in
             guard playerMode != nil else { return }
@@ -392,6 +395,10 @@ struct MainTabView: View {
                 chatMode: store.landscapeChat,
                 isLandscape: landscape,
                 controlsInset: controlsInset,
+                fillScreen: store.fillScreen,
+                canReturnToLive: dvrSourceChannel != nil,
+                streamStartedAt: liveStartedAt,
+                archiveAvailable: liveDvrVideoId != nil,
                 onProgress: { time in
                     vodPlaybackTime = time
                     if let id = currentVodId { store.setVodProgress(id, time: time) }
@@ -402,7 +409,17 @@ struct MainTabView: View {
                 onMenu:   { showPlayerMenu = true },
                 onRefresh: { reloadCurrent() },
                 onToggleChat: { withAnimation { store.landscapeChat = store.landscapeChat.next } },
-                onSleep: { showSleepSheet = true }
+                onSleep: { showSleepSheet = true },
+                onBackToLive: { backToLiveAction?() },
+                onSeekToArchive: { offset in
+                    // Le flux du direct ne sait pas remonter si loin : on ouvre
+                    // l'enregistrement à cet instant. Passer par la progression
+                    // enregistrée réutilise le chemin de reprise des VODs.
+                    guard let ch = currentChannelName, let dvr = liveDvrVideoId else { return }
+                    store.setVodProgress(dvr, time: offset)
+                    pendingDvrChannel = ch
+                    playVod(dvr, statusTitle, nil, ch)
+                }
             )
         } else {
             VideoPlayerView(
@@ -621,7 +638,17 @@ struct MainTabView: View {
 
         Task {
             switch mode {
-            case .vod(let id, let title, _, _):
+            case .vod(let id, let title, _, let streamer):
+                // Le bandeau du lecteur montrait un rond gris sur les VODs :
+                // `getM3U8` ne ramène aucune photo de profil. On la demande à
+                // part, depuis le nom de chaîne que tous les points d'entrée
+                // transmettent déjà.
+                if let who = streamer, !who.isEmpty {
+                    Task { @MainActor in
+                        liveAvatar = await channelAvatar(login: who.lowercased(),
+                                                         token: store.twitchToken)
+                    }
+                }
                 let data = await getM3U8(vodId: id)
                 if let err = data.error, data.links.isEmpty {
                     await MainActor.run { errorMsg = err; loading = false }
@@ -649,6 +676,13 @@ struct MainTabView: View {
                         liveDvrVideoId    = data.dvrVideoId
                         loading           = false
                         startLiveTimers(channel: channel)
+                    }
+                    // GQL ne rend pas toujours `profileImageURL` : repli Helix,
+                    // plutôt qu'un rond gris pour le reste de la session.
+                    if data.avatar == nil {
+                        let fallback = await channelAvatar(login: channel.lowercased(),
+                                                           token: store.twitchToken)
+                        await MainActor.run { liveAvatar = fallback }
                     }
                 } else {
                     await MainActor.run { errorMsg = store.t("offline_msg"); loading = false }

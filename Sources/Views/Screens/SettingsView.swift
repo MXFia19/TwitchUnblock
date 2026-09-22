@@ -319,6 +319,7 @@ struct SettingsView: View {
                 // par un point-virgule sur la même ligne ne se composent pas.
                 switch section {
                 case .account:
+                    webSessionCard
                     compteCard
                     usageCard
                 case .general:
@@ -483,6 +484,9 @@ struct SettingsView: View {
                 Divider().background(Color.tBorder)
                 toggleRow(store.t("low_latency"), store.t("low_latency_sub"),
                           $store.lowLatency, log: "Mode faible latence")
+                Divider().background(Color.tBorder)
+                toggleRow(store.t("fill_screen"), store.t("fill_screen_sub"),
+                          $store.fillScreen, log: "Remplir l'écran")
             }
         }
     }
@@ -564,6 +568,30 @@ struct SettingsView: View {
                 Divider().background(Color.tBorder)
                 toggleRow(store.t("cache_auto"), store.t("cache_auto_sub"),
                           $store.autoPurgeImageCache, log: "Purge auto du cache")
+            }
+        }
+    }
+
+    /// Bandeau de session web expirée. Affiché seulement après un refus franc
+    /// de Twitch : une session jamais utilisée n'a rien à signaler.
+    @ViewBuilder private var webSessionCard: some View {
+        if store.webSessionExpired {
+            settingCard {
+                VStack(alignment: .leading, spacing: TSpace.md) {
+                    HStack(spacing: TSpace.sm) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundColor(.tWarning)
+                        Text(store.t("web_expired"))
+                            .font(.tCardTitle).foregroundColor(.tText)
+                    }
+                    Text(store.t("web_expired_sub"))
+                        .font(.tMeta).foregroundColor(.tMuted)
+                        .fixedSize(horizontal: false, vertical: true)
+                    TPrimaryButton(title: store.t("web_reconnect")) {
+                        store.webSessionExpired = false
+                        startWebLogin()
+                    }
+                }
             }
         }
     }

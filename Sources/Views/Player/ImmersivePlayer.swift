@@ -34,12 +34,16 @@ final class PlayerLayerUIView: UIView {
 
 struct PlayerLayerView: UIViewRepresentable {
     let player: AVPlayer
+    /// `resizeAspectFill` recadre pour occuper toute la surface : plus de bandes
+    /// noires, au prix du haut et du bas de l'image. Du 16:9 dans un écran de
+    /// téléphone en paysage (≈2.16) ne peut pas faire les deux.
+    var fill: Bool = false
     var onLayer: ((AVPlayerLayer) -> Void)? = nil
 
     func makeUIView(context: Context) -> PlayerLayerUIView {
         let v = PlayerLayerUIView()
         v.playerLayer.player = player
-        v.playerLayer.videoGravity = .resizeAspect
+        v.playerLayer.videoGravity = fill ? .resizeAspectFill : .resizeAspect
         v.backgroundColor = .black
         onLayer?(v.playerLayer)
         return v
@@ -47,6 +51,10 @@ struct PlayerLayerView: UIViewRepresentable {
 
     func updateUIView(_ uiView: PlayerLayerUIView, context: Context) {
         if uiView.playerLayer.player !== player { uiView.playerLayer.player = player }
+        let wanted: AVLayerVideoGravity = fill ? .resizeAspectFill : .resizeAspect
+        if uiView.playerLayer.videoGravity != wanted {
+            uiView.playerLayer.videoGravity = wanted
+        }
     }
 }
 
@@ -58,6 +66,10 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
     @Published var position:  Double = 0   // temps courant (s)
     @Published var startTime: Double = 0   // début de la fenêtre rembobinable
     @Published var endTime:   Double = 0   // bord du direct, ou fin de la VOD
+    /// Heure réelle de l'image affichée (EXT-X-PROGRAM-DATE-TIME). C'est le
+    /// seul repère commun entre le direct et son enregistrement : la base de
+    /// temps HLS d'un live ne commence pas au début de la diffusion.
+    @Published var currentDate: Date? = nil
     @Published var pipActive  = false
     @Published var pipPossible = false
 
@@ -109,7 +121,8 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
         }
 
         // Latence : écart entre l'heure réelle et l'horodatage du segment lu.
-        if isLive, let date = item.currentDate() {
+        currentDate = item.currentDate()
+        if isLive, let date = currentDate {
             onLatency(Date().timeIntervalSince(date))
         } else {
             onLatency(nil)
@@ -212,6 +225,19 @@ struct ImmersivePlayer: View {
     /// Marge droite des barres de commande : en chat superposé, le calque
     /// occupe cette largeur, et les boutons doivent rester à sa gauche.
     var controlsInset: CGFloat = 0
+    /// Recadrer pour remplir l'écran au lieu de laisser des bandes noires.
+    /// Coupe le haut et le bas de l'image : c'est le compromis, d'où le réglage.
+    var fillScreen: Bool = false
+    /// On regarde le DVR d'un direct : proposer d'y retourner.
+    var canReturnToLive: Bool = false
+    var onBackToLive: () -> Void = {}
+    /// Début de la diffusion. Fourni avec `archiveAvailable`, il étale la barre
+    /// sur tout le direct au lieu de la seule fenêtre rembobinable.
+    var streamStartedAt: Date? = nil
+    var archiveAvailable: Bool = false
+    /// Rembobinage au-delà de la fenêtre DVR : le direct ne sait pas y aller,
+    /// on bascule sur l'enregistrement à ce nombre de secondes du début.
+    var onSeekToArchive: (Double) -> Void = { _ in }
 
     var onProgress: (Double) -> Void = { _ in }
     var onLatency:  (Double?) -> Void = { _ in }
@@ -229,6 +255,10 @@ struct ImmersivePlayer: View {
     @State private var dragging  = false
     @State private var dragValue: Double = 0
     @State private var seekFlash: String? = nil
+    /// Secondes cumulées des doubles-tapes rapprochés, pour afficher « +30 s »
+    /// au troisième plutôt que trois fois « +10 s » sans savoir où l'on est.
+    @State private var seekTotal: Double = 0
+    @State private var seekResetTask: Task<Void, Never>? = nil
 
     init(url: URL, isLive: Bool, dvrEnabled: Bool, savedTime: Double,
          info: PlayerOverlayInfo,
@@ -236,6 +266,10 @@ struct ImmersivePlayer: View {
          chatMode: LandscapeChat = .column,
          isLandscape: Bool = false,
          controlsInset: CGFloat = 0,
+         fillScreen: Bool = false,
+         canReturnToLive: Bool = false,
+         streamStartedAt: Date? = nil,
+         archiveAvailable: Bool = false,
          onProgress: @escaping (Double) -> Void = { _ in },
          onLatency:  @escaping (Double?) -> Void = { _ in },
          onReduce:   @escaping () -> Void = {},
@@ -243,15 +277,20 @@ struct ImmersivePlayer: View {
          onMenu:     @escaping () -> Void = {},
          onRefresh:  @escaping () -> Void = {},
          onToggleChat: @escaping () -> Void = {},
-         onSleep:    @escaping () -> Void = {}) {
+         onSleep:    @escaping () -> Void = {},
+         onBackToLive: @escaping () -> Void = {},
+         onSeekToArchive: @escaping (Double) -> Void = { _ in }) {
         self.url = url; self.isLive = isLive; self.dvrEnabled = dvrEnabled
         self.savedTime = savedTime; self.info = info
         self.onProgress = onProgress; self.onLatency = onLatency
         self.sleepLabel = sleepLabel; self.chatMode = chatMode
         self.isLandscape = isLandscape; self.controlsInset = controlsInset
+        self.fillScreen = fillScreen; self.canReturnToLive = canReturnToLive
+        self.streamStartedAt = streamStartedAt; self.archiveAvailable = archiveAvailable
         self.onReduce = onReduce; self.onClose = onClose
         self.onMenu = onMenu; self.onRefresh = onRefresh
         self.onToggleChat = onToggleChat; self.onSleep = onSleep
+        self.onBackToLive = onBackToLive; self.onSeekToArchive = onSeekToArchive
         _model = StateObject(wrappedValue: ImmersivePlayerModel(
             url: url, isLive: isLive, savedTime: savedTime,
             onProgress: onProgress, onLatency: onLatency))
@@ -260,9 +299,50 @@ struct ImmersivePlayer: View {
     /// Un direct sans DVR n'est pas rembobinable : la barre reste décorative.
     private var canScrub: Bool { !isLive || dvrEnabled }
 
+    /// Repères de la barre « toute la diffusion », en secondes depuis le début.
+    /// Tout est exprimé par rapport à l'horloge réelle : la base de temps HLS
+    /// d'un direct ne commence pas au début de la diffusion, et celle de
+    /// l'enregistrement, si, — l'heure est le seul repère commun aux deux.
+    private struct BroadcastSpan {
+        let total: Double        // durée écoulée depuis le début
+        let current: Double      // position lue
+        let windowStart: Double  // bornes de ce que le flux sait rembobiner
+        let windowEnd: Double
+    }
+
+    private var broadcastSpan: BroadcastSpan? {
+        guard isLive, archiveAvailable, canScrub,
+              let start = streamStartedAt,
+              let now   = model.currentDate,
+              model.endTime > model.startTime else { return nil }
+
+        let total   = Date().timeIntervalSince(start)
+        let current = now.timeIntervalSince(start)
+        guard total > 60, current >= 0, current <= total + 60 else { return nil }
+
+        return BroadcastSpan(
+            total: total,
+            current: min(current, total),
+            windowStart: max(0, current - (model.position - model.startTime)),
+            windowEnd:   min(total, current + (model.endTime - model.position))
+        )
+    }
+
+    /// Rembobinage sur la barre complète : dans la fenêtre du flux on cherche
+    /// normalement, au-delà on passe la main à l'enregistrement.
+    private func seekBroadcast(to target: Double, span: BroadcastSpan) {
+        if target >= span.windowStart && target <= span.windowEnd {
+            model.seek(to: model.position + (target - span.current))
+        } else {
+            logger.info("LECTEUR", "Rembobinage hors fenêtre DVR",
+                        String(format: "→ %.0f s depuis le début", target))
+            onSeekToArchive(target)
+        }
+    }
+
     var body: some View {
         ZStack {
-            PlayerLayerView(player: model.player) { layer in
+            PlayerLayerView(player: model.player, fill: fillScreen) { layer in
                 model.attachPiP(layer: layer)
             }
 
@@ -394,7 +474,39 @@ struct ImmersivePlayer: View {
         VStack(spacing: TSpace.xs) {
 
             // Barre de progression : VOD, ou direct avec DVR.
-            if canScrub, model.endTime > model.startTime {
+            if let span = broadcastSpan {
+                // Direct dont l'enregistrement existe : la barre couvre toute
+                // la diffusion, pas seulement la fenêtre rembobinable du flux.
+                Slider(
+                    value: Binding(
+                        get: { dragging ? dragValue : span.current },
+                        set: { dragValue = $0 }
+                    ),
+                    in: 0...max(span.total, 1),
+                    onEditingChanged: { editing in
+                        dragging = editing
+                        if editing { dragValue = span.current; hideTask?.cancel() }
+                        else { seekBroadcast(to: dragValue, span: span); scheduleAutoHide() }
+                    }
+                )
+                .tint(.tPrimary)
+                // Le tronçon réellement accessible dans le flux est teinté :
+                // au-delà, c'est l'enregistrement qui prendra le relais, avec
+                // le temps de chargement que ça suppose.
+                .background(alignment: .leading) {
+                    GeometryReader { geo in
+                        let w = geo.size.width
+                        let a = CGFloat(span.windowStart / max(span.total, 1)) * w
+                        let b = CGFloat(span.windowEnd   / max(span.total, 1)) * w
+                        Capsule()
+                            .fill(Color.white.opacity(0.18))
+                            .frame(width: max(0, b - a), height: 3)
+                            .offset(x: a)
+                    }
+                    .allowsHitTesting(false)
+                }
+
+            } else if canScrub, model.endTime > model.startTime {
                 Slider(
                     value: Binding(
                         get: { dragging ? dragValue : model.position },
@@ -459,6 +571,25 @@ struct ImmersivePlayer: View {
                     .buttonStyle(.plain)
                 }
 
+                // On regarde l'enregistrement d'un direct en cours : le retour
+                // au direct était enfoui dans le menu « ⋯ », alors que c'est
+                // l'action qu'on cherche en premier.
+                if canReturnToLive {
+                    Button { onBackToLive() } label: {
+                        HStack(spacing: TSpace.xs) {
+                            Circle().fill(Color.tLive).frame(width: 7, height: 7)
+                            Text(store.t("back_to_live"))
+                                .font(.system(size: 12, weight: .bold))
+                        }
+                        .foregroundColor(.white)
+                        .padding(.horizontal, TSpace.sm)
+                        .frame(height: 32)
+                        .background(Color.tLive.opacity(0.35))
+                        .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+
                 if model.pipPossible {
                     overlayButton(icon: "pip.enter") { model.togglePiP(); scheduleAutoHide() }
                 }
@@ -516,15 +647,31 @@ struct ImmersivePlayer: View {
             .contentShape(Rectangle())
             .onTapGesture(count: 2) {
                 model.seekBy(seconds)
-                flash(label)
+                accumulateSeek(seconds)
             }
     }
 
+    /// Additionne les sauts tant qu'ils s'enchaînent. Un saut dans l'autre sens
+    /// repart de zéro : enchaîner −10 après +30 doit afficher −10, pas +20.
+    private func accumulateSeek(_ seconds: Double) {
+        if seekTotal != 0, (seekTotal < 0) != (seconds < 0) { seekTotal = 0 }
+        seekTotal += seconds
+        let value = abs(Int(seekTotal.rounded()))
+        flash("\(seekTotal < 0 ? "−" : "+")\(value) s", duration: 900_000_000)
+
+        seekResetTask?.cancel()
+        seekResetTask = Task {
+            try? await Task.sleep(nanoseconds: 1_100_000_000)
+            guard !Task.isCancelled else { return }
+            seekTotal = 0
+        }
+    }
+
     /// Bandeau fugace au centre de l'image (±10 s, changement de mode du chat).
-    private func flash(_ text: String) {
+    private func flash(_ text: String, duration: UInt64 = 700_000_000) {
         withAnimation(.easeOut(duration: 0.15)) { seekFlash = text }
         Task {
-            try? await Task.sleep(nanoseconds: 700_000_000)
+            try? await Task.sleep(nanoseconds: duration)
             withAnimation(.easeOut(duration: 0.2)) { seekFlash = nil }
         }
     }

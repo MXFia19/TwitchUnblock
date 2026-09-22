@@ -430,6 +430,13 @@ struct MainTabView: View {
                 streamStartedAt: liveStartedAt,
                 archiveAvailable: liveDvrVideoId != nil,
                 onProgress: { time in
+                    // Pendant une bascule, `playerMode` désigne déjà la
+                    // nouvelle source alors que le lecteur en place joue encore
+                    // l'ancienne. Sa position n'a aucun sens dans la nouvelle
+                    // base de temps, et l'enregistrer écrasait précisément
+                    // l'instant qu'on venait d'y viser — d'où un retour au
+                    // début de l'enregistrement.
+                    guard !switchingSource else { return }
                     vodPlaybackTime = time
                     if let id = currentVodId { store.setVodProgress(id, time: time) }
                 },

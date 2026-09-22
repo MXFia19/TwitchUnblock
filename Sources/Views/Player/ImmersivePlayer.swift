@@ -73,13 +73,22 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
     @Published var pipActive  = false
     @Published var pipPossible = false
 
-    let isLive: Bool
+    /// Pas une constante : une bascule douce direct → enregistrement remplace
+    /// la source sans reconstruire le modèle. Figée, elle laissait le lecteur
+    /// se croire en direct sur une VOD (rattrapage, latence, bord du direct).
+    private(set) var isLive: Bool
     /// Rattrape le bord du direct quand la lecture a dérivé (mode faible latence).
     var lowLatency = false
 
     private let onProgress: (Double) -> Void
     private let onLatency:  (Double?) -> Void
     private var timeObs: Any?
+    private var statusObs: NSKeyValueObservation?
+    /// Position demandée avant que l'élément ne soit prêt. Chercher tout de
+    /// suite après `replaceCurrentItem` ne tient pas : la playlist HLS n'est
+    /// pas encore chargée, la recherche part à la poubelle et la lecture
+    /// démarre au début.
+    private var pendingSeek: Double?
     private var pip: AVPictureInPictureController?
     private var lastCatchUp = Date.distantPast
 
@@ -96,24 +105,53 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
         ) { [weak self] t in self?.tick(t) }
     }
 
-    func load(url: URL, seek: Double = 0) {
-        player.replaceCurrentItem(with: AVPlayerItem(url: url))
-        if seek > 5 { player.seek(to: CMTime(seconds: seek, preferredTimescale: 600)) }
+    func load(url: URL, seek: Double = 0, isLive: Bool? = nil) {
+        if let isLive { self.isLive = isLive }
+        // Repart d'une fenêtre vierge : garder les bornes de la source
+        // précédente affichait une barre fantaisiste le temps du chargement.
+        startTime = 0; endTime = 0; currentDate = nil
+
+        let item = AVPlayerItem(url: url)
+        pendingSeek = seek > 5 ? seek : nil
+        statusObs = item.observe(\.status, options: [.initial, .new]) { [weak self] item, _ in
+            guard item.status == .readyToPlay else { return }
+            DispatchQueue.main.async { self?.applyPendingSeek(on: item) }
+        }
+        player.replaceCurrentItem(with: item)
         player.play()
         isPlaying = true
         lastCatchUp = Date()   // laisse le flux démarrer avant tout rattrapage
     }
 
+    private func applyPendingSeek(on item: AVPlayerItem) {
+        guard let target = pendingSeek, player.currentItem === item else { return }
+        pendingSeek = nil
+        var t = target
+        if let range = item.seekableTimeRanges.last?.timeRangeValue,
+           range.duration.seconds > 0 {
+            t = max(range.start.seconds,
+                    min((range.start + range.duration).seconds, t))
+        }
+        player.seek(to: CMTime(seconds: t, preferredTimescale: 600),
+                    toleranceBefore: .zero, toleranceAfter: .zero)
+        position = t
+    }
+
     private func tick(_ t: CMTime) {
         guard let item = player.currentItem else { return }
 
-        if let range = item.seekableTimeRanges.last?.timeRangeValue,
-           range.duration.seconds > 0 {
+        // La durée d'abord : sur un enregistrement, la fenêtre cherchable ne
+        // couvre au départ que les premières secondes chargées, et la barre
+        // affichait « 0:00 / 0:24 » sur une VOD de plusieurs heures. Un direct
+        // n'a pas de durée finie, il retombe donc sur la fenêtre.
+        let dur = item.duration.seconds
+        if dur.isFinite, dur > 0 {
+            startTime = 0
+            endTime   = dur
+        } else if let range = item.seekableTimeRanges.last?.timeRangeValue,
+                  range.duration.seconds > 0 {
             startTime = range.start.seconds
             endTime   = (range.start + range.duration).seconds
-        } else if item.duration.seconds.isFinite {
-            startTime = 0
-            endTime   = item.duration.seconds
         }
         if t.seconds.isFinite {
             position = t.seconds
@@ -187,6 +225,8 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
 
     func teardown() {
         if let o = timeObs { player.removeTimeObserver(o); timeObs = nil }
+        statusObs = nil
+        pendingSeek = nil
         player.pause()
         player.replaceCurrentItem(with: nil)
         pip = nil
@@ -254,6 +294,13 @@ struct ImmersivePlayer: View {
     @State private var hideTask: Task<Void, Never>? = nil
     @State private var dragging  = false
     @State private var dragValue: Double = 0
+    /// Bornes gelées le temps d'un glissement. En direct, `endTime` et la durée
+    /// écoulée avancent deux fois par seconde : la plage du `Slider` changeait
+    /// sous le doigt, le curseur sautait et le geste était perdu — il fallait
+    /// re-balayer. Le repère est donc figé à la prise, et le saut calculé
+    /// dessus à la relâche.
+    @State private var dragSpan: BroadcastSpan? = nil
+    @State private var dragBounds: ClosedRange<Double>? = nil
     @State private var seekFlash: String? = nil
     /// Secondes cumulées des doubles-tapes rapprochés, pour afficher « +30 s »
     /// au troisième plutôt que trois fois « +10 s » sans savoir où l'on est.
@@ -305,7 +352,8 @@ struct ImmersivePlayer: View {
     /// l'enregistrement, si, — l'heure est le seul repère commun aux deux.
     private struct BroadcastSpan {
         let total: Double        // durée écoulée depuis le début
-        let current: Double      // position lue
+        let current: Double      // position lue, en secondes depuis le début
+        let playhead: Double     // la même, dans la base de temps du flux
         let windowStart: Double  // bornes de ce que le flux sait rembobiner
         let windowEnd: Double
     }
@@ -323,6 +371,7 @@ struct ImmersivePlayer: View {
         return BroadcastSpan(
             total: total,
             current: min(current, total),
+            playhead: model.position,
             windowStart: max(0, current - (model.position - model.startTime)),
             windowEnd:   min(total, current + (model.endTime - model.position))
         )
@@ -332,7 +381,10 @@ struct ImmersivePlayer: View {
     /// normalement, au-delà on passe la main à l'enregistrement.
     private func seekBroadcast(to target: Double, span: BroadcastSpan) {
         if target >= span.windowStart && target <= span.windowEnd {
-            model.seek(to: model.position + (target - span.current))
+            // `span.playhead`, pas `model.position` : le repère est celui de la
+            // prise du curseur. La lecture a continué pendant le glissement, et
+            // s'appuyer sur la position courante décalait l'arrivée d'autant.
+            model.seek(to: span.playhead + (target - span.current))
         } else {
             logger.info("LECTEUR", "Rembobinage hors fenêtre DVR",
                         String(format: "→ %.0f s depuis le début", target))
@@ -345,6 +397,13 @@ struct ImmersivePlayer: View {
             PlayerLayerView(player: model.player, fill: fillScreen) { layer in
                 model.attachPiP(layer: layer)
             }
+            // « Remplir l'écran » ne peut pas se contenter de changer le
+            // cadrage : en paysage, la bande noire qui restait visible était
+            // celle de l'encoche, hors zone sûre, et recadrer à l'intérieur de
+            // cette zone ne la touchait pas — d'où un réglage sans effet
+            // apparent. L'image seule déborde donc ; les commandes, elles,
+            // restent dans la zone sûre pour rester atteignables.
+            .ignoresSafeArea(fillScreen ? SafeAreaRegions.all : [])
 
             // Zones de double-tap ±10 s (VOD et direct rembobinable).
             if canScrub {
@@ -372,10 +431,16 @@ struct ImmersivePlayer: View {
         // garde ses proportions quelle que soit la boîte.
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.black)
-        .clipped()
+        // Pas de `clipped()` : il rognerait précisément le débordement que
+        // « remplir l'écran » vient de demander. AVPlayerLayer borne déjà son
+        // image à ses propres limites, y compris en `resizeAspectFill`.
         .contentShape(Rectangle())
         .onTapGesture { toggleControls() }
-        .onChange(of: url) { model.load(url: $0) }
+        // Changement de source (direct ↔ enregistrement) : la position voulue
+        // et la nature du flux doivent suivre. Sans elles, basculer sur
+        // l'enregistrement rouvrait la VOD à 0:00 — il fallait re-balayer la
+        // barre — et le modèle continuait de se croire en direct.
+        .onChange(of: url) { model.load(url: $0, seek: savedTime, isLive: isLive) }
         .onAppear {
             model.lowLatency = store.lowLatency && isLive
             scheduleAutoHide()
@@ -474,9 +539,12 @@ struct ImmersivePlayer: View {
         VStack(spacing: TSpace.xs) {
 
             // Barre de progression : VOD, ou direct avec DVR.
-            if let span = broadcastSpan {
+            if let live = broadcastSpan {
                 // Direct dont l'enregistrement existe : la barre couvre toute
                 // la diffusion, pas seulement la fenêtre rembobinable du flux.
+                // Pendant le glissement on lit le repère gelé, pas celui qui
+                // avance avec la diffusion.
+                let span = dragging ? (dragSpan ?? live) : live
                 Slider(
                     value: Binding(
                         get: { dragging ? dragValue : span.current },
@@ -484,9 +552,18 @@ struct ImmersivePlayer: View {
                     ),
                     in: 0...max(span.total, 1),
                     onEditingChanged: { editing in
-                        dragging = editing
-                        if editing { dragValue = span.current; hideTask?.cancel() }
-                        else { seekBroadcast(to: dragValue, span: span); scheduleAutoHide() }
+                        if editing {
+                            dragSpan  = live
+                            dragValue = live.current
+                            dragging  = true
+                            hideTask?.cancel()
+                        } else {
+                            let frozen = dragSpan ?? live
+                            dragging = false
+                            dragSpan = nil
+                            seekBroadcast(to: dragValue, span: frozen)
+                            scheduleAutoHide()
+                        }
                     }
                 )
                 .tint(.tPrimary)
@@ -507,19 +584,41 @@ struct ImmersivePlayer: View {
                 }
 
             } else if canScrub, model.endTime > model.startTime {
+                // Même gel des bornes : sur un direct sans enregistrement, la
+                // fenêtre rembobinable glisse en permanence vers l'avant.
+                let window: ClosedRange<Double> =
+                    model.startTime...max(model.endTime, model.startTime + 1)
+                let bounds = dragging ? (dragBounds ?? window) : window
                 Slider(
                     value: Binding(
                         get: { dragging ? dragValue : model.position },
                         set: { dragValue = $0 }
                     ),
-                    in: model.startTime...max(model.endTime, model.startTime + 1),
+                    in: bounds,
                     onEditingChanged: { editing in
-                        dragging = editing
-                        if editing { dragValue = model.position; hideTask?.cancel() }
-                        else { model.seek(to: dragValue); scheduleAutoHide() }
+                        if editing {
+                            dragBounds = window
+                            dragValue  = model.position
+                            dragging   = true
+                            hideTask?.cancel()
+                        } else {
+                            dragging   = false
+                            dragBounds = nil
+                            model.seek(to: dragValue)
+                            scheduleAutoHide()
+                        }
                     }
                 )
                 .tint(.tPrimary)
+
+            } else if canScrub {
+                // Bornes encore inconnues — le temps qu'une nouvelle source se
+                // charge. On garde la place de la barre : la faire disparaître
+                // puis revenir faisait sauter la rangée de boutons dessous.
+                Capsule()
+                    .fill(Color.white.opacity(0.18))
+                    .frame(height: 3)
+                    .frame(height: 28)
             }
 
             HStack(spacing: TSpace.md) {

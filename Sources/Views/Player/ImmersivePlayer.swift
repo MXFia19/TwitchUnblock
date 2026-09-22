@@ -346,6 +346,11 @@ struct ImmersivePlayer: View {
     /// Un direct sans DVR n'est pas rembobinable : la barre reste décorative.
     private var canScrub: Bool { !isLive || dvrEnabled }
 
+    /// Le recadrage est réservé au paysage. En portrait la boîte fait déjà
+    /// 16:9, comme l'image : il n'y a rien à remplir, et agrandir ne faisait
+    /// que couper les côtés.
+    private var croppingFill: Bool { fillScreen && isLandscape }
+
     /// Repères de la barre « toute la diffusion », en secondes depuis le début.
     /// Tout est exprimé par rapport à l'horloge réelle : la base de temps HLS
     /// d'un direct ne commence pas au début de la diffusion, et celle de
@@ -394,16 +399,18 @@ struct ImmersivePlayer: View {
 
     var body: some View {
         ZStack {
-            PlayerLayerView(player: model.player, fill: fillScreen) { layer in
+            PlayerLayerView(player: model.player, fill: croppingFill) { layer in
                 model.attachPiP(layer: layer)
             }
-            // « Remplir l'écran » ne peut pas se contenter de changer le
-            // cadrage : en paysage, la bande noire qui restait visible était
-            // celle de l'encoche, hors zone sûre, et recadrer à l'intérieur de
-            // cette zone ne la touchait pas — d'où un réglage sans effet
-            // apparent. L'image seule déborde donc ; les commandes, elles,
-            // restent dans la zone sûre pour rester atteignables.
-            .ignoresSafeArea(fillScreen ? SafeAreaRegions.all : [])
+            // En paysage la surface va toujours jusqu'aux bords physiques,
+            // encoche comprise : sans ça une bande noire restait collée à
+            // l'encoche et l'image n'était pas centrée sur l'écran réel. Le
+            // cadrage, lui, ne change pas — l'image entière tient la hauteur et
+            // laisse des bandes égales sur les côtés.
+            //
+            // En portrait, jamais : la boîte est déjà en 16:9, déborder ne
+            // faisait que la rendre plus haute que large et rogner les côtés.
+            .ignoresSafeArea(isLandscape ? SafeAreaRegions.all : [])
 
             // Zones de double-tap ±10 s (VOD et direct rembobinable).
             if canScrub {

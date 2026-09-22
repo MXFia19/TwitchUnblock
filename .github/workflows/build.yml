@@ -129,8 +129,24 @@ jobs:
             exit 1
           fi
           
+          # La source Feather ne vit que sur master : un build lancé à la main
+          # depuis une autre branche ne doit pas essayer d'y pousser. Le run 173
+          # avait tout réussi — IPA construit, release publiée — et n'a échoué
+          # que sur ce push rejeté, ce qui laissait croire à une compilation
+          # cassée alors que le Swift compilait.
+          if [ "${{ github.ref }}" != "refs/heads/master" ]; then
+            echo "Branche ${{ github.ref_name }} : apps.json laissé tel quel."
+            exit 0
+          fi
+
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add apps.json
-          git diff --cached --quiet || \
-            (git commit -m "chore: bump version to ${{ steps.vars.outputs.version }} [skip ci]" && git push origin HEAD:master)
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: bump version to ${{ steps.vars.outputs.version }} [skip ci]"
+            # Le push peut être rejeté si master a bougé pendant le build :
+            # on rejoue par-dessus au lieu d'échouer sur une course bénigne.
+            git push origin HEAD:master || {
+              git pull --rebase origin master && git push origin HEAD:master
+            }
+          fi

@@ -169,7 +169,9 @@ Support your favourite creators whenever you can.
 
 ## 📜 License
 
-MIT.
+MIT — see [`LICENSE`](LICENSE). Do what you want with the code, keep the
+copyright notice, and don't hold anyone liable.
 
-> No `LICENSE` file is committed yet — the terms above aren't enforceable
-> without one. Drop a standard MIT text at the repository root to fix that.
+This covers the code in this repository, and nothing else: Twitch's
+trademarks, its API terms of service and the content on it are not ours to
+license.

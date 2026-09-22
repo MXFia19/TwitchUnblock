@@ -1,14 +1,17 @@
 # 🟣 TwitchUnblock
 
 **TwitchUnblock** is an open-source Twitch client that lets you watch VODs and
-live streams without a subscription, with full quality access through your own
-proxy server. Native iOS app built with SwiftUI, plus a browser version.
+live streams without a subscription, at full quality. Native iOS app built with
+SwiftUI, plus a browser version.
+
+**Install it and it works.** There is nothing to configure, no server to set up,
+no key to paste. The backend is already hosted and shared by every install.
 
 | | |
 |---|---|
 | **iOS** | SwiftUI, iOS 16+, sideloaded |
 | **Web** | React + TypeScript — see [`web/`](web/) |
-| **Backend** | Your own Cloudflare Worker |
+| **Setup needed** | None — sign in with Twitch and watch |
 
 ---
 
@@ -76,7 +79,7 @@ proxy server. Native iOS app built with SwiftUI, plus a browser version.
 * 🎮 **Categories** — browse by game, then the live channels in it.
 * 🔍 **Search** — by streamer name, channel link, or VOD ID.
 * 🕒 **History** — recently watched VODs and channels, each removable.
-* 🔄 **Cloud sync** — watch progress and history saved to your own Worker, so
+* 🔄 **Cloud sync** — watch progress and history follow your Twitch account, so
   you pick up where you left off on another device.
 
 ### The rest
@@ -130,8 +133,8 @@ npm run dev
 
 Channel points, polls and predictions are **not** in the web version and cannot
 be: they need the `twitch.tv` session cookie, which no third-party site can
-read. [`web/README.md`](web/README.md) covers hosting (no domain needed) and the
-one header to add to the Worker.
+read. [`web/README.md`](web/README.md) covers hosting your own copy, if you want
+one.
 
 ---
 
@@ -152,10 +155,15 @@ The Xcode project is generated from `project.yml` with
 [XcodeGen](https://github.com/yonaskolb/XcodeGen): run `xcodegen` after adding
 files. GitHub Actions builds and publishes nightly IPAs from `master`.
 
-### Worker
+### Backend
 
-The app talks to your own Cloudflare Worker for playlist resolution, cloud sync
-and the usage count. Setup notes are in [`worker/`](worker/).
+Playlist resolution, cloud sync and the usage count go through a Cloudflare
+Worker that this project hosts. Nothing to do if you are just building the app —
+it points at the shared instance out of the box.
+
+If you **fork** the project and want your own backend, the Worker code and
+deployment notes are in [`worker/`](worker/); change `kAPIURL` in
+[`Sources/Constants.swift`](Sources/Constants.swift) to point at it.
 
 ---
 

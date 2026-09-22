@@ -54,6 +54,12 @@ struct MainTabView: View {
     @State private var chatDragRatio: Double? = nil
     /// Fermeture du lecteur en cours : le contenu survit le temps du fondu.
     @State private var closingPlayer = false
+    /// Bascule entre le direct et son enregistrement, sur la même chaîne.
+    /// On garde l'image à l'écran et on n'échange les liens qu'une fois les
+    /// nouveaux prêts : vider `qualityLinks` faisait repasser par l'écran noir
+    /// « Chargement de la VOD », alors qu'on ne change ni de chaîne ni de
+    /// contexte — juste de source.
+    @State private var switchingSource = false
 
     /// Décalage à appliquer au chat : la latence mesurée, si la synchro est active.
     private var chatDelay: Double {
@@ -212,6 +218,25 @@ struct MainTabView: View {
                     playerBody(links: links, size: geo.size, landscape: landscape)
                 }
             }
+            // Bascule direct ↔ enregistrement : une pastille discrète en haut,
+            // pas un écran d'attente. L'image précédente continue de jouer
+            // dessous jusqu'à ce que la nouvelle source soit prête.
+            .overlay(alignment: .top) {
+                if switchingSource {
+                    HStack(spacing: TSpace.sm) {
+                        ProgressView().tint(.white).scaleEffect(0.7)
+                        Text(store.t("switching_source"))
+                            .font(.tLabel).foregroundColor(.white)
+                    }
+                    .padding(.horizontal, TSpace.md)
+                    .frame(height: 34)
+                    .background(Color.black.opacity(0.65))
+                    .clipShape(Capsule())
+                    .padding(.top, TSpace.lg)
+                    .transition(.opacity)
+                }
+            }
+            .animation(.easeInOut(duration: 0.2), value: switchingSource)
         }
     }
 
@@ -418,7 +443,7 @@ struct MainTabView: View {
                     guard let ch = currentChannelName, let dvr = liveDvrVideoId else { return }
                     store.setVodProgress(dvr, time: offset)
                     pendingDvrChannel = ch
-                    playVod(dvr, statusTitle, nil, ch)
+                    playVod(dvr, statusTitle, nil, ch, soft: true)
                 }
             )
         } else {
@@ -530,17 +555,18 @@ struct MainTabView: View {
 
     // MARK: – Actions du lecteur (nil ⇒ bouton masqué)
     /// Rembobiner un live : lit le VOD en cours d'enregistrement.
+    /// Bascule douce : même chaîne, seule la source change.
     private var rewindAction: (() -> Void)? {
         guard let ch = currentChannelName, let dvr = liveDvrVideoId else { return nil }
         return {
             pendingDvrChannel = ch
-            playVod(dvr, statusTitle, nil, ch)
+            playVod(dvr, statusTitle, nil, ch, soft: true)
         }
     }
 
     private var backToLiveAction: (() -> Void)? {
         guard let ch = dvrSourceChannel else { return nil }
-        return { playLive(ch) }
+        return { playLive(ch, soft: true) }
     }
 
     /// Identifiant de la VOD en cours de lecture (nil en live).
@@ -586,7 +612,8 @@ struct MainTabView: View {
 
     // MARK: – Playback
     private func playVod(_ id: String, _ title: String? = nil,
-                         _ thumb: String? = nil, _ streamer: String? = nil) {
+                         _ thumb: String? = nil, _ streamer: String? = nil,
+                         soft: Bool = false) {
         // Historique des VODs vues : centralisé ici pour couvrir TOUS les points
         // d'entrée (Découverte, Streamer, Lien/ID, rembobinage…). Avant, seul
         // l'onglet Lien/ID enregistrait, donc l'onglet VODs restait vide.
@@ -596,13 +623,16 @@ struct MainTabView: View {
             thumb: thumb, streamer: streamer,
             addedAt: Date().timeIntervalSince1970 * 1000
         ))
-        startPlayback(.vod(id: id, title: title, thumb: thumb, streamer: streamer))
+        startPlayback(.vod(id: id, title: title, thumb: thumb, streamer: streamer), soft: soft)
     }
-    private func playLive(_ channel: String) {
-        startPlayback(.live(channelName: channel))
+    private func playLive(_ channel: String, soft: Bool = false) {
+        startPlayback(.live(channelName: channel), soft: soft)
     }
 
-    private func startPlayback(_ mode: PlayerMode) {
+    /// `soft` : on reste sur la même chaîne (direct ↔ enregistrement). Le
+    /// lecteur en place continue de jouer pendant que la nouvelle source se
+    /// résout, au lieu d'être démonté et remplacé par un écran d'attente.
+    private func startPlayback(_ mode: PlayerMode, soft: Bool = false) {
         // Referme le clavier s'il était ouvert (recherche en cours) : sinon il
         // restait affiché par-dessus le lecteur.
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder),
@@ -612,16 +642,24 @@ struct MainTabView: View {
         UIApplication.shared.isIdleTimerDisabled = true
         playerMode    = mode
         playerVisible = true
-        loading       = true
         errorMsg      = nil
-        qualityLinks  = nil
         chatOnly      = false
         vodPlaybackTime = 0
         liveDvrVideoId  = nil
         liveLatency     = 0
-        liveAvatar      = nil
-        liveGame        = ""
-        immersiveQuality = ""
+
+        if soft {
+            switchingSource = true
+        } else {
+            loading          = true
+            qualityLinks     = nil
+            // Avatar, jeu et qualité retenue ne sont vidés qu'à l'ouverture
+            // d'une autre chaîne : en bascule, ils sont toujours les bons, et
+            // les effacer ne ferait que les faire clignoter.
+            liveAvatar       = nil
+            liveGame         = ""
+            immersiveQuality = ""
+        }
         // Un VOD lancé depuis le bouton Rembobiner garde le lien vers sa chaîne,
         // pour pouvoir revenir au direct. Un VOD normal, non.
         if case .live = mode { dvrSourceChannel = nil }
@@ -651,19 +689,24 @@ struct MainTabView: View {
                 }
                 let data = await getM3U8(vodId: id)
                 if let err = data.error, data.links.isEmpty {
-                    await MainActor.run { errorMsg = err; loading = false }
+                    await MainActor.run {
+                        errorMsg = err; loading = false; switchingSource = false
+                    }
                 } else {
                     await MainActor.run {
-                        qualityLinks = data.links
-                        statusTitle  = title ?? "VOD \(id)"
-                        loading      = false
+                        qualityLinks    = data.links
+                        statusTitle     = title ?? "VOD \(id)"
+                        loading         = false
+                        switchingSource = false
                     }
                 }
 
             case .live(let channel):
                 let data = await getLive(channelName: channel)
                 if let err = data.error, err != "offline" {
-                    await MainActor.run { errorMsg = err; loading = false }
+                    await MainActor.run {
+                        errorMsg = err; loading = false; switchingSource = false
+                    }
                 } else if let links = data.links, !links.isEmpty {
                     await MainActor.run {
                         qualityLinks      = links
@@ -675,6 +718,7 @@ struct MainTabView: View {
                         liveGame          = data.game
                         liveDvrVideoId    = data.dvrVideoId
                         loading           = false
+                        switchingSource   = false
                         startLiveTimers(channel: channel)
                     }
                     // GQL ne rend pas toujours `profileImageURL` : repli Helix,
@@ -685,7 +729,10 @@ struct MainTabView: View {
                         await MainActor.run { liveAvatar = fallback }
                     }
                 } else {
-                    await MainActor.run { errorMsg = store.t("offline_msg"); loading = false }
+                    await MainActor.run {
+                        errorMsg = store.t("offline_msg")
+                        loading = false; switchingSource = false
+                    }
                 }
             }
         }

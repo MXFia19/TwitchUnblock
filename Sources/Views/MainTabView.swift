@@ -124,9 +124,14 @@ struct MainTabView: View {
 
                 Group {
                     switch activeTab {
-                    case .home:    HomeView(onPlayStream: playLive)
-                    case .search:  SearchView(onPlayVod: playVod, onPlayLive: playLive)
-                    case .library: LibraryView(onPlayVod: playVod)
+                    // Les fermetures sont explicites : Swift n'applique pas les
+                    // valeurs par défaut (`soft:`) quand une méthode est passée
+                    // comme valeur, donc `playLive` vaudrait ici
+                    // `(String, Bool) -> Void` et ne collerait pas au callback.
+                    case .home:    HomeView(onPlayStream: { playLive($0) })
+                    case .search:  SearchView(onPlayVod: { playVod($0, $1, $2, $3) },
+                                              onPlayLive: { playLive($0) })
+                    case .library: LibraryView(onPlayVod: { playVod($0, $1, $2, $3) })
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)

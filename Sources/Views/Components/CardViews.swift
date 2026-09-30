@@ -179,6 +179,23 @@ struct CategoryCardView: View {
                             .font(.system(size: 20)).foregroundColor(.tMuted.opacity(0.5)))
                 }
                 .clipped()
+                // Pastille en surimpression plutôt qu'un ZStack : la jaquette
+                // reste seule à décider de la taille de la carte. Même forme et
+                // même place que sur les cartes de direct.
+                //
+                // Rien tant que l'audience n'est pas revenue : elle arrive
+                // après la grille, par une requête séparée.
+                .overlay(alignment: .bottomTrailing) {
+                    if let viewers = category.viewers {
+                        TMeta(icon: "eye.fill", text: formatViewers(viewers), tint: .white)
+                            .padding(.horizontal, 6).padding(.vertical, 3)
+                            .background(Color.black.opacity(0.65))
+                            .cornerRadius(4)
+                            .padding(TSpace.sm)
+                            .transition(.opacity)
+                    }
+                }
+                .animation(.easeOut(duration: 0.2), value: category.viewers)
 
                 Text(category.name)
                     .font(.tCardTitle)

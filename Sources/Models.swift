@@ -53,6 +53,9 @@ struct TwitchCategory: Identifiable, Hashable {
     let name: String
     /// URL de la jaquette, avec les gabarits {width}/{height} déjà remplacés.
     let boxArtURL: String
+    /// Audience totale de la catégorie. Absente à la première réponse : Helix
+    /// ne la donne pas, elle est complétée par une requête GQL séparée.
+    var viewers: Int? = nil
 }
 
 struct TwitchUser {

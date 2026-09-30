@@ -546,10 +546,50 @@ func getStreamsByCategory(token: String, gameId: String, cursor: String? = nil) 
     return (arr.map { streamFromDict($0) }, arr.isEmpty ? nil : next)
 }
 
+/// Audience par catégorie, en une requête pour toute une page.
+///
+/// Helix ne la donne pas : `games/top` renvoie un classement, pas de chiffres.
+/// GQL, lui, expose `viewersCount` par identifiant. Les champs sont aliasés
+/// pour tenir dans un seul aller-retour — cent alias passent sans broncher —
+/// et la requête ne demande aucun jeton d'intégrité, contrairement à
+/// `channel { chatters }`.
+///
+/// Un échec n'est pas une erreur ici : la carte affiche simplement la
+/// catégorie sans son audience.
+func categoryViewers(ids: [String]) async -> [String: Int] {
+    guard !ids.isEmpty else { return [:] }
+    var out: [String: Int] = [:]
+
+    for start in stride(from: 0, to: ids.count, by: 100) {
+        let chunk = Array(ids[start ..< min(start + 100, ids.count)])
+        let fields = chunk.enumerated()
+            .map { "g\($0.offset): game(id: \"\($0.element)\") { id viewersCount }" }
+            .joined(separator: " ")
+
+        guard let json = try? await twitchGQL("query { \(fields) }") as? [String: Any],
+              let data = json["data"] as? [String: Any] else { continue }
+
+        for (_, value) in data {
+            guard let game = value as? [String: Any],
+                  let id    = game["id"] as? String,
+                  let count = game["viewersCount"] as? Int else { continue }
+            out[id] = count
+        }
+    }
+
+    logger.success("GQL", "\(out.count) audiences de catégories sur \(ids.count)")
+    return out
+}
+
 private func categoryFromDict(_ d: [String: Any]) -> TwitchCategory {
+    // 570×760, soit le double de la taille de référence de Twitch. La grille
+    // fait deux colonnes : une jaquette y occupe environ 170 pt, donc plus de
+    // 500 px sur un écran ×3. À 144×192 l'image était agrandie quatre fois et
+    // sortait floue. Le CDN sert la taille demandée telle quelle, sans
+    // agrandissement de son côté.
     let raw = (d["box_art_url"] as? String ?? "")
-        .replacingOccurrences(of: "{width}",  with: "144")
-        .replacingOccurrences(of: "{height}", with: "192")
+        .replacingOccurrences(of: "{width}",  with: "570")
+        .replacingOccurrences(of: "{height}", with: "760")
     return TwitchCategory(
         id:   d["id"]   as? String ?? UUID().uuidString,
         name: d["name"] as? String ?? "",

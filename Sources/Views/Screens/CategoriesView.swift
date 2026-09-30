@@ -125,6 +125,20 @@ struct CategoriesView: View {
             errorMsg = store.t("err_loading")
         }
         loading = false
+        await loadViewers()
+    }
+
+    /// Complète les cartes avec l'audience de chaque catégorie. Séparé du
+    /// chargement : Helix ne la donne pas, et la grille ne doit pas attendre
+    /// une seconde requête pour s'afficher.
+    @MainActor private func loadViewers() async {
+        let missing = categories.filter { $0.viewers == nil }.map(\.id)
+        guard !missing.isEmpty else { return }
+        let counts = await categoryViewers(ids: missing)
+        guard !counts.isEmpty else { return }
+        for i in categories.indices where categories[i].viewers == nil {
+            categories[i].viewers = counts[categories[i].id]
+        }
     }
 
     @MainActor private func loadMore() async {
@@ -136,6 +150,7 @@ struct CategoriesView: View {
         let known = Set(categories.map(\.id))
         categories += page.categories.filter { !known.contains($0.id) }
         cursor = page.cursor
+        await loadViewers()
     }
 
     /// Recherche différée de 350 ms : évite un appel par frappe.
@@ -156,6 +171,10 @@ struct CategoriesView: View {
                 cursor     = nil
                 errorMsg   = nil
             }
+            // La recherche passe par Helix elle aussi : mêmes cartes, donc
+            // même complément d'audience.
+            guard !Task.isCancelled else { return }
+            await loadViewers()
         }
     }
 }

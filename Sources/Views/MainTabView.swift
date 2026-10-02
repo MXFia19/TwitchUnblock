@@ -65,6 +65,9 @@ struct MainTabView: View {
     /// déjà fermé) est ignorée au lieu d'écraser l'état ou de relancer les
     /// minuteries du direct sans lecteur.
     @State private var loadGeneration = 0
+    /// Clip en cours : VOD d'origine et position, pour en rejouer le chat.
+    @State private var clipVodId: String? = nil
+    @State private var clipOffset: Double = 0
 
     /// Décalage à appliquer au chat : la latence mesurée, si la synchro est active.
     private var chatDelay: Double {
@@ -135,7 +138,8 @@ struct MainTabView: View {
                     // `(String, Bool) -> Void` et ne collerait pas au callback.
                     case .home:    HomeView(onPlayStream: { playLive($0) })
                     case .search:  SearchView(onPlayVod: { playVod($0, $1, $2, $3) },
-                                              onPlayLive: { playLive($0) })
+                                              onPlayLive: { playLive($0) },
+                                              onPlayClip: { playClip($0, $1) })
                     case .library: LibraryView(onPlayVod: { playVod($0, $1, $2, $3) })
                     }
                 }
@@ -410,6 +414,12 @@ struct MainTabView: View {
                 .id(vid)
                 .frame(maxHeight: .infinity)
 
+        } else if let cv = clipVodId {
+            // Clip : le chat de la VOD d'origine, à l'instant du clip.
+            VodChatView(videoId: cv, playbackTime: clipOffset + vodPlaybackTime, style: style)
+                .id("clip-\(cv)-\(Int(clipOffset))")
+                .frame(maxHeight: .infinity)
+
         } else {
             Spacer()
         }
@@ -642,6 +652,9 @@ struct MainTabView: View {
         ))
         startPlayback(.vod(id: id, title: title, thumb: thumb, streamer: streamer), soft: soft)
     }
+    private func playClip(_ slug: String, _ title: String?) {
+        startPlayback(.clip(slug: slug, title: title))
+    }
     private func playLive(_ channel: String, soft: Bool = false) {
         startPlayback(.live(channelName: channel), soft: soft)
     }
@@ -693,8 +706,29 @@ struct MainTabView: View {
 
         loadGeneration += 1
         let gen = loadGeneration
+        clipVodId = nil; clipOffset = 0
         Task {
             switch mode {
+            case .clip(let slug, let title):
+                let clip = await getClip(slug: slug)
+                await MainActor.run {
+                    guard gen == loadGeneration else { return }
+                    guard let clip else {
+                        errorMsg = store.t("err_clip"); loading = false; switchingSource = false
+                        return
+                    }
+                    qualityLinks    = clip.links
+                    statusTitle     = clip.title.isEmpty ? (title ?? "Clip") : clip.title
+                    clipVodId       = clip.vodId
+                    clipOffset      = clip.vodOffset ?? 0
+                    loading         = false
+                    switchingSource = false
+                }
+                if let who = clip?.broadcasterLogin {
+                    let avatar = await channelAvatar(login: who, token: store.twitchToken)
+                    await MainActor.run { if gen == loadGeneration { liveAvatar = avatar } }
+                }
+
             case .vod(let id, let title, _, let streamer):
                 // Le bandeau du lecteur montrait un rond gris sur les VODs :
                 // `getM3U8` ne ramène aucune photo de profil. On la demande à
@@ -791,6 +825,7 @@ struct MainTabView: View {
             liveUptimeText     = ""
             liveLatency        = 0
             liveAvatar         = nil
+            clipVodId          = nil
             liveGame           = ""
             playerMode         = nil
             qualityLinks       = nil

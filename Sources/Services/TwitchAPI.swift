@@ -764,3 +764,75 @@ func gqlStr(_ s: String) -> String {
     }
     return out
 }
+
+// MARK: – Clips
+/// Requête GQL avec variables (les valeurs ne sont jamais collées dans le texte).
+private func gqlRequest(_ query: String, _ variables: [String: Any]) async -> [String: Any]? {
+    guard let url = URL(string: "https://gql.twitch.tv/gql"),
+          let body = try? JSONSerialization.data(withJSONObject: ["query": query, "variables": variables]) else { return nil }
+    var req = URLRequest(url: url)
+    req.httpMethod = "POST"
+    req.setValue(kGQLClientID, forHTTPHeaderField: "Client-ID")
+    req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    req.httpBody = body
+    guard let (data, _) = try? await URLSession.shared.data(for: req),
+          let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+    return json["data"] as? [String: Any]
+}
+
+/// Clips les plus vus d'une chaîne sur la période (LAST_DAY, LAST_WEEK, LAST_MONTH, ALL_TIME).
+func getClips(login: String, period: String) async -> [ClipData] {
+    let q = """
+    query($l: String!, $p: ClipsPeriod) { user(login: $l) { clips(first: 30, criteria: { period: $p, sort: VIEWS_DESC }) {
+      edges { node { slug title viewCount durationSeconds createdAt thumbnailURL(width: 480, height: 272) curator { displayName } } }
+    } } }
+    """
+    guard let d = await gqlRequest(q, ["l": login.lowercased(), "p": period]),
+          let user = d["user"] as? [String: Any],
+          let clips = user["clips"] as? [String: Any],
+          let edges = clips["edges"] as? [[String: Any]] else { return [] }
+    return edges.compactMap { e in
+        guard let n = e["node"] as? [String: Any], let slug = n["slug"] as? String else { return nil }
+        return ClipData(id: slug,
+                        title: n["title"] as? String ?? "",
+                        thumbnailURL: n["thumbnailURL"] as? String ?? "",
+                        viewCount: n["viewCount"] as? Int ?? 0,
+                        durationSeconds: n["durationSeconds"] as? Int ?? 0,
+                        createdAt: n["createdAt"] as? String ?? "",
+                        curator: (n["curator"] as? [String: Any])?["displayName"] as? String)
+    }
+}
+
+/// MP4 signés d'un clip (lus directement par AVPlayer) et sa VOD d'origine.
+func getClip(slug: String) async -> ClipPlayback? {
+    let q = """
+    query($s: ID!) { clip(slug: $s) {
+      title broadcaster { login displayName } video { id } videoOffsetSeconds
+      playbackAccessToken(params: { platform: "web", playerType: "site", playerBackend: "mediaplayer" }) { signature value }
+      videoQualities { quality frameRate sourceURL }
+    } }
+    """
+    guard let d = await gqlRequest(q, ["s": slug]),
+          let c = d["clip"] as? [String: Any],
+          let tok = c["playbackAccessToken"] as? [String: Any],
+          let sig = tok["signature"] as? String, let value = tok["value"] as? String,
+          let qualities = c["videoQualities"] as? [[String: Any]] else { return nil }
+    var allowed = CharacterSet.urlQueryAllowed
+    allowed.remove(charactersIn: "&+=?#")
+    let token = value.addingPercentEncoding(withAllowedCharacters: allowed) ?? value
+    var links: QualityLinks = [:]
+    for qd in qualities {
+        guard let src = qd["sourceURL"] as? String, src.hasPrefix("https://") else { continue }
+        let fps = (qd["frameRate"] as? Double) ?? Double(qd["frameRate"] as? Int ?? 30)
+        let label = "\(qd["quality"] as? String ?? "?")p\(fps >= 50 ? String(Int(fps.rounded())) : "")"
+        links[label] = src + (src.contains("?") ? "&" : "?") + "sig=\(sig)&token=\(token)"
+    }
+    guard !links.isEmpty else { return nil }
+    let b = c["broadcaster"] as? [String: Any]
+    let vodId = (c["video"] as? [String: Any])?["id"] as? String
+    let offset = (c["videoOffsetSeconds"] as? Double) ?? (c["videoOffsetSeconds"] as? Int).map(Double.init)
+    return ClipPlayback(links: links, title: c["title"] as? String ?? "Clip",
+                        broadcasterLogin: b?["login"] as? String,
+                        broadcasterName: b?["displayName"] as? String,
+                        vodId: vodId, vodOffset: offset)
+}

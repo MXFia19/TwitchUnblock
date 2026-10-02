@@ -163,6 +163,65 @@ struct VodCardView: View {
     }
 }
 
+// MARK: – Carte de clip
+struct ClipCardView: View {
+    let clip: ClipData
+    let onPress: () -> Void
+
+    private var meta: String {
+        var parts: [String] = []
+        if let date = ISO8601DateFormatter().date(from: clip.createdAt) {
+            let df = DateFormatter(); df.dateStyle = .short; df.timeStyle = .none
+            parts.append(df.string(from: date))
+        }
+        if let c = clip.curator, !c.isEmpty { parts.append(c) }
+        return parts.joined(separator: " · ")
+    }
+
+    var body: some View {
+        Button(action: onPress) {
+            VStack(alignment: .leading, spacing: 0) {
+                ZStack {
+                    Thumbnail(url: clip.thumbnailURL)
+                    VStack {
+                        HStack {
+                            HStack(spacing: 3) {
+                                Image(systemName: "eye.fill").font(.system(size: 8))
+                                Text(formatViewers(clip.viewCount))
+                            }
+                            .font(.tBadge).foregroundColor(.white)
+                            .padding(.horizontal, 5).padding(.vertical, 2)
+                            .background(Color.black.opacity(0.65)).cornerRadius(4)
+                            Spacer()
+                        }
+                        Spacer()
+                        HStack {
+                            Spacer()
+                            Text(formatDuration(clip.durationSeconds))
+                                .font(.tBadge).foregroundColor(.white)
+                                .padding(.horizontal, 5).padding(.vertical, 2)
+                                .background(Color.black.opacity(0.65)).cornerRadius(4)
+                        }
+                    }
+                    .padding(TSpace.sm)
+                }
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(clip.title)
+                        .font(.tCardTitle).foregroundColor(.tText)
+                        .lineLimit(2).multilineTextAlignment(.leading)
+                    Text(meta).font(.tMeta).foregroundColor(.tMuted).lineLimit(1)
+                }
+                .frame(height: cardTextHeight, alignment: .top)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(TSpace.md)
+            }
+            .background(Color.tCard)
+            .cornerRadius(TRadius.card)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 // MARK: – Carte de catégorie
 struct CategoryCardView: View {
     let category: TwitchCategory

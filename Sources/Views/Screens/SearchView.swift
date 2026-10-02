@@ -13,6 +13,7 @@ import SwiftUI
 struct SearchView: View {
     let onPlayVod:  (String, String?, String?, String?) -> Void
     let onPlayLive: (String) -> Void
+    var onPlayClip: (String, String?) -> Void = { _, _ in }
 
     @EnvironmentObject private var store: AppStore
 
@@ -29,6 +30,13 @@ struct SearchView: View {
     @State private var vodCursor: String? = nil
     @State private var hasMoreVods  = false
     @State private var isLoadingMore = false
+
+    // Clips de la chaîne (onglet « Clips »)
+    @State private var showClips    = false
+    @State private var clips: [ClipData] = []
+    @State private var clipPeriod   = "LAST_WEEK"
+    @State private var clipsFor     = ""
+    @State private var loadingClips = false
 
     // Suggestions de chaînes pendant la frappe
     @State private var suggestions: [AutocompleteSuggestion] = []
@@ -267,44 +275,96 @@ struct SearchView: View {
             .padding(.horizontal, TSpace.lg)
         }
 
-        if !vods.isEmpty {
-            VStack(alignment: .leading, spacing: TSpace.md) {
-                TSectionHeader("\(vods.count) \(store.t("vods_found"))", icon: "film")
+        if liveData != nil {
+            TSegmented(items: [false, true], selection: $showClips) { $0 ? store.t("clips") : store.t("vods") }
+                .onChange(of: showClips) { on in if on { Task { await loadClips() } } }
+        }
 
-                // Filtre par mot-clé : n'apparaît que s'il y a de quoi filtrer.
-                TSearchField(text: $filterText, placeholder: store.t("ph_keyword"))
-                    .padding(.horizontal, TSpace.lg)
+        if showClips {
+            clipsSection
+        } else {
+            if !vods.isEmpty {
+                VStack(alignment: .leading, spacing: TSpace.md) {
+                    TSectionHeader("\(vods.count) \(store.t("vods_found"))", icon: "film")
 
-                if filteredVods.isEmpty {
-                    TEmptyState(icon: "line.3.horizontal.decrease.circle",
-                                title: store.t("no_result"))
-                } else {
-                    LazyVGrid(columns: columns, spacing: TSpace.md) {
-                        ForEach(filteredVods) { vod in
-                            let saved = store.getVodProgress(vod.id)
-                            let progress = vod.lengthSeconds > 0
-                                ? saved / Double(vod.lengthSeconds) : 0
-                            VodCardView(vod: vod, progress: progress) {
-                                onPlayVod(vod.id, vod.title, vod.previewThumbnailURL, channelName)
-                            }
-                            .onAppear {
-                                // Défilement infini : charge la suite quand la
-                                // dernière carte apparaît.
-                                guard vod.id == filteredVods.last?.id,
-                                      hasMoreVods, !isLoadingMore else { return }
-                                isLoadingMore = true
-                                Task { await loadMoreVods() }
+                    // Filtre par mot-clé : n'apparaît que s'il y a de quoi filtrer.
+                    TSearchField(text: $filterText, placeholder: store.t("ph_keyword"))
+                        .padding(.horizontal, TSpace.lg)
+
+                    if filteredVods.isEmpty {
+                        TEmptyState(icon: "line.3.horizontal.decrease.circle",
+                                    title: store.t("no_result"))
+                    } else {
+                        LazyVGrid(columns: columns, spacing: TSpace.md) {
+                            ForEach(filteredVods) { vod in
+                                let saved = store.getVodProgress(vod.id)
+                                let progress = vod.lengthSeconds > 0
+                                    ? saved / Double(vod.lengthSeconds) : 0
+                                VodCardView(vod: vod, progress: progress) {
+                                    onPlayVod(vod.id, vod.title, vod.previewThumbnailURL, channelName)
+                                }
+                                .onAppear {
+                                    // Défilement infini : charge la suite quand la
+                                    // dernière carte apparaît.
+                                    guard vod.id == filteredVods.last?.id,
+                                          hasMoreVods, !isLoadingMore else { return }
+                                    isLoadingMore = true
+                                    Task { await loadMoreVods() }
+                                }
                             }
                         }
-                    }
-                    .padding(.horizontal, TSpace.lg)
+                        .padding(.horizontal, TSpace.lg)
 
-                    if isLoadingMore { TLoader() }
+                        if isLoadingMore { TLoader() }
+                    }
                 }
+            } else if liveData != nil, errorMsg == nil {
+                TEmptyState(icon: "film", title: store.t("no_vod"))
             }
-        } else if liveData != nil, errorMsg == nil {
-            TEmptyState(icon: "film", title: store.t("no_vod"))
         }
+    }
+
+    // MARK: – Clips
+    @ViewBuilder private var clipsSection: some View {
+        VStack(alignment: .leading, spacing: TSpace.md) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach([("LAST_DAY", "period_day"), ("LAST_WEEK", "period_week"),
+                             ("LAST_MONTH", "period_month"), ("ALL_TIME", "period_all")], id: \.0) { p in
+                        TChip(title: store.t(p.1), isOn: clipPeriod == p.0) {
+                            clipPeriod = p.0
+                            Task { await loadClips() }
+                        }
+                    }
+                }
+                .padding(.horizontal, TSpace.lg)
+            }
+            if loadingClips {
+                TLoader()
+            } else if clips.isEmpty {
+                TEmptyState(icon: "scissors", title: store.t("no_clips"))
+            } else {
+                LazyVGrid(columns: columns, spacing: TSpace.md) {
+                    ForEach(clips) { clip in
+                        ClipCardView(clip: clip) { onPlayClip(clip.id, clip.title) }
+                    }
+                }
+                .padding(.horizontal, TSpace.lg)
+            }
+        }
+    }
+
+    @MainActor private func loadClips() async {
+        let login = searchedName.lowercased()
+        guard !login.isEmpty else { return }
+        let key = "\(login)|\(clipPeriod)"
+        if clipsFor == key, !clips.isEmpty { return }
+        loadingClips = true
+        let result = await getClips(login: login, period: clipPeriod)
+        guard key == "\(searchedName.lowercased())|\(clipPeriod)" else { return }
+        clips = result
+        clipsFor = key
+        loadingClips = false
     }
 
     // MARK: – Actions
@@ -341,6 +401,7 @@ struct SearchView: View {
 
         loading = true; errorMsg = nil; liveData = nil; vods = []
         filterText = ""; searchedName = login; suggestions = []
+        showClips = false; clips = []; clipsFor = ""
         vodCursor = nil; hasMoreVods = false; isLoadingMore = false
 
         async let liveTask   = getLive(channelName: login)

@@ -26,6 +26,27 @@ struct VodData: Identifiable {
     let lengthSeconds: Int
 }
 
+/// Clip d'une chaîne (liste de la page chaîne).
+struct ClipData: Identifiable {
+    let id: String            // slug
+    let title: String
+    let thumbnailURL: String
+    let viewCount: Int
+    let durationSeconds: Int
+    let createdAt: String
+    let curator: String?
+}
+
+/// Clip prêt à lire : MP4 signés par qualité, et la VOD d'origine (chat).
+struct ClipPlayback {
+    let links: QualityLinks
+    let title: String
+    let broadcasterLogin: String?
+    let broadcasterName: String?
+    let vodId: String?
+    let vodOffset: Double?
+}
+
 struct ChannelVideosData {
     let videos: [VodData]
     let avatar: String?
@@ -119,6 +140,7 @@ struct LossyDecodable<T: Decodable>: Decodable {
 enum PlayerMode {
     case vod(id: String, title: String?, thumb: String?, streamer: String?)
     case live(channelName: String)
+    case clip(slug: String, title: String?)
 }
 
 // MARK: – Log

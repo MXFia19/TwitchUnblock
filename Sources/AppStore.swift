@@ -206,6 +206,52 @@ final class AppStore: ObservableObject {
     // MARK: – VOD Progress
     @Published private(set) var vodProgress: [String: Double] = [:]
 
+    // MARK: – Filtres du chat
+    @Published var chatHideBots = false {
+        didSet { UserDefaults.standard.set(chatHideBots, forKey: "chat_hide_bots") }
+    }
+    @Published var chatHideCommands = false {
+        didSet { UserDefaults.standard.set(chatHideCommands, forKey: "chat_hide_commands") }
+    }
+    /// Mots masqués (minuscules) : les messages qui les contiennent disparaissent.
+    @Published var chatMutedWords: [String] = [] {
+        didSet { UserDefaults.standard.set(chatMutedWords, forKey: "chat_muted_words") }
+    }
+    /// Personnes masquées (logins en minuscules).
+    @Published var chatBlockedUsers: [String] = [] {
+        didSet { UserDefaults.standard.set(chatBlockedUsers, forKey: "chat_blocked_users") }
+    }
+
+    static let knownBots: Set<String> = ["nightbot", "streamelements", "moobot", "fossabot", "streamlabs",
+        "wizebot", "soundalerts", "sery_bot", "botisimo", "own3d", "kofistreambot",
+        "pokemoncommunitygame", "deepbot", "coebot", "phantombot", "creatisbot", "blerp"]
+
+    /// Vrai si le message doit être masqué (réglages de filtres).
+    func isChatFiltered(_ m: ChatMessage) -> Bool {
+        let login = m.userName.lowercased()
+        guard !login.isEmpty, m.userId != "system" else { return false }
+        if login == twitchLogin?.lowercased() { return false }
+        if chatBlockedUsers.contains(login) { return true }
+        if chatHideBots && Self.knownBots.contains(login) { return true }
+        guard chatHideCommands || !chatMutedWords.isEmpty else { return false }
+        let text = m.tokens.map { t -> String in
+            switch t {
+            case .text(let s), .link(let s): return s
+            case .mention(let s): return "@" + s
+            case .emote(let e): return e.name
+            }
+        }.joined(separator: " ")
+        if chatHideCommands && text.hasPrefix("!") { return true }
+        let low = text.lowercased()
+        return chatMutedWords.contains { low.contains($0) }
+    }
+
+    func toggleBlocked(_ login: String) {
+        let l = login.lowercased()
+        if let i = chatBlockedUsers.firstIndex(of: l) { chatBlockedUsers.remove(at: i) }
+        else { chatBlockedUsers = Array((chatBlockedUsers + [l]).suffix(500)) }
+    }
+
     /// Mots surlignés dans le chat (en plus des mentions), en minuscules.
     @Published var chatHighlightWords: [String] = [] {
         didSet { UserDefaults.standard.set(chatHighlightWords, forKey: "chat_highlight_words") }
@@ -215,6 +261,10 @@ final class AppStore: ObservableObject {
     init() {
         let ud = UserDefaults.standard
         chatHighlightWords = ud.stringArray(forKey: "chat_highlight_words") ?? []
+        chatHideBots       = ud.bool(forKey: "chat_hide_bots")
+        chatHideCommands   = ud.bool(forKey: "chat_hide_commands")
+        chatMutedWords     = ud.stringArray(forKey: "chat_muted_words") ?? []
+        chatBlockedUsers   = ud.stringArray(forKey: "chat_blocked_users") ?? []
         if let l = ud.string(forKey: "lang"), let parsed = Lang(rawValue: l) { lang = parsed }
         twitchToken = Keychain.loadToken("twitch_token")
         twitchUserId = ud.string(forKey: "twitch_user_id")

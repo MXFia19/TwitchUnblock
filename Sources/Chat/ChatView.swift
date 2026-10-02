@@ -213,7 +213,7 @@ struct ChatView: View {
                         ZStack(alignment: .bottomTrailing) {
                             ScrollView {
                                 LazyVStack(alignment: .leading, spacing: 0) {
-                                    ForEach(chat.messages.reversed()) { msg in
+                                    ForEach(chat.messages.reversed().filter { !store.isChatFiltered($0) }) { msg in
                                         ChatMessageRow(
                                             message: msg,
                                             availableWidth: geo.size.width,

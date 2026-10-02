@@ -4,6 +4,7 @@ struct SettingsView: View {
     @EnvironmentObject private var store: AppStore
     @State private var showLogs        = false
     @State private var highlightDraft  = ""
+    @State private var mutedDraft      = ""
     @State private var showLogoutAlert = false
     @State private var showClearAlert  = false
     @State private var showWebLogin    = false   // login web (points de chaîne)
@@ -424,6 +425,47 @@ struct SettingsView: View {
                 Divider().background(Color.tBorder)
                 toggleRow(store.t("cfg_deleted"), store.t("cfg_deleted_sub"),
                           $store.chatShowDeleted, log: "Messages supprimés")
+                Divider().background(Color.tBorder)
+                toggleRow(store.t("hide_bots"), store.t("hide_bots_sub"),
+                          $store.chatHideBots, log: "Masquer les bots")
+                Divider().background(Color.tBorder)
+                toggleRow(store.t("hide_commands"), store.t("hide_commands_sub"),
+                          $store.chatHideCommands, log: "Masquer les commandes")
+                Divider().background(Color.tBorder)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(store.t("muted_words"))
+                        .font(.system(size: 14, weight: .semibold)).foregroundColor(.tText)
+                    Text(store.t("muted_words_sub"))
+                        .font(.system(size: 12)).foregroundColor(.tMuted)
+                        .fixedSize(horizontal: false, vertical: true)
+                    TextField("spoiler", text: $mutedDraft)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .font(.system(size: 14))
+                        .padding(.horizontal, 10).padding(.vertical, 8)
+                        .background(Color.tSurface).cornerRadius(8)
+                        .onAppear { mutedDraft = store.chatMutedWords.joined(separator: ", ") }
+                        .onChange(of: mutedDraft) { _ in
+                            let w = Array(mutedDraft.split(separator: ",")
+                                .map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
+                                .filter { !$0.isEmpty }.prefix(50))
+                            if w != store.chatMutedWords { store.chatMutedWords = w }
+                        }
+                }
+                if !store.chatBlockedUsers.isEmpty {
+                    Divider().background(Color.tBorder)
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(store.t("hidden_users").replacingOccurrences(of: "{n}", with: "\(store.chatBlockedUsers.count)"))
+                                .font(.system(size: 14, weight: .semibold)).foregroundColor(.tText)
+                            Text(store.chatBlockedUsers.suffix(6).joined(separator: ", "))
+                                .font(.system(size: 12)).foregroundColor(.tMuted).lineLimit(1)
+                        }
+                        Spacer()
+                        Button(store.t("clear")) { store.chatBlockedUsers = [] }
+                            .font(.system(size: 13, weight: .bold)).foregroundColor(.tPrimary)
+                    }
+                }
                 Divider().background(Color.tBorder)
                 // Mots surlignés : en plus des mentions, séparés par des virgules.
                 VStack(alignment: .leading, spacing: 6) {

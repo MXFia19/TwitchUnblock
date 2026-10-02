@@ -112,6 +112,17 @@ struct MessageSheet: View {
                         Label(store.t("mention_user"), systemImage: "at")
                     }
                 }
+                // Masquer / réafficher cette personne dans le chat (local).
+                if !message.userName.isEmpty {
+                    let hidden = store.chatBlockedUsers.contains(message.userName.lowercased())
+                    Button(role: hidden ? nil : .destructive) {
+                        store.toggleBlocked(message.userName)
+                        dismiss()
+                    } label: {
+                        Label(store.t(hidden ? "unhide_user" : "hide_user"),
+                              systemImage: hidden ? "eye" : "eye.slash")
+                    }
+                }
             } label: {
                 Image(systemName: "ellipsis")
                     .font(.system(size: 17, weight: .bold))

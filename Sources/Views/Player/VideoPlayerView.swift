@@ -136,10 +136,14 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
             }
         }
 
+        /// Jeton de l'observateur à bloc : `removeObserver(self)` ne le retire
+        /// pas, il restait un observateur par lecteur ouvert.
+        private var stopObserver: NSObjectProtocol?
+
         override init() {
             super.init()
             // Coupe instantanément le son si on reçoit le signal "ForceStopVideo" depuis la croix
-            NotificationCenter.default.addObserver(forName: NSNotification.Name("ForceStopVideo"), object: nil, queue: .main) { [weak self] _ in
+            stopObserver = NotificationCenter.default.addObserver(forName: NSNotification.Name("ForceStopVideo"), object: nil, queue: .main) { [weak self] _ in
                 self?.playerVC?.player?.pause()
                 self?.playerVC?.player = nil
             }
@@ -167,7 +171,7 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
 
         deinit {
             if let obs = timeObserver { playerRef?.removeTimeObserver(obs) }
-            NotificationCenter.default.removeObserver(self)
+            if let stopObserver { NotificationCenter.default.removeObserver(stopObserver) }
         }
     }
 }

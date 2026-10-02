@@ -169,3 +169,20 @@ private struct TwitchWebLogin: UIViewRepresentable {
         }
     }
 }
+
+// MARK: – Fin de session web
+enum TwitchWebSession {
+    /// Efface les cookies et données twitch.tv de la WebView de connexion.
+    /// Sans ça, après une déconnexion, la connexion web suivante reprenait
+    /// en silence l'ancienne session (cookie `auth-token` toujours là).
+    @MainActor
+    static func clear() async {
+        let store = WKWebsiteDataStore.default()
+        let types = WKWebsiteDataStore.allWebsiteDataTypes()
+        let records = await store.dataRecords(ofTypes: types)
+        let twitch = records.filter { $0.displayName.lowercased().contains("twitch") }
+        guard !twitch.isEmpty else { return }
+        await store.removeData(ofTypes: types, for: twitch)
+        logger.info("AUTH/WEB", "Données twitch.tv effacées", "\(twitch.count) site(s)")
+    }
+}

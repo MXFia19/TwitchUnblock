@@ -276,6 +276,7 @@ final class AppStore: ObservableObject {
     func logout() {
         twitchToken    = nil
         twitchWebToken = nil
+        Task { await TwitchWebSession.clear() }
         twitchUserId   = nil
         twitchLogin    = nil   // ← nettoyage complet
         twitchAvatar   = nil

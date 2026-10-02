@@ -334,8 +334,13 @@ final class AppStore: ObservableObject {
 
     func pullFromCloud(userId: String) async {
         lastPullAt = Date()
-        guard let url = URL(string: "\(kAPIURL)/api/sync/get?userId=\(userId)"),
-              let (data, _) = try? await URLSession.shared.data(from: url),
+        // Le Worker exige le jeton Twitch du propriétaire de la sauvegarde.
+        guard let token = twitchToken,
+              let url = URL(string: "\(kAPIURL)/api/sync/get?userId=\(userId)") else { return }
+        var request = URLRequest(url: url)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        guard let (data, resp) = try? await URLSession.shared.data(for: request),
+              (resp as? HTTPURLResponse)?.statusCode == 200,
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
 
         var remote: [HistoryItem] = []
@@ -379,7 +384,7 @@ final class AppStore: ObservableObject {
     /// Envoie la sauvegarde si elle a changé. `force` ignore l'intervalle
     /// minimal — pour la fermeture d'une vidéo et le passage en arrière-plan.
     func flushToCloud(force: Bool = false) {
-        guard syncDirty, let userId = twitchUserId, !userId.isEmpty else { return }
+        guard syncDirty, let userId = twitchUserId, !userId.isEmpty, let token = twitchToken else { return }
         guard force || Date().timeIntervalSince(lastSyncAt) >= syncEvery else { return }
 
         // Seule la progression des VODs de l'historique part : le Worker garde
@@ -401,6 +406,7 @@ final class AppStore: ObservableObject {
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         req.httpBody = body
 
         // Laisse à l'envoi le temps de finir si l'app vient de passer en

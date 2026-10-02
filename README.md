@@ -38,6 +38,11 @@ no key to paste. The backend is already hosted and shared by every install.
   landscape. Cuts off the top and bottom: 16:9 in a phone screen can't do both.
 * 🌙 **Sleep timer** — presets or a custom duration, with the countdown shown
   right in the player.
+* 📡 **AirPlay** — send the stream to an Apple TV or a compatible TV.
+* 🧭 **VOD chapters** — game changes marked on the progress bar; tap the current
+  chapter to jump to another.
+* ✂️ **Clips** — a Clips tab on every channel (24 h, 7 days, 30 days, all time),
+  played with the original chat replayed.
 
 ### Chat
 
@@ -54,8 +59,14 @@ no key to paste. The backend is already hosted and shared by every install.
   permission was added).
 * 👤 **Tap a message** — opens the person: their avatar, everything they wrote
   in this session, reply, mention, copy.
-* 📌 **Pinned messages, polls, predictions, hype train** and **raids** — each
-  one can be switched off.
+* 📌 **Pinned messages** — compact banner with badges, emotes, who pinned it and
+  a countdown; collapse it to a chip.
+* 📊 **Polls, predictions, hype train** — vote, see the countdown, the results
+  and the winning outcome.
+* 🚀 **Raids** — follow the streamer to the raided channel automatically;
+  incoming raids shown with a link to the raider. Each of these can be switched off.
+* 🔦 **Highlights & filters** — messages mentioning you or containing your words
+  stand out; hide bots, `!commands`, muted words or someone in particular.
 * 🔥 **Watch streak** and a **follow / unfollow** button.
 * 🎁 **Channel points** — balance, rewards, and automatic bonus chest claiming.
 * ⏱ **Auto-sync chat delay** — offsets the chat by the measured stream latency
@@ -81,6 +92,8 @@ no key to paste. The backend is already hosted and shared by every install.
 * 🕒 **History** — recently watched VODs and channels, each removable.
 * 🔄 **Cloud sync** — watch progress and history follow your Twitch account, so
   you pick up where you left off on another device.
+* 🔔 **Live notifications** — be told when a followed channel goes live
+  (checked in the background, as often as iOS allows).
 
 ### The rest
 

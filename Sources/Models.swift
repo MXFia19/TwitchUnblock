@@ -93,6 +93,28 @@ struct HistoryItem: Codable, Identifiable {
     enum HistoryType: String, Codable { case vod, channel }
 }
 
+// Décodage tolérant : la sauvegarde est partagée avec le site, dont les
+// anciens éléments n'ont pas de date d'ajout. Exiger `addedAt` faisait
+// échouer le décodage de TOUTE la liste au premier élément venu du site.
+// Placé en extension pour garder l'initialiseur par membres.
+extension HistoryItem {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        term     = try c.decode(String.self, forKey: .term)
+        type     = try c.decode(HistoryType.self, forKey: .type)
+        display  = (try? c.decodeIfPresent(String.self, forKey: .display)) ?? term
+        thumb    = try? c.decodeIfPresent(String.self, forKey: .thumb)
+        streamer = try? c.decodeIfPresent(String.self, forKey: .streamer)
+        addedAt  = (try? c.decodeIfPresent(Double.self, forKey: .addedAt)) ?? 0
+    }
+}
+
+/// Élément de liste qui ne fait pas échouer toute la liste s'il est illisible.
+struct LossyDecodable<T: Decodable>: Decodable {
+    let value: T?
+    init(from decoder: Decoder) throws { value = try? T(from: decoder) }
+}
+
 // MARK: – Player Mode
 enum PlayerMode {
     case vod(id: String, title: String?, thumb: String?, streamer: String?)

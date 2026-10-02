@@ -13,10 +13,21 @@ struct TwitchUnblockApp: App {
                 .preferredColorScheme(.dark)
                 .task { await UsageService.shared.ping(enabled: store.shareUsage) }
                 .onChange(of: scenePhase) { phase in
-                    // Au retour en avant-plan : le service ne laisse passer
-                    // qu'un ping par heure, on compte des journées actives.
-                    guard phase == .active else { return }
-                    Task { await UsageService.shared.ping(enabled: store.shareUsage) }
+                    switch phase {
+                    case .background:
+                        // Dernier moment sûr pour sauvegarder : iOS peut
+                        // fermer l'app ensuite sans prévenir.
+                        store.flushToCloud(force: true)
+                    case .active:
+                        // Le service ne laisse passer qu'un ping par heure :
+                        // on compte des journées actives.
+                        Task { await UsageService.shared.ping(enabled: store.shareUsage) }
+                        // Ce qui a été regardé ailleurs entre-temps (site,
+                        // autre appareil) — au plus une lecture par 10 min.
+                        Task { await store.refreshFromCloudIfStale() }
+                    default:
+                        break
+                    }
                 }
         }
     }

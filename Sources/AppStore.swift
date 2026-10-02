@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import UIKit
 
 final class AppStore: ObservableObject {
 
@@ -16,7 +17,15 @@ final class AppStore: ObservableObject {
             else { UserDefaults.standard.removeObject(forKey: "twitch_token") }
         }
     }
-    @Published var twitchUserId: String?
+    /// Gardé entre deux lancements : l'envoi de la sauvegarde au passage en
+    /// arrière-plan doit savoir pour qui écrire, même avant que l'accueil
+    /// n'ait rechargé le profil.
+    @Published var twitchUserId: String? {
+        didSet {
+            if let id = twitchUserId { UserDefaults.standard.set(id, forKey: "twitch_user_id") }
+            else { UserDefaults.standard.removeObject(forKey: "twitch_user_id") }
+        }
+    }
 
     /// Token de session web (cookie `auth-token` de twitch.tv).
     /// Distinct de `twitchToken` (OAuth/Helix) : indispensable pour l'API GQL
@@ -193,7 +202,7 @@ final class AppStore: ObservableObject {
 
     // MARK: – History
     @Published var history: [HistoryItem] = [] {
-        didSet { persistHistory() }
+        didSet { persistHistory(); syncDirty = true }
     }
 
     // MARK: – VOD Progress
@@ -204,6 +213,7 @@ final class AppStore: ObservableObject {
         let ud = UserDefaults.standard
         if let l = ud.string(forKey: "lang"), let parsed = Lang(rawValue: l) { lang = parsed }
         twitchToken = ud.string(forKey: "twitch_token")
+        twitchUserId = ud.string(forKey: "twitch_user_id")
         twitchWebToken = ud.string(forKey: "twitch_web_token")
         twitchLogin = ud.string(forKey: "twitch_login")
         twitchAvatar = ud.string(forKey: "twitch_avatar")
@@ -238,6 +248,13 @@ final class AppStore: ObservableObject {
         if let data = ud.data(forKey: "vod_progress_all"),
            let decoded = try? JSONDecoder().decode([String: Double].self, from: data) {
             vodProgress = decoded
+        }
+        // Le chargement initial n'est pas un changement à envoyer.
+        syncDirty = false
+        // Filet de sécurité pendant une longue lecture : au plus un envoi par
+        // `syncEvery`, et seulement s'il y a du neuf.
+        syncTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.flushToCloud() }
         }
     }
 
@@ -281,33 +298,137 @@ final class AppStore: ObservableObject {
 
     func setVodProgress(_ vodId: String, time: Double) {
         vodProgress[vodId] = time
+        persistProgress()
+        syncDirty = true
+    }
+
+    private func persistProgress() {
         if let data = try? JSONEncoder().encode(vodProgress) {
             UserDefaults.standard.set(data, forKey: "vod_progress_all")
         }
     }
 
     // MARK: – Cloud Sync
-    func pullFromCloud(userId: String) async {
-        guard let url = URL(string: "\(kAPIURL)/api/sync/get?userId=\(userId)") else { return }
-        do {
-            let (data, _) = try await URLSession.shared.data(from: url)
-            if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-               let histData = try? JSONSerialization.data(withJSONObject: json["history"] ?? []),
-               let items = try? JSONDecoder().decode([HistoryItem].self, from: histData) {
-                await MainActor.run { self.history = items }
-            }
-        } catch {}
+    //
+    // Sauvegarde partagée avec le site, sur le Worker (KV Cloudflare). Le KV
+    // gratuit n'offre que 1 000 écritures par jour au total : un changement
+    // ne fait que marquer la sauvegarde « à envoyer », et l'envoi part à la
+    // fermeture d'une vidéo, au passage en arrière-plan, sinon au plus toutes
+    // les 10 minutes — jamais si rien n'a changé depuis le dernier envoi.
+
+    private var syncDirty = false
+    private var lastSyncedBody: Data?
+    private var lastSyncAt  = Date.distantPast
+    private var lastPullAt  = Date.distantPast
+    private var syncTimer: Timer?
+    private let syncEvery: TimeInterval = 600
+    private let pullEvery: TimeInterval = 600
+
+    /// Relit la sauvegarde si la dernière lecture date de plus de 10 minutes.
+    /// Une lecture ne coûte presque rien (100 000 par jour en gratuit).
+    func refreshFromCloudIfStale(userId: String? = nil) async {
+        guard let id = userId ?? twitchUserId, !id.isEmpty,
+              Date().timeIntervalSince(lastPullAt) > pullEvery else { return }
+        await pullFromCloud(userId: id)
     }
 
-    func pushToCloud() {
-        guard let userId = twitchUserId,
-              let histData = try? JSONEncoder().encode(history),
+    func pullFromCloud(userId: String) async {
+        lastPullAt = Date()
+        guard let url = URL(string: "\(kAPIURL)/api/sync/get?userId=\(userId)"),
+              let (data, _) = try? await URLSession.shared.data(from: url),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
+
+        var remote: [HistoryItem] = []
+        if let raw = json["history"],
+           let histData = try? JSONSerialization.data(withJSONObject: raw),
+           let items = try? JSONDecoder().decode([LossyDecodable<HistoryItem>].self, from: histData) {
+            remote = items.compactMap(\.value)
+        }
+        var remoteProgress: [String: Double] = [:]
+        for (id, value) in json["progress"] as? [String: Any] ?? [:] {
+            if let n = value as? NSNumber { remoteProgress[id] = n.doubleValue }
+        }
+
+        await MainActor.run {
+            // Fusion, pas remplacement : ce qui a été vu ici depuis le dernier
+            // envoi ne doit pas disparaître. Le plus récent d'abord ; les
+            // éléments sans date (anciens, venus du site) en fin de liste.
+            let known = Set(history.map { $0.term.lowercased() })
+            let added = remote.filter { !known.contains($0.term.lowercased()) }
+            if !added.isEmpty {
+                let merged = (history + added).enumerated()
+                    .sorted { a, b in
+                        a.element.addedAt != b.element.addedAt
+                            ? a.element.addedAt > b.element.addedAt
+                            : a.offset < b.offset
+                    }
+                    .map(\.element)
+                history = Array(merged.prefix(50))
+            }
+            // Progression : la position la plus avancée l'emporte.
+            var changed = false
+            for (id, t) in remoteProgress where t > (vodProgress[id] ?? 0) {
+                vodProgress[id] = t
+                changed = true
+            }
+            if changed { persistProgress() }
+            logger.syncPull(items: added.count)
+        }
+    }
+
+    /// Envoie la sauvegarde si elle a changé. `force` ignore l'intervalle
+    /// minimal — pour la fermeture d'une vidéo et le passage en arrière-plan.
+    func flushToCloud(force: Bool = false) {
+        guard syncDirty, let userId = twitchUserId, !userId.isEmpty else { return }
+        guard force || Date().timeIntervalSince(lastSyncAt) >= syncEvery else { return }
+
+        // Seule la progression des VODs de l'historique part : le Worker garde
+        // déjà les autres (il fusionne), inutile d'alourdir chaque envoi.
+        let vodIds = Set(history.filter { $0.type == .vod }.map(\.term))
+        let progress = vodProgress.filter { vodIds.contains($0.key) }.mapValues { $0.rounded() }
+        guard let histData = try? JSONEncoder().encode(history),
               let histJSON = try? JSONSerialization.jsonObject(with: histData),
+              let body = try? JSONSerialization.data(
+                  withJSONObject: ["userId": userId, "data": ["history": histJSON, "progress": progress]],
+                  options: [.sortedKeys]),
               let url = URL(string: "\(kAPIURL)/api/sync/post") else { return }
+
+        syncDirty = false
+        guard body != lastSyncedBody else { return }
+        lastSyncedBody = body
+        lastSyncAt = Date()
+
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.httpBody = try? JSONSerialization.data(withJSONObject: ["userId": userId, "data": ["history": histJSON]])
-        URLSession.shared.dataTask(with: req).resume()
+        req.httpBody = body
+
+        // Laisse à l'envoi le temps de finir si l'app vient de passer en
+        // arrière-plan : sans ça, iOS peut la suspendre en pleine requête.
+        // Boîte de référence plutôt qu'une `var` capturée : les deux blocs
+        // sont `@Sendable` dans les SDK récents, où muter une variable
+        // capturée ne compile pas.
+        let request = req   // une `var` capturée par un Task ne compile pas
+        let bg = BackgroundTaskBox()
+        bg.id = UIApplication.shared.beginBackgroundTask(withName: "sync") { bg.end() }
+        Task {
+            _ = try? await URLSession.shared.data(for: request)
+            await MainActor.run { bg.end() }
+        }
+        logger.syncPush(items: history.count)
+    }
+}
+
+/// Tâche d'arrière-plan à clore une seule fois, quel que soit le premier
+/// des deux à finir : la requête, ou le délai accordé par iOS.
+private final class BackgroundTaskBox {
+    var id: UIBackgroundTaskIdentifier = .invalid
+    // Pas d'annotation d'acteur : appelé depuis le délai d'expiration d'iOS,
+    // dont l'isolation varie selon la version du SDK. Toujours sur le fil
+    // principal en pratique (délai d'expiration, MainActor.run).
+    func end() {
+        guard id != .invalid else { return }
+        UIApplication.shared.endBackgroundTask(id)
+        id = .invalid
     }
 }

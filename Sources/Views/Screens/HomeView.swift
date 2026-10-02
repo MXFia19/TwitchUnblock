@@ -166,9 +166,12 @@ struct HomeView: View {
                 store.twitchUserId = user.id
                 store.twitchLogin  = user.login
                 store.twitchAvatar = user.profileImageURL   // ← avatar du header
-                await store.pullFromCloud(userId: user.id)
                 logger.authLogin(user: user.displayName)
             }
+            // Dans les deux cas, et plus seulement au premier chargement du
+            // profil : l'identifiant étant désormais gardé entre deux
+            // lancements, la relecture n'aurait sinon plus jamais lieu.
+            await store.refreshFromCloudIfStale(userId: currentUserId)
             followedStreams = try await getFollowedStreams(token: token, userId: currentUserId)
         } catch is CancellationError {
             loadingFollowed = false

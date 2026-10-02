@@ -753,6 +753,9 @@ struct MainTabView: View {
     private func stopPlayer() {
         UIApplication.shared.isIdleTimerDisabled = false   // ré-autorise la veille
         stopLiveTimers()
+        // Fin de visionnage : la progression part maintenant, plutôt que
+        // toutes les quelques secondes pendant la lecture.
+        store.flushToCloud(force: true)
 
         // Le fondu d'abord, le ménage ensuite. Vider `qualityLinks` et
         // `playerMode` dans la même transaction escamotait l'animation : le

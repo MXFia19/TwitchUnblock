@@ -126,6 +126,12 @@ struct ChatMessage: Identifiable {
     var isHistorical: Bool = false
     /// Supprimé par un modérateur mais conservé à l'écran (réglage).
     var isDeleted: Bool = false
+    /// USERNOTICE : "raid" (raid entrant), "sub", "announcement", ou autre.
+    var noticeKind: String? = nil
+    /// Raid entrant : chaîne d'où vient le raid (lien « Voir la chaîne »).
+    var raider: String? = nil
+    /// Annonce : couleur choisie par le modérateur.
+    var accent: Color? = nil
 }
 
 // MARK: – Tokenisation d'un segment de texte
@@ -136,7 +142,8 @@ func tokenizeChatSegment(_ segment: String, channelId: String?) async -> [Messag
     for word in segment.components(separatedBy: " ") {
         guard !word.isEmpty else { continue }
         let lower = word.lowercased()
-        if lower.hasPrefix("http://") || lower.hasPrefix("https://") || lower.hasPrefix("www.") {
+        if lower.hasPrefix("http://") || lower.hasPrefix("https://") || lower.hasPrefix("www.")
+            || isBareLink(lower) {
             tokens.append(.link(word))
         } else if word.hasPrefix("@") && word.count > 1 {
             tokens.append(.mention(String(word.dropFirst())))
@@ -147,6 +154,13 @@ func tokenizeChatSegment(_ segment: String, channelId: String?) async -> [Messag
         }
     }
     return tokens
+}
+
+/// Lien sans « https:// » (« t.me/x », « discord.gg/abc ») : seulement les
+/// extensions courantes, pour ne pas transformer « lol.xd » en lien.
+func isBareLink(_ lower: String) -> Bool {
+    lower.range(of: #"^[a-z0-9][a-z0-9-]*(\.[a-z0-9-]+)*\.(com|net|org|tv|gg|me|io|fr|be|ch|de|es|it|uk|co|app|dev|ly|link|to|ru|eu|xyz|shop|store)(/\S*)?$"#,
+                options: .regularExpression) != nil
 }
 
 // MARK: – Déséchappement IRCv3 (tags system-msg, etc.)

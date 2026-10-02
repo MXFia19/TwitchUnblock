@@ -3,6 +3,7 @@ import SwiftUI
 struct SettingsView: View {
     @EnvironmentObject private var store: AppStore
     @State private var showLogs        = false
+    @State private var highlightDraft  = ""
     @State private var showLogoutAlert = false
     @State private var showClearAlert  = false
     @State private var showWebLogin    = false   // login web (points de chaîne)
@@ -423,8 +424,34 @@ struct SettingsView: View {
                 Divider().background(Color.tBorder)
                 toggleRow(store.t("cfg_deleted"), store.t("cfg_deleted_sub"),
                           $store.chatShowDeleted, log: "Messages supprimés")
+                Divider().background(Color.tBorder)
+                // Mots surlignés : en plus des mentions, séparés par des virgules.
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(store.t("highlight_words"))
+                        .font(.system(size: 14, weight: .semibold)).foregroundColor(.tText)
+                    Text(store.t("highlight_words_sub"))
+                        .font(.system(size: 12)).foregroundColor(.tMuted)
+                        .fixedSize(horizontal: false, vertical: true)
+                    TextField("giveaway, tournoi", text: $highlightDraft)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .font(.system(size: 14))
+                        .padding(.horizontal, 10).padding(.vertical, 8)
+                        .background(Color.tSurface).cornerRadius(8)
+                        .onAppear { highlightDraft = store.chatHighlightWords.joined(separator: ", ") }
+                        .onSubmit { saveHighlightWords() }
+                        .onChange(of: highlightDraft) { _ in saveHighlightWords() }
+                }
             }
         }
+    }
+
+    private func saveHighlightWords() {
+        let words = highlightDraft.split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
+            .filter { !$0.isEmpty }
+        let capped = Array(words.prefix(30))
+        if capped != store.chatHighlightWords { store.chatHighlightWords = capped }
     }
 
     @ViewBuilder private var tailleChatCard: some View {

@@ -206,9 +206,15 @@ final class AppStore: ObservableObject {
     // MARK: – VOD Progress
     @Published private(set) var vodProgress: [String: Double] = [:]
 
+    /// Mots surlignés dans le chat (en plus des mentions), en minuscules.
+    @Published var chatHighlightWords: [String] = [] {
+        didSet { UserDefaults.standard.set(chatHighlightWords, forKey: "chat_highlight_words") }
+    }
+
     // MARK: – Init
     init() {
         let ud = UserDefaults.standard
+        chatHighlightWords = ud.stringArray(forKey: "chat_highlight_words") ?? []
         if let l = ud.string(forKey: "lang"), let parsed = Lang(rawValue: l) { lang = parsed }
         twitchToken = Keychain.loadToken("twitch_token")
         twitchUserId = ud.string(forKey: "twitch_user_id")

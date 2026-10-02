@@ -217,7 +217,8 @@ struct ChatView: View {
                                         ChatMessageRow(
                                             message: msg,
                                             availableWidth: geo.size.width,
-                                            style: style
+                                            style: style,
+                                            onOpenChannel: onJoinChannel
                                         )
                                         .id(msg.id)
                                         .contentShape(Rectangle())
@@ -729,7 +730,29 @@ struct ChatMessageRow: View {
     let message: ChatMessage
     let availableWidth: CGFloat
     var style: ChatStyle = .standard
+    /// Raid entrant : ouvrir la chaîne d'où vient le raid.
+    var onOpenChannel: (String) -> Void = { _ in }
     @EnvironmentObject private var store: AppStore
+
+    /// Mentionné (avec ou sans @) ou mot surveillé (réglages) : surligné.
+    private var isMention: Bool {
+        guard message.systemMsg == nil, message.userId != "system" else { return false }
+        let me = store.twitchLogin?.lowercased() ?? ""
+        guard message.userName.lowercased() != me || me.isEmpty else { return false }
+        let words = store.chatHighlightWords
+        guard !me.isEmpty || !words.isEmpty else { return false }
+        for token in message.tokens {
+            switch token {
+            case .mention(let m):
+                if !me.isEmpty, m.lowercased() == me { return true }
+            case .text(let t):
+                let w = t.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: "@.,!?:;"))
+                if (!me.isEmpty && w == me) || words.contains(w) { return true }
+            default: break
+            }
+        }
+        return false
+    }
 
     private static let timeFormatter: DateFormatter = {
         let f = DateFormatter(); f.dateFormat = "HH:mm"; return f
@@ -751,8 +774,31 @@ struct ChatMessageRow: View {
                 .frame(width: availableWidth, alignment: .leading)
             }
 
+            // Raid entrant : carte avec un lien vers la chaîne qui arrive.
+            if message.noticeKind == "raid", let sys = message.systemMsg {
+                HStack(spacing: 8) {
+                    Image(systemName: "person.3.fill").font(.system(size: 11)).foregroundColor(.tPurple)
+                    Text(sys).font(.system(size: 12, weight: .semibold)).foregroundColor(.tText)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 4)
+                    if let raider = message.raider {
+                        Button { onOpenChannel(raider) } label: {
+                            Text(store.t("see_channel")).font(.system(size: 11, weight: .bold))
+                                .foregroundColor(.tPurple)
+                                .padding(.horizontal, 8).padding(.vertical, 4)
+                                .background(Color.tPurple.opacity(0.18)).cornerRadius(6)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 10).padding(.vertical, 8)
+                .background(Color.tPurple.opacity(0.14))
+                .cornerRadius(8)
+                .padding(.horizontal, 8).padding(.vertical, 4)
+                .frame(width: availableWidth, alignment: .leading)
+            }
             // Bannière USERNOTICE (abonnement, série de visionnage…)
-            if let sys = message.systemMsg {
+            else if let sys = message.systemMsg {
                 HStack(spacing: 6) {
                     Image(systemName: "star.fill").font(.system(size: 10, weight: .bold))
                     Text(sys).font(.system(size: 11, weight: .semibold))
@@ -787,7 +833,9 @@ struct ChatMessageRow: View {
             // Ligne du message (masquée si USERNOTICE sans texte écrit)
             if message.systemMsg == nil || !message.tokens.isEmpty {
                 HStack(alignment: .top, spacing: 0) {
-                    if message.isHighlight { Rectangle().fill(Color.tWarning).frame(width: 3) }
+                    if let accent = message.accent { Rectangle().fill(accent).frame(width: 3) }
+                    else if isMention { Rectangle().fill(Color.tPrimary).frame(width: 3) }
+                    else if message.isHighlight { Rectangle().fill(Color.tWarning).frame(width: 3) }
                     WrappingHStack(message: message, timeString: timeString,
                                    availableWidth: availableWidth - 24,
                                    style: style)
@@ -799,6 +847,8 @@ struct ChatMessageRow: View {
         }
         .frame(width: availableWidth, alignment: .leading)
         .background(
+            message.accent != nil  ? (message.accent ?? .clear).opacity(0.16) :
+            isMention              ? Color.tPrimary.opacity(0.14) :
             message.isHighlight    ? Color.tWarning.opacity(0.08) :
             message.isFirstMessage ? Color.tPrimary.opacity(0.05) :
                                      Color.clear
@@ -864,7 +914,7 @@ struct WrappingHStack: View {
 
     private func openLink(_ raw: String) {
         var s = raw
-        if s.lowercased().hasPrefix("www.") { s = "https://" + s }
+        if !s.lowercased().hasPrefix("http://") && !s.lowercased().hasPrefix("https://") { s = "https://" + s }
         if let url = URL(string: s) { UIApplication.shared.open(url) }
     }
 }

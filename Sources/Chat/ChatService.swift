@@ -426,7 +426,15 @@ final class ChatService: NSObject, ObservableObject {
 
     // MARK: – USERNOTICE (abonnements, séries de visionnage, raids…)
     private func handleUsernotice(_ irc: IRCMessage) async {
-        let systemMsg = ircUnescape(irc.tags["system-msg"] ?? "")
+        guard let message = await buildNotice(irc, historical: false) else { return }
+        publish(message)
+        logger.debug("CHAT", "USERNOTICE \(irc.tags["msg-id"] ?? "")", message.systemMsg ?? "")
+    }
+
+    /// Message d'un USERNOTICE, partagé par le direct et l'historique.
+    private func buildNotice(_ irc: IRCMessage, historical: Bool) async -> ChatMessage? {
+        let kind = irc.tags["msg-id"] ?? ""
+        let systemMsg = kind == "announcement" ? "" : ircUnescape(irc.tags["system-msg"] ?? "")
 
         // Message écrit par l'utilisateur (resub avec texte), optionnel.
         var tokens: [MessageToken] = []
@@ -444,13 +452,21 @@ final class ChatService: NSObject, ObservableObject {
             tokens = await tokenize(text: text, twitchRanges: byRange, channelId: channelId)
         }
 
-        guard !systemMsg.isEmpty || !tokens.isEmpty else { return }
+        guard !systemMsg.isEmpty || !tokens.isEmpty else { return nil }
 
         let hexColor = irc.color.isEmpty
             ? "9146ff"
             : irc.color.trimmingCharacters(in: CharacterSet(charactersIn: "#"))
 
-        let message = ChatMessage(
+        let sentAt: Date = {
+            guard historical, let ms = irc.tags["tmi-sent-ts"], let n = Double(ms) else { return Date() }
+            return Date(timeIntervalSince1970: n / 1000)
+        }()
+        let raiderLogin = (irc.tags["msg-param-login"] ?? "").lowercased()
+        let accents: [String: String] = ["PRIMARY": "9146ff", "BLUE": "387aff", "GREEN": "00c853",
+                                         "ORANGE": "ff9a00", "PURPLE": "bf94ff"]
+
+        var message = ChatMessage(
             id: irc.msgId,
             userId: irc.userId,
             userName: irc.tags["login"] ?? "",
@@ -458,15 +474,22 @@ final class ChatService: NSObject, ObservableObject {
             color: Color.readableChat(hex: hexColor),
             badges: await parseBadges(irc.badgesRaw, channelId: channelId),
             tokens: tokens,
-            timestamp: Date(),
+            timestamp: sentAt,
             isAction: false,
-            isHighlight: true,
+            isHighlight: kind != "raid",
             isFirstMessage: false,
             replyTo: nil, replyBody: nil,
             systemMsg: systemMsg.isEmpty ? nil : systemMsg
         )
-        publish(message)
-        logger.debug("CHAT", "USERNOTICE \(irc.tags["msg-id"] ?? "")", systemMsg)
+        message.isHistorical = historical
+        message.noticeKind = kind.isEmpty ? nil : kind
+        if kind == "raid", raiderLogin.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "_" }), !raiderLogin.isEmpty {
+            message.raider = raiderLogin
+        }
+        if kind == "announcement" {
+            message.accent = Color(hex: accents[irc.tags["msg-param-color"] ?? ""] ?? "9146ff")
+        }
+        return message
     }
 
     // MARK: – Badge parsing (async → BadgeService)
@@ -603,9 +626,36 @@ final class ChatService: NSObject, ObservableObject {
 
         var older: [ChatMessage] = []
         for line in raw {
-            guard let irc = IRCParser.parse(line), irc.command == "PRIVMSG",
-                  let msg = await buildMessage(irc, historical: true) else { continue }
-            older.append(msg)
+            guard let irc = IRCParser.parse(line) else { continue }
+            switch irc.command {
+            case "PRIVMSG":
+                guard var msg = await buildMessage(irc, historical: true) else { continue }
+                // Supprimé depuis par la modération (signalé par le service).
+                if irc.tags["rm-deleted"] == "1" {
+                    guard keepDeleted else { continue }
+                    msg.isDeleted = true
+                }
+                older.append(msg)
+            case "USERNOTICE":
+                if let msg = await buildNotice(irc, historical: true) { older.append(msg) }
+            case "CLEARCHAT":
+                // Banni ou exclu : ses messages déjà rejoués disparaissent aussi.
+                guard let target = irc.text?.lowercased(), !target.isEmpty else { continue }
+                if keepDeleted {
+                    for i in older.indices where older[i].userName == target { older[i].isDeleted = true }
+                } else {
+                    older.removeAll { $0.userName == target }
+                }
+            case "CLEARMSG":
+                guard let id = irc.tags["target-msg-id"] else { continue }
+                if keepDeleted {
+                    for i in older.indices where older[i].id == id { older[i].isDeleted = true }
+                } else {
+                    older.removeAll { $0.id == id }
+                }
+            default:
+                continue
+            }
         }
         // La connexion a pu changer de canal pendant le téléchargement.
         guard generation == gen, !older.isEmpty else { return }

@@ -2,7 +2,7 @@
 
 **TwitchUnblock** is an open-source Twitch client that lets you watch VODs and
 live streams without a subscription, at full quality. Native iOS app built with
-SwiftUI, plus a browser version.
+SwiftUI — also available [in your browser](https://test2-fawn-eta.vercel.app).
 
 **Install it and it works.** There is nothing to configure, no server to set up,
 no key to paste. The backend is already hosted and shared by every install.
@@ -10,7 +10,7 @@ no key to paste. The backend is already hosted and shared by every install.
 | | |
 |---|---|
 | **iOS** | SwiftUI, iOS 16+, sideloaded |
-| **Web** | React + TypeScript — see [`web/`](web/) |
+| **Web** | [test2-fawn-eta.vercel.app](https://test2-fawn-eta.vercel.app) — source in [TwitchUnblock-Web](https://github.com/MXFia19/TwitchUnblock-Web) |
 | **Setup needed** | None — sign in with Twitch and watch |
 
 ---
@@ -122,19 +122,23 @@ with Sideloadly, AltStore, or TrollStore if your device supports it.
 
 ## 🌐 Web version
 
-A browser build lives in [`web/`](web/): player, chat, discovery and settings,
-sharing the same Worker and the same Twitch application.
+**No install? Use it in your browser: https://test2-fawn-eta.vercel.app**
 
-```bash
-cd web
-npm install
-npm run dev
-```
+The website has its own repository, [TwitchUnblock-Web](https://github.com/MXFia19/TwitchUnblock-Web),
+and shares this app's backend (the Cloudflare Worker, which now lives there too).
+
+What you get on the web:
+
+* Top streams without logging in, followed channels once logged in
+* Live and VOD player with quality picker, speed, ±10 s, picture in picture, mini player
+* Native chat: Twitch, BTTV, FFZ and 7TV emotes, badges, chat history, pinned message, replies
+* VOD chat replayed in sync with the video
+* Resume VODs where you left off, history synced with your Twitch account
+* French, English and Spanish
 
 Channel points, polls and predictions are **not** in the web version and cannot
 be: they need the `twitch.tv` session cookie, which no third-party site can
-read. [`web/README.md`](web/README.md) covers hosting your own copy, if you want
-one.
+read. For those, use the app.
 
 ---
 

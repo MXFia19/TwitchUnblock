@@ -1,5 +1,12 @@
 # Comptage d'utilisation — mise en service
 
+> **Mise à jour** — ces routes sont désormais intégrées au Worker, dans le
+> dépôt du site : [TwitchUnblock-Web/worker.js](https://github.com/MXFia19/TwitchUnblock-Web/blob/main/worker.js).
+> Elles y comptent aussi le site (plateforme `web`), avec la répartition par
+> plateforme dans `/api/stats`, et le correctif `getRequestHeaders` y est
+> appliqué. Plus rien à coller à la main : `npx wrangler deploy` depuis ce
+> dépôt suffit. Ce dossier reste comme documentation.
+
 Deux routes à ajouter au Worker TwitchUnblock existant
 (`https://test2.kurzmathis4.workers.dev`) :
 

@@ -97,7 +97,7 @@ final class ChannelPointsService: ObservableObject {
         }
 
         logger.info("POINTS", "Chargement canal \(channelLogin)",
-                    "compte: @\(userLogin ?? "?") · token web: \(String(token.prefix(8)))…")
+                    "compte: @\(userLogin ?? "?")")
 
         let b = await fetchBalance()
         let elapsed = String(format: "%.0f ms", Date().timeIntervalSince(start) * 1000)
@@ -133,7 +133,12 @@ final class ChannelPointsService: ObservableObject {
         }
     }
 
+    /// Incrémenté à l'arrêt : une mise en route de la présence encore en
+    /// cours (requêtes) n'arme pas sa minuterie pour une chaîne quittée.
+    private var presenceGeneration = 0
+
     func stopPolling() {
+        presenceGeneration &+= 1
         if balanceTimer != nil || claimTimer != nil || watchTimer != nil {
             logger.debug("POINTS", "Polling arrêté", "canal: \(channelLogin)")
         }
@@ -169,7 +174,7 @@ final class ChannelPointsService: ObservableObject {
     private func checkForBonus() async {
         guard pendingClaimId == nil else { return }
         let query = """
-        { channel(name: "\(channelLogin)") {
+        { channel(name: "\(gqlStr(channelLogin))") {
             self { communityPoints { availableClaim { id } } }
         } }
         """
@@ -196,6 +201,7 @@ final class ChannelPointsService: ObservableObject {
         + "(KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1"
 
     private func startWatchPresence() {
+        let gen = presenceGeneration
         Task {
             // broadcastId + spade en parallèle ; viewerId résolu si absent.
             async let bid   = fetchBroadcastId()
@@ -211,7 +217,9 @@ final class ChannelPointsService: ObservableObject {
             }
             logger.success("POINTS/WATCH", "Présence active",
                            "minute-watched /\(Int(watchPollInterval))s · broadcast: \(bcast.prefix(8))…")
+            guard gen == presenceGeneration else { return }
             await sendMinuteWatched()
+            guard gen == presenceGeneration else { return }
             watchTimer?.invalidate()
             watchTimer = Timer.scheduledCommon(every: watchPollInterval) { [weak self] _ in
                 Task { await self?.sendMinuteWatched() }
@@ -262,7 +270,7 @@ final class ChannelPointsService: ObservableObject {
 
     /// Récupère le broadcast_id du live en cours (nil si hors-ligne).
     private func fetchBroadcastId() async -> String? {
-        let q = "{ user(login: \"\(channelLogin)\") { stream { id } } }"
+        let q = "{ user(login: \"\(gqlStr(channelLogin))\") { stream { id } } }"
         guard let json   = try? await gqlPublic(q, tag: "broadcastId") as? [String: Any],
               let data   = json["data"]   as? [String: Any],
               let user   = data["user"]   as? [String: Any],
@@ -365,8 +373,8 @@ final class ChannelPointsService: ObservableObject {
                                              : "prompt: \"\(gqlEscape(promptText))\""
         let mutation = """
         mutation { redeemCommunityPointsCustomReward(input: {
-            channelID: "\(channelId)", cost: \(reward.cost), \(promptField),
-            rewardID: "\(reward.id)", title: "\(safeTitle)", transactionID: "\(txId)"
+            channelID: "\(gqlStr(channelId))", cost: \(reward.cost), \(promptField),
+            rewardID: "\(gqlStr(reward.id))", title: "\(safeTitle)", transactionID: "\(txId)"
         }) { redemption { id } error { code } } }
         """
         // Rachat en NATIF avec le token integrity.
@@ -390,7 +398,7 @@ final class ChannelPointsService: ObservableObject {
     private func fetchRewards() async -> [ChannelReward] {
         logger.debug("POINTS", "fetchRewards → channel(name:\(channelLogin))", nil)
         let query = """
-        { channel(name: "\(channelLogin)") {
+        { channel(name: "\(gqlStr(channelLogin))") {
             communityPointsSettings {
                 isEnabled
                 customRewards {
@@ -440,7 +448,7 @@ final class ChannelPointsService: ObservableObject {
     private func fetchBalance(quiet: Bool = false) async -> (balance: Int, claimId: String?) {
         if !quiet { logger.debug("POINTS", "fetchBalance → channel(name:\(channelLogin)).self", nil) }
         let query = """
-        { channel(name: "\(channelLogin)") {
+        { channel(name: "\(gqlStr(channelLogin))") {
             self { communityPoints { balance availableClaim { id } } }
         } }
         """

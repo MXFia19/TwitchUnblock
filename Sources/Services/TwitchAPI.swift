@@ -58,8 +58,8 @@ private func twitchGQL(_ query: String) async throws -> Any {
 private func getAccessToken(id: String, isLive: Bool) async -> (value: String, signature: String)? {
     logger.debug("TOKEN", "Récupération token \(isLive ? "live" : "VOD") pour \"\(id)\"")
     let q = isLive
-        ? "query { streamPlaybackAccessToken(channelName: \"\(id)\", params: {platform: \"web\", playerBackend: \"mediaplayer\", playerType: \"site\"}) { value signature } }"
-        : "query { videoPlaybackAccessToken(id: \"\(id)\", params: {platform: \"web\", playerBackend: \"mediaplayer\", playerType: \"site\"}) { value signature } }"
+        ? "query { streamPlaybackAccessToken(channelName: \"\(gqlStr(id))\", params: {platform: \"web\", playerBackend: \"mediaplayer\", playerType: \"site\"}) { value signature } }"
+        : "query { videoPlaybackAccessToken(id: \"\(gqlStr(id))\", params: {platform: \"web\", playerBackend: \"mediaplayer\", playerType: \"site\"}) { value signature } }"
     guard let json = try? await twitchGQL(q) as? [String: Any],
           let data = json["data"] as? [String: Any],
           let token = (isLive ? data["streamPlaybackAccessToken"] : data["videoPlaybackAccessToken"]) as? [String: Any],
@@ -75,7 +75,7 @@ private func getAccessToken(id: String, isLive: Bool) async -> (value: String, s
 // MARK: – Storyboard Hack
 private func storyboardHack(vodId: String) async -> QualityLinks {
     logger.info("STORYBOARD", "Tentative storyboard hack pour VOD \(vodId)")
-    guard let json = try? await twitchGQL("query { video(id: \"\(vodId)\") { seekPreviewsURL } }") as? [String: Any],
+    guard let json = try? await twitchGQL("query { video(id: \"\(gqlStr(vodId))\") { seekPreviewsURL } }") as? [String: Any],
           let data = json["data"] as? [String: Any],
           let video = data["video"] as? [String: Any],
           let seekUrl = video["seekPreviewsURL"] as? String,
@@ -89,7 +89,8 @@ private func storyboardHack(vodId: String) async -> QualityLinks {
         return [:]
     }
     let hash = parts[storyIndex - 1]
-    let root = "https://\(parsedURL.host!)/\(hash)"
+    guard let host = parsedURL.host else { return [:] }
+    let root = "https://\(host)/\(hash)"
 
     var found: QualityLinks = [:]
     await withTaskGroup(of: (String, String)?.self) { group in
@@ -116,7 +117,10 @@ func getM3U8(vodId: String) async -> M3U8Data {
     logger.info("M3U8", "Lancement VOD \(vodId)")
 
     if let token = await getAccessToken(id: vodId, isLive: false) {
-        var comps = URLComponents(string: "https://usher.ttvnw.net/vod/\(vodId).m3u8")!
+        // Identifiant numérique uniquement (il peut venir de l'historique
+        // synchronisé) : sinon l'adresse est invalide et le `!` plantait.
+        if vodId.allSatisfy(\.isNumber), !vodId.isEmpty,
+           var comps = URLComponents(string: "https://usher.ttvnw.net/vod/\(vodId).m3u8") {
         comps.queryItems = [
             .init(name: "nauth",            value: token.value),
             .init(name: "nauthsig",         value: token.signature),
@@ -134,6 +138,7 @@ func getM3U8(vodId: String) async -> M3U8Data {
                 logger.success("M3U8", "[1/3] ✅ \(links.count) qualités", links.keys.joined(separator: ", "))
                 return M3U8Data(links: links, error: nil)
             }
+        }
         }
         logger.warn("M3U8", "[1/3] Échec token officiel")
     }
@@ -164,7 +169,7 @@ func getLive(channelName: String) async -> LiveData {
 
     // ← id ajouté à la query pour récupérer le userId Twitch du canal
     let q = """
-    query { user(login: "\(login)") {
+    query { user(login: "\(gqlStr(login))") {
         id
         profileImageURL(width: 70)
         stream {
@@ -255,7 +260,8 @@ func getLive(channelName: String) async -> LiveData {
     if links.isEmpty && (sourcePref == "auto" || sourcePref == "twitch") {
         if let token = token {
             logger.info("LIVE", "Tentative Twitch officiel...")
-            var comps = URLComponents(string: "https://usher.ttvnw.net/api/channel/hls/\(login).m3u8")!
+            if login.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "_" }), !login.isEmpty,
+               var comps = URLComponents(string: "https://usher.ttvnw.net/api/channel/hls/\(login).m3u8") {
             // Mode faible latence : Twitch sert alors la variante « low latency »
             // (segments plus courts, playlist rafraîchie plus souvent).
             let wantsLowLatency = UserDefaults.standard.bool(forKey: "cfg_low_latency")
@@ -278,6 +284,7 @@ func getLive(channelName: String) async -> LiveData {
                let body = String(data: data, encoding: .utf8) {
                 links = parseM3U8(body, baseURL: url)
                 logger.success("LIVE", "✅ Twitch officiel : \(links.count) qualités")
+            }
             }
         }
     }
@@ -306,7 +313,7 @@ func getLive(channelName: String) async -> LiveData {
 // MARK: – getStreamStats (rafraîchissement LÉGER viewers/uptime, sans re-fetch des liens)
 func getStreamStats(channelName: String) async -> (viewerCount: Int, startedAt: Date?) {
     let login = channelName.trimmingCharacters(in: .whitespaces).lowercased()
-    let q = "query { user(login: \"\(login)\") { stream { viewersCount createdAt } } }"
+    let q = "query { user(login: \"\(gqlStr(login))\") { stream { viewersCount createdAt } } }"
     guard let json   = try? await twitchGQL(q) as? [String: Any],
           let data   = json["data"]   as? [String: Any],
           let user   = data["user"]   as? [String: Any],
@@ -327,10 +334,10 @@ func getStreamStats(channelName: String) async -> (viewerCount: Int, startedAt: 
 func getChannelVideos(channelName: String, cursor: String? = nil) async -> (videos: [VodData], avatar: String?, error: String?, cursor: String?) {
     logger.info("VIDEOS", "Chargement VODs de \"\(channelName)\"\(cursor != nil ? " (Page suivante)" : "")")
 
-    let afterCursor = cursor != nil ? ", after: \"\(cursor!)\"" : ""
+    let afterCursor = cursor != nil ? ", after: \"\(gqlStr(cursor!))\"" : ""
     let q = """
     query {
-        user(login: "\(channelName)") {
+        user(login: "\(gqlStr(channelName))") {
             profileImageURL(width: 70)
             videos(first: 100, type: ARCHIVE, sort: TIME\(afterCursor)) {
                 edges { cursor node { id title previewThumbnailURL(height: 180, width: 320) publishedAt lengthSeconds } }
@@ -472,7 +479,11 @@ func getFollowedStreams(token: String, userId: String) async throws -> [TwitchSt
     req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
     req.setValue(kHelixClientID, forHTTPHeaderField: "Client-Id")
     let (data, resp) = try await URLSession.shared.data(for: req)
-    guard (resp as? HTTPURLResponse)?.statusCode == 200 else { throw URLError(.badServerResponse) }
+    let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
+    // 401 distingué : l'accueil s'en sert pour déconnecter un jeton expiré
+    // (le test sur le texte de l'erreur ne correspondait jamais).
+    if status == 401 { throw URLError(.userAuthenticationRequired) }
+    guard status == 200 else { throw URLError(.badServerResponse) }
     let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
     let arr  = json?["data"] as? [[String: Any]] ?? []
     logger.success("HELIX", "\(arr.count) streams suivis en direct")
@@ -513,7 +524,11 @@ func getTopCategories(token: String, cursor: String? = nil) async throws -> (cat
 
 /// Recherche de catégories par nom (barre de recherche de l'onglet Catégories).
 func searchCategories(token: String, query: String) async throws -> [TwitchCategory] {
-    let q = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? query
+    // « & », « + », « = » encodés aussi : « Dungeons & Dragons » était coupé,
+    // « C++ » devenait « C  ».
+    var allowed = CharacterSet.urlQueryAllowed
+    allowed.remove(charactersIn: "&+=?#")
+    let q = query.addingPercentEncoding(withAllowedCharacters: allowed) ?? ""
     guard !q.isEmpty,
           let url = URL(string: "https://api.twitch.tv/helix/search/categories?first=50&query=\(q)")
     else { return [] }
@@ -563,7 +578,7 @@ func categoryViewers(ids: [String]) async -> [String: Int] {
     for start in stride(from: 0, to: ids.count, by: 100) {
         let chunk = Array(ids[start ..< min(start + 100, ids.count)])
         let fields = chunk.enumerated()
-            .map { "g\($0.offset): game(id: \"\($0.element)\") { id viewersCount }" }
+            .map { "g\($0.offset): game(id: \"\(gqlStr($0.element))\") { id viewersCount }" }
             .joined(separator: " ")
 
         guard let json = try? await twitchGQL("query { \(fields) }") as? [String: Any],
@@ -611,7 +626,7 @@ private func streamFromDict(_ d: [String: Any]) -> TwitchStream {
 
 // MARK: – Autocomplete GQL
 func searchUsersGQL(_ query: String) async -> [AutocompleteSuggestion] {
-    let q = "query { searchUsers(userQuery: \"\(query)\", first: 5) { edges { node { login displayName profileImageURL(width: 70) } } } }"
+    let q = "query { searchUsers(userQuery: \"\(gqlStr(query))\", first: 5) { edges { node { login displayName profileImageURL(width: 70) } } } }"
     guard let json = try? await twitchGQL(q) as? [String: Any],
           let data = json["data"] as? [String: Any],
           let edges = (data["searchUsers"] as? [String: Any])?["edges"] as? [[String: Any]] else { return [] }
@@ -625,7 +640,7 @@ func searchUsersGQL(_ query: String) async -> [AutocompleteSuggestion] {
 }
 
 func getVodMetaGQL(_ vodId: String) async -> VodMeta? {
-    let q = "query { video(id: \"\(vodId)\") { title lengthSeconds viewCount owner { displayName } previewThumbnailURL(height: 180, width: 320) } }"
+    let q = "query { video(id: \"\(gqlStr(vodId))\") { title lengthSeconds viewCount owner { displayName } previewThumbnailURL(height: 180, width: 320) } }"
     guard let json = try? await twitchGQL(q) as? [String: Any],
           let data = json["data"] as? [String: Any],
           let v    = data["video"] as? [String: Any],
@@ -731,4 +746,21 @@ func isWebSessionValid(token: String) async -> Bool {
 /// partagé avec la feuille de message : une requête par chaîne et par session.
 func channelAvatar(login: String, token: String?) async -> String? {
     await AvatarCache.shared.avatar(login: login, token: token)
+}
+
+/// Texte rendu sûr pour une chaîne GQL entre guillemets. Sans cela, un `"`
+/// tapé dans la recherche (ou venu de l'historique synchronisé) cassait la
+/// requête ou permettait d'en réécrire le contenu.
+func gqlStr(_ s: String) -> String {
+    var out = ""
+    for ch in s.unicodeScalars {
+        switch ch {
+        case "\\": out += "\\\\"
+        case "\"": out += "\\\""
+        case "\n", "\r", "\t": out += " "
+        default:
+            if ch.value >= 0x20 { out.unicodeScalars.append(ch) }
+        }
+    }
+    return out
 }

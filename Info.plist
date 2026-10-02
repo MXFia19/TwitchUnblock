@@ -52,10 +52,10 @@
     <key>NSMicrophoneUsageDescription</key>
     <string>Cette app n'utilise pas le microphone.</string>
 
-    <!-- ── ATS: allow HTTP for Twitch CDN (optional) ─────────── -->
+    <!-- ── ATS : HTTPS partout, sauf pour la lecture vidéo (AVPlayer) ── -->
     <key>NSAppTransportSecurity</key>
     <dict>
-        <key>NSAllowsArbitraryLoads</key>
+        <key>NSAllowsArbitraryLoadsForMedia</key>
         <true/>
     </dict>
 

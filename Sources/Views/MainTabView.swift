@@ -60,6 +60,11 @@ struct MainTabView: View {
     /// « Chargement de la VOD », alors qu'on ne change ni de chaîne ni de
     /// contexte — juste de source.
     @State private var switchingSource = false
+    /// Incrémenté à chaque ouverture et fermeture du lecteur : la réponse
+    /// d'un chargement dépassé (chaîne A arrivée après la chaîne B, lecteur
+    /// déjà fermé) est ignorée au lieu d'écraser l'état ou de relancer les
+    /// minuteries du direct sans lecteur.
+    @State private var loadGeneration = 0
 
     /// Décalage à appliquer au chat : la latence mesurée, si la synchro est active.
     private var chatDelay: Double {
@@ -686,6 +691,8 @@ struct MainTabView: View {
             currentChannelId   = nil
         }
 
+        loadGeneration += 1
+        let gen = loadGeneration
         Task {
             switch mode {
             case .vod(let id, let title, _, let streamer):
@@ -695,17 +702,20 @@ struct MainTabView: View {
                 // transmettent déjà.
                 if let who = streamer, !who.isEmpty {
                     Task { @MainActor in
-                        liveAvatar = await channelAvatar(login: who.lowercased(),
+                        let avatar = await channelAvatar(login: who.lowercased(),
                                                          token: store.twitchToken)
+                        if gen == loadGeneration { liveAvatar = avatar }
                     }
                 }
                 let data = await getM3U8(vodId: id)
                 if let err = data.error, data.links.isEmpty {
                     await MainActor.run {
+                        guard gen == loadGeneration else { return }
                         errorMsg = err; loading = false; switchingSource = false
                     }
                 } else {
                     await MainActor.run {
+                        guard gen == loadGeneration else { return }
                         qualityLinks    = data.links
                         statusTitle     = title ?? "VOD \(id)"
                         loading         = false
@@ -717,10 +727,12 @@ struct MainTabView: View {
                 let data = await getLive(channelName: channel)
                 if let err = data.error, err != "offline" {
                     await MainActor.run {
+                        guard gen == loadGeneration else { return }
                         errorMsg = err; loading = false; switchingSource = false
                     }
                 } else if let links = data.links, !links.isEmpty {
                     await MainActor.run {
+                        guard gen == loadGeneration else { return }
                         qualityLinks      = links
                         statusTitle       = data.title.isEmpty ? channel : data.title
                         liveViewerCount   = data.viewerCount
@@ -738,10 +750,11 @@ struct MainTabView: View {
                     if data.avatar == nil {
                         let fallback = await channelAvatar(login: channel.lowercased(),
                                                            token: store.twitchToken)
-                        await MainActor.run { liveAvatar = fallback }
+                        await MainActor.run { if gen == loadGeneration { liveAvatar = fallback } }
                     }
                 } else {
                     await MainActor.run {
+                        guard gen == loadGeneration else { return }
                         errorMsg = store.t("offline_msg")
                         loading = false; switchingSource = false
                     }
@@ -752,6 +765,7 @@ struct MainTabView: View {
 
     private func stopPlayer() {
         UIApplication.shared.isIdleTimerDisabled = false   // ré-autorise la veille
+        loadGeneration += 1   // un chargement encore en cours sera ignoré
         stopLiveTimers()
         // Fin de visionnage : la progression part maintenant, plutôt que
         // toutes les quelques secondes pendant la lecture.

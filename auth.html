@@ -21,21 +21,22 @@
 </div>
 <script>
   // Récupérer le token depuis le fragment (#access_token=...)
-  const hash = window.location.hash || window.location.search;
-  const tokenMatch = hash.match(/access_token=([^&]+)/);
+  const raw = (window.location.hash || window.location.search).replace(/^[#?]/, '');
+  const params = new URLSearchParams(raw);
+  const token = params.get('access_token');
 
-  if (tokenMatch) {
-    const token = tokenMatch[1];
-
-    // Rediriger vers le deep link de l'app avec le token
-    const deepLink = 'twitchunblock://auth?access_token=' + token;
+  // Jeton Twitch : lettres et chiffres uniquement. Le state est renvoyé tel
+  // quel à l'app, qui vérifie qu'il correspond à sa demande.
+  if (token && /^[a-z0-9]+$/i.test(token)) {
+    const state = params.get('state') || '';
+    const deepLink = 'twitchunblock://auth?access_token=' + encodeURIComponent(token) +
+      (state ? '&state=' + encodeURIComponent(state) : '');
     window.location.href = deepLink;
 
     document.getElementById('status').textContent = '✅ Connecté !';
     document.getElementById('sub').textContent = 'Retourne dans TwitchUnblock';
   } else {
-    const errorMatch = hash.match(/error=([^&]+)/);
-    const error = errorMatch ? decodeURIComponent(errorMatch[1]) : 'Inconnu';
+    const error = params.get('error_description') || params.get('error') || 'Inconnu';
     document.getElementById('status').textContent = '❌ Erreur';
     document.getElementById('sub').textContent = 'Erreur: ' + error;
   }

@@ -861,7 +861,7 @@ struct SettingsView: View {
         apiLoggingIn = true
         defer { apiLoggingIn = false }
         if let token = await TwitchAuthManager.shared.login() {
-            store.twitchToken = token
+            store.adoptToken(token)
             logger.success("AUTH", "Connexion API réussie", nil)
         }
     }

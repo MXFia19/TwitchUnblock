@@ -13,8 +13,7 @@ final class AppStore: ObservableObject {
     // MARK: – Twitch Auth
     @Published var twitchToken: String? {
         didSet {
-            if let t = twitchToken { UserDefaults.standard.set(t, forKey: "twitch_token") }
-            else { UserDefaults.standard.removeObject(forKey: "twitch_token") }
+            Keychain.storeToken(twitchToken, for: "twitch_token")
         }
     }
     /// Gardé entre deux lancements : l'envoi de la sauvegarde au passage en
@@ -32,8 +31,7 @@ final class AppStore: ObservableObject {
     /// « community points » (solde, coffres, rachats), qui rejette les tokens OAuth custom.
     @Published var twitchWebToken: String? {
         didSet {
-            if let t = twitchWebToken { UserDefaults.standard.set(t, forKey: "twitch_web_token") }
-            else { UserDefaults.standard.removeObject(forKey: "twitch_web_token") }
+            Keychain.storeToken(twitchWebToken, for: "twitch_web_token")
         }
     }
 
@@ -212,9 +210,9 @@ final class AppStore: ObservableObject {
     init() {
         let ud = UserDefaults.standard
         if let l = ud.string(forKey: "lang"), let parsed = Lang(rawValue: l) { lang = parsed }
-        twitchToken = ud.string(forKey: "twitch_token")
+        twitchToken = Keychain.loadToken("twitch_token")
         twitchUserId = ud.string(forKey: "twitch_user_id")
-        twitchWebToken = ud.string(forKey: "twitch_web_token")
+        twitchWebToken = Keychain.loadToken("twitch_web_token")
         twitchLogin = ud.string(forKey: "twitch_login")
         twitchAvatar = ud.string(forKey: "twitch_avatar")
         autoClaimChest = ud.object(forKey: "auto_claim_chest") as? Bool ?? true
@@ -262,6 +260,19 @@ final class AppStore: ObservableObject {
     func t(_ key: String) -> String { translate(key, lang) }
 
     // MARK: – Auth
+    /// Nouveau jeton après une connexion. S'il change, l'identité gardée
+    /// (id, pseudo, avatar) est oubliée : sinon, en se connectant à un autre
+    /// compte, le nouveau jeton partait avec l'ancien id — sauvegarde et chat
+    /// visaient le mauvais compte.
+    func adoptToken(_ token: String) {
+        if token != twitchToken {
+            twitchUserId = nil
+            twitchLogin  = nil
+            twitchAvatar = nil
+        }
+        twitchToken = token
+    }
+
     func logout() {
         twitchToken    = nil
         twitchWebToken = nil
@@ -297,7 +308,17 @@ final class AppStore: ObservableObject {
     func getVodProgress(_ vodId: String) -> Double { vodProgress[vodId] ?? 0 }
 
     func setVodProgress(_ vodId: String, time: Double) {
+        // Le lecteur appelle ceci toutes les 0,5 s : chaque appel réencodait
+        // tout le dictionnaire dans UserDefaults et republiait le store (donc
+        // redessinait l'interface). Écart de 5 s minimum, sauf saut (reprise
+        // DVR, retour au début).
+        if let old = vodProgress[vodId], abs(time - old) < 5 { return }
         vodProgress[vodId] = time
+        // Borné aux 500 VODs les plus récentes (identifiants croissants).
+        if vodProgress.count > 500 {
+            let keep = Set(vodProgress.keys.sorted { (Int($0) ?? 0) > (Int($1) ?? 0) }.prefix(500))
+            vodProgress = vodProgress.filter { keep.contains($0.key) }
+        }
         persistProgress()
         syncDirty = true
     }
@@ -351,7 +372,11 @@ final class AppStore: ObservableObject {
         }
         var remoteProgress: [String: Double] = [:]
         for (id, value) in json["progress"] as? [String: Any] ?? [:] {
-            if let n = value as? NSNumber { remoteProgress[id] = n.doubleValue }
+            // Borné : une valeur aberrante venue du serveur faisait planter
+            // la conversion en Int de la bibliothèque.
+            if let n = value as? NSNumber, n.doubleValue.isFinite, n.doubleValue > 0 {
+                remoteProgress[id] = min(n.doubleValue, 7 * 24 * 3600)
+            }
         }
 
         await MainActor.run {
@@ -400,7 +425,6 @@ final class AppStore: ObservableObject {
 
         syncDirty = false
         guard body != lastSyncedBody else { return }
-        lastSyncedBody = body
         lastSyncAt = Date()
 
         var req = URLRequest(url: url)
@@ -418,8 +442,14 @@ final class AppStore: ObservableObject {
         let bg = BackgroundTaskBox()
         bg.id = UIApplication.shared.beginBackgroundTask(withName: "sync") { bg.end() }
         Task {
-            _ = try? await URLSession.shared.data(for: request)
-            await MainActor.run { bg.end() }
+            let ok = ((try? await URLSession.shared.data(for: request))?.1 as? HTTPURLResponse)
+                .map { (200..<300).contains($0.statusCode) } ?? false
+            await MainActor.run {
+                // Retenu comme envoyé seulement si le Worker l'a accepté :
+                // sinon le prochain passage réessaie au lieu d'oublier.
+                if ok { self.lastSyncedBody = body } else { self.syncDirty = true }
+                bg.end()
+            }
         }
         logger.syncPush(items: history.count)
     }

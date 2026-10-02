@@ -12,6 +12,7 @@ final class TwitchAuthManager: NSObject, ASWebAuthenticationPresentationContextP
     /// - Parameter forceVerify: false = silencieux si déjà connecté dans Safari (< 1s)
     ///                          true  = re-login visible garanti (token fraîchement émis)
     func login(forceVerify: Bool = false) async -> String? {
+        let expectedState = UUID().uuidString
         var comps = URLComponents(string: "https://id.twitch.tv/oauth2/authorize")!
         comps.queryItems = [
             .init(name: "client_id",     value: kHelixClientID),
@@ -21,6 +22,9 @@ final class TwitchAuthManager: NSObject, ASWebAuthenticationPresentationContextP
             // en 2023, la couleur passe désormais par l'API Helix.
             .init(name: "scope",         value: "user:read:follows chat:read chat:edit user:manage:chat_color"),
             .init(name: "force_verify",  value: forceVerify ? "true" : "false"),
+            // Valeur aléatoire vérifiée au retour : seul le retour de CETTE
+            // demande de connexion est accepté.
+            .init(name: "state",         value: expectedState),
         ]
         guard let authURL = comps.url else { return nil }
 
@@ -40,29 +44,28 @@ final class TwitchAuthManager: NSObject, ASWebAuthenticationPresentationContextP
                     return
                 }
 
-                // Cherche access_token dans le fragment (#access_token=xxx)
-                if let fragment = url.fragment,
-                   let range = fragment.range(of: "access_token=") {
-                    let afterToken = String(fragment[range.upperBound...])
-                    let token = afterToken.components(separatedBy: "&").first
-                    logger.debug("AUTH", "Token extrait depuis fragment", String(token?.prefix(8) ?? "nil") + "…")
+                // Paramètres lus proprement, dans le fragment (#access_token=…)
+                // ou la query (?access_token=…). L'ancien découpage par texte
+                // prenait l'adresse entière pour un jeton quand il manquait
+                // (par ex. « twitchunblock://auth?error=… »).
+                var fragmentComps = URLComponents()
+                fragmentComps.query = url.fragment
+                let items: [URLQueryItem] =
+                    (URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? [])
+                    + (fragmentComps.queryItems ?? [])
+                func value(_ name: String) -> String? { items.first { $0.name == name }?.value }
+                if let token = value("access_token"), !token.isEmpty,
+                   token.allSatisfy({ $0.isLetter || $0.isNumber }),
+                   // Absent : ancienne page auth.html encore en cache, qui ne
+                   // le transmettait pas. Présent, il doit correspondre.
+                   value("state") == nil || value("state") == expectedState {
+                    logger.debug("AUTH", "Token reçu", nil)
                     continuation.resume(returning: token)
                     return
                 }
 
-                // Fallback : cherche dans la query string complète
-                if let token = url.absoluteString
-                    .components(separatedBy: "access_token=").last?
-                    .components(separatedBy: "&").first,
-                   !token.isEmpty {
-                    logger.debug("AUTH", "Token extrait depuis query string (fallback)",
-                                 String(token.prefix(8)) + "…")
-                    continuation.resume(returning: token)
-                    return
-                }
-
-                logger.error("AUTH", "Token introuvable dans la callback URL",
-                             url.absoluteString.prefix(100).description)
+                logger.error("AUTH", "Token absent ou state invalide",
+                             value("error_description") ?? value("error"))
                 continuation.resume(returning: nil)
             }
             s.presentationContextProvider = self

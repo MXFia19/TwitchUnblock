@@ -30,6 +30,13 @@ final class ChatService: NSObject, ObservableObject {
     /// précédente sont abandonnés au lieu d'atterrir dans le nouveau canal.
     private var generation = 0
 
+    /// Identifiants de la dernière connexion, pour la reconnexion automatique.
+    private var lastToken: String?
+    private var lastLogin: String?
+    /// Attente avant la prochaine reconnexion automatique (recul progressif).
+    private var reconnectDelay: Double = 2
+    private var reconnectTask: Task<Void, Never>?
+
     /// Garder à l'écran les messages supprimés par la modération, barrés, au
     /// lieu de les faire disparaître. Piloté par les réglages.
     var keepDeleted = false
@@ -86,6 +93,8 @@ final class ChatService: NSObject, ObservableObject {
     func connect(channel: String, token: String? = nil, login: String? = nil) {
         disconnect()
         channelName = channel.lowercased()
+        lastToken = token
+        lastLogin = login
         logger.info("CHAT", "Connexion IRC → #\(channelName)")
 
         guard let url = URL(string: "wss://irc-ws.chat.twitch.tv:443") else { return }
@@ -101,7 +110,9 @@ final class ChatService: NSObject, ObservableObject {
 
         Task {
             await send("CAP REQ :twitch.tv/tags twitch.tv/commands twitch.tv/membership")
-            if let token = token, let login = login, !login.isEmpty {
+            if let token = token, let login = login, !login.isEmpty,
+               token.allSatisfy({ $0.isLetter || $0.isNumber }),
+               login.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "_" }) {
                 await send("PASS oauth:\(token)")
                 await send("NICK \(login.lowercased())")
                 isAuthenticated = true
@@ -144,6 +155,7 @@ final class ChatService: NSObject, ObservableObject {
     // MARK: – Disconnect
     func disconnect() {
         generation &+= 1   // abandonne les messages encore en attente de synchro
+        reconnectTask?.cancel(); reconnectTask = nil
         presentUsers.removeAll()
         presenceSupported = false
         connectionTimeoutTask?.cancel(); connectionTimeoutTask = nil
@@ -183,7 +195,10 @@ final class ChatService: NSObject, ObservableObject {
         guard !sanitized.isEmpty, sanitized.count <= 500,
               isAuthenticated, isConnected else { return }
 
-        if let pid = replyParentId {
+        // Identifiant venu des balises IRC : vérifié, un retour à la ligne y
+        // ajouterait une commande IRC.
+        if let pid = replyParentId,
+           pid.allSatisfy({ $0.isHexDigit || $0 == "-" }) {
             await send("@reply-parent-msg-id=\(pid) PRIVMSG #\(channelName) :\(sanitized)")
         } else {
             await send("PRIVMSG #\(channelName) :\(sanitized)")
@@ -236,22 +251,47 @@ final class ChatService: NSObject, ObservableObject {
     }
 
     // MARK: – Receive loop
+    // Boucle (et non plus récursion, qui gardait une trame par message reçu)
+    // liée à SA connexion : si la connexion est remplacée (fallback anonyme,
+    // reconnexion), l'ancienne boucle s'arrête au lieu de lire la nouvelle.
     private func receive() async {
         guard let task = webSocketTask else { return }
-        do {
-            let msg = try await task.receive()
-            switch msg {
-            case .string(let text):  await handleRaw(text)
-            case .data(let data):
-                if let text = String(data: data, encoding: .utf8) { await handleRaw(text) }
-            @unknown default: break
-            }
-            if webSocketTask != nil { await receive() }
-        } catch {
-            if isConnected {
+        let gen = generation
+        while webSocketTask === task {
+            do {
+                let msg = try await task.receive()
+                guard webSocketTask === task else { return }
+                switch msg {
+                case .string(let text):  await handleRaw(text)
+                case .data(let data):
+                    if let text = String(data: data, encoding: .utf8) { await handleRaw(text) }
+                @unknown default: break
+                }
+            } catch {
+                guard webSocketTask === task, generation == gen else { return }
                 logger.error("CHAT", "Connexion IRC perdue", error.localizedDescription)
                 isConnected = false
+                scheduleReconnect(gen: gen)
+                return
             }
+        }
+    }
+
+    /// Reconnexion automatique après une coupure (réseau, serveur), avec un
+    /// recul progressif plafonné à 30 s.
+    private func scheduleReconnect(gen: Int) {
+        guard !channelName.isEmpty else { return }
+        let delay = reconnectDelay
+        reconnectDelay = min(reconnectDelay * 2, 30)
+        // Plusieurs échecs d'affilée (jeton refusé par l'IRC, par ex.) : on
+        // repasse en lecture anonyme plutôt que de réessayer sans fin.
+        if delay >= 8 { lastToken = nil; lastLogin = nil }
+        reconnectTask?.cancel()
+        reconnectTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            guard let self, !Task.isCancelled, self.generation == gen else { return }
+            logger.info("CHAT", "Reconnexion automatique → #\(self.channelName)")
+            self.connect(channel: self.channelName, token: self.lastToken, login: self.lastLogin)
         }
     }
 
@@ -264,6 +304,7 @@ final class ChatService: NSObject, ObservableObject {
             case "001":
                 isConnected = true
                 connectionTimeoutTask?.cancel(); connectionTimeoutTask = nil
+                reconnectDelay = 2
                 logger.success("CHAT", "IRC connecté à #\(channelName)")
             case "PING":
                 await send("PONG :tmi.twitch.tv")

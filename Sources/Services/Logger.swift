@@ -16,10 +16,12 @@ final class AppLogger: ObservableObject {
         formatter.dateFormat = "HH:mm:ss"
         let ms = Calendar.current.component(.nanosecond, from: now) / 1_000_000
         let timestamp = formatter.string(from: now) + String(format: ".%03d", ms)
-        let entry = LogEntry(id: counter, timestamp: timestamp, level: level,
-                             category: category, message: message, detail: detail)
-        counter += 1
+        // Identifiant attribué sur le fil principal : incrémenté depuis
+        // plusieurs fils, le compteur pouvait donner deux fois le même id.
         DispatchQueue.main.async {
+            let entry = LogEntry(id: self.counter, timestamp: timestamp, level: level,
+                                 category: category, message: message, detail: detail)
+            self.counter += 1
             self.logs.insert(entry, at: 0)
             if self.logs.count > self.maxLogs {
                 self.logs = Array(self.logs.prefix(self.maxLogs))

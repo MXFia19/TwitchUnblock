@@ -81,10 +81,10 @@ final class VodChatService: ObservableObject {
 
     /// Requête des commentaires : par position (première page) ou par curseur (suite).
     private func commentsQuery(offset: Int?, cursor: String?) -> String {
-        let arg = cursor.map { "after: \"\($0)\"" } ?? "contentOffsetSeconds: \(offset ?? 0)"
+        let arg = cursor.map { "after: \"\(gqlStr($0))\"" } ?? "contentOffsetSeconds: \(offset ?? 0)"
         return """
         query {
-          video(id: "\(videoId)") {
+          video(id: "\(gqlStr(videoId))") {
             comments(\(arg)) {
               edges {
                 cursor
@@ -262,7 +262,7 @@ final class VodChatService: ObservableObject {
 
     // MARK: Propriétaire de la VOD (pour charger les emotes/badges du canal)
     private func resolveOwner() async {
-        let q = "query { video(id: \"\(videoId)\") { owner { id login } } }"
+        let q = "query { video(id: \"\(gqlStr(videoId))\") { owner { id login } } }"
         guard let json  = await rawGQL(q),
               let d     = json["data"]   as? [String: Any],
               let video = d["video"]     as? [String: Any],

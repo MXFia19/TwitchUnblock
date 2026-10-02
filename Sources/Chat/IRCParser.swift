@@ -53,7 +53,10 @@ struct IRCParser {
     static func parseEmoteRanges(raw: String, text: String) -> [(String, Range<String.Index>)] {
         guard !raw.isEmpty else { return [] }
         var result: [(String, Range<String.Index>)] = []
-        let chars = Array(text)
+        // Twitch compte en points de code (unicodeScalars), pas en UTF-16 :
+        // après un emoji, les emotes étaient décalées.
+        let scalars = text.unicodeScalars
+        let count = scalars.count
 
         for part in raw.components(separatedBy: "/") {
             let kv = part.components(separatedBy: ":")
@@ -61,11 +64,12 @@ struct IRCParser {
             let emoteId = kv[0]
             for rangeStr in kv[1].components(separatedBy: ",") {
                 let bounds = rangeStr.components(separatedBy: "-").compactMap { Int($0) }
-                guard bounds.count == 2, bounds[0] < chars.count, bounds[1] < chars.count else { continue }
-                let startIdx = text.utf16.index(text.utf16.startIndex, offsetBy: bounds[0])
-                let endIdx   = text.utf16.index(text.utf16.startIndex, offsetBy: bounds[1] + 1)
+                // début ≤ fin vérifié : sinon `s..<e` faisait planter l'app.
+                guard bounds.count == 2, bounds[0] >= 0, bounds[0] <= bounds[1], bounds[1] < count else { continue }
+                let startIdx = scalars.index(scalars.startIndex, offsetBy: bounds[0])
+                let endIdx   = scalars.index(startIdx, offsetBy: bounds[1] - bounds[0] + 1)
                 if let s = startIdx.samePosition(in: text),
-                   let e = endIdx.samePosition(in: text) {
+                   let e = endIdx.samePosition(in: text), s < e {
                     result.append((emoteId, s..<e))
                 }
             }

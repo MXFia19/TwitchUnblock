@@ -142,7 +142,7 @@ struct HomeView: View {
     // MARK: – Chargements
     private func handleLogin() async {
         if let token = await TwitchAuthManager.shared.login() {
-            store.twitchToken = token
+            store.adoptToken(token)
         }
     }
 
@@ -178,8 +178,7 @@ struct HomeView: View {
             return
         } catch {
             errorFollowed = store.t("err_loading")
-            let desc = error.localizedDescription.lowercased()
-            if desc.contains("token") || desc.contains("401") || desc.contains("unauthorized") {
+            if (error as? URLError)?.code == .userAuthenticationRequired {
                 store.logout()
             }
         }

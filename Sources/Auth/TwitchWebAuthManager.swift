@@ -163,7 +163,7 @@ private struct TwitchWebLogin: UIViewRepresentable {
                 self.stop()
                 let login = cookies.first(where: { $0.name == "login" })?.value
                 logger.success("AUTH/WEB", "Token de session capturé",
-                               "\(String(auth.prefix(8)))… · @\(login ?? "?")")
+                               "@\(login ?? "?")")
                 DispatchQueue.main.async { self.parent.onComplete(auth, login) }
             }
         }

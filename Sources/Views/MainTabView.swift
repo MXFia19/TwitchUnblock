@@ -68,6 +68,8 @@ struct MainTabView: View {
     /// Clip en cours : VOD d'origine et position, pour en rejouer le chat.
     @State private var clipVodId: String? = nil
     @State private var clipOffset: Double = 0
+    /// Chapitres de la VOD en cours (changements de jeu).
+    @State private var vodChapters: [VodChapter] = []
 
     /// Décalage à appliquer au chat : la latence mesurée, si la synchro est active.
     private var chatDelay: Double {
@@ -187,6 +189,10 @@ struct MainTabView: View {
         // Réglages : ouverts depuis l'avatar de l'en-tête.
         .sheet(isPresented: $showSettings) {
             SettingsView()
+        }
+        // Notification « en live » touchée : on ouvre le direct.
+        .onReceive(NotificationCenter.default.publisher(for: .openLiveChannel)) { note in
+            if let login = note.userInfo?["login"] as? String, !login.isEmpty { playLive(login) }
         }
         // Réglage rapide du minuteur depuis le lecteur.
         .sheet(isPresented: $showSleepSheet) {
@@ -444,6 +450,7 @@ struct MainTabView: View {
                 canReturnToLive: dvrSourceChannel != nil,
                 streamStartedAt: liveStartedAt,
                 archiveAvailable: liveDvrVideoId != nil,
+                chapters: vodChapters,
                 onProgress: { time in
                     // Pendant une bascule, `playerMode` désigne déjà la
                     // nouvelle source alors que le lecteur en place joue encore
@@ -707,6 +714,13 @@ struct MainTabView: View {
         loadGeneration += 1
         let gen = loadGeneration
         clipVodId = nil; clipOffset = 0
+        vodChapters = []
+        if case .vod(let vid, _, _, _) = mode {
+            Task {
+                let ch = await getVodChapters(vodId: vid)
+                await MainActor.run { if gen == loadGeneration { vodChapters = ch } }
+            }
+        }
         Task {
             switch mode {
             case .clip(let slug, let title):

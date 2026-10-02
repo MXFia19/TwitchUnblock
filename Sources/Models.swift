@@ -26,6 +26,14 @@ struct VodData: Identifiable {
     let lengthSeconds: Int
 }
 
+/// Chapitre d'une VOD (changement de jeu).
+struct VodChapter: Identifiable, Hashable {
+    var id: Double { start }
+    let start: Double      // secondes
+    let duration: Double   // secondes
+    let title: String
+}
+
 /// Clip d'une chaîne (liste de la page chaîne).
 struct ClipData: Identifiable {
     let id: String            // slug

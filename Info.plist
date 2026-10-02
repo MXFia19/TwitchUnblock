@@ -32,6 +32,11 @@
     </array>
 
     <!-- ── Background Modes (audio + PiP) ────────────────────── -->
+    <key>BGTaskSchedulerPermittedIdentifiers</key>
+    <array>
+        <string>com.mxfia19.TwitchUnblock.liveRefresh</string>
+    </array>
+
     <key>UIBackgroundModes</key>
     <array>
         <string>audio</string>

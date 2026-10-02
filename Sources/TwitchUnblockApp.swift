@@ -18,6 +18,7 @@ struct TwitchUnblockApp: App {
                         // Dernier moment sûr pour sauvegarder : iOS peut
                         // fermer l'app ensuite sans prévenir.
                         store.flushToCloud(force: true)
+                        LiveNotifier.schedule()
                     case .active:
                         // Le service ne laisse passer qu'un ping par heure :
                         // on compte des journées actives.

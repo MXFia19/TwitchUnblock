@@ -275,6 +275,8 @@ struct ImmersivePlayer: View {
     /// sur tout le direct au lieu de la seule fenêtre rembobinable.
     var streamStartedAt: Date? = nil
     var archiveAvailable: Bool = false
+    /// Chapitres de la VOD (changements de jeu) : repères et liste pour sauter.
+    var chapters: [VodChapter] = []
     /// Rembobinage au-delà de la fenêtre DVR : le direct ne sait pas y aller,
     /// on bascule sur l'enregistrement à ce nombre de secondes du début.
     var onSeekToArchive: (Double) -> Void = { _ in }
@@ -317,6 +319,7 @@ struct ImmersivePlayer: View {
          canReturnToLive: Bool = false,
          streamStartedAt: Date? = nil,
          archiveAvailable: Bool = false,
+         chapters: [VodChapter] = [],
          onProgress: @escaping (Double) -> Void = { _ in },
          onLatency:  @escaping (Double?) -> Void = { _ in },
          onReduce:   @escaping () -> Void = {},
@@ -334,6 +337,7 @@ struct ImmersivePlayer: View {
         self.isLandscape = isLandscape; self.controlsInset = controlsInset
         self.fillScreen = fillScreen; self.canReturnToLive = canReturnToLive
         self.streamStartedAt = streamStartedAt; self.archiveAvailable = archiveAvailable
+        self.chapters = chapters
         self.onReduce = onReduce; self.onClose = onClose
         self.onMenu = onMenu; self.onRefresh = onRefresh
         self.onToggleChat = onToggleChat; self.onSleep = onSleep
@@ -539,6 +543,11 @@ struct ImmersivePlayer: View {
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
+                // AirPlay : envoyer la vidéo vers une Apple TV ou une TV compatible.
+                AirPlayButton()
+                    .frame(width: 32, height: 32)
+                    .background(Color.black.opacity(0.4))
+                    .clipShape(Circle())
                 overlayButton(icon: "ellipsis", action: onMenu)
                 overlayButton(icon: "xmark", action: onClose)
             }
@@ -630,6 +639,23 @@ struct ImmersivePlayer: View {
                     }
                 )
                 .tint(.tPrimary)
+                // Repères de chapitres sur la barre.
+                .overlay {
+                    if !isLive, chapters.count > 1, model.endTime > 0 {
+                        GeometryReader { geo in
+                            let inset: CGFloat = 12   // le curseur ne va pas jusqu'au bord
+                            let w = max(1, geo.size.width - inset * 2)
+                            ForEach(chapters.dropFirst()) { c in
+                                Rectangle()
+                                    .fill(Color.white.opacity(0.85))
+                                    .frame(width: 2, height: 7)
+                                    .position(x: inset + CGFloat(min(1, c.start / model.endTime)) * w,
+                                              y: geo.size.height / 2)
+                            }
+                        }
+                        .allowsHitTesting(false)
+                    }
+                }
 
             } else if canScrub {
                 // Bornes encore inconnues — le temps qu'une nouvelle source se
@@ -668,6 +694,27 @@ struct ImmersivePlayer: View {
                     Text("\(timeLabel(model.position)) / \(timeLabel(model.endTime))")
                         .font(.system(size: 12, weight: .semibold).monospacedDigit())
                         .foregroundColor(.white)
+                    // Chapitre en cours ; un appui liste les chapitres pour y sauter.
+                    if chapters.count > 1 {
+                        Menu {
+                            ForEach(chapters) { c in
+                                Button("\(timeLabel(c.start))  \(c.title)") {
+                                    model.seek(to: c.start); scheduleAutoHide()
+                                }
+                            }
+                        } label: {
+                            HStack(spacing: 3) {
+                                Image(systemName: "list.bullet").font(.system(size: 10, weight: .bold))
+                                Text(currentChapter?.title ?? "")
+                                    .font(.system(size: 12, weight: .semibold)).lineLimit(1)
+                            }
+                            .foregroundColor(.white)
+                            .padding(.horizontal, TSpace.sm)
+                            .frame(height: 28)
+                            .background(Color.black.opacity(0.4))
+                            .clipShape(Capsule())
+                        }
+                    }
                 }
 
                 Spacer(minLength: 0)
@@ -737,6 +784,10 @@ struct ImmersivePlayer: View {
 
     // MARK: – Briques d'interface
     @ViewBuilder
+    private var currentChapter: VodChapter? {
+        chapters.last { $0.start <= model.position + 0.5 }
+    }
+
     private func overlayButton(icon: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: icon)
@@ -834,4 +885,18 @@ struct ImmersivePlayer: View {
         // ne redemande la mise à jour.
         UIViewController.attemptRotationToDeviceOrientation()
     }
+}
+
+// MARK: – Bouton AirPlay
+/// Sélecteur de sortie (AirPlay) natif d'iOS.
+struct AirPlayButton: UIViewRepresentable {
+    func makeUIView(context: Context) -> AVRoutePickerView {
+        let v = AVRoutePickerView()
+        v.tintColor = .white
+        v.activeTintColor = UIColor(red: 0.57, green: 0.27, blue: 1, alpha: 1)
+        v.prioritizesVideoDevices = true
+        v.backgroundColor = .clear
+        return v
+    }
+    func updateUIView(_ uiView: AVRoutePickerView, context: Context) {}
 }

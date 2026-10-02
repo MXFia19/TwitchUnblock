@@ -5,6 +5,7 @@ struct SettingsView: View {
     @State private var showLogs        = false
     @State private var highlightDraft  = ""
     @State private var mutedDraft      = ""
+    @State private var liveNotif       = LiveNotifier.isEnabled
     @State private var showLogoutAlert = false
     @State private var showClearAlert  = false
     @State private var showWebLogin    = false   // login web (points de chaîne)
@@ -408,6 +409,17 @@ struct SettingsView: View {
                 Divider().background(Color.tBorder)
                 toggleRow(store.t("cfg_raids"),  store.t("cfg_raids_sub"),
                           $store.enableRaids,        log: "Système de raid")
+                Divider().background(Color.tBorder)
+                // Notifications quand une chaîne suivie passe en live.
+                toggleRow(store.t("notif_live"), store.t("notif_live_sub"),
+                          Binding(get: { liveNotif }, set: { on in
+                              liveNotif = on
+                              if on {
+                                  Task { let ok = await LiveNotifier.enable(); await MainActor.run { liveNotif = ok } }
+                              } else {
+                                  LiveNotifier.disable()
+                              }
+                          }), log: "Notifications de live")
             }
         }
     }

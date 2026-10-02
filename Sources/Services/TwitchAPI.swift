@@ -836,3 +836,25 @@ func getClip(slug: String) async -> ClipPlayback? {
                         broadcasterName: b?["displayName"] as? String,
                         vodId: vodId, vodOffset: offset)
 }
+
+// MARK: – Chapitres de VOD
+/// Changements de jeu d'une VOD (repères sur la barre de lecture).
+func getVodChapters(vodId: String) async -> [VodChapter] {
+    let q = """
+    query($id: ID!) { video(id: $id) { moments(first: 50, momentRequestType: VIDEO_CHAPTER_MARKERS) {
+      edges { node { positionMilliseconds durationMilliseconds description } }
+    } } }
+    """
+    guard let d = await gqlRequest(q, ["id": vodId]),
+          let v = d["video"] as? [String: Any],
+          let m = v["moments"] as? [String: Any],
+          let edges = m["edges"] as? [[String: Any]] else { return [] }
+    let chapters: [VodChapter] = edges.compactMap { e in
+        guard let n = e["node"] as? [String: Any] else { return nil }
+        let pos = (n["positionMilliseconds"] as? Double) ?? Double(n["positionMilliseconds"] as? Int ?? 0)
+        let dur = (n["durationMilliseconds"] as? Double) ?? Double(n["durationMilliseconds"] as? Int ?? 0)
+        return VodChapter(start: pos / 1000, duration: dur / 1000, title: n["description"] as? String ?? "")
+    }
+    // Un seul chapitre n'apporte rien (toute la VOD sur le même jeu).
+    return chapters.count > 1 ? chapters.sorted { $0.start < $1.start } : []
+}

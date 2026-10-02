@@ -1,14 +1,37 @@
 import SwiftUI
 import AVFoundation
+import UserNotifications
 
 // MARK: – AppDelegate (configure audio session for background playback)
-class AppDelegate: NSObject, UIApplicationDelegate {
+class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
     func application(
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
         configureAudioSession()
+        // Notifications de live : tâche d'arrière-plan et réception des touches.
+        LiveNotifier.register()
+        UNUserNotificationCenter.current().delegate = self
         return true
+    }
+
+    // Notification touchée → on ouvre le direct de la chaîne.
+    func userNotificationCenter(_ center: UNUserNotificationCenter,
+                                didReceive response: UNNotificationResponse,
+                                withCompletionHandler completionHandler: @escaping () -> Void) {
+        if let login = response.notification.request.content.userInfo["login"] as? String {
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(name: .openLiveChannel, object: nil, userInfo: ["login": login])
+            }
+        }
+        completionHandler()
+    }
+
+    // App ouverte : la notification s'affiche quand même en bannière.
+    func userNotificationCenter(_ center: UNUserNotificationCenter,
+                                willPresent notification: UNNotification,
+                                withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        completionHandler([.banner, .sound])
     }
 
     /// Fermeture de l'app → purge du cache emotes/badges (si l'option est active).

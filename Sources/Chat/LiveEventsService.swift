@@ -14,19 +14,35 @@ final class LiveEventsService: ObservableObject {
         let title: String
         let choices: [Choice]
         let endsAt: Date?
+        /// Terminé (Twitch le renvoie encore 1 à 3 min) : résultats, plus de vote.
+        var isActive: Bool = true
+        /// Plusieurs choix possibles.
+        var multichoice: Bool = false
         var total: Int { max(1, choices.reduce(0) { $0 + $1.votes }) }
+        var winnerId: String? {
+            guard !isActive, let best = choices.max(by: { $0.votes < $1.votes }), best.votes > 0 else { return nil }
+            return best.id
+        }
         struct Choice: Identifiable { let id: String; let title: String; let votes: Int }
     }
     struct LivePrediction {
+        var id: String = ""
         let title: String
         let locked: Bool
-        let outcomes: [(title: String, color: String, points: Int)]
+        let outcomes: [(id: String, title: String, color: String, points: Int, users: Int)]
+        /// Fin de la période de pari (prédiction encore ouverte).
+        var closesAt: Date? = nil
+        /// Résultat connu : l'issue gagnante (affichée un moment après la fin).
+        var winnerId: String? = nil
         var total: Int { max(1, outcomes.reduce(0) { $0 + $1.points }) }
     }
     struct LiveHype { let level: Int; let percent: Double }
 
-    /// Choix pour lequel on a voté (nil = pas encore voté sur ce sondage).
-    @Published var votedChoiceId: String? = nil
+    /// Choix pour lesquels on a voté (vide = pas encore voté sur ce sondage).
+    @Published var votedChoiceIds: Set<String> = []
+    var votedChoiceId: String? { votedChoiceIds.first }
+    /// Une prédiction vient de se terminer : on montre l'issue gagnante une minute.
+    private var resultUntil: Date? = nil
     @Published var voting = false
 
     private var channelId = ""
@@ -57,13 +73,14 @@ final class LiveEventsService: ObservableObject {
     func stop() {
         timer?.invalidate(); timer = nil
         watchStreak = 0; poll = nil; prediction = nil; hype = nil
-        votedChoiceId = nil; voting = false
+        votedChoiceIds = []; voting = false; resultUntil = nil
     }
 
     // MARK: Vote au sondage
     func vote(choiceId: String) async {
-        guard !voting, votedChoiceId == nil,
-              let p = poll, !p.id.isEmpty, !choiceId.isEmpty else { return }
+        guard !voting, let p = poll, p.isActive, !p.id.isEmpty, !choiceId.isEmpty,
+              !votedChoiceIds.contains(choiceId),
+              p.multichoice || votedChoiceIds.isEmpty else { return }
         guard !viewerId.isEmpty, let tok = token, !tok.isEmpty else {
             logger.warn("EVENTS", "Vote impossible", "session web ou compte manquant")
             return
@@ -85,7 +102,7 @@ final class LiveEventsService: ObservableObject {
                                                   sha256: H.votePoll, token: tok)
         if let d = res?["data"] as? [String: Any], d["voteInPoll"] != nil,
            res?["errors"] == nil {
-            votedChoiceId = choiceId
+            votedChoiceIds.insert(choiceId)
             logger.success("EVENTS", "🗳️ Vote enregistré", p.title)
             await fetchPoll()             // rafraîchit les pourcentages
         } else {
@@ -125,7 +142,7 @@ final class LiveEventsService: ObservableObject {
               let chan  = data["channel"] as? [String: Any] else { return }
         guard let p = chan["viewablePoll"] as? [String: Any] else {
             if poll != nil { logger.debug("EVENTS", "Sondage terminé", nil) }
-            poll = nil; votedChoiceId = nil; return
+            poll = nil; votedChoiceIds = []; return
         }
         logger.debug("EVENTS", "Sondage brut", "\(p.keys.sorted())")
         let title = p["title"] as? String ?? "Sondage"
@@ -138,11 +155,16 @@ final class LiveEventsService: ObservableObject {
         }
         // Fin du sondage : plusieurs formes possibles selon la réponse → parse défensif.
         let endsAt = pollEndDate(p)
+        let status = (p["status"] as? String)?.uppercased() ?? "ACTIVE"
+        let settings = p["settings"] as? [String: Any]
+        let multi = ((settings?["multichoice"] as? [String: Any])?["isEnabled"] as? Bool)
+                 ?? (settings?["multichoice"] as? Bool) ?? false
         let newPoll = choices.isEmpty ? nil
                     : LivePoll(id: p["id"] as? String ?? "", title: title,
-                               choices: choices, endsAt: endsAt)
+                               choices: choices, endsAt: endsAt,
+                               isActive: status == "ACTIVE", multichoice: multi)
         if newPoll?.id != poll?.id {
-            votedChoiceId = nil        // nouveau sondage → on peut revoter
+            votedChoiceIds = []        // nouveau sondage → on peut revoter
             if let np = newPoll {
                 logger.success("EVENTS", "📊 Sondage actif",
                                "\(np.title) · fin \(np.endsAt.map { "\($0)" } ?? "?")")
@@ -181,22 +203,69 @@ final class LiveEventsService: ObservableObject {
         let active = chan["activePredictionEvents"] as? [[String: Any]] ?? []
         let locked = chan["lockedPredictionEvents"] as? [[String: Any]] ?? []
         guard let ev = active.first ?? locked.first else {
-            if prediction != nil { logger.debug("EVENTS", "Prédiction terminée", nil) }
-            prediction = nil; return
+            // Disparue : terminée. On cherche l'issue gagnante pour l'afficher
+            // une minute, au lieu de tout faire disparaître d'un coup.
+            if let prev = prediction {
+                if prev.winnerId == nil, !prev.id.isEmpty, let winner = await resolvedWinner(eventId: prev.id) {
+                    var done = prev
+                    done.winnerId = winner
+                    done.closesAt = nil
+                    prediction = done
+                    resultUntil = Date().addingTimeInterval(60)
+                    logger.success("EVENTS", "🏆 Prédiction résolue", prev.title)
+                } else if prev.winnerId == nil || (resultUntil ?? .distantPast) < Date() {
+                    logger.debug("EVENTS", "Prédiction terminée", nil)
+                    prediction = nil; resultUntil = nil
+                }
+            }
+            return
         }
+        resultUntil = nil
         let title = ev["title"] as? String ?? "Prédiction"
         let isLocked = active.isEmpty || (ev["status"] as? String) == "LOCKED"
-        let outcomes = (ev["outcomes"] as? [[String: Any]] ?? []).map { o -> (String, String, Int) in
-            (o["title"] as? String ?? "",
+        let outcomes = (ev["outcomes"] as? [[String: Any]] ?? []).map { o -> (id: String, title: String, color: String, points: Int, users: Int) in
+            (o["id"] as? String ?? "",
+             o["title"] as? String ?? "",
              o["color"] as? String ?? "BLUE",
-             o["totalPoints"] as? Int ?? 0)
+             o["totalPoints"] as? Int ?? 0,
+             o["totalUsers"] as? Int ?? 0)
+        }
+        // Compte à rebours de la période de pari.
+        var closesAt: Date? = nil
+        if !isLocked, let created = (ev["createdAt"] as? String).flatMap(isoDate),
+           let window = ev["predictionWindowSeconds"] as? Int {
+            closesAt = created.addingTimeInterval(Double(window))
         }
         let newPred = outcomes.isEmpty ? nil
-                    : LivePrediction(title: title, locked: isLocked, outcomes: outcomes)
+                    : LivePrediction(id: ev["id"] as? String ?? "", title: title, locked: isLocked,
+                                     outcomes: outcomes, closesAt: closesAt)
         if newPred?.title != prediction?.title, let np = newPred {
             logger.success("EVENTS", "🔮 Prédiction active\(np.locked ? " (verrouillée)" : "")", np.title)
         }
         prediction = newPred
+    }
+
+    /// Issue gagnante d'une prédiction terminée (requête GQL publique).
+    private func resolvedWinner(eventId: String) async -> String? {
+        let q = "query($l: String!) { channel(name: $l) { resolvedPredictionEvents(first: 3) { edges { node { id winningOutcome { id } } } } } }"
+        guard let url = URL(string: "https://gql.twitch.tv/gql"),
+              let body = try? JSONSerialization.data(withJSONObject: ["query": q, "variables": ["l": login]]) else { return nil }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue(kGQLClientID, forHTTPHeaderField: "Client-ID")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = body
+        guard let (data, _) = try? await URLSession.shared.data(for: req),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let d = json["data"] as? [String: Any],
+              let chan = d["channel"] as? [String: Any],
+              let conn = chan["resolvedPredictionEvents"] as? [String: Any],
+              let edges = conn["edges"] as? [[String: Any]] else { return nil }
+        for e in edges {
+            guard let n = e["node"] as? [String: Any], n["id"] as? String == eventId else { continue }
+            return (n["winningOutcome"] as? [String: Any])?["id"] as? String
+        }
+        return nil
     }
 
     // MARK: Hype train (structure active jamais capturée → parse défensif + log)
@@ -248,7 +317,12 @@ struct LiveEventsBanner: View {
                             Text("📊 \(poll.title)")
                                 .font(.system(size: 12, weight: .bold)).foregroundColor(.tText)
                             Spacer(minLength: 4)
-                            if let endsAt = poll.endsAt, endsAt > Date() {
+                            if !poll.isActive {
+                                Text(store.t("poll_results"))
+                                    .font(.system(size: 10, weight: .bold)).foregroundColor(.tMuted)
+                                    .padding(.horizontal, 6).padding(.vertical, 2)
+                                    .background(Color.tSurface).cornerRadius(5)
+                            } else if let endsAt = poll.endsAt, endsAt > Date() {
                                 HStack(spacing: 3) {
                                     Image(systemName: "clock.fill").font(.system(size: 9))
                                     Text(timerInterval: Date()...endsAt, countsDown: true)
@@ -257,27 +331,52 @@ struct LiveEventsBanner: View {
                                 .foregroundColor(.tPrimary)
                             }
                         }
+                        if poll.multichoice && poll.isActive {
+                            Text(store.t("poll_multi"))
+                                .font(.system(size: 10)).foregroundColor(.tMuted)
+                        }
                         ForEach(poll.choices) { c in
+                            let voted = events.votedChoiceIds.contains(c.id)
                             Button {
                                 Task { await events.vote(choiceId: c.id) }
                             } label: {
                                 bar(label: c.title, value: c.votes, total: poll.total,
-                                    color: .tPrimary, voted: events.votedChoiceId == c.id)
+                                    color: poll.winnerId == c.id ? .tSuccess : .tPrimary,
+                                    voted: voted, winner: poll.winnerId == c.id)
                             }
                             .buttonStyle(.plain)
-                            .disabled(events.voting || events.votedChoiceId != nil || c.id.isEmpty)
+                            .disabled(events.voting || !poll.isActive || voted || c.id.isEmpty
+                                      || (!poll.multichoice && !events.votedChoiceIds.isEmpty))
                         }
+                        Text("\(poll.choices.reduce(0) { $0 + $1.votes }) \(store.t("poll_votes"))")
+                            .font(.system(size: 10)).foregroundColor(.tMuted)
                     }
                 }
             }
             if let pred = events.prediction {
                 banner(icon: "sparkles", tint: .tPurple) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("🔮 \(pred.title)\(pred.locked ? " 🔒" : "")")
-                            .font(.system(size: 12, weight: .bold)).foregroundColor(.tText)
+                        HStack(spacing: 6) {
+                            Text("🔮 \(pred.title)\(pred.locked && pred.winnerId == nil ? " 🔒" : "")")
+                                .font(.system(size: 12, weight: .bold)).foregroundColor(.tText)
+                            Spacer(minLength: 4)
+                            if let closes = pred.closesAt, closes > Date() {
+                                HStack(spacing: 3) {
+                                    Image(systemName: "clock.fill").font(.system(size: 9))
+                                    Text(timerInterval: Date()...closes, countsDown: true)
+                                        .font(.system(size: 11, weight: .bold).monospacedDigit())
+                                }
+                                .foregroundColor(.tPurple)
+                            } else if pred.winnerId != nil {
+                                Text(store.t("pred_result"))
+                                    .font(.system(size: 10, weight: .bold)).foregroundColor(.tSuccess)
+                            }
+                        }
                         ForEach(Array(pred.outcomes.enumerated()), id: \.offset) { _, o in
-                            bar(label: o.title, value: o.points, total: pred.total,
-                                color: predColor(o.color), suffix: "pts")
+                            bar(label: "\(o.title)" + (o.users > 0 ? " · \(o.users) 👤" : ""),
+                                value: o.points, total: pred.total,
+                                color: pred.winnerId == nil || pred.winnerId == o.id ? predColor(o.color) : .tMuted,
+                                suffix: "pts", winner: pred.winnerId == o.id)
                         }
                     }
                 }
@@ -308,10 +407,14 @@ struct LiveEventsBanner: View {
 
     @ViewBuilder
     private func bar(label: String, value: Int, total: Int, color: Color,
-                     suffix: String = "", voted: Bool = false) -> some View {
+                     suffix: String = "", voted: Bool = false, winner: Bool = false) -> some View {
         let pct = Double(value) / Double(total)
         VStack(alignment: .leading, spacing: 1) {
             HStack(spacing: 4) {
+                if winner {
+                    Image(systemName: "trophy.fill")
+                        .font(.system(size: 10)).foregroundColor(.tWarning)
+                }
                 if voted {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 10)).foregroundColor(.tSuccess)

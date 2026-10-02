@@ -30,7 +30,9 @@ struct ChatView: View {
     @State private var showWebLogin     = false
     @State private var webLoginClear    = false   // true = re-login forcé (token web expiré)
     @State private var threadRoot: ChatMessage? = nil   // fil de discussion ouvert
-    @State private var pinnedCollapsed  = false   // bandeau épinglé masqué/affiché
+    @State private var pinnedExpanded   = false   // bandeau épinglé déplié
+    @State private var dismissedPinId: String? = nil   // épingle réduite en pastille
+    @State private var chromeWidth: CGFloat = 320
     @State private var isSetup          = false   // chat/points déjà initialisés
     @State private var teardownWork: DispatchWorkItem? = nil   // anti-rebond plein écran
     @FocusState private var isInputFocused: Bool
@@ -116,6 +118,21 @@ struct ChatView: View {
                         .lineLimit(1)
                         .truncationMode(.tail)
                 }
+                // Épingle réduite : une pastille la rouvre.
+                if store.showPinnedMessages, let pin = pubsub.pinned, pin.id == dismissedPinId {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.18)) { dismissedPinId = nil }
+                    } label: {
+                        HStack(spacing: 3) {
+                            Image(systemName: "pin.fill").font(.system(size: 9))
+                            Text(store.t("pinned_short")).font(.system(size: 10, weight: .bold))
+                        }
+                        .foregroundColor(.tPurple)
+                        .padding(.horizontal, 7).padding(.vertical, 3)
+                        .background(Color.tPurple.opacity(0.15)).cornerRadius(6)
+                    }
+                    .fixedSize()
+                }
                 Text("#\(channelName)")
                     .font(.system(size: 11, weight: .bold))
                     .foregroundColor(.tPrimary)
@@ -124,48 +141,20 @@ struct ChatView: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
+            .background(GeometryReader { g in
+                Color.clear
+                    .onAppear { chromeWidth = g.size.width }
+                    .onChange(of: g.size.width) { chromeWidth = $0 }
+            })
             .background(Color.tCard)
             .overlay(Divider().background(Color.tBorder), alignment: .bottom)
 
             // ── Message épinglé ─────────────────────────────────────
-            if store.showPinnedMessages, let pin = pubsub.pinnedText {
-                HStack(alignment: .top, spacing: 8) {
-                    Image(systemName: "pin.fill")
-                        .font(.system(size: 12)).foregroundColor(.tWarning)
-                        .padding(.top, 1)
-                    VStack(alignment: .leading, spacing: 2) {
-                        if let author = pubsub.pinnedAuthor {
-                            Text(author)
-                                .font(.system(size: 11, weight: .bold))
-                                .foregroundColor(.tWarning)
-                        }
-                        if !pinnedCollapsed {
-                            // Liens cliquables (détection auto d'URL) + retour à la ligne
-                            Text(linkified(pin))
-                                .font(.system(size: 12))
-                                .tint(.tOutplayer)
-                                .foregroundColor(.tText)
-                                .fixedSize(horizontal: false, vertical: true)
-                        } else {
-                            Text(pin)
-                                .font(.system(size: 12)).foregroundColor(.tMuted)
-                                .lineLimit(1).truncationMode(.tail)
-                        }
-                    }
-                    Spacer(minLength: 0)
-                    // Bouton masquer / afficher
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.15)) { pinnedCollapsed.toggle() }
-                    } label: {
-                        Image(systemName: pinnedCollapsed ? "chevron.down" : "chevron.up")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundColor(.tMuted)
-                            .frame(width: 26, height: 26)
-                    }
+            if store.showPinnedMessages, let pin = pubsub.pinned, pin.id != dismissedPinId {
+                PinnedBanner(pin: pin, width: chromeWidth, expanded: $pinnedExpanded) {
+                    withAnimation(.easeInOut(duration: 0.18)) { dismissedPinId = pin.id }
                 }
-                .padding(.horizontal, 12).padding(.vertical, 8)
-                .background(Color.tWarning.opacity(0.12))
-                .overlay(Divider().background(Color.tBorder), alignment: .bottom)
+                .transition(.opacity)
             }
 
             // ── Événements live (sondage / prédiction / hype train) ─
@@ -467,9 +456,9 @@ struct ChatView: View {
         // Les services ci-dessous sont conditionnés par les réglages de personnalisation :
         // on n'ouvre pas de sondage/websocket inutile si l'option est désactivée.
         // Messages épinglés (PubSub) — nécessite un token + l'ID du canal.
-        if store.showPinnedMessages, let cid = channelId,
-           let tok = store.twitchWebToken ?? store.twitchToken {
-            pubsub.connect(channelId: cid, token: tok)
+        // Lecture publique : plus besoin d'être connecté pour les voir.
+        if store.showPinnedMessages, let cid = channelId {
+            pubsub.connect(channelId: cid)
         }
         if let cid = channelId {
             // Statut de suivi (nécessite le token web pour le champ self.follower)

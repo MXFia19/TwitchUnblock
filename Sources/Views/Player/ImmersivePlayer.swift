@@ -785,7 +785,9 @@ struct ImmersivePlayer: View {
     // MARK: – Briques d'interface
     @ViewBuilder
     private var currentChapter: VodChapter? {
-        chapters.last(where: { $0.start <= model.position + 0.5 })
+        var found: VodChapter? = nil
+        for c in chapters where c.start <= model.position + 0.5 { found = c }
+        return found
     }
 
     private func overlayButton(icon: String, action: @escaping () -> Void) -> some View {

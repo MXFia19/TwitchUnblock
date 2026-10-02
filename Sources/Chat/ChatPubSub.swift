@@ -172,6 +172,14 @@ struct PinnedBanner: View {
     @Binding var expanded: Bool
     let onDismiss: () -> Void
     @EnvironmentObject private var store: AppStore
+    /// Largeur réelle du bandeau (mesurée), et hauteur du message déplié.
+    @State private var measuredWidth: CGFloat = 0
+    @State private var contentHeight: CGFloat = 0
+
+    /// Place laissée au message : bandeau moins l'icône, les deux boutons et les marges.
+    private var textWidth: CGFloat {
+        max(60, (measuredWidth > 0 ? measuredWidth : width) - 100)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
@@ -180,12 +188,17 @@ struct PinnedBanner: View {
                     .font(.system(size: 11)).foregroundColor(.tPurple)
                     .padding(.top, 3)
                 if expanded {
-                    ScrollView {
+                    // Hauteur bornée : au-delà, le message défile dans le
+                    // bandeau au lieu de pousser le chat hors de l'écran.
+                    ScrollView(.vertical, showsIndicators: true) {
                         WrappingHStack(message: pin.asMessage, timeString: "",
-                                       availableWidth: max(40, width - 90))
+                                       availableWidth: textWidth)
+                            .background(GeometryReader { g in
+                                Color.clear.preference(key: PinnedHeightKey.self, value: g.size.height)
+                            })
                     }
-                    .frame(maxHeight: 180)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(width: textWidth, height: min(max(contentHeight, 18), 160), alignment: .topLeading)
+                    .onPreferenceChange(PinnedHeightKey.self) { contentHeight = $0 }
                 } else {
                     HStack(spacing: 3) {
                         ForEach(pin.badges) { badge in
@@ -224,6 +237,12 @@ struct PinnedBanner: View {
         .onChange(of: pin.id) { _ in expanded = false }
         .padding(.leading, 10).padding(.trailing, 4).padding(.vertical, 6)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .background(GeometryReader { g in
+            Color.clear
+                .onAppear { measuredWidth = g.size.width }
+                .onChange(of: g.size.width) { measuredWidth = $0 }
+        })
+        .clipped()
         .background(Color.tCard)
         .overlay(alignment: .bottom) {
             if let start = pin.startsAt, let end = pin.endsAt, end > start {
@@ -257,4 +276,9 @@ struct PinnedBanner: View {
         }
         return parts.joined(separator: " · ")
     }
+}
+
+private struct PinnedHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
 }

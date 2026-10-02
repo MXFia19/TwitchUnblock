@@ -308,6 +308,8 @@ struct ImmersivePlayer: View {
     /// au troisième plutôt que trois fois « +10 s » sans savoir où l'on est.
     @State private var seekTotal: Double = 0
     @State private var seekResetTask: Task<Void, Never>? = nil
+    /// Liste des chapitres ouverte (feuille : ne se referme pas toute seule).
+    @State private var showChapters = false
 
     init(url: URL, isLive: Bool, dvrEnabled: Bool, savedTime: Double,
          info: PlayerOverlayInfo,
@@ -462,6 +464,51 @@ struct ImmersivePlayer: View {
             // En PiP la lecture continue hors de l'écran : ne pas tout couper.
             if !model.pipActive { model.teardown() }
         }
+        // Attachée à la racine : la feuille reste ouverte même quand les
+        // commandes se masquent (un Menu dans la barre se refermait avec elle).
+        .sheet(isPresented: $showChapters, onDismiss: { scheduleAutoHide() }) {
+            chaptersSheet
+        }
+    }
+
+    // ── Liste des chapitres ───────────────────────────────────────────
+    @ViewBuilder private var chaptersSheet: some View {
+        let current = currentChapter
+        NavigationStack {
+            List(chapters) { c in
+                Button {
+                    model.seek(to: c.start)
+                    showChapters = false
+                } label: {
+                    HStack(spacing: 10) {
+                        Text(timeLabel(c.start))
+                            .font(.system(size: 13, weight: .semibold).monospacedDigit())
+                            .foregroundColor(.tMuted)
+                            .frame(minWidth: 56, alignment: .leading)
+                        Text(c.title)
+                            .font(.system(size: 15, weight: c == current ? .bold : .regular))
+                            .foregroundColor(c == current ? .tPrimary : .tText)
+                            .lineLimit(2)
+                        Spacer(minLength: 0)
+                        if c == current {
+                            Image(systemName: "checkmark").foregroundColor(.tPrimary)
+                        }
+                    }
+                }
+                .listRowBackground(Color.tCard)
+            }
+            .scrollContentBackground(.hidden)
+            .background(Color.tDark)
+            .navigationTitle(store.t("chapters"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(store.t("close")) { showChapters = false }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+        .preferredColorScheme(.dark)
     }
 
     // MARK: – Commandes en surimpression
@@ -696,12 +743,9 @@ struct ImmersivePlayer: View {
                         .foregroundColor(.white)
                     // Chapitre en cours ; un appui liste les chapitres pour y sauter.
                     if chapters.count > 1 {
-                        Menu {
-                            ForEach(chapters) { c in
-                                Button("\(timeLabel(c.start))  \(c.title)") {
-                                    model.seek(to: c.start); scheduleAutoHide()
-                                }
-                            }
+                        Button {
+                            hideTask?.cancel()
+                            showChapters = true
                         } label: {
                             HStack(spacing: 3) {
                                 Image(systemName: "list.bullet").font(.system(size: 10, weight: .bold))
@@ -714,6 +758,7 @@ struct ImmersivePlayer: View {
                             .background(Color.black.opacity(0.4))
                             .clipShape(Capsule())
                         }
+                        .buttonStyle(.plain)
                     }
                 }
 

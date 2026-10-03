@@ -14,6 +14,8 @@ struct TwitchUnblockApp: App {
                 .task { await UsageService.shared.ping(enabled: store.shareUsage) }
                 // À chaque lancement : nouvelle version disponible ?
                 .task { await UpdateChecker.shared.checkIfDue(atLaunch: true) }
+                // Annonce du développeur en cours ?
+                .task { await AnnouncementService.shared.refresh(force: true) }
                 .onChange(of: scenePhase) { phase in
                     switch phase {
                     case .background:
@@ -30,6 +32,10 @@ struct TwitchUnblockApp: App {
                         Task { await store.refreshFromCloudIfStale() }
                         // Nouvelle version sur la source ? (au plus toutes les 6 h)
                         Task { await UpdateChecker.shared.checkIfDue() }
+                        // Lives vus dans l'app : pas de notification en retard
+                        // au prochain réveil pour un live déjà découvert ici.
+                        Task { await LiveNotifier.check(notify: false) }
+                        Task { await AnnouncementService.shared.refresh() }
                     default:
                         break
                     }

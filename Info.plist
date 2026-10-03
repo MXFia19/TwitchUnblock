@@ -3,6 +3,10 @@
 <plist version="1.0">
 <dict>
     <!-- ── App ───────────────────────────────────────────────── -->
+    <key>CFBundleDevelopmentRegion</key>
+    <string>en</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
     <key>CFBundleName</key>
     <string>TwitchUnblock</string>
     <key>CFBundleDisplayName</key>

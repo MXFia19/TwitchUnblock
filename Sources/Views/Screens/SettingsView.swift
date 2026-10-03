@@ -9,6 +9,7 @@ struct SettingsView: View {
     @State private var highlightDraft  = ""
     @State private var mutedDraft      = ""
     @State private var liveNotif       = LiveNotifier.isEnabled
+    @State private var notifTestResult: String? = nil
     @State private var showLogoutAlert = false
     @State private var showClearAlert  = false
     @State private var showWebLogin    = false   // login web (points de chaîne)
@@ -467,8 +468,54 @@ struct SettingsView: View {
                                   LiveNotifier.disable()
                               }
                           }), log: "Notifications de live")
+                if liveNotif { liveNotifTools }
             }
         }
+    }
+
+    /// Test et état des notifications : savoir si iOS réveille bien l'app.
+    @ViewBuilder private var liveNotifTools: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Button {
+                Task {
+                    let ok = await LiveNotifier.sendTest(lang: store.lang)
+                    await MainActor.run { notifTestResult = ok ? store.t("notif_test_sent") : store.t("notif_test_denied") }
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "bell.badge.fill").font(.system(size: 13, weight: .semibold))
+                    Text(store.t("notif_test")).font(.system(size: 14, weight: .semibold))
+                }
+                .foregroundColor(.tPrimary)
+                .padding(.horizontal, 12).padding(.vertical, 8)
+                .background(Color.tPrimary.opacity(0.12))
+                .cornerRadius(10)
+            }
+            .buttonStyle(.plain)
+            if let notifTestResult {
+                Text(notifTestResult).font(.tMeta).foregroundColor(.tMuted)
+            }
+            Text(notifStatusLine).font(.tMeta).foregroundColor(.tMuted)
+                .fixedSize(horizontal: false, vertical: true)
+            if UIApplication.shared.backgroundRefreshStatus != .available {
+                Text(store.t("notif_bg_off")).font(.tMeta).foregroundColor(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else if let err = UserDefaults.standard.string(forKey: LiveNotifier.submitErrorKey) {
+                Text("\(store.t("notif_bg_refused")) (\(err))").font(.tMeta).foregroundColor(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(.leading, 2)
+    }
+
+    private var notifStatusLine: String {
+        guard let last = LiveNotifier.lastRun else { return store.t("notif_last_never") }
+        let f = RelativeDateTimeFormatter()
+        f.locale = Locale(identifier: store.lang.rawValue)
+        f.unitsStyle = .full
+        let ok = UserDefaults.standard.bool(forKey: LiveNotifier.lastOkKey)
+        return store.t("notif_last_run").replacingOccurrences(of: "{t}", with: f.localizedString(for: last, relativeTo: Date()))
+            + (ok ? "" : " · " + store.t("notif_last_failed"))
     }
 
     @ViewBuilder private var chatBehaviorCard: some View {

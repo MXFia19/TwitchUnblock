@@ -12,6 +12,13 @@ enum LiveNotifier {
     static let taskId = "com.mxfia19.TwitchUnblock.liveRefresh"
     private static let knownKey = "notif_known_live"
     static let enabledKey = "notif_live_enabled"
+    /// Dernier réveil en arrière-plan (date, réussite) : affiché dans les
+    /// réglages pour savoir si iOS réveille bien l'app.
+    static let lastRunKey = "notif_last_bg_run"
+    static let lastOkKey  = "notif_last_bg_ok"
+    /// La dernière demande de réveil a été refusée par iOS (identifiant non
+    /// autorisé, actualisation en arrière-plan coupée…).
+    static let submitErrorKey = "notif_submit_error"
 
     static var isEnabled: Bool { UserDefaults.standard.bool(forKey: enabledKey) }
 
@@ -28,7 +35,36 @@ enum LiveNotifier {
         guard isEnabled else { return }
         let req = BGAppRefreshTaskRequest(identifier: taskId)
         req.earliestBeginDate = Date(timeIntervalSinceNow: 15 * 60)
-        try? BGTaskScheduler.shared.submit(req)
+        do {
+            try BGTaskScheduler.shared.submit(req)
+            UserDefaults.standard.removeObject(forKey: submitErrorKey)
+        } catch {
+            // Jusqu'ici avalé en silence : c'est ce qui cachait la panne.
+            UserDefaults.standard.set(String(describing: error), forKey: submitErrorKey)
+            logger.warn("NOTIF", "Réveil en arrière-plan refusé par iOS", String(describing: error))
+        }
+    }
+
+    /// Notification immédiate, pour vérifier autorisations et affichage.
+    static func sendTest(lang: Lang) async -> Bool {
+        let center = UNUserNotificationCenter.current()
+        let granted = (try? await center.requestAuthorization(options: [.alert, .sound, .badge])) ?? false
+        guard granted else { return false }
+        let content = UNMutableNotificationContent()
+        content.title = translate("notif_test_title", lang)
+        content.body = translate("notif_test_body", lang)
+        content.sound = .default
+        // 3 s : le temps de quitter l'app pour la voir arriver comme une vraie.
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 3, repeats: false)
+        do {
+            try await center.add(UNNotificationRequest(identifier: "live-test", content: content, trigger: trigger))
+            return true
+        } catch { return false }
+    }
+
+    static var lastRun: Date? {
+        let t = UserDefaults.standard.double(forKey: lastRunKey)
+        return t > 0 ? Date(timeIntervalSince1970: t) : nil
     }
 
     /// Active l'option : demande l'autorisation, mémorise l'état actuel (pour
@@ -52,6 +88,8 @@ enum LiveNotifier {
         schedule()   // le suivant d'abord : un échec ne doit pas tout arrêter
         let work = Task {
             let ok = await check(notify: true)
+            UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: lastRunKey)
+            UserDefaults.standard.set(ok, forKey: lastOkKey)
             task.setTaskCompleted(success: ok)
         }
         task.expirationHandler = { work.cancel() }

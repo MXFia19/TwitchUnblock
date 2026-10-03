@@ -17,6 +17,10 @@ struct HomeView: View {
     @State private var loadingTop      = false
     @State private var errorFollowed: String? = nil
     @State private var section: HomeSection = .live
+    @State private var showWebLogin = false
+    /// Bandeau « session web » masqué jusqu'à cette date (bouton ✕).
+    @AppStorage("web_banner_hidden_until") private var webBannerHiddenUntil: Double = 0
+    @ObservedObject private var announcements = AnnouncementService.shared
 
     enum TopLang: Hashable { case local, all }
 
@@ -57,6 +61,19 @@ struct HomeView: View {
                 Task { await loadAll() }
             }
         }
+        .sheet(isPresented: $showWebLogin) {
+            TwitchWebLoginSheet(
+                clearSession: store.webSessionExpired,
+                onComplete: { webToken, webLogin in
+                    showWebLogin = false
+                    if store.twitchLogin == nil, let l = webLogin { store.twitchLogin = l }
+                    store.twitchWebToken = webToken
+                    store.webSessionExpired = false
+                    logger.success("AUTH/WEB", "Session web connectée depuis l'accueil", nil)
+                },
+                onCancel: { showWebLogin = false }
+            )
+        }
         .onChange(of: store.twitchToken) { token in
             if token != nil { Task { await loadAll() } }
             else { followedStreams = []; topStreams = [] }
@@ -72,6 +89,11 @@ struct HomeView: View {
     // MARK: – Non connecté
     @ViewBuilder private var loggedOut: some View {
         VStack(spacing: TSpace.lg) {
+            if let a = announcements.current {
+                AnnouncementBanner(announcement: a) { announcements.dismiss(a) }
+                    .padding(.horizontal, TSpace.lg)
+                    .padding(.top, TSpace.md)
+            }
             Spacer()
             TEmptyState(
                 icon: "person.crop.circle.badge.plus",
@@ -84,10 +106,73 @@ struct HomeView: View {
         }
     }
 
+    // MARK: – Bandeau session web
+    @ViewBuilder private var webSessionBanner: some View {
+        let expired = store.webSessionExpired
+        HStack(alignment: .top, spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(LinearGradient(colors: [Color.tPrimary, Color.tPurple],
+                                         startPoint: .topLeading, endPoint: .bottomTrailing))
+                    .frame(width: 38, height: 38)
+                Image(systemName: expired ? "exclamationmark.triangle.fill" : "sparkles")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(.white)
+            }
+            VStack(alignment: .leading, spacing: 6) {
+                Text(store.t(expired ? "web_expired" : "web_banner_title"))
+                    .font(.tCardTitle).foregroundColor(.tText)
+                Text(store.t("web_banner_msg"))
+                    .font(.tMeta).foregroundColor(.tMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button { showWebLogin = true } label: {
+                    Text(store.t(expired ? "web_reconnect" : "web_banner_btn"))
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 14).padding(.vertical, 8)
+                        .background(Color.tPrimary)
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 2)
+            }
+            Spacer(minLength: 0)
+            // ✕ : masqué une semaine, puis il revient (la session reste utile).
+            Button {
+                withAnimation { webBannerHiddenUntil = Date().timeIntervalSince1970 + 7 * 86400 }
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(.tMuted)
+                    .frame(width: 28, height: 28)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(14)
+        .background(Color.tCard)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
+            .stroke(Color.tPrimary.opacity(0.3), lineWidth: 1))
+    }
+
     // MARK: – Lives
     @ViewBuilder private var liveSection: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: TSpace.lg) {
+
+                // ── Annonce du développeur (si une est en cours) ────
+                if let a = announcements.current {
+                    AnnouncementBanner(announcement: a) { announcements.dismiss(a) }
+                        .padding(.horizontal, TSpace.lg)
+                        .padding(.top, TSpace.md)
+                }
+
+                // ── Session web absente : points, coffres, prédictions ──
+                if store.twitchWebToken == nil && Date().timeIntervalSince1970 > webBannerHiddenUntil {
+                    webSessionBanner
+                        .padding(.horizontal, TSpace.lg)
+                        .padding(.top, TSpace.md)
+                }
 
                 // ── Chaînes suivies ─────────────────────────────────
                 TSectionHeader(store.t("followed_channels"), icon: "heart.fill")

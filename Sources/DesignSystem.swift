@@ -397,6 +397,9 @@ struct TPromptCard: View {
     var secondary: String? = nil
     let onPrimary: () -> Void
     var onSecondary: () -> Void = {}
+    /// Troisième choix, plus discret (ex. « Ne plus afficher »).
+    var tertiary: String? = nil
+    var onTertiary: () -> Void = {}
 
     var body: some View {
         ZStack {
@@ -454,6 +457,16 @@ struct TPromptCard: View {
                                 .foregroundColor(.tMuted)
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 40)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    if let tertiary {
+                        Button(action: onTertiary) {
+                            Text(tertiary)
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundColor(.tMuted.opacity(0.75))
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 30)
                         }
                         .buttonStyle(.plain)
                     }

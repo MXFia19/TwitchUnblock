@@ -192,16 +192,16 @@ struct MainTabView: View {
         .sheet(isPresented: $showSettings) {
             SettingsView()
         }
-        // Invitation au Discord : une seule fois, au 2ᵉ lancement, et jamais
-        // en même temps que l'alerte de mise à jour.
+        // Invitation au Discord : à chaque lancement à partir du 2ᵉ, tant
+        // qu'on n'a pas choisi « Ne plus afficher » (ou rejoint), et jamais en
+        // même temps que la fenêtre de mise à jour.
         .task {
             let ud = UserDefaults.standard
             let launches = ud.integer(forKey: "launch_count") + 1
             ud.set(launches, forKey: "launch_count")
-            guard launches >= 2, !ud.bool(forKey: "discord_prompted") else { return }
+            guard launches >= 2, !ud.bool(forKey: "discord_never") else { return }
             try? await Task.sleep(nanoseconds: 4_000_000_000)
             guard !updater.showAlert else { return }
-            ud.set(true, forKey: "discord_prompted")
             showDiscordPrompt = true
         }
         // Fenêtres « mise à jour » et « Discord » dans le style de l'app.
@@ -225,10 +225,17 @@ struct MainTabView: View {
                     primary: store.t("discord_join"),
                     secondary: store.t("later"),
                     onPrimary: {
+                        // Rejoint : inutile de le reproposer.
+                        UserDefaults.standard.set(true, forKey: "discord_never")
                         withAnimation(.spring(response: 0.3)) { showDiscordPrompt = false }
                         if let url = URL(string: kDiscordURL) { UIApplication.shared.open(url) }
                     },
-                    onSecondary: { withAnimation(.spring(response: 0.3)) { showDiscordPrompt = false } })
+                    onSecondary: { withAnimation(.spring(response: 0.3)) { showDiscordPrompt = false } },
+                    tertiary: store.t("dont_show_again"),
+                    onTertiary: {
+                        UserDefaults.standard.set(true, forKey: "discord_never")
+                        withAnimation(.spring(response: 0.3)) { showDiscordPrompt = false }
+                    })
                 .zIndex(10)
             }
         }

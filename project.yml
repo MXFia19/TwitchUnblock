@@ -23,13 +23,15 @@ targets:
     sources:
       - path: Sources
 
-    info:
-      path: Info.plist
-
+    # Pas de bloc `info:` : xcodegen réécrirait Info.plist avec un fichier
+    # minimal et ferait disparaître nos clés (tâche d'arrière-plan des
+    # notifications, schémas canOpenURL, liens twitchunblock://…).
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.mxfia19.TwitchUnblock
         PRODUCT_NAME: TwitchUnblock
+        INFOPLIST_FILE: Info.plist
+        GENERATE_INFOPLIST_FILE: NO
         SWIFT_VERSION: 5.9
         CODE_SIGN_STYLE: Manual
         CODE_SIGN_IDENTITY: ""

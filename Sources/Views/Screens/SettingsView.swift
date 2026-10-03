@@ -821,6 +821,23 @@ struct SettingsView: View {
         }
     }
 
+    /// Lien externe façon bouton (crédits).
+    private func creditLink(icon: String, title: String, url: String) -> some View {
+        Link(destination: URL(string: url)!) {
+            HStack(spacing: TSpace.sm) {
+                Image(systemName: icon).font(.system(size: 13, weight: .semibold))
+                Text(title).font(.tLabel)
+                Spacer()
+                Image(systemName: "arrow.up.right").font(.system(size: 12, weight: .semibold))
+            }
+            .foregroundColor(.tText)
+            .padding(.horizontal, TSpace.md)
+            .frame(height: 44)
+            .background(Color.tSurface)
+            .cornerRadius(TRadius.control)
+        }
+    }
+
     @ViewBuilder private var aboutCard: some View {
         // ── À propos / Logs ─────────────────────────────────
         settingCard {
@@ -842,6 +859,29 @@ struct SettingsView: View {
                     .font(.tMeta)
                     .foregroundColor(.tMuted)
                     .fixedSize(horizontal: false, vertical: true)
+
+                // ── Crédits ──────────────────────────────────────
+                HStack(spacing: 4) {
+                    Text(store.t("made_by")).foregroundColor(.tMuted)
+                    Link("MXFia19", destination: URL(string: "https://github.com/MXFia19")!)
+                        .foregroundColor(.tPrimary)
+                }
+                .font(.system(size: 14, weight: .semibold))
+
+                creditLink(icon: "chevron.left.forwardslash.chevron.right",
+                           title: store.t("source_ios"),
+                           url: "https://github.com/MXFia19/TwitchUnblock")
+                creditLink(icon: "globe",
+                           title: store.t("web_version"),
+                           url: "https://test2-fawn-eta.vercel.app")
+
+                Text(store.t("credits_thanks"))
+                    .font(.tMeta)
+                    .foregroundColor(.tMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(store.t("not_affiliated"))
+                    .font(.tMeta)
+                    .foregroundColor(.tMuted.opacity(0.8))
 
                 Button {
                     showLogs = true

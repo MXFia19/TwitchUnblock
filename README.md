@@ -1,5 +1,10 @@
 # 🟣 TwitchUnblock
 
+[![Discord](https://img.shields.io/badge/Discord-Join%20the%20community-5865F2?logo=discord&logoColor=white)](https://discord.gg/cEsMRdxsVq)
+[![Version](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2FMXFia19%2FTwitchUnblock%2Fmaster%2Fapps.json&query=%24.apps%5B0%5D.version&label=version&color=9146ff)](https://github.com/MXFia19/TwitchUnblock/releases)
+
+> 💬 **Join the Discord — https://discord.gg/cEsMRdxsVq** — news, help, bug reports and ideas.
+
 **TwitchUnblock** is an open-source Twitch client that lets you watch VODs and
 live streams without a subscription, at full quality. Native iOS app built with
 SwiftUI — also available [in your browser](https://test2-fawn-eta.vercel.app).
@@ -135,12 +140,6 @@ with Sideloadly, AltStore, or TrollStore if your device supports it.
 
 ---
 
-## 💬 Community
-
-Questions, bugs, ideas: join the Discord — **https://discord.gg/cEsMRdxsVq**
-
----
-
 ## 🌐 Web version
 
 **No install? Use it in your browser: https://test2-fawn-eta.vercel.app**
@@ -179,6 +178,14 @@ Pick your development team under *Signing & Capabilities*, then build the
 The Xcode project is generated from `project.yml` with
 [XcodeGen](https://github.com/yonaskolb/XcodeGen): run `xcodegen` after adding
 files. GitHub Actions builds and publishes nightly IPAs from `master`.
+
+### Versioning
+
+Versions look like `1.1.4`. The first two numbers come from the
+[`VERSION`](VERSION) file; the last one counts the builds since that file last
+changed, and starts again at 0 when you bump it (edit `VERSION` to `1.2` for a
+new series). The internal build number (`CFBundleVersion`) is the CI run number:
+it only ever goes up, and it is what the app compares to detect an update.
 
 ### Backend
 

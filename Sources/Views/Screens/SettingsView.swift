@@ -825,7 +825,8 @@ struct SettingsView: View {
     }
 
     private var versionLabel: String {
-        "\(store.t("version_label")) \(UpdateChecker.installedVersion) (\(UpdateChecker.installedBuild))"
+        // Même numéro que la source et les versions GitHub (1.1.4…).
+        "\(store.t("version_label")) \(UpdateChecker.installedVersion)"
     }
 
     /// Lien externe façon bouton (crédits).

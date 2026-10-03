@@ -66,6 +66,7 @@ struct MainTabView: View {
     /// minuteries du direct sans lecteur.
     @State private var loadGeneration = 0
     @ObservedObject private var updater = UpdateChecker.shared
+    @State private var showDiscordPrompt = false
     /// Clip en cours : VOD d'origine et position, pour en rejouer le chat.
     @State private var clipVodId: String? = nil
     @State private var clipOffset: Double = 0
@@ -190,6 +191,26 @@ struct MainTabView: View {
         // Réglages : ouverts depuis l'avatar de l'en-tête.
         .sheet(isPresented: $showSettings) {
             SettingsView()
+        }
+        // Invitation au Discord : une seule fois, au 2ᵉ lancement, et jamais
+        // en même temps que l'alerte de mise à jour.
+        .task {
+            let ud = UserDefaults.standard
+            let launches = ud.integer(forKey: "launch_count") + 1
+            ud.set(launches, forKey: "launch_count")
+            guard launches >= 2, !ud.bool(forKey: "discord_prompted") else { return }
+            try? await Task.sleep(nanoseconds: 4_000_000_000)
+            guard !updater.showAlert else { return }
+            ud.set(true, forKey: "discord_prompted")
+            showDiscordPrompt = true
+        }
+        .alert(store.t("discord_title"), isPresented: $showDiscordPrompt) {
+            Button(store.t("discord_join")) {
+                if let url = URL(string: kDiscordURL) { UIApplication.shared.open(url) }
+            }
+            Button(store.t("later"), role: .cancel) {}
+        } message: {
+            Text(store.t("discord_msg"))
         }
         // Nouvelle version détectée sur la source.
         .alert(store.t("update_title"), isPresented: $updater.showAlert) {

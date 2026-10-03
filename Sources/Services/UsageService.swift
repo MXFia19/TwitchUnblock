@@ -84,12 +84,16 @@ final class UsageService: ObservableObject {
 
     private init() {
         let ud = UserDefaults.standard
-        if let existing = ud.string(forKey: "usage_install_id") {
-            installId = existing
+        // Trousseau d'abord : il survit à une réinstallation par l'outil de
+        // sideload (UserDefaults non), sinon chaque réinstallation comptait
+        // comme une nouvelle personne. Copie dans les deux pour la suite.
+        if let kept = Keychain.get("usage_install_id") ?? ud.string(forKey: "usage_install_id") {
+            installId = kept
         } else {
             installId = UUID().uuidString
-            ud.set(installId, forKey: "usage_install_id")
         }
+        ud.set(installId, forKey: "usage_install_id")
+        if Keychain.get("usage_install_id") != installId { Keychain.set(installId, for: "usage_install_id") }
         if let t = ud.object(forKey: "usage_last_ping") as? Double {
             lastPing = Date(timeIntervalSince1970: t)
         }

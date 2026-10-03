@@ -238,32 +238,27 @@ struct CategoryCardView: View {
                             .font(.system(size: 20)).foregroundColor(.tMuted.opacity(0.5)))
                 }
                 .clipped()
-                // Pastille en surimpression plutôt qu'un ZStack : la jaquette
-                // reste seule à décider de la taille de la carte. Même forme et
-                // même place que sur les cartes de direct.
-                //
-                // Rien tant que l'audience n'est pas revenue : elle arrive
-                // après la grille, par une requête séparée.
-                .overlay(alignment: .bottomTrailing) {
-                    if let viewers = category.viewers {
-                        TMeta(icon: "eye.fill", text: formatViewers(viewers), tint: .white)
-                            .padding(.horizontal, 6).padding(.vertical, 3)
-                            .background(Color.black.opacity(0.65))
-                            .cornerRadius(4)
-                            .padding(TSpace.sm)
-                            .transition(.opacity)
-                    }
-                }
-                .animation(.easeOut(duration: 0.2), value: category.viewers)
 
-                Text(category.name)
-                    .font(.tCardTitle)
-                    .foregroundColor(.tText)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.leading)
-                    .frame(height: 36, alignment: .top)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(TSpace.md)
+                // Nom puis audience, sous la jaquette : l'affiche reste lisible.
+                // L'audience arrive après la grille (requête séparée) : sa
+                // ligne garde sa place pour que les cartes ne sautent pas.
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(category.name)
+                        .font(.tCardTitle)
+                        .foregroundColor(.tText)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                        .frame(height: 36, alignment: .top)
+                    HStack(spacing: 4) {
+                        Circle().fill(Color.tLive).frame(width: 6, height: 6)
+                        Text(category.viewers.map { formatViewers($0) } ?? " ")
+                            .font(.tMeta).foregroundColor(.tMuted)
+                    }
+                    .opacity(category.viewers == nil ? 0 : 1)
+                    .animation(.easeOut(duration: 0.2), value: category.viewers)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(TSpace.md)
             }
             .background(Color.tCard)
             .cornerRadius(TRadius.card)

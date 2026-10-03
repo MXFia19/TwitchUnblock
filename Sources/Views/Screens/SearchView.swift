@@ -187,8 +187,23 @@ struct SearchView: View {
                         }
                         .frame(width: 32, height: 32)
                         .clipShape(Circle())
+                        // Anneau rouge : la chaîne est en live.
+                        .overlay(Circle().stroke(s.isLive ? Color.tLive : .clear, lineWidth: 2).padding(-2))
 
-                        Text(s.name).font(.tCardTitle).foregroundColor(.tText)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(s.name).font(.tCardTitle).foregroundColor(.tText).lineLimit(1)
+                            if let viewers = s.viewers {
+                                HStack(spacing: 5) {
+                                    Text("LIVE")
+                                        .font(.system(size: 9, weight: .heavy))
+                                        .foregroundColor(.white)
+                                        .padding(.horizontal, 4).padding(.vertical, 1)
+                                        .background(Color.tLive).cornerRadius(3)
+                                    Text(formatViewers(viewers) + (s.game.map { " · \($0)" } ?? ""))
+                                        .font(.tMeta).foregroundColor(.tMuted).lineLimit(1)
+                                }
+                            }
+                        }
                         Spacer()
                         Image(systemName: "arrow.up.left")
                             .font(.system(size: 11)).foregroundColor(.tMuted)

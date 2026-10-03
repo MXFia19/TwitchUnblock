@@ -626,17 +626,22 @@ private func streamFromDict(_ d: [String: Any]) -> TwitchStream {
 
 // MARK: – Autocomplete GQL
 func searchUsersGQL(_ query: String) async -> [AutocompleteSuggestion] {
-    let q = "query { searchUsers(userQuery: \"\(gqlStr(query))\", first: 5) { edges { node { login displayName profileImageURL(width: 70) } } } }"
-    guard let json = try? await twitchGQL(q) as? [String: Any],
-          let data = json["data"] as? [String: Any],
+    // `stream` : présent seulement si la chaîne est en live (pastille dans la liste).
+    let q = "query($q: String!) { searchUsers(userQuery: $q, first: 5) { edges { node { login displayName profileImageURL(width: 70) stream { viewersCount game { displayName } } } } } }"
+    guard let data = await gqlRequest(q, ["q": query]),
           let edges = (data["searchUsers"] as? [String: Any])?["edges"] as? [[String: Any]] else { return [] }
-    return edges.compactMap { e in
+    let list: [AutocompleteSuggestion] = edges.compactMap { e in
         guard let node  = e["node"] as? [String: Any],
               let login = node["login"] as? String else { return nil }
+        let stream = node["stream"] as? [String: Any]
         return AutocompleteSuggestion(login: login,
                                       name: node["displayName"] as? String ?? login,
-                                      avatar: node["profileImageURL"] as? String)
+                                      avatar: node["profileImageURL"] as? String,
+                                      viewers: stream.map { $0["viewersCount"] as? Int ?? 0 },
+                                      game: (stream?["game"] as? [String: Any])?["displayName"] as? String)
     }
+    // Les chaînes en live d'abord, sans changer l'ordre de Twitch entre elles.
+    return list.filter(\.isLive) + list.filter { !$0.isLive }
 }
 
 func getVodMetaGQL(_ vodId: String) async -> VodMeta? {

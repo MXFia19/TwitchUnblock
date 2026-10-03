@@ -99,6 +99,10 @@ struct AutocompleteSuggestion: Identifiable {
     let login: String
     let name: String
     let avatar: String?
+    /// En live : nombre de spectateurs et jeu (nil hors live).
+    var viewers: Int? = nil
+    var game: String? = nil
+    var isLive: Bool { viewers != nil }
 }
 
 struct VodMeta {

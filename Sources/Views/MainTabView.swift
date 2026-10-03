@@ -204,23 +204,36 @@ struct MainTabView: View {
             ud.set(true, forKey: "discord_prompted")
             showDiscordPrompt = true
         }
-        .alert(store.t("discord_title"), isPresented: $showDiscordPrompt) {
-            Button(store.t("discord_join")) {
-                if let url = URL(string: kDiscordURL) { UIApplication.shared.open(url) }
+        // Fenêtres « mise à jour » et « Discord » dans le style de l'app.
+        .overlay {
+            if updater.showAlert, let up = updater.available {
+                TPromptCard(
+                    icon: "arrow.down.circle.fill",
+                    title: store.t("update_title"),
+                    message: store.t("update_msg_short"),
+                    detail: "\(UpdateChecker.installedVersion)  →  \(up.version)",
+                    primary: store.t("update_open"),
+                    secondary: store.t("later"),
+                    onPrimary: { withAnimation(.spring(response: 0.3)) { updater.dismiss() }; UpdateChecker.openSource() },
+                    onSecondary: { withAnimation(.spring(response: 0.3)) { updater.dismiss() } })
+                .zIndex(10)
+            } else if showDiscordPrompt {
+                TPromptCard(
+                    icon: "bubble.left.and.bubble.right.fill",
+                    title: store.t("discord_title"),
+                    message: store.t("discord_msg"),
+                    primary: store.t("discord_join"),
+                    secondary: store.t("later"),
+                    onPrimary: {
+                        withAnimation(.spring(response: 0.3)) { showDiscordPrompt = false }
+                        if let url = URL(string: kDiscordURL) { UIApplication.shared.open(url) }
+                    },
+                    onSecondary: { withAnimation(.spring(response: 0.3)) { showDiscordPrompt = false } })
+                .zIndex(10)
             }
-            Button(store.t("later"), role: .cancel) {}
-        } message: {
-            Text(store.t("discord_msg"))
         }
-        // Nouvelle version détectée sur la source.
-        .alert(store.t("update_title"), isPresented: $updater.showAlert) {
-            Button(store.t("update_open")) { updater.dismiss(); UpdateChecker.openSource() }
-            Button(store.t("later"), role: .cancel) { updater.dismiss() }
-        } message: {
-            Text(store.t("update_msg")
-                .replacingOccurrences(of: "{v}", with: updater.available?.version ?? "")
-                .replacingOccurrences(of: "{c}", with: UpdateChecker.installedVersion))
-        }
+        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: updater.showAlert)
+        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: showDiscordPrompt)
         // Notification « en live » touchée : on ouvre le direct.
         .onReceive(NotificationCenter.default.publisher(for: .openLiveChannel)) { note in
             if let login = note.userInfo?["login"] as? String, !login.isEmpty { playLive(login) }

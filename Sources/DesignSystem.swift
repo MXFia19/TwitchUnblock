@@ -383,3 +383,92 @@ struct TLoadMoreButton: View {
         .padding(.top, TSpace.md)
     }
 }
+
+// MARK: – Carte de dialogue (style de l'app)
+/// Remplace l'alerte système grise : carte sombre, icône dans un rond violet,
+/// bouton principal plein et bouton secondaire discret. Un appui en dehors
+/// vaut « Plus tard ».
+struct TPromptCard: View {
+    let icon: String
+    let title: String
+    let message: String
+    var detail: String? = nil
+    let primary: String
+    var secondary: String? = nil
+    let onPrimary: () -> Void
+    var onSecondary: () -> Void = {}
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.6)
+                .ignoresSafeArea()
+                .onTapGesture { onSecondary() }
+
+            VStack(spacing: 14) {
+                ZStack {
+                    Circle()
+                        .fill(LinearGradient(colors: [Color.tPrimary, Color.tPurple],
+                                             startPoint: .topLeading, endPoint: .bottomTrailing))
+                        .frame(width: 56, height: 56)
+                    Image(systemName: icon)
+                        .font(.system(size: 24, weight: .bold))
+                        .foregroundColor(.white)
+                }
+                .padding(.top, 4)
+
+                Text(title)
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundColor(.tText)
+                    .multilineTextAlignment(.center)
+
+                if let detail {
+                    Text(detail)
+                        .font(.system(size: 13, weight: .bold).monospacedDigit())
+                        .foregroundColor(.tPrimary)
+                        .padding(.horizontal, 10).padding(.vertical, 4)
+                        .background(Color.tPrimary.opacity(0.15))
+                        .clipShape(Capsule())
+                }
+
+                Text(message)
+                    .font(.system(size: 14))
+                    .foregroundColor(.tMuted)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                VStack(spacing: 6) {
+                    Button(action: onPrimary) {
+                        Text(primary)
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 48)
+                            .background(Color.tPrimary)
+                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    if let secondary {
+                        Button(action: onSecondary) {
+                            Text(secondary)
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundColor(.tMuted)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 40)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.top, 4)
+            }
+            .padding(22)
+            .frame(maxWidth: 340)
+            .background(Color.tCard)
+            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .stroke(Color.tPrimary.opacity(0.25), lineWidth: 1))
+            .shadow(color: .black.opacity(0.5), radius: 30, y: 12)
+            .padding(.horizontal, 28)
+            .transition(.scale(scale: 0.92).combined(with: .opacity))
+        }
+    }
+}

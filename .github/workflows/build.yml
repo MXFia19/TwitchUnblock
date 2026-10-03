@@ -4,6 +4,16 @@ on:
   push:
     branches:
       - master
+    # Nouvelle version seulement si l'app elle-même change : un README, la
+    # source apps.json, auth.html ou le dossier worker ne déclenchent rien.
+    paths:
+      - 'Sources/**'
+      - 'Info.plist'
+      - 'project.yml'
+      - 'VERSION'
+      - 'buildipa.sh'
+      - 'assets/icon.png'
+      - '.github/workflows/build.yml'
   workflow_dispatch:
 
 env:
@@ -34,7 +44,8 @@ jobs:
           BASE=$(tr -d ' \n\r' < VERSION 2>/dev/null || echo "1.0")
           SINCE=$(git log -1 --format=%H -- VERSION)
           if [ -n "$SINCE" ]; then
-            PATCH=$(git rev-list --count --invert-grep --grep='\[skip ci\]' "$SINCE"..HEAD)
+            # Seuls les commits qui touchent l'app comptent (pas les README…).
+            PATCH=$(git rev-list --count "$SINCE"..HEAD -- Sources Info.plist project.yml buildipa.sh assets/icon.png)
           else
             PATCH=${{ github.run_number }}
           fi

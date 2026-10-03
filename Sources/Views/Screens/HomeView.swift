@@ -12,13 +12,13 @@ struct HomeView: View {
 
     @State private var followedStreams: [TwitchStream] = []
     @State private var topStreams:      [TwitchStream] = []
-    @State private var topLang: TopLang = .fr
+    @State private var topLang: TopLang = .local
     @State private var loadingFollowed = false
     @State private var loadingTop      = false
     @State private var errorFollowed: String? = nil
     @State private var section: HomeSection = .live
 
-    enum TopLang: Hashable { case fr, all }
+    enum TopLang: Hashable { case local, all }
 
     enum HomeSection: String, CaseIterable, Hashable {
         case live, categories
@@ -60,6 +60,12 @@ struct HomeView: View {
         .onChange(of: store.twitchToken) { token in
             if token != nil { Task { await loadAll() } }
             else { followedStreams = []; topStreams = [] }
+        }
+        // Langue du top changée dans les réglages : on recharge tout de suite.
+        .onChange(of: store.topLang) { _ in
+            topLang = .local
+            topStreams = []
+            Task { await loadTopStreams(.local) }
         }
     }
 
@@ -107,9 +113,9 @@ struct HomeView: View {
                 // ── Top ─────────────────────────────────────────────
                 TSectionHeader(store.t("top_streams"), icon: "flame.fill") {
                     HStack(spacing: TSpace.xs) {
-                        TChip(title: store.t("top_fr"), isOn: topLang == .fr) {
-                            topLang = .fr
-                            Task { await loadTopStreams(.fr) }
+                        TChip(title: TopLanguage.name(TopLanguage.resolved(store.topLang), in: store.lang), isOn: topLang == .local) {
+                            topLang = .local
+                            Task { await loadTopStreams(.local) }
                         }
                         TChip(title: store.t("top_world"), isOn: topLang == .all) {
                             topLang = .all
@@ -189,7 +195,7 @@ struct HomeView: View {
         guard let token = store.twitchToken else { return }
         if topStreams.isEmpty && !isRefresh { loadingTop = true }
         do {
-            let fetched = try await getTopStreams(token: token, lang: l == .fr ? "fr" : nil)
+            let fetched = try await getTopStreams(token: token, lang: l == .local ? TopLanguage.resolved(store.topLang) : nil)
             // Réseau capricieux : on ne vide jamais une liste déjà affichée.
             if !fetched.isEmpty { topStreams = fetched }
         } catch is CancellationError {

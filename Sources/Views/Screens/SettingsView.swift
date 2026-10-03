@@ -362,8 +362,52 @@ struct SettingsView: View {
                         langButton(lang)
                     }
                 }
+                topLangRow
             }
         }
+    }
+
+    /// Langue des streamers dans « Top des lives » (appareil par défaut).
+    @ViewBuilder private var topLangRow: some View {
+        let device = TopLanguage.name(TopLanguage.device, in: store.lang)
+        let options = TopLanguage.codes
+            .map { ($0, TopLanguage.name($0, in: store.lang)) }
+            .sorted { $0.1.localizedCompare($1.1) == .orderedAscending }
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(store.t("top_lang"))
+                    .font(.tCardTitle)
+                    .foregroundColor(.tText)
+                Text(store.t("top_lang_sub").replacingOccurrences(of: "{l}", with: device))
+                    .font(.tMeta)
+                    .foregroundColor(.tMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 8)
+            Menu {
+                Button { store.topLang = nil } label: {
+                    if store.topLang == nil { Label("\(store.t("lang_auto")) · \(device)", systemImage: "checkmark") }
+                    else { Text("\(store.t("lang_auto")) · \(device)") }
+                }
+                Divider()
+                ForEach(options, id: \.0) { code, name in
+                    Button { store.topLang = code } label: {
+                        if store.topLang == code { Label(name, systemImage: "checkmark") } else { Text(name) }
+                    }
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Text(store.topLang.map { TopLanguage.name($0, in: store.lang) } ?? store.t("lang_auto"))
+                        .font(.tCardTitle)
+                    Image(systemName: "chevron.up.chevron.down").font(.system(size: 11, weight: .semibold))
+                }
+                .foregroundColor(.tPrimary)
+                .padding(.horizontal, 12).padding(.vertical, 8)
+                .background(Color.tPrimary.opacity(0.12))
+                .cornerRadius(10)
+            }
+        }
+        .padding(.top, 6)
     }
 
     @ViewBuilder private var autoclaimCard: some View {

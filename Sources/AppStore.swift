@@ -188,6 +188,11 @@ final class AppStore: ObservableObject {
         didSet { UserDefaults.standard.set(shareUsage, forKey: "cfg_share_usage") }
     }
 
+    /// Langue du top des lives ; nil = celle de l'appareil.
+    @Published var topLang: String? = nil {
+        didSet { UserDefaults.standard.set(topLang, forKey: "cfg_top_lang") }
+    }
+
     // MARK: – Débogage (section temporaire)
     /// Afficher la latence du direct par-dessus le lecteur.
     @Published var showLatency: Bool = false {
@@ -293,6 +298,7 @@ final class AppStore: ObservableObject {
         chatAutocomplete   = ud.object(forKey: "cfg_chat_autocomplete") as? Bool ?? true
         chatShowDeleted    = ud.object(forKey: "cfg_chat_deleted")      as? Bool ?? false
         shareUsage         = ud.object(forKey: "cfg_share_usage") as? Bool ?? true
+        topLang            = ud.string(forKey: "cfg_top_lang")
         showLatency        = ud.object(forKey: "dbg_latency")    as? Bool ?? false
         autoChatDelay      = ud.object(forKey: "dbg_chat_delay") as? Bool ?? false
         if let data = ud.data(forKey: "twitch_vod_history"),

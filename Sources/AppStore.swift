@@ -326,7 +326,14 @@ final class AppStore: ObservableObject {
             twitchLogin  = nil
             twitchAvatar = nil
         }
+        let isNew = token != twitchToken
         twitchToken = token
+        // Compté tout de suite comme compte, sans attendre l'heure suivante :
+        // le Worker reprend l'historique anonyme de l'appareil et l'efface.
+        if isNew {
+            let enabled = shareUsage
+            Task { await UsageService.shared.ping(enabled: enabled, force: true) }
+        }
     }
 
     func logout() {

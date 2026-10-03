@@ -48,12 +48,16 @@ struct CachedEmoteImage: View {
     /// simultanément : autant de UIImageView qui tournent en boucle, et
     /// l'interface se traîne. Il n'en affiche donc que la première image.
     let animated: Bool
+    /// Largeur maximale : une emote très large est réduite (proportions
+    /// gardées) au lieu de déborder sur ses voisines.
+    let maxWidth: CGFloat?
 
     @State private var img: CachedImage?
     @State private var failed = false
 
     init(url: String, name: String, height: CGFloat = 24,
-         showsNameFallback: Bool = true, animated: Bool = true) {
+         showsNameFallback: Bool = true, animated: Bool = true, maxWidth: CGFloat? = nil) {
+        self.maxWidth = maxWidth
         self.url = url
         self.name = name
         self.height = height
@@ -65,18 +69,26 @@ struct CachedEmoteImage: View {
         _img = State(initialValue: ImageCache.shared.cached(url))
     }
 
+    /// Taille affichée : hauteur demandée, réduite si la largeur dépasse `maxWidth`.
+    private func fitted(aspect: CGFloat) -> CGSize {
+        let w = height * aspect
+        guard let maxW = maxWidth, w > maxW, aspect > 0 else { return CGSize(width: w, height: height) }
+        return CGSize(width: maxW, height: maxW / aspect)
+    }
+
     var body: some View {
         Group {
             if let img {
+                let size = fitted(aspect: img.aspect)
                 if img.isAnimated, animated {
                     AnimatedImageView(image: img)
-                        .frame(width: height * img.aspect, height: height)
+                        .frame(width: size.width, height: size.height)
                 } else if let ui = img.first {
                     Image(uiImage: ui)
                         .resizable()
                         .interpolation(.medium)
                         .scaledToFit()
-                        .frame(width: height * img.aspect, height: height)
+                        .frame(width: size.width, height: size.height)
                 }
             } else if failed, showsNameFallback, !name.isEmpty {
                 Text(name).font(.system(size: 11)).foregroundColor(.tMuted)

@@ -12,6 +12,8 @@ struct TwitchUnblockApp: App {
                 .environmentObject(store)
                 .preferredColorScheme(.dark)
                 .task { await UsageService.shared.ping(enabled: store.shareUsage) }
+                // À chaque lancement : nouvelle version disponible ?
+                .task { await UpdateChecker.shared.checkIfDue(atLaunch: true) }
                 .onChange(of: scenePhase) { phase in
                     switch phase {
                     case .background:

@@ -35,7 +35,11 @@ final class UpdateChecker: ObservableObject {
         Int(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "") ?? 0
     }
 
-    func checkIfDue(force: Bool = false) async {
+    /// `atLaunch` : au lancement, on vérifie toujours et on reprévient même si
+    /// « Plus tard » a été choisi lors d'un lancement précédent.
+    func checkIfDue(force: Bool = false, atLaunch: Bool = false) async {
+        let force = force || atLaunch
+        if atLaunch { UserDefaults.standard.removeObject(forKey: dismissedKey) }
         let ud = UserDefaults.standard
         let last = ud.double(forKey: lastCheckKey)
         guard force || Date().timeIntervalSince1970 - last > minInterval else { return }

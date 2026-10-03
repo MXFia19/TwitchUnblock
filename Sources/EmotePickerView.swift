@@ -167,9 +167,12 @@ private struct EmoteCell: View {
             VStack(spacing: 3) {
                 // animated: false — des centaines d'emotes animées en même temps
                 // saturent le processeur et rendent la grille inutilisable.
+                // Largeur bornée : les emotes larges (7TV surtout) sont réduites
+                // au lieu de déborder sur les cases voisines.
                 CachedEmoteImage(url: emote.url, name: String(emote.name.prefix(3)),
-                                 height: 34, animated: false)
-                    .frame(width: 34, height: 34)
+                                 height: 34, animated: false, maxWidth: 46)
+                    .frame(width: 46, height: 34)
+                    .clipped()
 
                 Text(emote.name)
                     .font(.system(size: 8))

@@ -58,14 +58,12 @@ struct ChatView: View {
 
             // ── Barre de statut ─────────────────────────────────────
             HStack(spacing: 6) {
+                // Seul le point dit l'état de la connexion : la place va aux
+                // pastilles utiles (synchro, série, suivre, épinglé).
                 Circle()
                     .fill(chat.isConnected ? Color.tSuccess : Color.tDanger)
-                    .frame(width: 6, height: 6)
-                Text(chat.isConnected ? store.t("chat_connected") : store.t("chat_connecting"))
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(.tMuted)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
+                    .frame(width: 7, height: 7)
+                    .accessibilityLabel(chat.isConnected ? store.t("chat_connected") : store.t("chat_connecting"))
                 Spacer(minLength: 4)
                 // Synchro auto : décalage appliqué au chat
                 if chatDelay >= 0.5 {
@@ -111,13 +109,6 @@ struct ChatView: View {
                     .disabled(follow.busy)
                     .opacity(follow.busy ? 0.5 : 1)
                 }
-                if chat.isAuthenticated, let l = login {
-                    Text("✏️ @\(l)")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(.tPrimary)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                }
                 // Épingle réduite : une pastille la rouvre.
                 if store.showPinnedMessages, let pin = pubsub.pinned, pin.id == dismissedPinId {
                     Button {
@@ -133,12 +124,9 @@ struct ChatView: View {
                     }
                     .fixedSize()
                 }
-                Text("#\(channelName)")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(.tPrimary)
-                    .lineLimit(1)
-                    .fixedSize()
             }
+            // Hauteur stable même quand seul le point est affiché.
+            .frame(minHeight: 22)
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
             .background(GeometryReader { g in

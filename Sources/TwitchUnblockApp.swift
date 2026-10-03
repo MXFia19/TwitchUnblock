@@ -26,6 +26,8 @@ struct TwitchUnblockApp: App {
                         // Ce qui a été regardé ailleurs entre-temps (site,
                         // autre appareil) — au plus une lecture par 10 min.
                         Task { await store.refreshFromCloudIfStale() }
+                        // Nouvelle version sur la source ? (au plus toutes les 6 h)
+                        Task { await UpdateChecker.shared.checkIfDue() }
                     default:
                         break
                     }

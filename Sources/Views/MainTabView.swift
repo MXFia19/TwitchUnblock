@@ -65,6 +65,7 @@ struct MainTabView: View {
     /// déjà fermé) est ignorée au lieu d'écraser l'état ou de relancer les
     /// minuteries du direct sans lecteur.
     @State private var loadGeneration = 0
+    @ObservedObject private var updater = UpdateChecker.shared
     /// Clip en cours : VOD d'origine et position, pour en rejouer le chat.
     @State private var clipVodId: String? = nil
     @State private var clipOffset: Double = 0
@@ -189,6 +190,15 @@ struct MainTabView: View {
         // Réglages : ouverts depuis l'avatar de l'en-tête.
         .sheet(isPresented: $showSettings) {
             SettingsView()
+        }
+        // Nouvelle version détectée sur la source.
+        .alert(store.t("update_title"), isPresented: $updater.showAlert) {
+            Button(store.t("update_open")) { updater.dismiss(); UpdateChecker.openSource() }
+            Button(store.t("later"), role: .cancel) { updater.dismiss() }
+        } message: {
+            Text(store.t("update_msg")
+                .replacingOccurrences(of: "{v}", with: updater.available?.version ?? "")
+                .replacingOccurrences(of: "{c}", with: UpdateChecker.installedVersion))
         }
         // Notification « en live » touchée : on ouvre le direct.
         .onReceive(NotificationCenter.default.publisher(for: .openLiveChannel)) { note in

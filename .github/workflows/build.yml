@@ -80,7 +80,7 @@ jobs:
           find . -name "Info.plist" -exec plutil -replace UILaunchScreen -xml "<dict/>" {} \;
           
           # ✨ RÉPARATION DU PIP ET DE L'AUDIO EN ARRIÈRE-PLAN
-          find . -name "Info.plist" -exec plutil -replace UIBackgroundModes -json '["audio"]' {} \;
+          find . -name "Info.plist" -exec plutil -replace UIBackgroundModes -json '["audio","fetch"]' {} \;
 
       - name: Make build script executable
         run: chmod +x ./buildipa.sh

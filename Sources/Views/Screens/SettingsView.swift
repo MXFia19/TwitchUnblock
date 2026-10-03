@@ -3,6 +3,9 @@ import SwiftUI
 struct SettingsView: View {
     @EnvironmentObject private var store: AppStore
     @State private var showLogs        = false
+    @ObservedObject private var updater = UpdateChecker.shared
+    @State private var checkingUpdate  = false
+    @State private var upToDate        = false
     @State private var highlightDraft  = ""
     @State private var mutedDraft      = ""
     @State private var liveNotif       = LiveNotifier.isEnabled
@@ -227,7 +230,7 @@ struct SettingsView: View {
                 }
                 .tCard()
 
-                Text(store.t("version"))
+                Text(versionLabel)
                     .font(.tMeta).foregroundColor(.tMuted)
 
                 Spacer(minLength: 24)
@@ -821,6 +824,10 @@ struct SettingsView: View {
         }
     }
 
+    private var versionLabel: String {
+        "\(store.t("version_label")) \(UpdateChecker.installedVersion) (\(UpdateChecker.installedBuild))"
+    }
+
     /// Lien externe façon bouton (crédits).
     private func creditLink(icon: String, title: String, url: String) -> some View {
         Link(destination: URL(string: url)!) {
@@ -848,12 +855,56 @@ struct SettingsView: View {
                         Text("TwitchUnblock")
                             .font(.tSection)
                             .foregroundColor(.tText)
-                        Text(store.t("version"))
+                        Text(versionLabel)
                             .font(.tMeta)
                             .foregroundColor(.tMuted)
                     }
                     Spacer()
                     Circle().fill(Color.tPrimary).frame(width: 26, height: 26)
+                }
+
+                // Mise à jour : disponible → bouton ; sinon, vérification manuelle.
+                if let up = updater.available {
+                    Button { UpdateChecker.openSource() } label: {
+                        HStack(spacing: TSpace.sm) {
+                            Image(systemName: "arrow.down.circle.fill")
+                                .font(.system(size: 14, weight: .semibold))
+                            Text(store.t("update_available").replacingOccurrences(of: "{v}", with: up.version))
+                                .font(.tLabel)
+                            Spacer()
+                            Image(systemName: "arrow.up.right").font(.system(size: 12, weight: .semibold))
+                        }
+                        .foregroundColor(.white)
+                        .padding(.horizontal, TSpace.md)
+                        .frame(height: 44)
+                        .background(Color.tPrimary)
+                        .cornerRadius(TRadius.control)
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    Button {
+                        checkingUpdate = true
+                        Task {
+                            await updater.checkIfDue(force: true)
+                            checkingUpdate = false
+                            upToDate = updater.available == nil
+                        }
+                    } label: {
+                        HStack(spacing: TSpace.sm) {
+                            Image(systemName: upToDate ? "checkmark.circle.fill" : "arrow.triangle.2.circlepath")
+                                .font(.system(size: 13, weight: .semibold))
+                            Text(store.t(upToDate ? "update_none" : "update_check")).font(.tLabel)
+                            Spacer()
+                            if checkingUpdate { ProgressView().scaleEffect(0.8) }
+                        }
+                        .foregroundColor(.tText)
+                        .padding(.horizontal, TSpace.md)
+                        .frame(height: 44)
+                        .background(Color.tSurface)
+                        .cornerRadius(TRadius.control)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(checkingUpdate)
                 }
                 Text(store.t("about_desc"))
                     .font(.tMeta)
@@ -874,6 +925,9 @@ struct SettingsView: View {
                 creditLink(icon: "globe",
                            title: store.t("web_version"),
                            url: "https://test2-fawn-eta.vercel.app")
+                creditLink(icon: "bubble.left.and.bubble.right.fill",
+                           title: store.t("discord_join"),
+                           url: kDiscordURL)
 
                 Text(store.t("credits_thanks"))
                     .font(.tMeta)

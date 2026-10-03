@@ -49,6 +49,9 @@
         <string>vlc</string>
         <string>outplayer</string>
         <string>infuse</string>
+        <string>feather</string>
+        <string>sidestore</string>
+        <string>altstore</string>
     </array>
 
     <!-- ── Privacy ───────────────────────────────────────────── -->

@@ -2,6 +2,7 @@ import SwiftUI
 
 // MARK: – API
 let kAPIURL          = "https://test2.kurzmathis4.workers.dev"
+let kDiscordURL      = "https://discord.gg/cEsMRdxsVq"
 let kHelixClientID   = "1e68ku2ehgzy5cy0di3xvfy82sxpf6"
 let kGQLClientID     = "kimne78kx3ncx6brgo4mv6wki5h1ko"
 let kRedirectURI     = "https://mxfia19.github.io/TwitchUnblock/auth.html"
@@ -187,6 +188,7 @@ private let translations: [Lang: [String: String]] = [
         "notif_live": "Notifications de live", "notif_live_sub": "Prévient quand une chaîne suivie commence un live (vérifié en arrière-plan quand iOS le permet, il faut être connecté).", "notif_live_title": "{u} est en live",
         "chapters": "Chapitres", "close": "Fermer",
         "made_by": "Fait par", "source_ios": "Code source de l'app", "web_version": "Version web", "credits_thanks": "Merci à BetterTTV, FrankerFaceZ, 7TV, recent-messages et Luminous.", "not_affiliated": "Projet indépendant, non affilié à Twitch.",
+        "update_title": "Mise à jour disponible", "update_msg": "La version {v} est sortie (tu as la {c}). Mets-la à jour depuis Feather, SideStore ou AltStore.", "update_open": "Mettre à jour", "later": "Plus tard", "update_available": "Mise à jour disponible : {v}", "update_check": "Vérifier les mises à jour", "update_none": "L'app est à jour", "version_label": "Version", "discord_join": "Rejoindre le Discord",
         "see_channel": "Voir la chaîne", "highlight_words": "Mots surlignés", "highlight_words_sub": "Séparés par des virgules. Les messages qui les contiennent (ou qui te mentionnent) sont mis en avant.",
         "pinned": "Message épinglé", "pinned_by": "Épinglé par {u}", "pinned_short": "Épinglé", "just_now": "à l'instant", "minutes_ago": "il y a {n} min", "hours_ago": "il y a {n} h", "pin_left": "encore {n} min",
         "thread_title": "Fil", "thread_reply_to": "Réponse à",
@@ -409,6 +411,7 @@ private let translations: [Lang: [String: String]] = [
         "notif_live": "Live notifications", "notif_live_sub": "Get notified when a followed channel goes live (checked in the background when iOS allows it; you need to be logged in).", "notif_live_title": "{u} is live",
         "chapters": "Chapters", "close": "Close",
         "made_by": "Made by", "source_ios": "App source code", "web_version": "Web version", "credits_thanks": "Thanks to BetterTTV, FrankerFaceZ, 7TV, recent-messages and Luminous.", "not_affiliated": "Independent project, not affiliated with Twitch.",
+        "update_title": "Update available", "update_msg": "Version {v} is out (you have {c}). Update it from Feather, SideStore or AltStore.", "update_open": "Update", "later": "Later", "update_available": "Update available: {v}", "update_check": "Check for updates", "update_none": "The app is up to date", "version_label": "Version", "discord_join": "Join the Discord",
         "see_channel": "See channel", "highlight_words": "Highlighted words", "highlight_words_sub": "Comma-separated. Messages containing them (or mentioning you) stand out.",
         "pinned": "Pinned message", "pinned_by": "Pinned by {u}", "pinned_short": "Pinned", "just_now": "just now", "minutes_ago": "{n} min ago", "hours_ago": "{n} h ago", "pin_left": "{n} min left",
         "thread_title": "Thread", "thread_reply_to": "Reply to",
@@ -631,6 +634,7 @@ private let translations: [Lang: [String: String]] = [
         "notif_live": "Notificaciones de directo", "notif_live_sub": "Avisa cuando un canal seguido empieza un directo (se comprueba en segundo plano cuando iOS lo permite; hay que iniciar sesión).", "notif_live_title": "{u} está en directo",
         "chapters": "Capítulos", "close": "Cerrar",
         "made_by": "Hecho por", "source_ios": "Código fuente de la app", "web_version": "Versión web", "credits_thanks": "Gracias a BetterTTV, FrankerFaceZ, 7TV, recent-messages y Luminous.", "not_affiliated": "Proyecto independiente, no afiliado a Twitch.",
+        "update_title": "Actualización disponible", "update_msg": "Ya salió la versión {v} (tienes la {c}). Actualízala desde Feather, SideStore o AltStore.", "update_open": "Actualizar", "later": "Más tarde", "update_available": "Actualización disponible: {v}", "update_check": "Buscar actualizaciones", "update_none": "La app está al día", "version_label": "Versión", "discord_join": "Unirse al Discord",
         "see_channel": "Ver canal", "highlight_words": "Palabras resaltadas", "highlight_words_sub": "Separadas por comas. Los mensajes que las contienen (o te mencionan) se destacan.",
         "pinned": "Mensaje fijado", "pinned_by": "Fijado por {u}", "pinned_short": "Fijado", "just_now": "ahora mismo", "minutes_ago": "hace {n} min", "hours_ago": "hace {n} h", "pin_left": "quedan {n} min",
         "thread_title": "Hilo", "thread_reply_to": "Responder a",

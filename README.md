@@ -92,6 +92,8 @@ no key to paste. The backend is already hosted and shared by every install.
 * 🕒 **History** — recently watched VODs and channels, each removable.
 * 🔄 **Cloud sync** — watch progress and history follow your Twitch account, so
   you pick up where you left off on another device.
+* ⬆️ **Update check** — the app tells you when a new version is out on the
+  source, with a shortcut to Feather / SideStore / AltStore.
 * 🔔 **Live notifications** — be told when a followed channel goes live
   (checked in the background, as often as iOS allows).
 
@@ -130,6 +132,12 @@ Automatic nightly builds, straight from your sideloader:
 Download the latest `TwitchUnblock.ipa` from the
 [Releases](https://github.com/MXFia19/TwitchUnblock/releases) page and install it
 with Sideloadly, AltStore, or TrollStore if your device supports it.
+
+---
+
+## 💬 Community
+
+Questions, bugs, ideas: join the Discord — **https://discord.gg/cEsMRdxsVq**
 
 ---
 

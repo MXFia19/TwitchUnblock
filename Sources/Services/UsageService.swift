@@ -115,6 +115,11 @@ final class UsageService: ObservableObject {
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        // Connecté : le compte Twitch est compté (une seule fois sur l'app et le
+        // site) plutôt que l'identifiant aléatoire ; l'effacement le vise aussi.
+        if let token = Keychain.loadToken("twitch_token"), !token.isEmpty {
+            req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
         req.httpBody = try? JSONSerialization.data(withJSONObject: [
             "id": installId,
             "version": appVersion,
@@ -198,6 +203,11 @@ final class UsageService: ObservableObject {
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        // Connecté : le compte Twitch est compté (une seule fois sur l'app et le
+        // site) plutôt que l'identifiant aléatoire ; l'effacement le vise aussi.
+        if let token = Keychain.loadToken("twitch_token"), !token.isEmpty {
+            req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
         req.httpBody = try? JSONSerialization.data(withJSONObject: [
             "id": installId,
             "forget": true,

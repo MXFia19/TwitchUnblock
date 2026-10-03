@@ -108,9 +108,10 @@ no key to paste. The backend is already hosted and shared by every install.
 * 🔐 **Web session check** — the Twitch web session has no known expiry date;
   it's verified at launch, and you're told when it needs restoring instead of
   channel points silently going quiet.
-* 📊 **Anonymous usage count** — a random install ID and the app version, at
-  most once an hour. No Twitch account, no channels watched, no IP address.
-  Switching it off erases the ID server-side. See
+* 📊 **Usage count** — logged in, your Twitch account (counted once across the
+  app and the website); logged out, a random install ID. Plus the app version,
+  at most once an hour. No channels watched, no IP address. Switching it off
+  erases it server-side. Public numbers: [/stats](https://test2-fawn-eta.vercel.app/stats). See
   [`Sources/Services/UsageService.swift`](Sources/Services/UsageService.swift).
 * 🪵 **System logs** — everything the app does, visible in Settings.
 

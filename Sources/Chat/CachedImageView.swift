@@ -80,6 +80,10 @@ struct CachedEmoteImage: View {
                 }
             } else if failed, showsNameFallback, !name.isEmpty {
                 Text(name).font(.system(size: 11)).foregroundColor(.tMuted)
+            } else if failed {
+                // Image introuvable (badge surtout) : aucune place réservée,
+                // sinon un trou restait devant le pseudo.
+                EmptyView()
             } else {
                 Color.clear.frame(width: height, height: height)
             }

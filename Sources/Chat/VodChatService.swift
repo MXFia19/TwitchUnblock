@@ -279,10 +279,11 @@ final class VodChatService: ObservableObject {
         await EmoteService.shared.loadGlobals()
         if let cid = channelId {
             await EmoteService.shared.loadChannel(channelId: cid, channelName: channelLogin)
-            if let tok = UserDefaults.standard.string(forKey: "twitch_token") {
-                await BadgeService.shared.loadGlobal(token: tok)
-                await BadgeService.shared.loadChannel(channelId: cid, token: tok)
-            }
+            // Jeton dans le trousseau (il n'est plus dans UserDefaults) ; sans
+            // jeton, BadgeService passe par la requête GQL publique.
+            let tok = Keychain.loadToken("twitch_token")
+            await BadgeService.shared.loadGlobal(token: tok)
+            await BadgeService.shared.loadChannel(channelId: cid, token: tok)
         }
     }
 }

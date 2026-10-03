@@ -428,11 +428,10 @@ struct ChatView: View {
         if let cid = channelId {
             await EmoteService.shared.loadChannel(channelId: cid, channelName: channelName)
         }
-        if let tok = token {
-            await BadgeService.shared.loadGlobal(token: tok)
-            if let cid = channelId {
-                await BadgeService.shared.loadChannel(channelId: cid, token: tok)
-            }
+        // Sans compte : BadgeService passe par la requête GQL publique.
+        await BadgeService.shared.loadGlobal(token: token)
+        if let cid = channelId {
+            await BadgeService.shared.loadChannel(channelId: cid, token: token)
         }
         pointsService.autoClaim = store.autoClaimChest
         // Points : on utilise le token de session web (cookie auth-token), pas l'OAuth.
@@ -488,11 +487,10 @@ struct ChatView: View {
         if let cid = channelId {
             await EmoteService.shared.loadChannel(channelId: cid, channelName: channelName)
         }
-        if let tok = token {
-            await BadgeService.shared.loadGlobal(token: tok)
-            if let cid = channelId {
-                await BadgeService.shared.loadChannel(channelId: cid, token: tok)
-            }
+        // Sans compte : BadgeService passe par la requête GQL publique.
+        await BadgeService.shared.loadGlobal(token: token)
+        if let cid = channelId {
+            await BadgeService.shared.loadChannel(channelId: cid, token: token)
         }
         logger.success("CHAT", "Emotes et badges rechargés", "#\(channelName)")
     }

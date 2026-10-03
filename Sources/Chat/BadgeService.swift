@@ -20,9 +20,12 @@ actor BadgeService {
     }
 
     // MARK: – Load global badges (Helix)
-    func loadGlobal(token: String) async {
+    func loadGlobal(token: String?) async {
         guard !globalsLoaded else { return }
-        guard let url = URL(string: "https://api.twitch.tv/helix/chat/badges/global") else { return }
+        guard let token, !token.isEmpty,
+              let url = URL(string: "https://api.twitch.tv/helix/chat/badges/global") else {
+            await loadGlobalPublic(); return
+        }
         var req = URLRequest(url: url)
         req.setValue("Bearer \(token)",  forHTTPHeaderField: "Authorization")
         req.setValue(kHelixClientID,      forHTTPHeaderField: "Client-Id")
@@ -30,7 +33,7 @@ actor BadgeService {
         guard let (data, resp) = try? await URLSession.shared.data(for: req),
               (resp as? HTTPURLResponse)?.statusCode == 200,
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let sets = json["data"] as? [[String: Any]] else { return }
+              let sets = json["data"] as? [[String: Any]] else { await loadGlobalPublic(); return }
 
         global = parseSets(sets)
         globalsLoaded = true
@@ -38,13 +41,13 @@ actor BadgeService {
     }
 
     // MARK: – Load channel badges (Helix — badges sub perso, bits, etc.)
-    func loadChannel(channelId: String, token: String) async {
+    func loadChannel(channelId: String, token: String?) async {
         guard !loadedChannels.contains(channelId) else { return }
         loadedChannels.insert(channelId)
 
-        guard let url = URL(string:
+        guard let token, !token.isEmpty, let url = URL(string:
             "https://api.twitch.tv/helix/chat/badges?broadcaster_id=\(channelId)"
-        ) else { return }
+        ) else { await loadChannelPublic(channelId: channelId); return }
         var req = URLRequest(url: url)
         req.setValue("Bearer \(token)",  forHTTPHeaderField: "Authorization")
         req.setValue(kHelixClientID,      forHTTPHeaderField: "Client-Id")
@@ -52,11 +55,59 @@ actor BadgeService {
         guard let (data, resp) = try? await URLSession.shared.data(for: req),
               (resp as? HTTPURLResponse)?.statusCode == 200,
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let sets = json["data"] as? [[String: Any]] else { return }
+              let sets = json["data"] as? [[String: Any]] else {
+            await loadChannelPublic(channelId: channelId); return
+        }
 
         channel[channelId] = parseSets(sets)
         logger.success("BADGES", "Badges canal \(channelId) chargés",
                        "\(channel[channelId]?.count ?? 0) sets")
+    }
+
+    // MARK: – Repli public (GQL, sans connexion)
+    // Helix exige un jeton : sans compte (ou jeton refusé), les badges
+    // restaient introuvables et laissaient un trou devant chaque pseudo.
+    private func gqlBadges(_ query: String, _ variables: [String: Any]) async -> [String: Any]? {
+        guard let url = URL(string: "https://gql.twitch.tv/gql"),
+              let body = try? JSONSerialization.data(withJSONObject: ["query": query, "variables": variables])
+        else { return nil }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue(kGQLClientID, forHTTPHeaderField: "Client-ID")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = body
+        guard let (data, _) = try? await URLSession.shared.data(for: req),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        return json["data"] as? [String: Any]
+    }
+
+    private func parseGQL(_ list: [[String: Any]]) -> [String: [String: String]] {
+        var map: [String: [String: String]] = [:]
+        for b in list {
+            guard let set = b["setID"] as? String, let v = b["version"] as? String,
+                  let u = b["imageURL"] as? String, u.hasPrefix("https://") else { continue }
+            map[set, default: [:]][v] = u
+        }
+        return map
+    }
+
+    private func loadGlobalPublic() async {
+        guard !globalsLoaded,
+              let d = await gqlBadges("query { badges { setID version imageURL(size: DOUBLE) } }", [:]),
+              let list = d["badges"] as? [[String: Any]], !list.isEmpty else { return }
+        global = parseGQL(list)
+        globalsLoaded = true
+        logger.success("BADGES", "Badges globaux chargés (GQL)", "\(global.count) sets")
+    }
+
+    private func loadChannelPublic(channelId: String) async {
+        guard let d = await gqlBadges(
+                "query($id: ID!) { user(id: $id) { broadcastBadges { setID version imageURL(size: DOUBLE) } } }",
+                ["id": channelId]),
+              let user = d["user"] as? [String: Any],
+              let list = user["broadcastBadges"] as? [[String: Any]] else { return }
+        channel[channelId] = parseGQL(list)
+        logger.success("BADGES", "Badges canal \(channelId) chargés (GQL)", "\(channel[channelId]?.count ?? 0) sets")
     }
 
     // MARK: – Resolve

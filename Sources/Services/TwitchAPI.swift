@@ -73,24 +73,48 @@ private func getAccessToken(id: String, isLive: Bool) async -> (value: String, s
 }
 
 // MARK: – Storyboard Hack
+// Dossier CDN d'une VOD (« https://<distribution>.cloudfront.net/<empreinte>_<chaîne>_<id>_<date> »),
+// celui qui contient ses playlists. Avant, il n'était lu que dans seekPreviewsURL :
+// une VOD réservée aux abonnés, ou masquée mais toujours listée, peut ne plus l'avoir
+// alors que ses autres aperçus pointent encore vers le même dossier. Même logique que
+// `vodCdnRoot` du Worker ; renvoie aussi l'aperçu utilisé, pour les logs.
+//  - seekPreviewsURL / animatedPreviewURL : https://<cdn>/<dossier>/storyboards/…
+//  - previewThumbnailURL : https://static-cdn.jtvnw.net/cf_vods/<distribution>/<dossier>//thumb/…
+// Une VOD encore en traitement a une miniature « _404/404_processing » : nil.
+private func vodCdnRoot(_ video: [String: Any]) -> (root: String, source: String)? {
+    for key in ["seekPreviewsURL", "animatedPreviewURL"] {
+        guard let raw = video[key] as? String, let url = URL(string: raw), let host = url.host else { continue }
+        let parts = url.path.components(separatedBy: "/")
+        if let i = parts.firstIndex(of: "storyboards"), i > 1 {
+            return ("https://\(host)/\(parts[i - 1])", key)
+        }
+    }
+    if let raw = video["previewThumbnailURL"] as? String, let url = URL(string: raw),
+       url.host == "static-cdn.jtvnw.net" {
+        // ["", "cf_vods", distribution, dossier, "", "thumb", …]
+        let parts = url.path.components(separatedBy: "/")
+        if parts.count > 3, parts[1] == "cf_vods",
+           parts[2].range(of: #"^[a-z0-9]+$"#, options: .regularExpression) != nil,
+           parts[3].range(of: #"^[0-9a-f]{20}_"#, options: .regularExpression) != nil {
+            return ("https://\(parts[2]).cloudfront.net/\(parts[3])", "previewThumbnailURL")
+        }
+    }
+    return nil
+}
+
 private func storyboardHack(vodId: String) async -> QualityLinks {
     logger.info("STORYBOARD", "Tentative storyboard hack pour VOD \(vodId)")
-    guard let json = try? await twitchGQL("query { video(id: \"\(gqlStr(vodId))\") { seekPreviewsURL } }") as? [String: Any],
+    guard let json = try? await twitchGQL("query { video(id: \"\(gqlStr(vodId))\") { seekPreviewsURL animatedPreviewURL previewThumbnailURL(width: 320, height: 180) } }") as? [String: Any],
           let data = json["data"] as? [String: Any],
-          let video = data["video"] as? [String: Any],
-          let seekUrl = video["seekPreviewsURL"] as? String,
-          let parsedURL = URL(string: seekUrl) else {
-        logger.warn("STORYBOARD", "seekPreviewsURL absent")
+          let video = data["video"] as? [String: Any] else {
+        logger.warn("STORYBOARD", "VOD introuvable", "supprimée ?")
         return [:]
     }
-    let parts = seekUrl.components(separatedBy: "/")
-    guard let storyIndex = parts.firstIndex(of: "storyboards"), storyIndex > 0 else {
-        logger.warn("STORYBOARD", "Structure URL inattendue")
+    guard let (root, source) = vodCdnRoot(video) else {
+        logger.warn("STORYBOARD", "Aucun aperçu exploitable", "VOD en traitement ou supprimée ?")
         return [:]
     }
-    let hash = parts[storyIndex - 1]
-    guard let host = parsedURL.host else { return [:] }
-    let root = "https://\(host)/\(hash)"
+    logger.info("STORYBOARD", "Dossier CDN trouvé via \(source)", root)
 
     var found: QualityLinks = [:]
     await withTaskGroup(of: (String, String)?.self) { group in

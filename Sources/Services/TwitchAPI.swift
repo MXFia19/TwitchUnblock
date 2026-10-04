@@ -914,7 +914,7 @@ func getTopStreamsGQL(lang: String?) async -> [TwitchStream] {
       edges { node { title viewersCount previewImageURL(width: 440, height: 248) game { displayName }
         broadcaster { id login displayName } } } } }
     """
-    var vars: [String: Any] = ["n": 40]
+    var vars: [String: Any] = ["n": 30]   // Twitch refuse au-delà de 30
     if let lang { vars["langs"] = [lang.uppercased().replacingOccurrences(of: "-", with: "_")] }
     guard let d = await gqlRequest(q, vars),
           let edges = (d["streams"] as? [String: Any])?["edges"] as? [[String: Any]] else { return [] }

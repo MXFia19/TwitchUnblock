@@ -14,6 +14,10 @@ struct SearchView: View {
     let onPlayVod:  (String, String?, String?, String?) -> Void
     let onPlayLive: (String) -> Void
     var onPlayClip: (String, String?) -> Void = { _, _ in }
+    /// Ouverte en feuille sur une chaîne précise (pseudo du lecteur, chaîne
+    /// hors ligne de l'accueil) : pas de barre de recherche, un bouton fermer.
+    var initialChannel: String? = nil
+    var onClose: (() -> Void)? = nil
 
     @EnvironmentObject private var store: AppStore
     /// Suivre pour de vrai (session web) depuis la page de la chaîne.
@@ -79,6 +83,18 @@ struct SearchView: View {
     var body: some View {
         VStack(spacing: 0) {
 
+            if initialChannel != nil {
+                // ── En-tête de la feuille « chaîne » ─────────────────────
+                HStack(spacing: TSpace.sm) {
+                    Text(searchedName.isEmpty ? (initialChannel ?? "") : searchedName)
+                        .font(.tSection).foregroundColor(.tText).lineLimit(1)
+                    Spacer(minLength: 0)
+                    TIconButton(icon: "xmark") { onClose?() }
+                }
+                .padding(.horizontal, TSpace.lg)
+                .padding(.top, TSpace.lg)
+                .padding(.bottom, TSpace.sm)
+            } else {
             // ── Barre de recherche ──────────────────────────────────
             VStack(spacing: TSpace.sm) {
                 HStack(spacing: TSpace.sm) {
@@ -105,6 +121,7 @@ struct SearchView: View {
             .padding(.top, TSpace.md)
             .padding(.bottom, TSpace.sm)
             .zIndex(10)
+            }
 
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: TSpace.lg) {
@@ -140,16 +157,11 @@ struct SearchView: View {
         .background(Color.tDark)
         // Chaîne demandée ailleurs (pseudo dans le lecteur, chaîne hors ligne
         // dans l'accueil) : on l'ouvre directement.
-        .onAppear { openPendingChannel() }
-        .onChange(of: store.pendingChannel) { _ in openPendingChannel() }
-    }
-
-    private func openPendingChannel() {
-        guard let login = store.pendingChannel else { return }
-        store.pendingChannel = nil
-        query = login
-        queryFocused = false
-        Task { await searchChannel(login) }
+        .onAppear {
+            if let login = initialChannel, searchedName.isEmpty, !loading {
+                Task { await searchChannel(login) }
+            }
+        }
     }
 
     // MARK: – Champ + suggestions

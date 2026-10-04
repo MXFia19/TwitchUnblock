@@ -19,15 +19,25 @@
       "tintColor": "#9146ff",
       "category": "entertainment",
       "screenshots": [],
-      "versions": [],
+      "versions": [
+        {
+          "version": "1.1.7",
+          "buildVersion": "211",
+          "date": "2026-10-04",
+          "localizedDescription": "- Update popup now lists everything new since your version\n- React to announcements with an emoji\n- Settings: new “Features in testing” section (live notifications, test button)\n- Latency badge moved to Player settings, auto chat sync to Chat settings\n- About: this project is vibe-coded (built with AI assistants)\n- Notifications réparées (Info.plist plus réécrit par xcodegen), test et diagnostic, bandeau session web, annonces, popup Discord\n- Top des lives dans la langue de l'appareil, réglable dans les réglages\n- Usage : ping immédiat après la connexion (l'anonyme est repris par le compte)\n- Fenêtres dans le style de l'app ; nouvelle version seulement si l'app change\n- Comptage par compte Twitch quand on est connecté\n- Comptage : identifiant gardé dans le trousseau (survit aux réinstallations)\n- Versions lisibles (1.1.x), Discord en tête du README et proposé une fois dans l'app",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-211/TwitchUnblock.ipa",
+          "size": 1534958,
+          "commit": "357c05ced183885d0df1c0719450a830be58932e"
+        }
+      ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.1.6",
-      "versionDate": "2026-10-03",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/nightly-210/TwitchUnblock.ipa",
-      "size": 1518490
+      "version": "1.1.7",
+      "versionDate": "2026-10-04",
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-211/TwitchUnblock.ipa",
+      "size": 1534958
     }
   ],
   "news": []

@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.2.0",
+          "buildVersion": "218",
+          "date": "2026-10-04",
+          "localizedDescription": "- Low latency mode now keeps you close to live (gently speeds up when behind)\n- Channel pages open in a sheet without switching to the Search tab\n- Expanded pinned message now stays above the chat\n- Fixed Top streams not loading without a Twitch account",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/nightly-218/TwitchUnblock.ipa",
+          "size": 1663729,
+          "commit": "82e21aac49832dc26c0f8f7f46c143e09984f634"
+        },
+        {
           "version": "1.1.10",
           "buildVersion": "216",
           "date": "2026-10-04",
@@ -51,10 +60,10 @@
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.1.10",
+      "version": "1.2.0",
       "versionDate": "2026-10-04",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/nightly-216/TwitchUnblock.ipa",
-      "size": 1654840
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/nightly-218/TwitchUnblock.ipa",
+      "size": 1663729
     }
   ],
   "news": []

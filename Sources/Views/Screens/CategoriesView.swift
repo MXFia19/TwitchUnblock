@@ -50,6 +50,21 @@ struct CategoriesView: View {
     @State private var search       = ""
     @State private var searchTask: Task<Void, Never>? = nil
     @State private var selected: TwitchCategory? = nil
+    /// 0 = catégories suivies, 1 = toutes.
+    @AppStorage("cat_tab") private var tab = 1
+    /// Suivies sur Twitch (session web), complétées par celles de l'appareil.
+    @State private var twitchFollowed: [TwitchCategory] = []
+    @State private var followedViewers: [String: Int] = [:]
+    @State private var loadingFollowed = false
+
+    /// Suivies : Twitch puis appareil, sans doublon.
+    private var followedList: [TwitchCategory] {
+        var seen = Set<String>()
+        return (twitchFollowed + store.followedCategories)
+            .filter { seen.insert($0.id).inserted }
+            .map { c in var c = c; c.viewers = c.viewers ?? followedViewers[c.id]; return c }
+            .sorted { ($0.viewers ?? 0) > ($1.viewers ?? 0) }
+    }
 
     private let columns = [GridItem(.flexible()), GridItem(.flexible())]
 
@@ -63,11 +78,74 @@ struct CategoriesView: View {
                 browser
             }
         }
-        .onAppear { if categories.isEmpty { Task { await loadTop() } } }
+        .onAppear {
+            if categories.isEmpty { Task { await loadTop() } }
+            Task { await loadFollowed() }
+        }
+        .onChange(of: store.followedCategories.map(\.id)) { _ in Task { await loadFollowed() } }
+    }
+
+    /// Catégories suivies : Twitch (si session web) + appareil, avec audience.
+    @MainActor private func loadFollowed() async {
+        if let web = store.twitchWebToken {
+            if twitchFollowed.isEmpty { loadingFollowed = true }
+            if let list = await getFollowedCategoriesGQL(webToken: web) { twitchFollowed = list }
+            loadingFollowed = false
+        }
+        let missing = store.followedCategories.map(\.id)
+        guard !missing.isEmpty else { return }
+        let counts = await categoryViewers(ids: missing)
+        if !counts.isEmpty { followedViewers = counts }
+    }
+
+    // MARK: – Onglet « Suivies »
+    @ViewBuilder private var followedGrid: some View {
+        let list = followedList
+        if loadingFollowed && list.isEmpty {
+            Spacer(); TLoader(); Spacer()
+        } else if list.isEmpty {
+            Spacer()
+            TEmptyState(icon: "heart", title: store.t("cat_followed_empty"),
+                        message: store.t(store.twitchWebToken == nil ? "cat_followed_empty_msg_local" : "cat_followed_empty_msg"))
+            Spacer()
+        } else {
+            ScrollView {
+                LazyVGrid(columns: columns, spacing: TSpace.md) {
+                    ForEach(list) { cat in
+                        CategoryCardView(category: cat) { selected = cat }
+                    }
+                }
+                .padding(.horizontal, TSpace.lg)
+                .padding(.top, TSpace.md)
+                Spacer(minLength: 40)
+            }
+            .refreshable { await Task { await loadFollowed() }.value }
+        }
     }
 
     // MARK: – Liste / recherche
     @ViewBuilder private var browser: some View {
+        VStack(spacing: 0) {
+            // Suivies | Toutes
+            HStack(spacing: TSpace.sm) {
+                TChip(title: store.t("cat_followed"), isOn: tab == 0) { tab = 0 }
+                TChip(title: store.t("cat_all"), isOn: tab == 1) { tab = 1 }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, TSpace.lg)
+            .padding(.top, TSpace.md)
+
+            if tab == 0 {
+                followedGrid
+            } else {
+                allBrowser
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.tDark)
+    }
+
+    @ViewBuilder private var allBrowser: some View {
         VStack(spacing: 0) {
             TSearchField(text: $search, placeholder: store.t("cat_search_ph"))
                 .padding(.horizontal, TSpace.lg)
@@ -217,6 +295,22 @@ struct CategoryStreamsView: View {
                     .foregroundColor(.tText)
                     .lineLimit(1)
                 Spacer(minLength: 0)
+                // Suivre la catégorie (gardé sur cet appareil).
+                let on = store.isCategoryFollowed(category.id)
+                Button {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    withAnimation(.easeInOut(duration: 0.15)) { store.toggleCategoryFollow(category) }
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: on ? "heart.fill" : "heart")
+                        Text(store.t(on ? "following" : "follow")).font(.system(size: 13, weight: .bold))
+                    }
+                    .foregroundColor(on ? .tDanger : .tPrimary)
+                    .padding(.horizontal, 10).padding(.vertical, 6)
+                    .background((on ? Color.tDanger : Color.tPrimary).opacity(0.14))
+                    .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
             }
             .padding(.horizontal, TSpace.lg)
             .padding(.top, TSpace.md)

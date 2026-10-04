@@ -188,6 +188,28 @@ final class AppStore: ObservableObject {
         didSet { UserDefaults.standard.set(shareUsage, forKey: "cfg_share_usage") }
     }
 
+    /// Chaîne à ouvrir dans l'onglet Recherche (depuis le lecteur, l'accueil…).
+    /// L'onglet la consomme puis la remet à nil.
+    @Published var pendingChannel: String? = nil
+    func openChannelPage(_ login: String) {
+        let l = login.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !l.isEmpty else { return }
+        pendingChannel = l
+    }
+
+    /// Catégories suivies sur cet appareil (id, nom, jaquette).
+    @Published var followedCategories: [TwitchCategory] = [] {
+        didSet {
+            let list = followedCategories.map { ["id": $0.id, "name": $0.name, "box": $0.boxArtURL] }
+            UserDefaults.standard.set(list, forKey: "followed_categories")
+        }
+    }
+    func isCategoryFollowed(_ id: String) -> Bool { followedCategories.contains { $0.id == id } }
+    func toggleCategoryFollow(_ c: TwitchCategory) {
+        if let i = followedCategories.firstIndex(where: { $0.id == c.id }) { followedCategories.remove(at: i) }
+        else { followedCategories.insert(TwitchCategory(id: c.id, name: c.name, boxArtURL: c.boxArtURL), at: 0) }
+    }
+
     /// Chaînes suivies sans compte Twitch (sur cet appareil), en minuscules.
     @Published var localFollows: [String] = [] {
         didSet { UserDefaults.standard.set(localFollows, forKey: "local_follows") }
@@ -316,6 +338,10 @@ final class AppStore: ObservableObject {
         shareUsage         = ud.object(forKey: "cfg_share_usage") as? Bool ?? true
         topLang            = ud.string(forKey: "cfg_top_lang")
         localFollows       = ud.stringArray(forKey: "local_follows") ?? []
+        followedCategories = (ud.array(forKey: "followed_categories") as? [[String: String]] ?? []).compactMap { d in
+            guard let id = d["id"] else { return nil }
+            return TwitchCategory(id: id, name: d["name"] ?? "", boxArtURL: d["box"] ?? "")
+        }
         // Le tutoriel est pour le tout premier lancement : une installation qui
         // a déjà servi (mise à jour) ne le voit pas.
         if ud.object(forKey: "onboarding_done") == nil && ud.integer(forKey: "launch_count") > 0 {

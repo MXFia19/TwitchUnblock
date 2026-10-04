@@ -13,6 +13,12 @@ struct HomeView: View {
     @State private var followedStreams: [TwitchStream] = []
     /// Lives des chaînes suivies sans compte (sur cet appareil).
     @State private var localLive: [TwitchStream] = []
+    /// Chaînes suivies hors ligne (compte + appareil), pour ouvrir leur page.
+    @State private var offlineChannels: [ChannelBrief] = []
+    /// Toutes les chaînes suivies par le compte Twitch.
+    @State private var twitchFollowLogins: [String] = []
+    /// Sous-onglet des lives : 0 = suivies, 1 = top.
+    @AppStorage("home_live_tab") private var liveTab = 0
     @State private var topStreams:      [TwitchStream] = []
     @State private var topLang: TopLang = .local
     @State private var loadingFollowed = false
@@ -224,8 +230,11 @@ struct HomeView: View {
                         .padding(.top, TSpace.md)
                 }
 
-                // ── Chaînes suivies ─────────────────────────────────
-                TSectionHeader(store.t("followed_channels"), icon: "heart.fill") {
+                // ── Suivies | Top : deux onglets plutôt qu'à la suite ──
+                HStack(spacing: TSpace.sm) {
+                    TChip(title: store.t("followed_channels"), isOn: liveTab == 0) { liveTab = 0 }
+                    TChip(title: store.t("top_streams"), isOn: liveTab == 1) { liveTab = 1 }
+                    Spacer(minLength: 0)
                     // Grille ou liste, au choix (aussi dans Réglages → Général).
                     Button {
                         withAnimation(.easeInOut(duration: 0.2)) { store.homeListLayout.toggle() }
@@ -238,50 +247,10 @@ struct HomeView: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel(store.t(store.homeListLayout ? "layout_grid" : "layout_list"))
                 }
+                .padding(.horizontal, TSpace.lg)
                 .padding(.top, TSpace.md)
 
-                let followed = allFollowedLive
-                if loadingFollowed && followed.isEmpty {
-                    TLoader()
-                } else if let err = errorFollowed, followed.isEmpty {
-                    TEmptyState(icon: "exclamationmark.triangle", title: err)
-                } else if followed.isEmpty {
-                    if store.twitchToken == nil && store.localFollows.isEmpty {
-                        TEmptyState(icon: "heart",
-                                    title: store.t("local_follow_empty"),
-                                    message: store.t("local_follow_empty_msg"))
-                    } else {
-                        TEmptyState(icon: "moon.zzz",
-                                    title: store.t("no_followed_live"),
-                                    message: store.t("no_followed_live_msg"))
-                    }
-                } else {
-                    streamsBlock(followed)
-                }
-
-                // ── Top ─────────────────────────────────────────────
-                TSectionHeader(store.t("top_streams"), icon: "flame.fill") {
-                    HStack(spacing: TSpace.xs) {
-                        TChip(title: TopLanguage.name(TopLanguage.resolved(store.topLang), in: store.lang), isOn: topLang == .local) {
-                            topLang = .local
-                            Task { await loadTopStreams(.local) }
-                        }
-                        TChip(title: store.t("top_world"), isOn: topLang == .all) {
-                            topLang = .all
-                            Task { await loadTopStreams(.all) }
-                        }
-                    }
-                }
-                .padding(.top, TSpace.sm)
-
-                if loadingTop {
-                    TLoader()
-                } else if topStreams.isEmpty {
-                    TEmptyState(icon: "antenna.radiowaves.left.and.right",
-                                title: store.t("no_live"))
-                } else {
-                    streamsBlock(topStreams)
-                }
+                if liveTab == 0 { followedTab } else { topTab }
 
                 Spacer(minLength: 40)
             }
@@ -289,6 +258,98 @@ struct HomeView: View {
         // Tâche détachée : tirer pour rafraîchir annule sa propre tâche dès que
         // la vue se redessine, et la requête annulée vidait les suivis locaux.
         .refreshable { await Task { await loadAll(isRefresh: true) }.value }
+    }
+
+    // MARK: – Onglet « Suivies »
+    @ViewBuilder private var followedTab: some View {
+        let followed = allFollowedLive
+        if loadingFollowed && followed.isEmpty && offlineChannels.isEmpty {
+            TLoader()
+        } else if let err = errorFollowed, followed.isEmpty, offlineChannels.isEmpty {
+            TEmptyState(icon: "exclamationmark.triangle", title: err)
+        } else if followed.isEmpty && offlineChannels.isEmpty {
+            if store.twitchToken == nil && store.localFollows.isEmpty {
+                TEmptyState(icon: "heart",
+                            title: store.t("local_follow_empty"),
+                            message: store.t("local_follow_empty_msg"))
+            } else {
+                TEmptyState(icon: "moon.zzz",
+                            title: store.t("no_followed_live"),
+                            message: store.t("no_followed_live_msg"))
+            }
+        } else {
+            if followed.isEmpty {
+                Text(store.t("no_followed_live"))
+                    .font(.tMeta).foregroundColor(.tMuted)
+                    .padding(.horizontal, TSpace.lg)
+            } else {
+                streamsBlock(followed)
+            }
+
+            // Hors ligne : accès direct à leur page (VODs, clips) sans chercher.
+            if !offlineChannels.isEmpty {
+                TSectionHeader("\(store.t("offline_channels")) · \(offlineChannels.count)", icon: "moon.fill")
+                    .padding(.top, TSpace.sm)
+                LazyVStack(spacing: 2) {
+                    ForEach(offlineChannels) { ch in
+                        Button { store.openChannelPage(ch.login) } label: {
+                            HStack(spacing: TSpace.md) {
+                                AsyncImage(url: URL(string: ch.avatar)) { img in
+                                    img.resizable().scaledToFill()
+                                } placeholder: {
+                                    Circle().fill(Color.tSurface)
+                                }
+                                .frame(width: 36, height: 36)
+                                .clipShape(Circle())
+                                .opacity(0.75)
+                                Text(ch.name)
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundColor(.tText)
+                                    .lineLimit(1)
+                                if store.isLocallyFollowed(ch.login) && !twitchFollowLogins.contains(ch.login) {
+                                    Image(systemName: "iphone")
+                                        .font(.system(size: 11))
+                                        .foregroundColor(.tMuted)
+                                }
+                                Spacer(minLength: 0)
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundColor(.tMuted)
+                            }
+                            .padding(.vertical, 6)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, TSpace.lg)
+            }
+        }
+    }
+
+    // MARK: – Onglet « Top »
+    @ViewBuilder private var topTab: some View {
+        HStack(spacing: TSpace.xs) {
+            TChip(title: TopLanguage.name(TopLanguage.resolved(store.topLang), in: store.lang), isOn: topLang == .local) {
+                topLang = .local
+                Task { await loadTopStreams(.local) }
+            }
+            TChip(title: store.t("top_world"), isOn: topLang == .all) {
+                topLang = .all
+                Task { await loadTopStreams(.all) }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, TSpace.lg)
+
+        if loadingTop {
+            TLoader()
+        } else if topStreams.isEmpty {
+            TEmptyState(icon: "antenna.radiowaves.left.and.right",
+                        title: store.t("no_live"))
+        } else {
+            streamsBlock(topStreams)
+        }
     }
 
     // MARK: – Chargements
@@ -338,10 +399,22 @@ struct HomeView: View {
     }
 
     /// Lives des chaînes suivies sur cet appareil (sans compte, GQL public).
+    /// Suivis de l'appareil en live, et toutes les chaînes suivies hors ligne
+    /// (compte Twitch + appareil), en une requête GQL publique.
     @MainActor private func loadLocalFollows() async {
-        // Échec réseau : on garde la liste affichée au lieu de la vider.
-        guard let live = await getLiveStreamsGQL(logins: store.localFollows) else { return }
-        localLive = live
+        if let token = store.twitchToken, let uid = store.twitchUserId, !uid.isEmpty,
+           let logins = await getFollowedLogins(token: token, userId: uid) {
+            twitchFollowLogins = logins.map { $0.lowercased() }
+        } else if store.twitchToken == nil {
+            twitchFollowLogins = []
+        }
+        var seen = Set<String>()
+        let all = (twitchFollowLogins + store.localFollows).filter { seen.insert($0).inserted }
+        // Échec réseau : on garde les listes affichées au lieu de les vider.
+        guard let infos = await getChannelsGQL(logins: all) else { return }
+        localLive = infos.compactMap { $0.stream }
+        offlineChannels = infos.filter { $0.stream == nil }
+            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
     @MainActor private func loadTopStreams(_ l: TopLang, isRefresh: Bool = false) async {

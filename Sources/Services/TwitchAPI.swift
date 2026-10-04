@@ -819,6 +819,88 @@ func getLiveStreamsGQL(logins: [String]) async -> [TwitchStream]? {
     return out.sorted { $0.viewerCount > $1.viewerCount }
 }
 
+// MARK: – Chaînes suivies (en live ou non)
+/// Une chaîne suivie : son live s'il y en a un, sinon de quoi ouvrir sa page.
+struct ChannelBrief: Identifiable {
+    let login: String
+    let name: String
+    let avatar: String
+    let stream: TwitchStream?
+    var id: String { login }
+}
+
+/// Infos de ces chaînes (avatar, live éventuel) par GQL public, 100 par requête.
+/// nil si Twitch n'a pas répondu, pour ne pas vider une liste affichée.
+func getChannelsGQL(logins: [String]) async -> [ChannelBrief]? {
+    guard !logins.isEmpty else { return [] }
+    let q = """
+    query($l: [String!]) { users(logins: $l) { id login displayName profileImageURL(width: 70)
+      stream { title viewersCount previewImageURL(width: 440, height: 248) game { displayName } } } }
+    """
+    var out: [ChannelBrief] = []
+    for start in stride(from: 0, to: logins.count, by: 100) {
+        let chunk = Array(logins[start..<min(start + 100, logins.count)])
+        guard let d = await gqlRequest(q, ["l": chunk]),
+              let users = d["users"] as? [Any] else { return nil }
+        for case let u as [String: Any] in users {
+            guard let login = u["login"] as? String else { continue }
+            let stream = (u["stream"] as? [String: Any]).flatMap { streamFromGQL(user: u, stream: $0) }
+            out.append(ChannelBrief(login: login, name: u["displayName"] as? String ?? login,
+                                    avatar: u["profileImageURL"] as? String ?? "", stream: stream))
+        }
+    }
+    return out
+}
+
+/// Toutes les chaînes suivies par le compte (Helix, pages de 100, 1 000 au plus).
+func getFollowedLogins(token: String, userId: String) async -> [String]? {
+    var logins: [String] = []
+    var cursor: String? = nil
+    repeat {
+        var urlStr = "https://api.twitch.tv/helix/channels/followed?user_id=\(userId)&first=100"
+        if let cursor { urlStr += "&after=\(cursor)" }
+        guard let url = URL(string: urlStr) else { return nil }
+        var req = URLRequest(url: url)
+        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        req.setValue(kHelixClientID, forHTTPHeaderField: "Client-Id")
+        guard let (data, resp) = try? await URLSession.shared.data(for: req),
+              (resp as? HTTPURLResponse)?.statusCode == 200,
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        for f in json["data"] as? [[String: Any]] ?? [] {
+            if let l = f["broadcaster_login"] as? String { logins.append(l) }
+        }
+        cursor = (json["pagination"] as? [String: Any])?["cursor"] as? String
+    } while cursor != nil && logins.count < 1000
+    return logins
+}
+
+// MARK: – Catégories suivies (compte Twitch, session web)
+/// Catégories suivies sur Twitch. Demande la session web (cookie auth-token) :
+/// Helix n'a pas d'équivalent. nil si indisponible.
+func getFollowedCategoriesGQL(webToken: String) async -> [TwitchCategory]? {
+    guard let url = URL(string: "https://gql.twitch.tv/gql") else { return nil }
+    let q = """
+    query { currentUser { followedGames(first: 100, type: ALL) { nodes { id displayName boxArtURL(width: 285, height: 380) viewersCount } } } }
+    """
+    guard let body = try? JSONSerialization.data(withJSONObject: ["query": q]) else { return nil }
+    var req = URLRequest(url: url)
+    req.httpMethod = "POST"
+    req.setValue(kGQLClientID, forHTTPHeaderField: "Client-ID")
+    req.setValue("OAuth \(webToken)", forHTTPHeaderField: "Authorization")
+    req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    req.httpBody = body
+    guard let (data, _) = try? await URLSession.shared.data(for: req),
+          let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+          let nodes = (((json["data"] as? [String: Any])?["currentUser"] as? [String: Any])?["followedGames"] as? [String: Any])?["nodes"] as? [[String: Any]]
+    else { return nil }
+    return nodes.compactMap { n in
+        guard let id = n["id"] as? String else { return nil }
+        return TwitchCategory(id: id, name: n["displayName"] as? String ?? "",
+                              boxArtURL: n["boxArtURL"] as? String ?? "",
+                              viewers: n["viewersCount"] as? Int)
+    }
+}
+
 /// Identifiant Twitch d'une chaîne (GQL public).
 func getUserIdGQL(login: String) async -> String? {
     let d = await gqlRequest("query($l: String!) { user(login: $l) { id } }", ["l": login.lowercased()])

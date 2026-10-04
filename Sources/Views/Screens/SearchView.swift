@@ -138,6 +138,18 @@ struct SearchView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.tDark)
+        // Chaîne demandée ailleurs (pseudo dans le lecteur, chaîne hors ligne
+        // dans l'accueil) : on l'ouvre directement.
+        .onAppear { openPendingChannel() }
+        .onChange(of: store.pendingChannel) { _ in openPendingChannel() }
+    }
+
+    private func openPendingChannel() {
+        guard let login = store.pendingChannel else { return }
+        store.pendingChannel = nil
+        query = login
+        queryFocused = false
+        Task { await searchChannel(login) }
     }
 
     // MARK: – Champ + suggestions

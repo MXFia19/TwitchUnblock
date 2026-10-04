@@ -739,10 +739,14 @@ struct MainTabView: View {
         .cornerRadius(TRadius.card)
         .overlay(RoundedRectangle(cornerRadius: TRadius.card)
             .stroke(Color.tPrimary.opacity(0.4), lineWidth: 1))
-        .padding(.horizontal, TSpace.md)
-        .padding(.bottom, 92)
+        // La zone tactile est fixée AVANT les marges : sinon le rectangle
+        // tactile englobait les 92 pt de marge basse, qui recouvrent la barre
+        // d'onglets — appuyer sur « Recherche » ou « VODs » rouvrait le lecteur
+        // en plein écran au lieu de changer d'onglet.
         .contentShape(Rectangle())
         .onTapGesture { withAnimation { playerVisible = true } }
+        .padding(.horizontal, TSpace.md)
+        .padding(.bottom, 92)
     }
 
     // MARK: – Playback

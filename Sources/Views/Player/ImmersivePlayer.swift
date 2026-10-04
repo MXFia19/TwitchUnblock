@@ -254,6 +254,8 @@ struct ImmersivePlayer: View {
     let dvrEnabled: Bool
     let savedTime: Double
     let info: PlayerOverlayInfo
+    /// Toucher le pseudo : page de la chaîne (nil = pas de chaîne connue).
+    var onChannel: (() -> Void)? = nil
 
     /// Compte à rebours du minuteur de veille, nil s'il n'est pas armé.
     var sleepLabel: String? = nil
@@ -313,6 +315,7 @@ struct ImmersivePlayer: View {
 
     init(url: URL, isLive: Bool, dvrEnabled: Bool, savedTime: Double,
          info: PlayerOverlayInfo,
+         onChannel: (() -> Void)? = nil,
          sleepLabel: String? = nil,
          chatMode: LandscapeChat = .column,
          isLandscape: Bool = false,
@@ -333,7 +336,7 @@ struct ImmersivePlayer: View {
          onBackToLive: @escaping () -> Void = {},
          onSeekToArchive: @escaping (Double) -> Void = { _ in }) {
         self.url = url; self.isLive = isLive; self.dvrEnabled = dvrEnabled
-        self.savedTime = savedTime; self.info = info
+        self.savedTime = savedTime; self.info = info; self.onChannel = onChannel
         self.onProgress = onProgress; self.onLatency = onLatency
         self.sleepLabel = sleepLabel; self.chatMode = chatMode
         self.isLandscape = isLandscape; self.controlsInset = controlsInset
@@ -589,6 +592,8 @@ struct ImmersivePlayer: View {
                 )
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+                .onTapGesture { onChannel?() }
 
                 // AirPlay : envoyer la vidéo vers une Apple TV ou une TV compatible.
                 AirPlayButton()

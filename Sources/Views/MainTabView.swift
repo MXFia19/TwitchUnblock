@@ -94,6 +94,14 @@ struct MainTabView: View {
         )
     }
 
+    /// Chaîne de ce qu'on regarde (direct, ou streamer de la VOD) : pour ouvrir
+    /// sa page en touchant le pseudo.
+    private var playerChannelLogin: String? {
+        if let ch = currentChannelName { return ch }
+        if case .vod(_, _, _, let streamer)? = playerMode, let s = streamer, !s.isEmpty { return s.lowercased() }
+        return nil
+    }
+
     /// Y a-t-il un chat à afficher sous le lecteur ?
     private var chatTarget: String? {
         if let ch = currentChannelName { return ch }
@@ -251,6 +259,15 @@ struct MainTabView: View {
         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: updater.showAlert)
         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: showDiscordPrompt)
         // Notification « en live » touchée : on ouvre le direct.
+        // Page d'une chaîne demandée (pseudo dans le lecteur, accueil…) :
+        // onglet Recherche, lecteur réduit en mini-barre pour la laisser voir.
+        .onChange(of: store.pendingChannel) { login in
+            guard login != nil else { return }
+            withAnimation(.easeInOut(duration: 0.2)) {
+                playerVisible = false
+                activeTab = .search
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .openLiveChannel)) { note in
             if let login = note.userInfo?["login"] as? String, !login.isEmpty { playLive(login) }
         }
@@ -502,6 +519,7 @@ struct MainTabView: View {
                 dvrEnabled: isLivePlaying,
                 savedTime: currentVodId.map { store.getVodProgress($0) } ?? 0,
                 info: overlayInfo,
+                onChannel: playerChannelLogin.map { l in { store.openChannelPage(l) } },
                 sleepLabel: sleepTimer.isActive ? sleepTimer.label : nil,
                 chatMode: store.landscapeChat,
                 isLandscape: landscape,
@@ -580,6 +598,8 @@ struct MainTabView: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text(currentChannelName ?? statusTitle)
                     .font(.tCardTitle).foregroundColor(.tText).lineLimit(1)
+                    // Toucher le pseudo : page de la chaîne.
+                    .onTapGesture { if let l = playerChannelLogin { store.openChannelPage(l) } }
 
                 HStack(spacing: TSpace.sm) {
                     if isLivePlaying {

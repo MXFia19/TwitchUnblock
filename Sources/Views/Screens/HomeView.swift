@@ -93,10 +93,12 @@ struct HomeView: View {
     }
 
     // MARK: – Accueil (avec ou sans compte)
-    /// Suivis du compte Twitch, puis ceux de cet appareil qui n'y sont pas déjà.
+    /// Suivis du compte Twitch et de cet appareil, sans doublon, mêlés et
+    /// triés par audience comme sur Twitch (pas relégués en bas).
     private var allFollowedLive: [TwitchStream] {
         let known = Set(followedStreams.map { $0.userLogin.lowercased() })
-        return followedStreams + localLive.filter { !known.contains($0.userLogin.lowercased()) }
+        return (followedStreams + localLive.filter { !known.contains($0.userLogin.lowercased()) })
+            .sorted { $0.viewerCount > $1.viewerCount }
     }
 
     /// Grille de cartes ou liste, selon le réglage.
@@ -284,7 +286,9 @@ struct HomeView: View {
                 Spacer(minLength: 40)
             }
         }
-        .refreshable { await loadAll(isRefresh: true) }
+        // Tâche détachée : tirer pour rafraîchir annule sa propre tâche dès que
+        // la vue se redessine, et la requête annulée vidait les suivis locaux.
+        .refreshable { await Task { await loadAll(isRefresh: true) }.value }
     }
 
     // MARK: – Chargements
@@ -335,7 +339,9 @@ struct HomeView: View {
 
     /// Lives des chaînes suivies sur cet appareil (sans compte, GQL public).
     @MainActor private func loadLocalFollows() async {
-        localLive = await getLiveStreamsGQL(logins: store.localFollows)
+        // Échec réseau : on garde la liste affichée au lieu de la vider.
+        guard let live = await getLiveStreamsGQL(logins: store.localFollows) else { return }
+        localLive = live
     }
 
     @MainActor private func loadTopStreams(_ l: TopLang, isRefresh: Bool = false) async {

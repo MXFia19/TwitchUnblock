@@ -138,10 +138,23 @@ struct ChatView: View {
             .overlay(Divider().background(Color.tBorder), alignment: .bottom)
 
             // ── Message épinglé ─────────────────────────────────────
+            // Replié, il garde sa place ; déplié, il s'affiche par-dessus le chat
+            // au lieu de le pousser : le chat ne bouge pas et continue de défiler.
             if store.showPinnedMessages, let pin = pubsub.pinned, pin.id != dismissedPinId {
-                PinnedBanner(pin: pin, width: chromeWidth, expanded: $pinnedExpanded) {
+                PinnedBanner(pin: pin, width: chromeWidth, expanded: $pinnedExpanded, layoutOnly: true) {
                     withAnimation(.easeInOut(duration: 0.18)) { dismissedPinId = pin.id }
                 }
+                .overlay(alignment: .top) {
+                    if pinnedExpanded {
+                        PinnedBanner(pin: pin, width: chromeWidth, expanded: $pinnedExpanded) {
+                            withAnimation(.easeInOut(duration: 0.18)) { dismissedPinId = pin.id }
+                        }
+                        .fixedSize(horizontal: false, vertical: true)
+                        .shadow(color: .black.opacity(0.45), radius: 10, y: 6)
+                        .transition(.opacity)
+                    }
+                }
+                .zIndex(2)
                 .transition(.opacity)
             }
 
@@ -258,19 +271,12 @@ struct ChatView: View {
                             // messages : sinon retirer les plus anciens (en haut) fait « descendre »
                             // la vue pendant qu'on lit l'historique.
                             .onChange(of: autoScroll) { chat.pauseTrim = !$0 }
-                            // La zone du chat change de hauteur (message épinglé déplié ou
-                            // replié, clavier…) : on reste calé en bas si on suivait, sinon
+                            // La zone du chat change de hauteur (clavier, rotation…) : on
+                            // reste calé en bas si on suivait, sinon
                             // le bas sort de l'écran et le suivi semble s'arrêter.
                             .onChange(of: geo.size.height) { _ in
                                 guard autoScroll else { return }
                                 DispatchQueue.main.async { proxy.scrollTo(bottomAnchor, anchor: .bottom) }
-                            }
-                            .onChange(of: pinnedExpanded) { _ in
-                                guard autoScroll else { return }
-                                // Après l'animation du bandeau (0,18 s).
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                                    proxy.scrollTo(bottomAnchor, anchor: .bottom)
-                                }
                             }
 
                             if !autoScroll {

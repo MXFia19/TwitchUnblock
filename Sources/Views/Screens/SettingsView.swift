@@ -10,6 +10,7 @@ struct SettingsView: View {
     @State private var mutedDraft      = ""
     @State private var liveNotif       = LiveNotifier.isEnabled
     @State private var notifTestResult: String? = nil
+    @AppStorage("onboarding_done") private var onboardingDone = false
     @State private var showLogoutAlert = false
     @State private var showClearAlert  = false
     @State private var showWebLogin    = false   // login web (points de chaîne)
@@ -1050,6 +1051,25 @@ struct SettingsView: View {
                 Text(store.t("not_affiliated"))
                     .font(.tMeta)
                     .foregroundColor(.tMuted.opacity(0.8))
+
+                // Revoir le tutoriel du premier lancement.
+                Button {
+                    dismiss()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { onboardingDone = false }
+                } label: {
+                    HStack(spacing: TSpace.sm) {
+                        Image(systemName: "graduationcap.fill")
+                            .font(.system(size: 13, weight: .semibold))
+                        Text(store.t("ob_replay")).font(.tLabel)
+                        Spacer()
+                    }
+                    .foregroundColor(.tPrimary)
+                    .padding(.horizontal, TSpace.md)
+                    .frame(height: 44)
+                    .background(Color.tPrimary.opacity(0.12))
+                    .cornerRadius(12)
+                }
+                .buttonStyle(.plain)
 
                 Button {
                     showLogs = true

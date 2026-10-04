@@ -112,7 +112,8 @@ enum LiveNotifier {
         let local = ud.stringArray(forKey: "local_follows") ?? []
         if !local.isEmpty {
             let known = Set(streams.map { $0.userLogin.lowercased() })
-            streams += await getLiveStreamsGQL(logins: local).filter { !known.contains($0.userLogin.lowercased()) }
+            guard let live = await getLiveStreamsGQL(logins: local) else { return false }
+            streams += live.filter { !known.contains($0.userLogin.lowercased()) }
             reached = true
         }
         guard reached else { return false }

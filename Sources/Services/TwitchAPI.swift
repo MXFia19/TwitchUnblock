@@ -799,7 +799,9 @@ private func streamFromGQL(user u: [String: Any], stream s: [String: Any]) -> Tw
 }
 
 /// Lesquelles de ces chaînes sont en live (suivis sans compte). 100 max par requête.
-func getLiveStreamsGQL(logins: [String]) async -> [TwitchStream] {
+/// nil si Twitch n'a pas répondu (réseau, requête annulée) : à ne pas
+/// confondre avec « personne en live », sinon la liste se viderait.
+func getLiveStreamsGQL(logins: [String]) async -> [TwitchStream]? {
     guard !logins.isEmpty else { return [] }
     let q = """
     query($l: [String!]) { users(logins: $l) { id login displayName
@@ -809,12 +811,18 @@ func getLiveStreamsGQL(logins: [String]) async -> [TwitchStream] {
     for start in stride(from: 0, to: logins.count, by: 100) {
         let chunk = Array(logins[start..<min(start + 100, logins.count)])
         guard let d = await gqlRequest(q, ["l": chunk]),
-              let users = d["users"] as? [Any] else { continue }
+              let users = d["users"] as? [Any] else { return nil }
         for case let u as [String: Any] in users {
             if let s = u["stream"] as? [String: Any], let st = streamFromGQL(user: u, stream: s) { out.append(st) }
         }
     }
     return out.sorted { $0.viewerCount > $1.viewerCount }
+}
+
+/// Identifiant Twitch d'une chaîne (GQL public).
+func getUserIdGQL(login: String) async -> String? {
+    let d = await gqlRequest("query($l: String!) { user(login: $l) { id } }", ["l": login.lowercased()])
+    return (d?["user"] as? [String: Any])?["id"] as? String
 }
 
 /// Top des lives sans jeton (GQL public) ; `lang` au format Helix (« fr », « zh-hk »).

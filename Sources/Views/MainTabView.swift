@@ -67,6 +67,8 @@ struct MainTabView: View {
     @State private var loadGeneration = 0
     @ObservedObject private var updater = UpdateChecker.shared
     @State private var showDiscordPrompt = false
+    /// Tutoriel du tout premier lancement (revu depuis les réglages).
+    @AppStorage("onboarding_done") private var onboardingDone = false
     /// Clip en cours : VOD d'origine et position, pour en rejouer le chat.
     @State private var clipVodId: String? = nil
     @State private var clipOffset: Double = 0
@@ -199,14 +201,19 @@ struct MainTabView: View {
             let ud = UserDefaults.standard
             let launches = ud.integer(forKey: "launch_count") + 1
             ud.set(launches, forKey: "launch_count")
-            guard launches >= 2, !ud.bool(forKey: "discord_never") else { return }
+            guard launches >= 2, onboardingDone, !ud.bool(forKey: "discord_never") else { return }
             try? await Task.sleep(nanoseconds: 4_000_000_000)
             guard !updater.showAlert else { return }
             showDiscordPrompt = true
         }
         // Fenêtres « mise à jour » et « Discord » dans le style de l'app.
         .overlay {
-            if updater.showAlert, let up = updater.available {
+            if !onboardingDone {
+                // Le tutoriel passe avant tout le reste (mise à jour, Discord).
+                OnboardingView { withAnimation(.easeInOut(duration: 0.3)) { onboardingDone = true } }
+                    .transition(.opacity)
+                    .zIndex(20)
+            } else if updater.showAlert, let up = updater.available {
                 TPromptCard(
                     icon: "arrow.down.circle.fill",
                     title: store.t("update_title"),

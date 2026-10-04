@@ -16,6 +16,8 @@ struct SearchView: View {
     var onPlayClip: (String, String?) -> Void = { _, _ in }
 
     @EnvironmentObject private var store: AppStore
+    /// Suivre pour de vrai (session web) depuis la page de la chaîne.
+    @StateObject private var follow = FollowService()
 
     @State private var query        = ""
     @State private var filterText   = ""
@@ -291,16 +293,20 @@ struct SearchView: View {
 
             // Suivre sans compte Twitch : la chaîne apparaît dans l'accueil
             // (« Chaînes suivies ») dès qu'elle est en live.
-            if store.twitchWebToken == nil, !channelName.isEmpty {
-                let on = store.isLocallyFollowed(channelName)
+            // Avec une session web, c'est un vrai suivi Twitch ; sans, il reste
+            // sur cet appareil.
+            if !channelName.isEmpty, let on = follow.isFollowing {
+                let local = store.twitchWebToken == nil
                 Button {
                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                    withAnimation(.easeInOut(duration: 0.15)) { store.toggleLocalFollow(channelName) }
+                    Task { await follow.toggle(token: store.twitchWebToken) }
                 } label: {
                     HStack(spacing: 6) {
                         Image(systemName: on ? "heart.fill" : "heart")
                         Text(store.t(on ? "following" : "follow")).font(.system(size: 14, weight: .bold))
-                        Text("· " + store.t("on_this_device")).font(.system(size: 12)).opacity(0.8)
+                        if local {
+                            Text("· " + store.t("on_this_device")).font(.system(size: 12)).opacity(0.8)
+                        }
                     }
                     .foregroundColor(on ? .tDanger : .tPrimary)
                     .padding(.horizontal, 14).padding(.vertical, 8)
@@ -309,6 +315,8 @@ struct SearchView: View {
                     .overlay(Capsule().stroke(on ? Color.tDanger : Color.tPrimary, lineWidth: 1))
                 }
                 .buttonStyle(.plain)
+                .disabled(follow.busy)
+                .opacity(follow.busy ? 0.5 : 1)
                 .padding(.horizontal, TSpace.lg)
             }
         }
@@ -457,11 +465,21 @@ struct SearchView: View {
                 thumb: nil, streamer: nil,
                 addedAt: Date().timeIntervalSince1970 * 1000))
             liveData    = live
+            Task { await loadFollowState(login: login, channelId: live.userId) }
             vods        = ch.videos
             vodCursor   = ch.cursor
             hasMoreVods = ch.cursor != nil
         }
         loading = false
+    }
+
+    /// Session web : statut de suivi Twitch réel. Sinon, suivi sur l'appareil.
+    @MainActor private func loadFollowState(login: String, channelId: String?) async {
+        guard let web = store.twitchWebToken else { follow.loadLocal(login: login, store: store); return }
+        var cid = channelId ?? ""
+        if cid.isEmpty { cid = await getUserIdGQL(login: login) ?? "" }
+        guard !cid.isEmpty, login == channelName.lowercased() else { return }
+        await follow.load(login: login, channelId: cid, token: web)
     }
 
     @MainActor private func loadMoreVods() async {

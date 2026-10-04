@@ -170,6 +170,9 @@ struct PinnedBanner: View {
     let pin: PinnedChat
     let width: CGFloat
     @Binding var expanded: Bool
+    /// Version posée dans la mise en page : toujours repliée (la version
+    /// dépliée s'affiche par-dessus le chat, sans le pousser).
+    var layoutOnly = false
     let onDismiss: () -> Void
     @EnvironmentObject private var store: AppStore
     /// Largeur réelle du bandeau (mesurée), et hauteur du message déplié.
@@ -181,13 +184,15 @@ struct PinnedBanner: View {
         max(60, (measuredWidth > 0 ? measuredWidth : width) - 100)
     }
 
+    private var isOpen: Bool { expanded && !layoutOnly }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
             HStack(alignment: .top, spacing: 6) {
                 Image(systemName: "pin.fill")
                     .font(.system(size: 11)).foregroundColor(.tPurple)
                     .padding(.top, 3)
-                if expanded {
+                if isOpen {
                     // Hauteur bornée : au-delà, le message défile dans le
                     // bandeau au lieu de pousser le chat hors de l'écran.
                     ScrollView(.vertical, showsIndicators: true) {
@@ -217,7 +222,7 @@ struct PinnedBanner: View {
                     withAnimation(.easeInOut(duration: 0.18)) { expanded.toggle() }
                 } label: {
                     Image(systemName: "chevron.down")
-                        .rotationEffect(.degrees(expanded ? 180 : 0))
+                        .rotationEffect(.degrees(isOpen ? 180 : 0))
                         .font(.system(size: 11, weight: .bold)).foregroundColor(.tMuted)
                         .frame(width: 24, height: 22)
                 }

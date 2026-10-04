@@ -316,6 +316,11 @@ final class AppStore: ObservableObject {
         shareUsage         = ud.object(forKey: "cfg_share_usage") as? Bool ?? true
         topLang            = ud.string(forKey: "cfg_top_lang")
         localFollows       = ud.stringArray(forKey: "local_follows") ?? []
+        // Le tutoriel est pour le tout premier lancement : une installation qui
+        // a déjà servi (mise à jour) ne le voit pas.
+        if ud.object(forKey: "onboarding_done") == nil && ud.integer(forKey: "launch_count") > 0 {
+            ud.set(true, forKey: "onboarding_done")
+        }
         homeListLayout     = ud.bool(forKey: "cfg_home_list")
         showLatency        = ud.object(forKey: "dbg_latency")    as? Bool ?? false
         autoChatDelay      = ud.object(forKey: "dbg_chat_delay") as? Bool ?? false

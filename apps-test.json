@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.2.1",
+          "buildVersion": "219",
+          "date": "2026-10-04",
+          "localizedDescription": "- Channel playlists: new Playlists tab on the channel page, with \"Play all\" to chain the videos.\n- Highlights (playlist videos) now play even when Twitch refuses the playback token.",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-219/TwitchUnblock.ipa",
+          "size": 1678957,
+          "commit": "c6dfb9a0877af1190fe4b92a9a440d5df8c3b1bb"
+        },
+        {
           "version": "1.1.11",
           "buildVersion": "217",
           "date": "2026-10-04",
@@ -70,10 +79,10 @@
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.1.11",
+      "version": "1.2.1",
       "versionDate": "2026-10-04",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-217/TwitchUnblock.ipa",
-      "size": 1663751
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-219/TwitchUnblock.ipa",
+      "size": 1678957
     }
   ],
   "news": []

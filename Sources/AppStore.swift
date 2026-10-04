@@ -210,6 +210,10 @@ final class AppStore: ObservableObject {
         else { followedCategories.insert(TwitchCategory(id: c.id, name: c.name, boxArtURL: c.boxArtURL), at: 0) }
     }
 
+    /// Chaînes suivies par le compte Twitch, telles que lues par l'accueil
+    /// (non enregistrées) : l'export les ajoute aux suivis de l'appareil.
+    var accountFollowLogins: [String] = []
+
     /// Chaînes suivies sans compte Twitch (sur cet appareil), en minuscules.
     @Published var localFollows: [String] = [] {
         didSet { UserDefaults.standard.set(localFollows, forKey: "local_follows") }
@@ -225,6 +229,14 @@ final class AppStore: ObservableObject {
     @Published var homeListLayout: Bool = false {
         didSet { UserDefaults.standard.set(homeListLayout, forKey: "cfg_home_list") }
     }
+
+    /// « Audio seul » choisi dans le lecteur : retenu pour les lectures
+    /// suivantes, jusqu'à ce qu'on choisisse une autre qualité (comme l'app Twitch).
+    @Published var preferAudioOnly: Bool = false {
+        didSet { UserDefaults.standard.set(preferAudioOnly, forKey: "cfg_audio_only") }
+    }
+    /// Retient ou oublie l'audio seul selon la qualité choisie à la main.
+    func rememberQualityChoice(_ q: String) { preferAudioOnly = (q == "audio_only") }
 
     /// Langue du top des lives ; nil = celle de l'appareil.
     @Published var topLang: String? = nil {
@@ -348,6 +360,7 @@ final class AppStore: ObservableObject {
             ud.set(true, forKey: "onboarding_done")
         }
         homeListLayout     = ud.bool(forKey: "cfg_home_list")
+        preferAudioOnly    = ud.bool(forKey: "cfg_audio_only")
         showLatency        = ud.object(forKey: "dbg_latency")    as? Bool ?? false
         autoChatDelay      = ud.object(forKey: "dbg_chat_delay") as? Bool ?? false
         if let data = ud.data(forKey: "twitch_vod_history"),

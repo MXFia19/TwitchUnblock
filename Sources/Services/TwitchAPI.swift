@@ -452,9 +452,14 @@ actor AvatarCache {
         guard !key.isEmpty else { return nil }
         if let hit = cache[key] { return hit.isEmpty ? nil : hit }
 
+        // Sans compte Twitch, pas de Helix : la photo vient de l'API publique
+        // (GQL). Avant, la fonction renvoyait nil et le bandeau du lecteur
+        // restait sur un rond gris.
         guard let token,
               let url = URL(string: "https://api.twitch.tv/helix/users?login=\(key)") else {
-            return nil
+            let img = await publicAvatar(login: key)
+            if let img { cache[key] = img }
+            return img
         }
         var req = URLRequest(url: url)
         req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
@@ -465,12 +470,27 @@ actor AvatarCache {
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let arr  = json["data"] as? [[String: Any]],
               let img  = arr.first?["profile_image_url"] as? String else {
-            cache[key] = ""   // évite de re-tenter en boucle sur un compte disparu
-            return nil
+            // Jeton expiré ou refusé : on tente encore l'API publique.
+            let img = await publicAvatar(login: key)
+            cache[key] = img ?? ""   // évite de re-tenter en boucle sur un compte disparu
+            return img
         }
         cache[key] = img
         return img
     }
+
+    private func publicAvatar(login: String) async -> String? {
+        await getUserAvatarGQL(login: login)
+    }
+}
+
+/// Photo de profil par l'API publique (sans compte).
+func getUserAvatarGQL(login: String) async -> String? {
+    let q = "query($l: String!) { user(login: $l) { profileImageURL(width: 150) } }"
+    guard let d = await gqlRequest(q, ["l": login.lowercased()]),
+          let user = d["user"] as? [String: Any],
+          let img = user["profileImageURL"] as? String, !img.isEmpty else { return nil }
+    return img
 }
 
 func getFollowedStreams(token: String, userId: String) async throws -> [TwitchStream] {
@@ -675,21 +695,42 @@ func formatDuration(_ seconds: Int) -> String {
     return h > 0 ? "\(h)h \(m)min" : "\(m)min"
 }
 
-func getTimeSince(publishedAt: String, lengthSeconds: Int, store: AppStore) -> String {
-    // Twitch date ses VODs sans fractions de seconde ("2026-09-11T18:00:00Z") :
-    // exiger .withFractionalSeconds faisait échouer le parsing, et la durée
-    // remontait vide (« Hors ligne depuis : » sans rien derrière).
+/// Twitch date ses VODs sans fractions de seconde et ses lives avec : on
+/// accepte les deux formats.
+private func parseTwitchDate(_ s: String?) -> Date? {
+    guard let s else { return nil }
     let df = ISO8601DateFormatter()
     df.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-    guard let startDate = df.date(from: publishedAt)
-            ?? ISO8601DateFormatter().date(from: publishedAt) else { return "" }
-    let endDate = startDate.addingTimeInterval(TimeInterval(lengthSeconds))
-    let diff = Date().timeIntervalSince(endDate)
+    return df.date(from: s) ?? ISO8601DateFormatter().date(from: s)
+}
+
+/// Fin du dernier live : la dernière VOD (début + durée) ou, si plus tard, le
+/// dernier live lancé (un live sans VOD n'en laisse pas).
+func lastLiveEnd(publishedAt: String?, lengthSeconds: Int, lastStart: String?) -> Date? {
+    let fromVod = parseTwitchDate(publishedAt)?.addingTimeInterval(TimeInterval(lengthSeconds))
+    let started = parseTwitchDate(lastStart)
+    switch (fromVod, started) {
+    case let (a?, b?): return max(a, b)
+    case let (a?, nil): return a
+    case let (nil, b?): return b
+    default: return nil
+    }
+}
+
+/// « 13 d · 21 sept. » : durée dans la langue de l'app, puis la date (avec
+/// l'année si ce n'est pas celle en cours).
+func offlineLabel(since end: Date, store: AppStore) -> String {
+    let diff = Date().timeIntervalSince(end)
     guard diff > 0 else { return "" }
     let days = Int(diff / 86400), hours = Int(diff / 3600), minutes = Int(diff / 60)
-    if days > 0   { return "\(days) \(store.t("day"))" }
-    if hours > 0  { return "\(hours) \(store.t("hour"))" }
-    return "\(minutes) \(store.t("min"))"
+    let span = days > 0 ? "\(days) \(store.t("day"))"
+             : hours > 0 ? "\(hours) \(store.t("hour"))"
+             : "\(minutes) \(store.t("min"))"
+    let df = DateFormatter()
+    df.locale = Locale(identifier: store.lang.rawValue)
+    let sameYear = Calendar.current.component(.year, from: end) == Calendar.current.component(.year, from: Date())
+    df.setLocalizedDateFormatFromTemplate(sameYear ? "d MMM" : "d MMM y")
+    return "\(span) · \(df.string(from: end))"
 }
 
 func sortQualities(_ keys: [String]) -> [String] {
@@ -826,6 +867,8 @@ struct ChannelBrief: Identifiable {
     let name: String
     let avatar: String
     let stream: TwitchStream?
+    /// Fin du dernier live connu (pour « hors ligne depuis »).
+    var lastEnd: Date? = nil
     var id: String { login }
 }
 
@@ -835,6 +878,8 @@ func getChannelsGQL(logins: [String]) async -> [ChannelBrief]? {
     guard !logins.isEmpty else { return [] }
     let q = """
     query($l: [String!]) { users(logins: $l) { id login displayName profileImageURL(width: 70)
+      lastBroadcast { startedAt }
+      videos(first: 1, type: ARCHIVE, sort: TIME) { edges { node { publishedAt lengthSeconds } } }
       stream { title viewersCount previewImageURL(width: 440, height: 248) game { displayName } } } }
     """
     var out: [ChannelBrief] = []
@@ -845,8 +890,13 @@ func getChannelsGQL(logins: [String]) async -> [ChannelBrief]? {
         for case let u as [String: Any] in users {
             guard let login = u["login"] as? String else { continue }
             let stream = (u["stream"] as? [String: Any]).flatMap { streamFromGQL(user: u, stream: $0) }
+            let video = ((u["videos"] as? [String: Any])?["edges"] as? [[String: Any]])?.first?["node"] as? [String: Any]
+            let lastEnd = lastLiveEnd(publishedAt: video?["publishedAt"] as? String,
+                                      lengthSeconds: video?["lengthSeconds"] as? Int ?? 0,
+                                      lastStart: (u["lastBroadcast"] as? [String: Any])?["startedAt"] as? String)
             out.append(ChannelBrief(login: login, name: u["displayName"] as? String ?? login,
-                                    avatar: u["profileImageURL"] as? String ?? "", stream: stream))
+                                    avatar: u["profileImageURL"] as? String ?? "", stream: stream,
+                                    lastEnd: lastEnd))
         }
     }
     return out
@@ -944,6 +994,61 @@ func getClips(login: String, period: String) async -> [ClipData] {
                         durationSeconds: n["durationSeconds"] as? Int ?? 0,
                         createdAt: n["createdAt"] as? String ?? "",
                         curator: (n["curator"] as? [String: Any])?["displayName"] as? String)
+    }
+}
+
+/// Highlights d'une chaîne (les 50 plus récents).
+func getHighlights(login: String) async -> [VodData] {
+    let q = """
+    query($l: String!) { user(login: $l) { videos(first: 50, type: HIGHLIGHT, sort: TIME) {
+      edges { node { id title lengthSeconds createdAt previewThumbnailURL(width: 320, height: 180) } }
+    } } }
+    """
+    guard let d = await gqlRequest(q, ["l": login.lowercased()]),
+          let user = d["user"] as? [String: Any],
+          let videos = user["videos"] as? [String: Any],
+          let edges = videos["edges"] as? [[String: Any]] else { return [] }
+    return edges.compactMap { e in
+        guard let v = e["node"] as? [String: Any], let id = v["id"] as? String else { return nil }
+        return VodData(id: id,
+                       title: v["title"] as? String ?? "",
+                       previewThumbnailURL: v["previewThumbnailURL"] as? String ?? "",
+                       publishedAt: v["createdAt"] as? String ?? "",
+                       lengthSeconds: v["lengthSeconds"] as? Int ?? 0)
+    }
+}
+
+/// Playlists (collections) d'une chaîne, avec leurs vidéos — vides exclues.
+func getCollections(login: String) async -> [PlaylistData] {
+    let q = """
+    query($l: String!) { user(login: $l) { collections(first: 20) { edges { node {
+      id title description
+      items(first: 50) { totalCount edges { node { ... on Video {
+        id title lengthSeconds createdAt previewThumbnailURL(width: 320, height: 180)
+      } } } }
+    } } } }
+    """
+    guard let d = await gqlRequest(q, ["l": login.lowercased()]),
+          let user = d["user"] as? [String: Any],
+          let cols = user["collections"] as? [String: Any],
+          let edges = cols["edges"] as? [[String: Any]] else { return [] }
+    return edges.compactMap { e -> PlaylistData? in
+        guard let n = e["node"] as? [String: Any], let id = n["id"] as? String,
+              let items = n["items"] as? [String: Any] else { return nil }
+        let videos: [VodData] = (items["edges"] as? [[String: Any]] ?? []).compactMap { ie in
+            guard let v = ie["node"] as? [String: Any], let vid = v["id"] as? String else { return nil }
+            return VodData(id: vid,
+                           title: v["title"] as? String ?? "",
+                           previewThumbnailURL: v["previewThumbnailURL"] as? String ?? "",
+                           publishedAt: v["createdAt"] as? String ?? "",
+                           lengthSeconds: v["lengthSeconds"] as? Int ?? 0)
+        }
+        guard !videos.isEmpty else { return nil }
+        return PlaylistData(id: id,
+                            title: n["title"] as? String ?? "",
+                            description: n["description"] as? String ?? "",
+                            total: items["totalCount"] as? Int ?? videos.count,
+                            videos: videos)
     }
 }
 

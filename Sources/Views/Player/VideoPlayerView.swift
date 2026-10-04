@@ -237,6 +237,7 @@ struct VideoPlayerView: View {
                         Button {
                             currentTime = 0
                             selectedQuality = q
+                            store.rememberQualityChoice(q)
                             showQualityPicker = false
                         } label: {
                             HStack {
@@ -264,7 +265,10 @@ struct VideoPlayerView: View {
         .background(Color.tCard)
         .cornerRadius(16)
         .onAppear {
-            if selectedQuality.isEmpty { selectedQuality = qualities.first ?? "" }
+            if selectedQuality.isEmpty {
+                selectedQuality = store.preferAudioOnly && qualities.contains("audio_only")
+                    ? "audio_only" : (qualities.first ?? "")
+            }
         }
     }
 

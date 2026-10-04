@@ -302,10 +302,21 @@ struct HomeView: View {
                                 .frame(width: 36, height: 36)
                                 .clipShape(Circle())
                                 .opacity(0.75)
-                                Text(ch.name)
-                                    .font(.system(size: 15, weight: .semibold))
-                                    .foregroundColor(.tText)
-                                    .lineLimit(1)
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(ch.name)
+                                        .font(.system(size: 15, weight: .semibold))
+                                        .foregroundColor(.tText)
+                                        .lineLimit(1)
+                                    if let end = ch.lastEnd {
+                                        let label = offlineLabel(since: end, store: store)
+                                        if !label.isEmpty {
+                                            Text(label)
+                                                .font(.system(size: 12))
+                                                .foregroundColor(.tMuted)
+                                                .lineLimit(1)
+                                        }
+                                    }
+                                }
                                 if store.isLocallyFollowed(ch.login) && !twitchFollowLogins.contains(ch.login) {
                                     Image(systemName: "iphone")
                                         .font(.system(size: 11))
@@ -408,6 +419,7 @@ struct HomeView: View {
         } else if store.twitchToken == nil {
             twitchFollowLogins = []
         }
+        store.accountFollowLogins = twitchFollowLogins   // pour l'export
         var seen = Set<String>()
         let all = (twitchFollowLogins + store.localFollows).filter { seen.insert($0).inserted }
         // Échec réseau : on garde les listes affichées au lieu de les vider.

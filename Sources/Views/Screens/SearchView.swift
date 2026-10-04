@@ -14,6 +14,8 @@ struct SearchView: View {
     let onPlayVod:  (String, String?, String?, String?) -> Void
     let onPlayLive: (String) -> Void
     var onPlayClip: (String, String?) -> Void = { _, _ in }
+    /// « Tout lire » d'une playlist : la liste, et le nom de la chaîne.
+    var onPlayQueue: ([VodData], String?) -> Void = { _, _ in }
     /// Ouverte en feuille sur une chaîne précise (pseudo du lecteur, chaîne
     /// hors ligne de l'accueil) : pas de barre de recherche, un bouton fermer.
     var initialChannel: String? = nil
@@ -37,8 +39,16 @@ struct SearchView: View {
     @State private var hasMoreVods  = false
     @State private var isLoadingMore = false
 
+    // Onglets de la chaîne : 0 VODs, 1 Highlights, 2 Playlists, 3 Clips
+    @State private var channelTab   = 0
+    @State private var highlights: [VodData] = []
+    @State private var highlightsFor = ""
+    @State private var loadingHighlights = false
+    @State private var playlists: [PlaylistData] = []
+    @State private var playlistsFor = ""
+    @State private var loadingPlaylists = false
+
     // Clips de la chaîne (onglet « Clips »)
-    @State private var showClips    = false
     @State private var clips: [ClipData] = []
     @State private var clipPeriod   = "LAST_WEEK"
     @State private var clipsFor     = ""
@@ -75,8 +85,9 @@ struct SearchView: View {
         guard liveData?.error != nil, let first = vods.first else { return nil }
         // Chaîne vide = date illisible : on préfère ne rien dire plutôt
         // qu'afficher « Hors ligne depuis : » suivi de rien.
-        let since = getTimeSince(publishedAt: first.publishedAt,
-                                 lengthSeconds: first.lengthSeconds, store: store)
+        guard let end = lastLiveEnd(publishedAt: first.publishedAt,
+                                    lengthSeconds: first.lengthSeconds, lastStart: nil) else { return nil }
+        let since = offlineLabel(since: end, store: store)
         return since.isEmpty ? nil : since
     }
 
@@ -346,12 +357,22 @@ struct SearchView: View {
         }
 
         if liveData != nil {
-            TSegmented(items: [false, true], selection: $showClips) { $0 ? store.t("clips") : store.t("vods") }
-                .onChange(of: showClips) { on in if on { Task { await loadClips() } } }
+            TSegmented(items: [0, 1, 2, 3], selection: $channelTab) {
+                [store.t("vods"), store.t("highlights"), store.t("playlists"), store.t("clips")][$0]
+            }
+                .onChange(of: channelTab) { tab in
+                    if tab == 1 { Task { await loadHighlights() } }
+                    if tab == 2 { Task { await loadPlaylists() } }
+                    if tab == 3 { Task { await loadClips() } }
+                }
         }
 
-        if showClips {
+        if channelTab == 3 {
             clipsSection
+        } else if channelTab == 2 {
+            playlistsSection
+        } else if channelTab == 1 {
+            highlightsSection
         } else {
             if !vods.isEmpty {
                 VStack(alignment: .leading, spacing: TSpace.md) {
@@ -392,6 +413,102 @@ struct SearchView: View {
                 TEmptyState(icon: "film", title: store.t("no_vod"))
             }
         }
+    }
+
+    // MARK: – Highlights
+    @ViewBuilder private var highlightsSection: some View {
+        if loadingHighlights {
+            TLoader()
+        } else if highlights.isEmpty {
+            TEmptyState(icon: "star", title: store.t("no_highlights"))
+        } else {
+            LazyVGrid(columns: columns, spacing: TSpace.md) {
+                ForEach(highlights) { vod in
+                    let saved = store.getVodProgress(vod.id)
+                    let progress = vod.lengthSeconds > 0 ? saved / Double(vod.lengthSeconds) : 0
+                    VodCardView(vod: vod, progress: progress) {
+                        onPlayVod(vod.id, vod.title, vod.previewThumbnailURL, channelName)
+                    }
+                }
+            }
+            .padding(.horizontal, TSpace.lg)
+        }
+    }
+
+    @MainActor private func loadHighlights() async {
+        let login = searchedName.lowercased()
+        guard !login.isEmpty, highlightsFor != login else { return }
+        loadingHighlights = true
+        let result = await getHighlights(login: login)
+        guard login == searchedName.lowercased() else { return }
+        highlights = result
+        highlightsFor = login
+        loadingHighlights = false
+    }
+
+    // MARK: – Playlists
+    @ViewBuilder private var playlistsSection: some View {
+        if loadingPlaylists {
+            TLoader()
+        } else if playlists.isEmpty {
+            TEmptyState(icon: "list.bullet.rectangle", title: store.t("no_playlists"))
+        } else {
+            VStack(alignment: .leading, spacing: TSpace.lg) {
+                ForEach(playlists) { list in
+                    VStack(alignment: .leading, spacing: TSpace.sm) {
+                        HStack(alignment: .firstTextBaseline, spacing: TSpace.sm) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(list.title)
+                                    .font(.system(size: 16, weight: .bold)).foregroundColor(.tText)
+                                    .lineLimit(2)
+                                Text(list.description.isEmpty
+                                     ? String(format: store.t("videos_count"), list.total)
+                                     : "\(list.description) · \(String(format: store.t("videos_count"), list.total))")
+                                    .font(.system(size: 12)).foregroundColor(.tMuted)
+                                    .lineLimit(2)
+                            }
+                            Spacer(minLength: 0)
+                            Button {
+                                onPlayQueue(list.videos, channelName)
+                            } label: {
+                                Label(store.t("play_all"), systemImage: "play.fill")
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .padding(.horizontal, 12).padding(.vertical, 7)
+                                    .background(Capsule().fill(Color.tPrimary.opacity(0.18)))
+                                    .foregroundColor(.tPrimary)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .padding(.horizontal, TSpace.lg)
+
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            LazyHStack(alignment: .top, spacing: TSpace.md) {
+                                ForEach(list.videos) { vod in
+                                    let saved = store.getVodProgress(vod.id)
+                                    let progress = vod.lengthSeconds > 0 ? saved / Double(vod.lengthSeconds) : 0
+                                    VodCardView(vod: vod, progress: progress) {
+                                        onPlayVod(vod.id, vod.title, vod.previewThumbnailURL, channelName)
+                                    }
+                                    .frame(width: 200)
+                                }
+                            }
+                            .padding(.horizontal, TSpace.lg)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @MainActor private func loadPlaylists() async {
+        let login = searchedName.lowercased()
+        guard !login.isEmpty, playlistsFor != login else { return }
+        loadingPlaylists = true
+        let result = await getCollections(login: login)
+        guard login == searchedName.lowercased() else { return }
+        playlists = result
+        playlistsFor = login
+        loadingPlaylists = false
     }
 
     // MARK: – Clips
@@ -471,7 +588,9 @@ struct SearchView: View {
 
         loading = true; errorMsg = nil; liveData = nil; vods = []
         filterText = ""; searchedName = login; suggestions = []
-        showClips = false; clips = []; clipsFor = ""
+        channelTab = 0; clips = []; clipsFor = ""
+        playlists = []; playlistsFor = ""; loadingPlaylists = false
+        highlights = []; highlightsFor = ""; loadingHighlights = false
         vodCursor = nil; hasMoreVods = false; isLoadingMore = false
 
         async let liveTask   = getLive(channelName: login)

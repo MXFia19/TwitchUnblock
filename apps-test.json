@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.2.4",
+          "buildVersion": "223",
+          "date": "2026-10-04",
+          "localizedDescription": "- More subscriber-only or hidden VODs now play: the fallback finds the video even when Twitch no longer provides its usual preview.",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-223/TwitchUnblock.ipa",
+          "size": 1708891,
+          "commit": "8d337bbbb1692840b0ca64c49efeda9efed6c69e"
+        },
+        {
           "version": "1.2.3",
           "buildVersion": "222",
           "date": "2026-10-04",
@@ -97,10 +106,10 @@
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.2.3",
+      "version": "1.2.4",
       "versionDate": "2026-10-04",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-222/TwitchUnblock.ipa",
-      "size": 1707923
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-223/TwitchUnblock.ipa",
+      "size": 1708891
     }
   ],
   "news": []

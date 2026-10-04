@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.1.9",
+          "buildVersion": "213",
+          "date": "2026-10-04",
+          "localizedDescription": "- Pinned message now opens over the chat instead of pushing it down\n- Follow button on channel pages (real Twitch follow with a web session)\n- Device follows are sorted with your other follows and no longer vanish on refresh\n- Welcome tutorial on first launch (replay it from Settings → About)",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-213/TwitchUnblock.ipa",
+          "size": 1617010,
+          "commit": "3fc67be384d7c198a75beeb15d547b9cef1228ac"
+        },
+        {
           "version": "1.1.8",
           "buildVersion": "212",
           "date": "2026-10-04",
@@ -43,10 +52,10 @@
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.1.8",
+      "version": "1.1.9",
       "versionDate": "2026-10-04",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-212/TwitchUnblock.ipa",
-      "size": 1596749
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-213/TwitchUnblock.ipa",
+      "size": 1617010
     }
   ],
   "news": []

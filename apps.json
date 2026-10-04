@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.1.10",
+          "buildVersion": "216",
+          "date": "2026-10-04",
+          "localizedDescription": "- Streams tab split into Followed and Top tabs\n- Followed now also lists offline channels, tap one to open its page\n- Tap the streamer name in the player to open their channel page\n- Categories: Followed and All tabs, with a Follow button on each category",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/nightly-216/TwitchUnblock.ipa",
+          "size": 1654840,
+          "commit": "eb34f583c4339e02f918b7c2db7a48e56a1d6584"
+        },
+        {
           "version": "1.1.9",
           "buildVersion": "214",
           "date": "2026-10-04",
@@ -42,10 +51,10 @@
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.1.9",
+      "version": "1.1.10",
       "versionDate": "2026-10-04",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/nightly-214/TwitchUnblock.ipa",
-      "size": 1617661
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/nightly-216/TwitchUnblock.ipa",
+      "size": 1654840
     }
   ],
   "news": []

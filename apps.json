@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.2.2",
+          "buildVersion": "221",
+          "date": "2026-10-04",
+          "localizedDescription": "- Backup: export and import your follows, followed categories and settings (Settings > General), compatible with the website.\n- Channel page now has VODs, Highlights, Playlists and Clips tabs.\n- Audio only is remembered: new streams start in audio only until you pick another quality.\n- The streamer's profile picture now loads on VODs without a Twitch account.\n- Offline channels show how long ago and the date of their last stream, on the channel page and in Home.\n- Channel playlists: new Playlists tab on the channel page, with \"Play all\" to chain the videos.\n- Highlights (playlist videos) now play even when Twitch refuses the playback token.",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/nightly-221/TwitchUnblock.ipa",
+          "size": 1707520,
+          "commit": "0ca2bba3ea81ec9f175cc0266655b1829a04641f"
+        },
+        {
           "version": "1.2.0",
           "buildVersion": "218",
           "date": "2026-10-04",
@@ -60,10 +69,10 @@
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.2.0",
+      "version": "1.2.2",
       "versionDate": "2026-10-04",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/nightly-218/TwitchUnblock.ipa",
-      "size": 1663729
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/nightly-221/TwitchUnblock.ipa",
+      "size": 1707520
     }
   ],
   "news": []

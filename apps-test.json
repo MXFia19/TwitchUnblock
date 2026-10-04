@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.2.3",
+          "buildVersion": "222",
+          "date": "2026-10-04",
+          "localizedDescription": "- Minimized player: tapping the Search or VODs tab no longer re-opens the player full screen.",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-222/TwitchUnblock.ipa",
+          "size": 1707923,
+          "commit": "d716dee6593d036cecbc64595f2903341ad4475d"
+        },
+        {
           "version": "1.2.2",
           "buildVersion": "220",
           "date": "2026-10-04",
@@ -88,10 +97,10 @@
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.2.2",
+      "version": "1.2.3",
       "versionDate": "2026-10-04",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-220/TwitchUnblock.ipa",
-      "size": 1707540
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-222/TwitchUnblock.ipa",
+      "size": 1707923
     }
   ],
   "news": []

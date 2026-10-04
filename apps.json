@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.1.9",
+          "buildVersion": "214",
+          "date": "2026-10-04",
+          "localizedDescription": "- Pinned message now opens over the chat instead of pushing it down\n- Follow button on channel pages (real Twitch follow with a web session)\n- Device follows are sorted with your other follows and no longer vanish on refresh\n- Welcome tutorial on first launch (replay it from Settings → About)\n- New “Features in testing” tab in Settings\n- Expanding a pinned message no longer stops chat auto-scroll\n- Home can show channels as a list (like Twitch) or a grid\n- Follow channels without a Twitch account (saved on this device)\n- Home works without logging in: top streams and your device follows\n- Bot commands: browse Nightbot, StreamElements, Fossabot and Moobot commands from the chat menu\n- Update popup now lists everything new since your version\n- React to announcements with an emoji\n- Settings: new “Features in testing” section (live notifications, test button)\n- Latency badge moved to Player settings, auto chat sync to Chat settings\n- About: this project is vibe-coded (built with AI assistants)",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/nightly-214/TwitchUnblock.ipa",
+          "size": 1617661,
+          "commit": "f14a5a7f274ce5ee8707068ba52255a6836f1ead"
+        },
+        {
           "version": "1.1.6",
           "buildVersion": "210",
           "date": "2026-10-03",
@@ -33,10 +42,10 @@
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.1.6",
-      "versionDate": "2026-10-03",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/nightly-210/TwitchUnblock.ipa",
-      "size": 1518490
+      "version": "1.1.9",
+      "versionDate": "2026-10-04",
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/nightly-214/TwitchUnblock.ipa",
+      "size": 1617661
     }
   ],
   "news": []

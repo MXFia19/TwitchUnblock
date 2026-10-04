@@ -343,3 +343,58 @@ struct ChannelHeroView: View {
         .tCard()
     }
 }
+
+// MARK: – Direct en liste (façon Twitch)
+/// Miniature à gauche, infos à droite : plus de chaînes visibles d'un coup.
+struct StreamRowView: View {
+    let stream: TwitchStream
+    let onPress: () -> Void
+
+    private var thumbURL: String {
+        stream.thumbnailURL
+            .replacingOccurrences(of: "{width}", with: "320")
+            .replacingOccurrences(of: "{height}", with: "180")
+    }
+
+    var body: some View {
+        Button(action: onPress) {
+            HStack(alignment: .top, spacing: TSpace.md) {
+                ZStack(alignment: .bottomLeading) {
+                    Thumbnail(url: thumbURL)
+                        .frame(width: 136, height: 76.5)
+                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    HStack(spacing: 3) {
+                        Circle().fill(Color.tLive).frame(width: 6, height: 6)
+                        Text(formatViewers(stream.viewerCount))
+                            .font(.system(size: 11, weight: .bold).monospacedDigit())
+                            .foregroundColor(.white)
+                    }
+                    .padding(.horizontal, 5).padding(.vertical, 2)
+                    .background(Color.black.opacity(0.7))
+                    .cornerRadius(4)
+                    .padding(5)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(stream.userName)
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundColor(.tText)
+                        .lineLimit(1)
+                    Text(stream.title)
+                        .font(.system(size: 13))
+                        .foregroundColor(.tMuted)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                    if !stream.gameName.isEmpty {
+                        Text(stream.gameName)
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(.tPurple)
+                            .lineLimit(1)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}

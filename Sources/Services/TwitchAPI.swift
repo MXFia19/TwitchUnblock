@@ -785,6 +785,55 @@ private func gqlRequest(_ query: String, _ variables: [String: Any]) async -> [S
     return json["data"] as? [String: Any]
 }
 
+// MARK: – Lives sans compte (GQL public)
+private func streamFromGQL(user u: [String: Any], stream s: [String: Any]) -> TwitchStream? {
+    guard let login = u["login"] as? String else { return nil }
+    return TwitchStream(
+        id: u["id"] as? String ?? login,
+        userLogin: login,
+        userName: u["displayName"] as? String ?? login,
+        title: s["title"] as? String ?? "",
+        gameName: (s["game"] as? [String: Any])?["displayName"] as? String ?? "",
+        viewerCount: s["viewersCount"] as? Int ?? 0,
+        thumbnailURL: s["previewImageURL"] as? String ?? "")
+}
+
+/// Lesquelles de ces chaînes sont en live (suivis sans compte). 100 max par requête.
+func getLiveStreamsGQL(logins: [String]) async -> [TwitchStream] {
+    guard !logins.isEmpty else { return [] }
+    let q = """
+    query($l: [String!]) { users(logins: $l) { id login displayName
+      stream { title viewersCount previewImageURL(width: 440, height: 248) game { displayName } } } }
+    """
+    var out: [TwitchStream] = []
+    for start in stride(from: 0, to: logins.count, by: 100) {
+        let chunk = Array(logins[start..<min(start + 100, logins.count)])
+        guard let d = await gqlRequest(q, ["l": chunk]),
+              let users = d["users"] as? [Any] else { continue }
+        for case let u as [String: Any] in users {
+            if let s = u["stream"] as? [String: Any], let st = streamFromGQL(user: u, stream: s) { out.append(st) }
+        }
+    }
+    return out.sorted { $0.viewerCount > $1.viewerCount }
+}
+
+/// Top des lives sans jeton (GQL public) ; `lang` au format Helix (« fr », « zh-hk »).
+func getTopStreamsGQL(lang: String?) async -> [TwitchStream] {
+    let q = """
+    query($n: Int!, $langs: [Language!]) { streams(first: $n, options: { broadcasterLanguages: $langs }) {
+      edges { node { title viewersCount previewImageURL(width: 440, height: 248) game { displayName }
+        broadcaster { id login displayName } } } } }
+    """
+    var vars: [String: Any] = ["n": 40]
+    if let lang { vars["langs"] = [lang.uppercased().replacingOccurrences(of: "-", with: "_")] }
+    guard let d = await gqlRequest(q, vars),
+          let edges = (d["streams"] as? [String: Any])?["edges"] as? [[String: Any]] else { return [] }
+    return edges.compactMap { e in
+        guard let n = e["node"] as? [String: Any], let b = n["broadcaster"] as? [String: Any] else { return nil }
+        return streamFromGQL(user: b, stream: n)
+    }
+}
+
 /// Clips les plus vus d'une chaîne sur la période (LAST_DAY, LAST_WEEK, LAST_MONTH, ALL_TIME).
 func getClips(login: String, period: String) async -> [ClipData] {
     let q = """

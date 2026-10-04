@@ -188,6 +188,22 @@ final class AppStore: ObservableObject {
         didSet { UserDefaults.standard.set(shareUsage, forKey: "cfg_share_usage") }
     }
 
+    /// Chaînes suivies sans compte Twitch (sur cet appareil), en minuscules.
+    @Published var localFollows: [String] = [] {
+        didSet { UserDefaults.standard.set(localFollows, forKey: "local_follows") }
+    }
+    func isLocallyFollowed(_ login: String) -> Bool { localFollows.contains(login.lowercased()) }
+    func toggleLocalFollow(_ login: String) {
+        let l = login.lowercased()
+        if let i = localFollows.firstIndex(of: l) { localFollows.remove(at: i) }
+        else if !l.isEmpty { localFollows.insert(l, at: 0) }
+    }
+
+    /// Accueil : chaînes en grille (cartes) ou en liste (façon Twitch).
+    @Published var homeListLayout: Bool = false {
+        didSet { UserDefaults.standard.set(homeListLayout, forKey: "cfg_home_list") }
+    }
+
     /// Langue du top des lives ; nil = celle de l'appareil.
     @Published var topLang: String? = nil {
         didSet { UserDefaults.standard.set(topLang, forKey: "cfg_top_lang") }
@@ -299,6 +315,8 @@ final class AppStore: ObservableObject {
         chatShowDeleted    = ud.object(forKey: "cfg_chat_deleted")      as? Bool ?? false
         shareUsage         = ud.object(forKey: "cfg_share_usage") as? Bool ?? true
         topLang            = ud.string(forKey: "cfg_top_lang")
+        localFollows       = ud.stringArray(forKey: "local_follows") ?? []
+        homeListLayout     = ud.bool(forKey: "cfg_home_list")
         showLatency        = ud.object(forKey: "dbg_latency")    as? Bool ?? false
         autoChatDelay      = ud.object(forKey: "dbg_chat_delay") as? Bool ?? false
         if let data = ud.data(forKey: "twitch_vod_history"),

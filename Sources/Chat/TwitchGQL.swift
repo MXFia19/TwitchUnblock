@@ -91,6 +91,15 @@ final class TwitchGQL {
 final class FollowService: ObservableObject {
     @Published var isFollowing: Bool? = nil   // nil = inconnu / en cours
     @Published var busy = false
+    /// Sans session web : suivi gardé sur cet appareil (AppStore.localFollows).
+    private(set) var localStore: AppStore? = nil
+
+    /// Pas de compte (ou pas de session web) : on suit la chaîne localement.
+    func loadLocal(login: String, store: AppStore) {
+        self.login = login.lowercased()
+        localStore = store
+        isFollowing = store.isLocallyFollowed(login)
+    }
 
     private var channelId = ""
     private var login = ""
@@ -101,6 +110,7 @@ final class FollowService: ObservableObject {
 
     func load(login: String, channelId: String, token: String?) async {
         self.login = login.lowercased(); self.channelId = channelId
+        localStore = nil
         isFollowing = nil
         guard let token = token, !login.isEmpty else { return }
         guard let res  = await TwitchGQL.shared.query("FollowButton_User",
@@ -114,6 +124,12 @@ final class FollowService: ObservableObject {
     }
 
     func toggle(token: String?) async {
+        if let localStore, token == nil {
+            localStore.toggleLocalFollow(login)
+            isFollowing = localStore.isLocallyFollowed(login)
+            logger.info("FOLLOW", isFollowing == true ? "Suivi local @\(login)" : "Suivi local retiré @\(login)", nil)
+            return
+        }
         guard let token = token, let current = isFollowing, !busy, !channelId.isEmpty else { return }
         busy = true; defer { busy = false }
         if current {

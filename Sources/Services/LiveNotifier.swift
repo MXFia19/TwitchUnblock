@@ -98,11 +98,24 @@ enum LiveNotifier {
     /// Relit les lives suivis ; notifie les nouveaux si `notify`.
     @discardableResult
     static func check(notify: Bool) async -> Bool {
-        guard isEnabled,
-              let token = Keychain.loadToken("twitch_token"),
-              let userId = UserDefaults.standard.string(forKey: "twitch_user_id"), !userId.isEmpty,
-              let streams = try? await getFollowedStreams(token: token, userId: userId) else { return false }
+        guard isEnabled else { return false }
         let ud = UserDefaults.standard
+        // Suivis du compte Twitch (si connecté) + suivis sur cet appareil.
+        var streams: [TwitchStream] = []
+        var reached = false
+        if let token = Keychain.loadToken("twitch_token"),
+           let userId = ud.string(forKey: "twitch_user_id"), !userId.isEmpty {
+            guard let followed = try? await getFollowedStreams(token: token, userId: userId) else { return false }
+            streams = followed
+            reached = true
+        }
+        let local = ud.stringArray(forKey: "local_follows") ?? []
+        if !local.isEmpty {
+            let known = Set(streams.map { $0.userLogin.lowercased() })
+            streams += await getLiveStreamsGQL(logins: local).filter { !known.contains($0.userLogin.lowercased()) }
+            reached = true
+        }
+        guard reached else { return false }
         let known = Set(ud.stringArray(forKey: knownKey) ?? [])
         let now = Set(streams.map { $0.userLogin.lowercased() })
         if notify {

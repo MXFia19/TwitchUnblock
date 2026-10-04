@@ -15,11 +15,14 @@ struct ChatMenuSheet: View {
 
     var onReloadEmotes: () -> Void
     var onReconnect:    () -> Void
+    /// Commande de bot choisie : mise dans le champ du chat (nil = copiée).
+    var onUseCommand: ((String) -> Void)? = nil
 
     @EnvironmentObject private var store: AppStore
     @Environment(\.dismiss) private var dismiss
 
     @State private var showChatters = false
+    @State private var showBotCommands = false
     @State private var showColors   = false
     @State private var busyLabel: String? = nil
 
@@ -89,6 +92,16 @@ struct ChatMenuSheet: View {
                         trailing: .chevron) {
                         showChatters = true
                     }
+
+                    divider
+
+                    // Commandes des bots, sans écrire « !commands » dans le chat.
+                    row(icon: "terminal.fill",
+                        title: store.t("bot_commands"),
+                        subtitle: store.t("bot_commands_sub"),
+                        trailing: .chevron) {
+                        showBotCommands = true
+                    }
                 }
                 .padding(.vertical, TSpace.sm)
             }
@@ -107,6 +120,12 @@ struct ChatMenuSheet: View {
         .sheet(isPresented: $showChatters) {
             ChattersSheet(chat: chat)
                 .presentationDetents([.medium, .large])
+        }
+        .sheet(isPresented: $showBotCommands) {
+            BotCommandsSheet(channelName: channelName, onUse: onUseCommand.map { use in
+                { (cmd: String) in use(cmd); dismiss() }
+            })
+            .presentationDetents([.medium, .large])
         }
         .sheet(isPresented: $showColors) {
             UsernameColorSheet { color in

@@ -126,9 +126,9 @@ struct SettingsView: View {
 
 
     // MARK: – Pages de réglages
-    /// Les cinq destinations du menu.
+    /// Les destinations du menu.
     enum Page: Hashable {
-        case account, general, player, chat, other
+        case account, general, player, chat, labs, other
 
         var titleKey: String {
             switch self {
@@ -136,6 +136,7 @@ struct SettingsView: View {
             case .general: return "sec_general"
             case .player:  return "sec_player"
             case .chat:    return "sec_chat"
+            case .labs:    return "debug_section"
             case .other:   return "sec_other"
             }
         }
@@ -145,6 +146,7 @@ struct SettingsView: View {
             case .general: return "sec_general_sub"
             case .player:  return "sec_player_sub"
             case .chat:    return "sec_chat_sub"
+            case .labs:    return "sec_labs_sub"
             case .other:   return "sec_other_sub"
             }
         }
@@ -154,6 +156,7 @@ struct SettingsView: View {
             case .general: return "gearshape.fill"
             case .player:  return "play.rectangle.fill"
             case .chat:    return "bubble.left.and.bubble.right.fill"
+            case .labs:    return "flask.fill"
             case .other:   return "info.circle.fill"
             }
         }
@@ -165,6 +168,7 @@ struct SettingsView: View {
             case .general: return .tPrimary
             case .player:  return .tOutplayer
             case .chat:    return .tSuccess
+            case .labs:    return .tWarning
             case .other:   return .tMuted
             }
         }
@@ -226,6 +230,8 @@ struct SettingsView: View {
                     menuRow(.player)
                     rowSeparator
                     menuRow(.chat)
+                    rowSeparator
+                    menuRow(.labs)
                     rowSeparator
                     menuRow(.other)
                 }
@@ -335,13 +341,14 @@ struct SettingsView: View {
                     veilleCard
                     historiqueCard
                     cacheCard
-                    debugCard
                 case .player:
                     lecteurCard
                 case .chat:
                     chatBehaviorCard
                     persoCard
                     tailleChatCard
+                case .labs:
+                    debugCard
                 case .other:
                     aboutCard
                 }
@@ -364,6 +371,9 @@ struct SettingsView: View {
                     }
                 }
                 topLangRow
+                Divider().background(Color.tBorder)
+                toggleRow(store.t("home_list"), store.t("home_list_sub"),
+                          $store.homeListLayout, log: "Accueil en liste")
             }
         }
     }
@@ -897,7 +907,6 @@ struct SettingsView: View {
         // avec le reste (aujourd'hui : les notifications de live).
         settingCard {
             VStack(alignment: .leading, spacing: 14) {
-                label("flask.fill", store.t("debug_section"))
                 Text(store.t("debug_note"))
                     .font(.tMeta)
                     .foregroundColor(.tMuted)

@@ -288,6 +288,29 @@ struct SearchView: View {
                 onWatchLive: live.error == nil ? { onPlayLive(channelName) } : nil
             )
             .padding(.horizontal, TSpace.lg)
+
+            // Suivre sans compte Twitch : la chaîne apparaît dans l'accueil
+            // (« Chaînes suivies ») dès qu'elle est en live.
+            if store.twitchWebToken == nil, !channelName.isEmpty {
+                let on = store.isLocallyFollowed(channelName)
+                Button {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    withAnimation(.easeInOut(duration: 0.15)) { store.toggleLocalFollow(channelName) }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: on ? "heart.fill" : "heart")
+                        Text(store.t(on ? "following" : "follow")).font(.system(size: 14, weight: .bold))
+                        Text("· " + store.t("on_this_device")).font(.system(size: 12)).opacity(0.8)
+                    }
+                    .foregroundColor(on ? .tDanger : .tPrimary)
+                    .padding(.horizontal, 14).padding(.vertical, 8)
+                    .background((on ? Color.tDanger : Color.tPrimary).opacity(0.14))
+                    .clipShape(Capsule())
+                    .overlay(Capsule().stroke(on ? Color.tDanger : Color.tPrimary, lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, TSpace.lg)
+            }
         }
 
         if liveData != nil {

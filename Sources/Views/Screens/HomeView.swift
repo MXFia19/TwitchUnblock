@@ -11,6 +11,8 @@ struct HomeView: View {
     @EnvironmentObject private var store: AppStore
 
     @State private var followedStreams: [TwitchStream] = []
+    /// Lives des chaînes suivies sans compte (sur cet appareil).
+    @State private var localLive: [TwitchStream] = []
     @State private var topStreams:      [TwitchStream] = []
     @State private var topLang: TopLang = .local
     @State private var loadingFollowed = false
@@ -40,7 +42,9 @@ struct HomeView: View {
     var body: some View {
         Group {
             if store.twitchToken == nil {
-                loggedOut
+                // Sans compte : lives des chaînes suivies sur cet appareil et
+                // top (requêtes publiques), avec une invitation à se connecter.
+                liveSection
             } else {
                 VStack(spacing: 0) {
                     TSegmented(items: HomeSection.allCases,
@@ -57,10 +61,12 @@ struct HomeView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.tDark)
         .onAppear {
-            if store.twitchToken != nil && followedStreams.isEmpty {
+            if followedStreams.isEmpty && localLive.isEmpty && topStreams.isEmpty {
                 Task { await loadAll() }
             }
         }
+        // Chaîne suivie ou retirée sur cet appareil : liste à jour.
+        .onChange(of: store.localFollows) { _ in Task { await loadLocalFollows() } }
         .sheet(isPresented: $showWebLogin) {
             TwitchWebLoginSheet(
                 clearSession: store.webSessionExpired,
@@ -75,8 +81,8 @@ struct HomeView: View {
             )
         }
         .onChange(of: store.twitchToken) { token in
-            if token != nil { Task { await loadAll() } }
-            else { followedStreams = []; topStreams = [] }
+            if token == nil { followedStreams = []; topStreams = [] }
+            Task { await loadAll() }
         }
         // Langue du top changée dans les réglages : on recharge tout de suite.
         .onChange(of: store.topLang) { _ in
@@ -86,24 +92,59 @@ struct HomeView: View {
         }
     }
 
-    // MARK: – Non connecté
-    @ViewBuilder private var loggedOut: some View {
-        VStack(spacing: TSpace.lg) {
-            if let a = announcements.current {
-                AnnouncementBanner(announcement: a) { announcements.dismiss(a) }
-                    .padding(.horizontal, TSpace.lg)
-                    .padding(.top, TSpace.md)
+    // MARK: – Accueil (avec ou sans compte)
+    /// Suivis du compte Twitch, puis ceux de cet appareil qui n'y sont pas déjà.
+    private var allFollowedLive: [TwitchStream] {
+        let known = Set(followedStreams.map { $0.userLogin.lowercased() })
+        return followedStreams + localLive.filter { !known.contains($0.userLogin.lowercased()) }
+    }
+
+    /// Grille de cartes ou liste, selon le réglage.
+    @ViewBuilder private func streamsBlock(_ streams: [TwitchStream]) -> some View {
+        if store.homeListLayout {
+            LazyVStack(spacing: TSpace.md) {
+                ForEach(streams) { stream in
+                    StreamRowView(stream: stream) { onPlayStream(stream.userLogin) }
+                }
             }
-            Spacer()
-            TEmptyState(
-                icon: "person.crop.circle.badge.plus",
-                title: store.t("login_prompt"),
-                message: store.t("login_points_hint"),
-                actionTitle: store.t("btn_login_twitch"),
-                action: { Task { await handleLogin() } }
-            )
-            Spacer()
+            .padding(.horizontal, TSpace.lg)
+        } else {
+            LazyVGrid(columns: columns, spacing: TSpace.md) {
+                ForEach(streams) { stream in
+                    StreamCardView(stream: stream) { onPlayStream(stream.userLogin) }
+                }
+            }
+            .padding(.horizontal, TSpace.lg)
         }
+    }
+
+    /// Sans compte : invitation compacte (le reste de l'accueil marche sans).
+    @ViewBuilder private var loginCard: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "person.crop.circle.badge.plus")
+                .font(.system(size: 26))
+                .foregroundColor(.tPrimary)
+            VStack(alignment: .leading, spacing: 6) {
+                Text(store.t("login_prompt"))
+                    .font(.tCardTitle).foregroundColor(.tText)
+                Text(store.t("login_optional_msg"))
+                    .font(.tMeta).foregroundColor(.tMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button { Task { await handleLogin() } } label: {
+                    Text(store.t("btn_login_twitch"))
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 14).padding(.vertical, 8)
+                        .background(Color.tPrimary)
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(14)
+        .background(Color.tCard)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
     // MARK: – Bandeau session web
@@ -167,32 +208,53 @@ struct HomeView: View {
                         .padding(.top, TSpace.md)
                 }
 
+                // ── Pas de compte : invitation compacte ──────────────
+                if store.twitchToken == nil {
+                    loginCard
+                        .padding(.horizontal, TSpace.lg)
+                        .padding(.top, TSpace.md)
+                }
+
                 // ── Session web absente : points, coffres, prédictions ──
-                if store.twitchWebToken == nil && Date().timeIntervalSince1970 > webBannerHiddenUntil {
+                if store.twitchToken != nil && store.twitchWebToken == nil && Date().timeIntervalSince1970 > webBannerHiddenUntil {
                     webSessionBanner
                         .padding(.horizontal, TSpace.lg)
                         .padding(.top, TSpace.md)
                 }
 
                 // ── Chaînes suivies ─────────────────────────────────
-                TSectionHeader(store.t("followed_channels"), icon: "heart.fill")
-                    .padding(.top, TSpace.md)
-
-                if loadingFollowed {
-                    TLoader()
-                } else if let err = errorFollowed {
-                    TEmptyState(icon: "exclamationmark.triangle", title: err)
-                } else if followedStreams.isEmpty {
-                    TEmptyState(icon: "moon.zzz",
-                                title: store.t("no_followed_live"),
-                                message: store.t("no_followed_live_msg"))
-                } else {
-                    LazyVGrid(columns: columns, spacing: TSpace.md) {
-                        ForEach(followedStreams) { stream in
-                            StreamCardView(stream: stream) { onPlayStream(stream.userLogin) }
-                        }
+                TSectionHeader(store.t("followed_channels"), icon: "heart.fill") {
+                    // Grille ou liste, au choix (aussi dans Réglages → Général).
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) { store.homeListLayout.toggle() }
+                    } label: {
+                        Image(systemName: store.homeListLayout ? "square.grid.2x2" : "list.bullet")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(.tMuted)
+                            .frame(width: 32, height: 28)
                     }
-                    .padding(.horizontal, TSpace.lg)
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(store.t(store.homeListLayout ? "layout_grid" : "layout_list"))
+                }
+                .padding(.top, TSpace.md)
+
+                let followed = allFollowedLive
+                if loadingFollowed && followed.isEmpty {
+                    TLoader()
+                } else if let err = errorFollowed, followed.isEmpty {
+                    TEmptyState(icon: "exclamationmark.triangle", title: err)
+                } else if followed.isEmpty {
+                    if store.twitchToken == nil && store.localFollows.isEmpty {
+                        TEmptyState(icon: "heart",
+                                    title: store.t("local_follow_empty"),
+                                    message: store.t("local_follow_empty_msg"))
+                    } else {
+                        TEmptyState(icon: "moon.zzz",
+                                    title: store.t("no_followed_live"),
+                                    message: store.t("no_followed_live_msg"))
+                    }
+                } else {
+                    streamsBlock(followed)
                 }
 
                 // ── Top ─────────────────────────────────────────────
@@ -216,12 +278,7 @@ struct HomeView: View {
                     TEmptyState(icon: "antenna.radiowaves.left.and.right",
                                 title: store.t("no_live"))
                 } else {
-                    LazyVGrid(columns: columns, spacing: TSpace.md) {
-                        ForEach(topStreams) { stream in
-                            StreamCardView(stream: stream) { onPlayStream(stream.userLogin) }
-                        }
-                    }
-                    .padding(.horizontal, TSpace.lg)
+                    streamsBlock(topStreams)
                 }
 
                 Spacer(minLength: 40)
@@ -276,11 +333,23 @@ struct HomeView: View {
         loadingFollowed = false
     }
 
+    /// Lives des chaînes suivies sur cet appareil (sans compte, GQL public).
+    @MainActor private func loadLocalFollows() async {
+        localLive = await getLiveStreamsGQL(logins: store.localFollows)
+    }
+
     @MainActor private func loadTopStreams(_ l: TopLang, isRefresh: Bool = false) async {
-        guard let token = store.twitchToken else { return }
+        let lang = l == .local ? TopLanguage.resolved(store.topLang) : nil
         if topStreams.isEmpty && !isRefresh { loadingTop = true }
+        guard let token = store.twitchToken else {
+            // Sans compte : même top, par la requête publique.
+            let fetched = await getTopStreamsGQL(lang: lang)
+            if !fetched.isEmpty { topStreams = fetched }
+            loadingTop = false
+            return
+        }
         do {
-            let fetched = try await getTopStreams(token: token, lang: l == .local ? TopLanguage.resolved(store.topLang) : nil)
+            let fetched = try await getTopStreams(token: token, lang: lang)
             // Réseau capricieux : on ne vide jamais une liste déjà affichée.
             if !fetched.isEmpty { topStreams = fetched }
         } catch is CancellationError {
@@ -294,6 +363,7 @@ struct HomeView: View {
 
     private func loadAll(isRefresh: Bool = false) async {
         await loadFollowedStreams()
+        await loadLocalFollows()
         await loadTopStreams(topLang, isRefresh: isRefresh)
     }
 }

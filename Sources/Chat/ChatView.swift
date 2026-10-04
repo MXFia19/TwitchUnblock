@@ -258,6 +258,20 @@ struct ChatView: View {
                             // messages : sinon retirer les plus anciens (en haut) fait « descendre »
                             // la vue pendant qu'on lit l'historique.
                             .onChange(of: autoScroll) { chat.pauseTrim = !$0 }
+                            // La zone du chat change de hauteur (message épinglé déplié ou
+                            // replié, clavier…) : on reste calé en bas si on suivait, sinon
+                            // le bas sort de l'écran et le suivi semble s'arrêter.
+                            .onChange(of: geo.size.height) { _ in
+                                guard autoScroll else { return }
+                                DispatchQueue.main.async { proxy.scrollTo(bottomAnchor, anchor: .bottom) }
+                            }
+                            .onChange(of: pinnedExpanded) { _ in
+                                guard autoScroll else { return }
+                                // Après l'animation du bandeau (0,18 s).
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                                    proxy.scrollTo(bottomAnchor, anchor: .bottom)
+                                }
+                            }
 
                             if !autoScroll {
                                 Button {
@@ -323,7 +337,11 @@ struct ChatView: View {
                 onReloadEmotes: { Task { await reloadEmotesAndBadges() } },
                 onReconnect: {
                     chat.reconnect(token: token, login: login)
-                }
+                },
+                onUseCommand: canSendMessages ? { cmd in
+                    messageText = cmd + " "
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { isInputFocused = true }
+                } : nil
             )
             .presentationDetents([.medium, .large])
         }
@@ -451,7 +469,12 @@ struct ChatView: View {
         if let cid = channelId {
             // Statut de suivi (nécessite le token web pour le champ self.follower)
             if store.showFollowButton {
-                await follow.load(login: channelName, channelId: cid, token: store.twitchWebToken)
+                if store.twitchWebToken == nil {
+                    // Sans session web, le suivi reste sur cet appareil.
+                    follow.loadLocal(login: channelName, store: store)
+                } else {
+                    await follow.load(login: channelName, channelId: cid, token: store.twitchWebToken)
+                }
             }
             // Événements live (série de visionnage, sondage, prédiction, hype train)
             if store.showWatchStreak || store.showLiveEvents {

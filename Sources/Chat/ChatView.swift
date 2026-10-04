@@ -144,17 +144,10 @@ struct ChatView: View {
                 PinnedBanner(pin: pin, width: chromeWidth, expanded: $pinnedExpanded, layoutOnly: true) {
                     withAnimation(.easeInOut(duration: 0.18)) { dismissedPinId = pin.id }
                 }
-                .overlay(alignment: .top) {
-                    if pinnedExpanded {
-                        PinnedBanner(pin: pin, width: chromeWidth, expanded: $pinnedExpanded) {
-                            withAnimation(.easeInOut(duration: 0.18)) { dismissedPinId = pin.id }
-                        }
-                        .fixedSize(horizontal: false, vertical: true)
-                        .shadow(color: .black.opacity(0.45), radius: 10, y: 6)
-                        .transition(.opacity)
-                    }
-                }
-                .zIndex(2)
+                // La version dépliée est dessinée à la racine du chat (voir
+                // `body`), calée sur cette ancre : un simple overlay restait
+                // sous la liste du chat (vue UIKit).
+                .anchorPreference(key: PinnedSlotKey.self, value: .bounds) { $0 }
                 .transition(.opacity)
             }
 
@@ -195,6 +188,28 @@ struct ChatView: View {
     }
 
     var body: some View {
+        content
+            // Message épinglé déplié : par-dessus tout le chat, à la place exacte
+            // du bandeau replié, sans rien pousser.
+            .overlayPreferenceValue(PinnedSlotKey.self) { anchor in
+                GeometryReader { geo in
+                    if pinnedExpanded, let anchor, store.showPinnedMessages,
+                       let pin = pubsub.pinned, pin.id != dismissedPinId {
+                        let r = geo[anchor]
+                        PinnedBanner(pin: pin, width: r.width, expanded: $pinnedExpanded) {
+                            withAnimation(.easeInOut(duration: 0.18)) { dismissedPinId = pin.id }
+                        }
+                        .frame(width: r.width)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .shadow(color: .black.opacity(0.45), radius: 10, y: 6)
+                        .offset(x: r.minX, y: r.minY)
+                        .transition(.opacity)
+                    }
+                }
+            }
+    }
+
+    private var content: some View {
         VStack(spacing: 0) {
 
             if style.showsChrome { chrome }
@@ -963,5 +978,13 @@ struct MessageFlowLayout: Layout {
         }
         for j in ls..<subviews.count {lh[j]=mh}
         return (CGSize(width:W,height:cy+mh),pos,lh,sizes)
+    }
+}
+
+/// Position du bandeau épinglé replié, pour y caler la version dépliée.
+private struct PinnedSlotKey: PreferenceKey {
+    static var defaultValue: Anchor<CGRect>? = nil
+    static func reduce(value: inout Anchor<CGRect>?, nextValue: () -> Anchor<CGRect>?) {
+        value = value ?? nextValue()
     }
 }

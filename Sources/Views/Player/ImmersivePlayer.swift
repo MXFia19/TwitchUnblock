@@ -91,6 +91,7 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
     private var pendingSeek: Double?
     private var pip: AVPictureInPictureController?
     private var lastCatchUp = Date.distantPast
+    private var latency = LiveLatencyController()
 
     init(url: URL, isLive: Bool, savedTime: Double,
          onProgress: @escaping (Double) -> Void,
@@ -172,16 +173,10 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
     /// Recolle au direct après une vraie dérive (pause longue, coupure réseau).
     /// Seuils volontairement larges : viser le bord en permanence fait caler.
     private func catchUpIfNeeded(_ item: AVPlayerItem) {
-        guard lowLatency, isLive, isPlaying, endTime > 0 else { return }
-        let behind = endTime - position
-        guard behind > 30, Date().timeIntervalSince(lastCatchUp) > 60 else { return }
-        lastCatchUp = Date()
-        let recommended = item.recommendedTimeOffsetFromLive
-        let offset = max(10, recommended.isValid && recommended.isNumeric
-                             ? recommended.seconds : 0)
-        logger.debug("LIVE", "Rattrapage du direct",
-                     String(format: "%.0f s de retard", behind))
-        seek(to: endTime - offset, exact: false)
+        // Laisse le flux démarrer (quelques secondes) avant d'ajuster.
+        guard Date().timeIntervalSince(lastCatchUp) > 4 else { return }
+        latency.adjust(player: player, item: item, behind: endTime - position,
+                       enabled: lowLatency && isLive && isPlaying && endTime > 0)
     }
 
     var atLiveEdge: Bool { isLive && (endTime - position) < 12 }

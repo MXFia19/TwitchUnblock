@@ -67,6 +67,8 @@ struct MainTabView: View {
     @State private var loadGeneration = 0
     @ObservedObject private var updater = UpdateChecker.shared
     @State private var showDiscordPrompt = false
+    /// Page d'une chaîne ouverte en feuille (sans passer par l'onglet Recherche).
+    @State private var channelSheet: ChannelSheetItem? = nil
     /// Tutoriel du tout premier lancement (revu depuis les réglages).
     @AppStorage("onboarding_done") private var onboardingDone = false
     /// Clip en cours : VOD d'origine et position, pour en rejouer le chat.
@@ -260,13 +262,22 @@ struct MainTabView: View {
         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: showDiscordPrompt)
         // Notification « en live » touchée : on ouvre le direct.
         // Page d'une chaîne demandée (pseudo dans le lecteur, accueil…) :
-        // onglet Recherche, lecteur réduit en mini-barre pour la laisser voir.
+        // ouverte dans une feuille par-dessus l'onglet en cours, sans passer
+        // par Recherche ; le lecteur se réduit en mini-barre.
         .onChange(of: store.pendingChannel) { login in
-            guard login != nil else { return }
-            withAnimation(.easeInOut(duration: 0.2)) {
-                playerVisible = false
-                activeTab = .search
-            }
+            guard let login else { return }
+            store.pendingChannel = nil
+            withAnimation(.easeInOut(duration: 0.2)) { playerVisible = false }
+            channelSheet = ChannelSheetItem(login: login)
+        }
+        .sheet(item: $channelSheet) { item in
+            SearchView(onPlayVod: { id, t, th, s in channelSheet = nil; playVod(id, t, th, s) },
+                       onPlayLive: { l in channelSheet = nil; playLive(l) },
+                       onPlayClip: { slug, t in channelSheet = nil; playClip(slug, t) },
+                       initialChannel: item.login,
+                       onClose: { channelSheet = nil })
+                .environmentObject(store)
+                .presentationDragIndicator(.visible)
         }
         .onReceive(NotificationCenter.default.publisher(for: .openLiveChannel)) { note in
             if let login = note.userInfo?["login"] as? String, !login.isEmpty { playLive(login) }
@@ -1006,4 +1017,10 @@ struct CustomTabBar: View {
         .background(.ultraThinMaterial)
         .overlay(Divider().background(Color.tBorder), alignment: .top)
     }
+}
+
+/// Chaîne affichée dans la feuille « page de chaîne ».
+struct ChannelSheetItem: Identifiable {
+    let login: String
+    var id: String { login }
 }

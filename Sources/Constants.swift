@@ -188,7 +188,7 @@ private let translations: [Lang: [String: String]] = [
         "notif_live": "Notifications de live", "notif_live_sub": "Prévient quand une chaîne suivie commence un live (vérifié en arrière-plan quand iOS le permet, il faut être connecté).", "notif_test": "Envoyer une notification de test", "notif_test_title": "TwitchUnblock", "notif_test_body": "Les notifications fonctionnent 🎉", "notif_test_sent": "Envoyée : elle arrive dans 3 s (quitte l'app pour la voir comme une vraie).", "notif_test_denied": "Notifications refusées : autorise-les dans Réglages iOS → TwitchUnblock.", "notif_last_never": "Aucune vérification en arrière-plan pour l'instant. iOS choisit le moment : laisse l'app en arrière-plan (sans la fermer) quelques heures.", "notif_last_run": "Dernière vérification en arrière-plan : {t}", "notif_last_failed": "échec (connexion ou jeton)", "notif_bg_off": "« Actualisation en arrière-plan » est coupée (ou le mode économie d'énergie est actif) : iOS ne réveillera pas l'app. Réglages iOS → Général → Actualisation en arrière-plan.", "notif_bg_refused": "iOS a refusé de programmer la vérification", "web_banner_title": "Connecte ta session web", "web_banner_msg": "Pour les points de chaîne, les coffres récupérés tout seuls et les prédictions : connecte-toi une fois sur twitch.tv dans l'app.", "web_banner_btn": "Connecter", "announcement_open": "Ouvrir", "dont_show_again": "Ne plus afficher", "notif_live_title": "{u} est en live",
         "chapters": "Chapitres", "close": "Fermer",
         "made_by": "Fait par", "source_ios": "Code source de l'app", "web_version": "Version web", "credits_thanks": "Merci à BetterTTV, FrankerFaceZ, 7TV, recent-messages et Luminous.", "not_affiliated": "Projet indépendant, non affilié à Twitch.",
-        "update_title": "Mise à jour disponible", "update_msg": "La version {v} est sortie (tu as la {c}). Mets-la à jour depuis Feather, SideStore ou AltStore.", "update_open": "Mettre à jour", "later": "Plus tard", "update_available": "Mise à jour disponible : {v}", "update_check": "Vérifier les mises à jour", "update_none": "L'app est à jour", "version_label": "Version", "discord_join": "Rejoindre le Discord",
+        "update_title": "Mise à jour disponible", "update_msg": "La version {v} est sortie (tu as la {c}). Mets-la à jour depuis Feather, SideStore ou AltStore.", "update_whats_new": "Voici ce qui a changé depuis ta version :", "update_open": "Mettre à jour", "later": "Plus tard", "update_available": "Mise à jour disponible : {v}", "update_check": "Vérifier les mises à jour", "update_none": "L'app est à jour", "version_label": "Version", "discord_join": "Rejoindre le Discord",
         "discord_title": "Rejoins le Discord", "discord_msg": "Nouveautés, bugs, idées : la communauté TwitchUnblock est sur Discord. Tu peux aussi le retrouver plus tard dans Réglages → À propos.",
         "update_msg_short": "Une nouvelle version de TwitchUnblock est disponible. Installe-la depuis Feather, SideStore ou AltStore.",
         "see_channel": "Voir la chaîne", "highlight_words": "Mots surlignés", "highlight_words_sub": "Séparés par des virgules. Les messages qui les contiennent (ou qui te mentionnent) sont mis en avant.",
@@ -287,8 +287,8 @@ private let translations: [Lang: [String: String]] = [
         "sleep_add": "+15 min",
 
         // Débogage
-        "debug_section": "Débogage",
-        "debug_note": "Section temporaire, pensée pour être retirée plus tard.",
+        "vibecoded": "Projet vibecodé : l’app est écrite avec l’aide d’assistants IA, puis relue et testée à la main. Des bugs peuvent passer, signale-les sur Discord.", "debug_section": "Fonctionnalités en test",
+        "debug_note": "Nouveautés encore en rodage : elles peuvent changer ou mal fonctionner. Tes retours sont les bienvenus sur Discord.",
         "dbg_latency": "Afficher la latence",
         "dbg_latency_sub": "Pastille sur le lecteur : retard du direct en secondes",
         "dbg_chat_delay": "Synchro auto du chat",
@@ -413,7 +413,7 @@ private let translations: [Lang: [String: String]] = [
         "notif_live": "Live notifications", "notif_live_sub": "Get notified when a followed channel goes live (checked in the background when iOS allows it; you need to be logged in).", "notif_test": "Send a test notification", "notif_test_title": "TwitchUnblock", "notif_test_body": "Notifications are working 🎉", "notif_test_sent": "Sent: it arrives in 3 s (leave the app to see it like a real one).", "notif_test_denied": "Notifications denied: allow them in iOS Settings → TwitchUnblock.", "notif_last_never": "No background check yet. iOS picks the moment: leave the app in the background (without closing it) for a few hours.", "notif_last_run": "Last background check: {t}", "notif_last_failed": "failed (network or token)", "notif_bg_off": "“Background App Refresh” is off (or Low Power Mode is on): iOS won’t wake the app. iOS Settings → General → Background App Refresh.", "notif_bg_refused": "iOS refused to schedule the check", "web_banner_title": "Connect your web session", "web_banner_msg": "For channel points, auto-claimed chests and predictions: sign in once to twitch.tv inside the app.", "web_banner_btn": "Connect", "announcement_open": "Open", "dont_show_again": "Don’t show again", "notif_live_title": "{u} is live",
         "chapters": "Chapters", "close": "Close",
         "made_by": "Made by", "source_ios": "App source code", "web_version": "Web version", "credits_thanks": "Thanks to BetterTTV, FrankerFaceZ, 7TV, recent-messages and Luminous.", "not_affiliated": "Independent project, not affiliated with Twitch.",
-        "update_title": "Update available", "update_msg": "Version {v} is out (you have {c}). Update it from Feather, SideStore or AltStore.", "update_open": "Update", "later": "Later", "update_available": "Update available: {v}", "update_check": "Check for updates", "update_none": "The app is up to date", "version_label": "Version", "discord_join": "Join the Discord",
+        "update_title": "Update available", "update_msg": "Version {v} is out (you have {c}). Update it from Feather, SideStore or AltStore.", "update_whats_new": "Here’s what’s new since your version:", "update_open": "Update", "later": "Later", "update_available": "Update available: {v}", "update_check": "Check for updates", "update_none": "The app is up to date", "version_label": "Version", "discord_join": "Join the Discord",
         "discord_title": "Join the Discord", "discord_msg": "News, bugs, ideas: the TwitchUnblock community is on Discord. You can also find it later in Settings → About.",
         "update_msg_short": "A new version of TwitchUnblock is available. Install it from Feather, SideStore or AltStore.",
         "see_channel": "See channel", "highlight_words": "Highlighted words", "highlight_words_sub": "Comma-separated. Messages containing them (or mentioning you) stand out.",
@@ -512,8 +512,8 @@ private let translations: [Lang: [String: String]] = [
         "sleep_add": "+15 min",
 
         // Debug
-        "debug_section": "Debug",
-        "debug_note": "Temporary section, meant to be removed later.",
+        "vibecoded": "Vibe-coded project: the app is written with AI coding assistants, then reviewed and tested by hand. Bugs can slip through, report them on Discord.", "debug_section": "Features in testing",
+        "debug_note": "New features still being polished: they may change or misbehave. Feedback is welcome on Discord.",
         "dbg_latency": "Show latency",
         "dbg_latency_sub": "Player badge: how far behind live, in seconds",
         "dbg_chat_delay": "Auto chat sync",
@@ -638,7 +638,7 @@ private let translations: [Lang: [String: String]] = [
         "notif_live": "Notificaciones de directo", "notif_live_sub": "Avisa cuando un canal seguido empieza un directo (se comprueba en segundo plano cuando iOS lo permite; hay que iniciar sesión).", "notif_test": "Enviar una notificación de prueba", "notif_test_title": "TwitchUnblock", "notif_test_body": "Las notificaciones funcionan 🎉", "notif_test_sent": "Enviada: llega en 3 s (sal de la app para verla como una real).", "notif_test_denied": "Notificaciones denegadas: permítelas en Ajustes de iOS → TwitchUnblock.", "notif_last_never": "Aún no hay comprobación en segundo plano. iOS elige el momento: deja la app en segundo plano (sin cerrarla) unas horas.", "notif_last_run": "Última comprobación en segundo plano: {t}", "notif_last_failed": "error (conexión o token)", "notif_bg_off": "«Actualización en segundo plano» está desactivada (o el modo de bajo consumo está activo): iOS no despertará la app. Ajustes de iOS → General → Actualización en segundo plano.", "notif_bg_refused": "iOS se negó a programar la comprobación", "web_banner_title": "Conecta tu sesión web", "web_banner_msg": "Para los puntos del canal, los cofres recogidos solos y las predicciones: inicia sesión una vez en twitch.tv dentro de la app.", "web_banner_btn": "Conectar", "announcement_open": "Abrir", "dont_show_again": "No volver a mostrar", "notif_live_title": "{u} está en directo",
         "chapters": "Capítulos", "close": "Cerrar",
         "made_by": "Hecho por", "source_ios": "Código fuente de la app", "web_version": "Versión web", "credits_thanks": "Gracias a BetterTTV, FrankerFaceZ, 7TV, recent-messages y Luminous.", "not_affiliated": "Proyecto independiente, no afiliado a Twitch.",
-        "update_title": "Actualización disponible", "update_msg": "Ya salió la versión {v} (tienes la {c}). Actualízala desde Feather, SideStore o AltStore.", "update_open": "Actualizar", "later": "Más tarde", "update_available": "Actualización disponible: {v}", "update_check": "Buscar actualizaciones", "update_none": "La app está al día", "version_label": "Versión", "discord_join": "Unirse al Discord",
+        "update_title": "Actualización disponible", "update_msg": "Ya salió la versión {v} (tienes la {c}). Actualízala desde Feather, SideStore o AltStore.", "update_whats_new": "Esto es lo nuevo desde tu versión:", "update_open": "Actualizar", "later": "Más tarde", "update_available": "Actualización disponible: {v}", "update_check": "Buscar actualizaciones", "update_none": "La app está al día", "version_label": "Versión", "discord_join": "Unirse al Discord",
         "discord_title": "Únete al Discord", "discord_msg": "Novedades, bugs, ideas: la comunidad de TwitchUnblock está en Discord. También lo encontrarás en Ajustes → Acerca de.",
         "update_msg_short": "Hay una nueva versión de TwitchUnblock. Instálala desde Feather, SideStore o AltStore.",
         "see_channel": "Ver canal", "highlight_words": "Palabras resaltadas", "highlight_words_sub": "Separadas por comas. Los mensajes que las contienen (o te mencionan) se destacan.",
@@ -737,8 +737,8 @@ private let translations: [Lang: [String: String]] = [
         "sleep_add": "+15 min",
 
         // Depuración
-        "debug_section": "Depuración",
-        "debug_note": "Sección temporal, pensada para quitarse más adelante.",
+        "vibecoded": "Proyecto vibecodeado: la app se escribe con ayuda de asistentes de IA y luego se revisa y prueba a mano. Pueden colarse errores, avísalos en Discord.", "debug_section": "Funciones en prueba",
+        "debug_note": "Novedades aún en pruebas: pueden cambiar o fallar. Tus comentarios son bienvenidos en Discord.",
         "dbg_latency": "Mostrar la latencia",
         "dbg_latency_sub": "Insignia en el reproductor: retraso del directo en segundos",
         "dbg_chat_delay": "Sincronía automática del chat",

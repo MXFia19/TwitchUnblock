@@ -15,6 +15,15 @@ final class UpdateChecker: ObservableObject {
         let version: String      // « 1.0.199 »
         let build: Int
         let downloadURL: String?
+        /// Nouveautés de chaque build manquant, du plus récent au plus ancien :
+        /// deux builds de retard → les notes des deux.
+        let changes: [Changes]
+    }
+    struct Changes: Equatable, Identifiable {
+        let version: String
+        let build: Int
+        let items: [String]
+        var id: Int { build }
     }
 
     /// Version plus récente que celle installée, sinon nil.
@@ -22,7 +31,17 @@ final class UpdateChecker: ObservableObject {
     /// Afficher l'alerte : une seule fois par version.
     @Published var showAlert = false
 
-    static let sourceURL = "https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json"
+    /// Canal écrit par le CI : « test » pour les builds de la branche de test
+    /// (app « TU Test »), qui ont leur propre source ; l'app normale ne lit
+    /// que apps.json sur master et ne voit jamais les builds de test.
+    static var isTestBuild: Bool {
+        (Bundle.main.object(forInfoDictionaryKey: "TUChannel") as? String) == "test"
+    }
+    static var sourceURL: String {
+        isTestBuild
+            ? "https://raw.githubusercontent.com/MXFia19/TwitchUnblock/test-17d298/apps-test.json"
+            : "https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json"
+    }
     private let lastCheckKey = "update_last_check"
     private let dismissedKey = "update_dismissed_build"
     private let minInterval: TimeInterval = 6 * 3600
@@ -54,14 +73,26 @@ final class UpdateChecker: ObservableObject {
               (resp as? HTTPURLResponse)?.statusCode == 200,
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let app = (json["apps"] as? [[String: Any]])?.first,
-              let latest = (app["versions"] as? [[String: Any]])?.first,
+              let versions = app["versions"] as? [[String: Any]],
+              let latest = versions.first,
               let buildStr = latest["buildVersion"] as? String, let build = Int(buildStr) else { return }
         ud.set(Date().timeIntervalSince1970, forKey: lastCheckKey)
 
         guard build > Self.installedBuild else { available = nil; return }
+        // Notes de tous les builds plus récents que celui installé.
+        let changes: [Changes] = versions.compactMap { v in
+            guard let b = Int(v["buildVersion"] as? String ?? ""), b > Self.installedBuild else { return nil }
+            let items = (v["localizedDescription"] as? String ?? "")
+                .split(separator: "\n")
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+                .filter { $0.hasPrefix("- ") }
+                .map { String($0.dropFirst(2)) }
+            return items.isEmpty ? nil : Changes(version: v["version"] as? String ?? "build \(b)", build: b, items: items)
+        }
         let update = Update(version: latest["version"] as? String ?? "build \(build)",
                             build: build,
-                            downloadURL: latest["downloadURL"] as? String)
+                            downloadURL: latest["downloadURL"] as? String,
+                            changes: changes)
         available = update
         logger.info("UPDATE", "Mise à jour disponible", "\(Self.installedVersion) → \(update.version)")
         if ud.integer(forKey: dismissedKey) < build { showAlert = true }

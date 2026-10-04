@@ -22,6 +22,13 @@ final class AnnouncementService: ObservableObject {
     @Published private(set) var current: Announcement? = nil
 
     private let dismissedKey = "announcement_dismissed"
+    private let reactedKey = "announcement_reacted"
+
+    /// Réactions proposées (mêmes que sur le site et côté Worker).
+    static let reactions = ["👍", "❤️", "🔥", "😂", "👎"]
+    /// Réaction de cet appareil, par annonce.
+    @Published private(set) var reacted: [String: String] =
+        UserDefaults.standard.dictionary(forKey: "announcement_reacted") as? [String: String] ?? [:]
     private var lastFetch: Date? = nil
 
     func refresh(force: Bool = false) async {
@@ -54,6 +61,34 @@ final class AnnouncementService: ObservableObject {
         withAnimation { current = nil }
     }
 
+    /// Toucher une réaction : la choisit, ou la retire si c'était déjà elle.
+    /// Affichée tout de suite ; annulée si le serveur refuse.
+    func react(_ a: Announcement, _ emoji: String) async {
+        let prev = reacted[a.id]
+        let next: String? = prev == emoji ? nil : emoji
+        setReaction(next, for: a.id)
+        guard let url = URL(string: "\(kAPIURL)/api/announcement/react") else { return }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: [
+            "announcementId": a.id,
+            "id": UsageService.shared.installId,
+            "emoji": next.map { $0 as Any } ?? NSNull(),
+        ])
+        let ok = ((try? await URLSession.shared.data(for: req))?.1 as? HTTPURLResponse)?.statusCode == 200
+        if !ok { setReaction(prev, for: a.id) }
+    }
+
+    private func setReaction(_ emoji: String?, for id: String) {
+        var m = reacted
+        m[id] = emoji
+        // Les 10 dernières annonces suffisent.
+        if m.count > 10 { m = Dictionary(uniqueKeysWithValues: m.sorted { $0.key > $1.key }.prefix(10).map { ($0.key, $0.value) }) }
+        reacted = m
+        UserDefaults.standard.set(m, forKey: reactedKey)
+    }
+
     private func pruneExpired() {
         if let c = current, c.until <= Date() { current = nil }
     }
@@ -64,6 +99,7 @@ struct AnnouncementBanner: View {
     let announcement: AnnouncementService.Announcement
     let onDismiss: () -> Void
     @EnvironmentObject private var store: AppStore
+    @ObservedObject private var service = AnnouncementService.shared
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -101,6 +137,26 @@ struct AnnouncementBanner: View {
                     .buttonStyle(.plain)
                     .padding(.top, 2)
                 }
+                // Réactions : une par appareil, re-toucher la retire.
+                HStack(spacing: 6) {
+                    ForEach(AnnouncementService.reactions, id: \.self) { emoji in
+                        let on = service.reacted[announcement.id] == emoji
+                        Button {
+                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                            Task { await service.react(announcement, emoji) }
+                        } label: {
+                            Text(emoji)
+                                .font(.system(size: 16))
+                                .frame(minWidth: 40, minHeight: 32)
+                                .background(on ? Color.tPrimary.opacity(0.25) : Color.tSurface)
+                                .clipShape(Capsule())
+                                .overlay(Capsule().stroke(on ? Color.tPrimary : Color.tBorder, lineWidth: 1))
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityAddTraits(on ? .isSelected : [])
+                    }
+                }
+                .padding(.top, 4)
             }
             Spacer(minLength: 0)
             Button(action: onDismiss) {

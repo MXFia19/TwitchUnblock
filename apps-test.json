@@ -1,0 +1,34 @@
+{
+  "name": "TwitchUnblock Test",
+  "subtitle": "Builds de test de TwitchUnblock (peuvent être instables)",
+  "description": "Source de test : les builds de la branche test-17d298, installés à côté de l’app normale sous le nom « TU Test ».",
+  "iconURL": "https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/assets/icon.png",
+  "website": "https://github.com/MXFia19/TwitchUnblock",
+  "tintColor": "#9146ff",
+  "featuredApps": [
+    "com.mxfia19.TwitchUnblock.test"
+  ],
+  "apps": [
+    {
+      "name": "TU Test",
+      "bundleIdentifier": "com.mxfia19.TwitchUnblock.test",
+      "developerName": "MXFia19",
+      "subtitle": "Builds de test (branche test-17d298)",
+      "localizedDescription": "Version de test de TwitchUnblock : nouveautés en cours, peut être instable. Installée à côté de l’app normale.",
+      "iconURL": "https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/assets/icon.png",
+      "tintColor": "#9146ff",
+      "category": "entertainment",
+      "screenshots": [],
+      "versions": [],
+      "appPermissions": {
+        "entitlements": [],
+        "privacy": {}
+      },
+      "version": "1.1.6",
+      "versionDate": "2026-10-03",
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/nightly-210/TwitchUnblock.ipa",
+      "size": 1518490
+    }
+  ],
+  "news": []
+}

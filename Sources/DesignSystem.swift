@@ -400,6 +400,14 @@ struct TPromptCard: View {
     /// Troisième choix, plus discret (ex. « Ne plus afficher »).
     var tertiary: String? = nil
     var onTertiary: () -> Void = {}
+    /// Liste à puces groupée (ex. nouveautés par version), défilable.
+    var sections: [PromptSection] = []
+
+    struct PromptSection: Identifiable {
+        let title: String
+        let items: [String]
+        var id: String { title }
+    }
 
     var body: some View {
         ZStack {
@@ -438,6 +446,35 @@ struct TPromptCard: View {
                     .foregroundColor(.tMuted)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
+
+                if !sections.isEmpty {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 10) {
+                            ForEach(sections) { section in
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(section.title)
+                                        .font(.system(size: 12, weight: .bold).monospacedDigit())
+                                        .foregroundColor(.tPrimary)
+                                    ForEach(Array(section.items.enumerated()), id: \.offset) { _, item in
+                                        HStack(alignment: .firstTextBaseline, spacing: 6) {
+                                            Text("•").foregroundColor(.tPrimary)
+                                            Text(item)
+                                                .foregroundColor(.tText)
+                                                .fixedSize(horizontal: false, vertical: true)
+                                        }
+                                        .font(.system(size: 13))
+                                    }
+                                }
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(12)
+                    }
+                    .frame(maxHeight: 220)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .background(Color.tSurface)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
 
                 VStack(spacing: 6) {
                     Button(action: onPrimary) {

@@ -335,9 +335,9 @@ struct SettingsView: View {
                     veilleCard
                     historiqueCard
                     cacheCard
+                    debugCard
                 case .player:
                     lecteurCard
-                    debugCard
                 case .chat:
                     chatBehaviorCard
                     persoCard
@@ -457,18 +457,6 @@ struct SettingsView: View {
                 Divider().background(Color.tBorder)
                 toggleRow(store.t("cfg_raids"),  store.t("cfg_raids_sub"),
                           $store.enableRaids,        log: "Système de raid")
-                Divider().background(Color.tBorder)
-                // Notifications quand une chaîne suivie passe en live.
-                toggleRow(store.t("notif_live"), store.t("notif_live_sub"),
-                          Binding(get: { liveNotif }, set: { on in
-                              liveNotif = on
-                              if on {
-                                  Task { let ok = await LiveNotifier.enable(); await MainActor.run { liveNotif = ok } }
-                              } else {
-                                  LiveNotifier.disable()
-                              }
-                          }), log: "Notifications de live")
-                if liveNotif { liveNotifTools }
             }
         }
     }
@@ -537,6 +525,9 @@ struct SettingsView: View {
                 Divider().background(Color.tBorder)
                 toggleRow(store.t("hide_commands"), store.t("hide_commands_sub"),
                           $store.chatHideCommands, log: "Masquer les commandes")
+                Divider().background(Color.tBorder)
+                toggleRow(store.t("dbg_chat_delay"), store.t("dbg_chat_delay_sub"),
+                          $store.autoChatDelay, log: "Synchro auto du chat")
                 Divider().background(Color.tBorder)
                 VStack(alignment: .leading, spacing: 6) {
                     Text(store.t("muted_words"))
@@ -662,6 +653,9 @@ struct SettingsView: View {
                 Divider().background(Color.tBorder)
                 toggleRow(store.t("fill_screen"), store.t("fill_screen_sub"),
                           $store.fillScreen, log: "Remplir l'écran")
+                Divider().background(Color.tBorder)
+                toggleRow(store.t("dbg_latency"), store.t("dbg_latency_sub"),
+                          $store.showLatency, log: "Afficher la latence")
             }
         }
     }
@@ -898,19 +892,27 @@ struct SettingsView: View {
     }
 
     @ViewBuilder private var debugCard: some View {
-        // ── Débogage (temporaire) ───────────────────────────
+        // ── Fonctionnalités en test ─────────────────────────
+        // Ce qui marche mais demande encore des retours avant d'être rangé
+        // avec le reste (aujourd'hui : les notifications de live).
         settingCard {
             VStack(alignment: .leading, spacing: 14) {
-                label("wrench.and.screwdriver.fill", store.t("debug_section"))
+                label("flask.fill", store.t("debug_section"))
                 Text(store.t("debug_note"))
                     .font(.tMeta)
                     .foregroundColor(.tMuted)
                     .fixedSize(horizontal: false, vertical: true)
-                toggleRow(store.t("dbg_latency"), store.t("dbg_latency_sub"),
-                          $store.showLatency,   log: "Afficher la latence")
-                Divider().background(Color.tBorder)
-                toggleRow(store.t("dbg_chat_delay"), store.t("dbg_chat_delay_sub"),
-                          $store.autoChatDelay, log: "Synchro auto du chat")
+                // Notifications quand une chaîne suivie passe en live.
+                toggleRow(store.t("notif_live"), store.t("notif_live_sub"),
+                          Binding(get: { liveNotif }, set: { on in
+                              liveNotif = on
+                              if on {
+                                  Task { let ok = await LiveNotifier.enable(); await MainActor.run { liveNotif = ok } }
+                              } else {
+                                  LiveNotifier.disable()
+                              }
+                          }), log: "Notifications de live")
+                if liveNotif { liveNotifTools }
             }
         }
     }
@@ -1010,6 +1012,17 @@ struct SettingsView: View {
                         .foregroundColor(.tPrimary)
                 }
                 .font(.system(size: 14, weight: .semibold))
+
+                // Projet vibecodé : dit franchement.
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.tPrimary)
+                    Text(store.t("vibecoded"))
+                        .font(.tMeta)
+                        .foregroundColor(.tMuted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
 
                 creditLink(icon: "chevron.left.forwardslash.chevron.right",
                            title: store.t("source_ios"),

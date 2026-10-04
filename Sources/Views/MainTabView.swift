@@ -210,12 +210,14 @@ struct MainTabView: View {
                 TPromptCard(
                     icon: "arrow.down.circle.fill",
                     title: store.t("update_title"),
-                    message: store.t("update_msg_short"),
+                    message: store.t(up.changes.isEmpty ? "update_msg_short" : "update_whats_new"),
                     detail: "\(UpdateChecker.installedVersion)  →  \(up.version)",
                     primary: store.t("update_open"),
                     secondary: store.t("later"),
                     onPrimary: { withAnimation(.spring(response: 0.3)) { updater.dismiss() }; UpdateChecker.openSource() },
-                    onSecondary: { withAnimation(.spring(response: 0.3)) { updater.dismiss() } })
+                    onSecondary: { withAnimation(.spring(response: 0.3)) { updater.dismiss() } },
+                    // Nouveautés de chaque build manquant, du plus récent au plus ancien.
+                    sections: up.changes.map { .init(title: $0.version, items: $0.items) })
                 .zIndex(10)
             } else if showDiscordPrompt {
                 TPromptCard(

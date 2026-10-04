@@ -193,7 +193,7 @@ struct MainTabView: View {
                 selected: currentQuality(qualityLinks ?? [:]),
                 canRewind: liveDvrVideoId != nil,
                 isDvr: dvrSourceChannel != nil,
-                onSelectQuality: { q in immersiveQuality = q; showPlayerMenu = false },
+                onSelectQuality: { q in immersiveQuality = q; store.rememberQualityChoice(q); showPlayerMenu = false },
                 onRewind: { showPlayerMenu = false; rewindAction?() },
                 onBackToLive: { showPlayerMenu = false; backToLiveAction?() },
                 onSleepTimer: { showPlayerMenu = false
@@ -671,6 +671,7 @@ struct MainTabView: View {
     /// Qualité en cours pour le lecteur immersif : celle choisie, sinon la meilleure.
     private func currentQuality(_ links: QualityLinks) -> String {
         if !immersiveQuality.isEmpty, links[immersiveQuality] != nil { return immersiveQuality }
+        if store.preferAudioOnly, links["audio_only"] != nil { return "audio_only" }
         return sortQualities(Array(links.keys)).first ?? ""
     }
 

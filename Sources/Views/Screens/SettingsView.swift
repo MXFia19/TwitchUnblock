@@ -22,6 +22,11 @@ struct SettingsView: View {
     @ObservedObject private var usage      = UsageService.shared
     @Environment(\.dismiss) private var dismiss
     @State private var showSleepSheet  = false
+    // Sauvegarde (export / import)
+    @State private var exportDoc: BackupDocument? = nil
+    @State private var showExporter    = false
+    @State private var showImporter    = false
+    @State private var backupMessage: String? = nil
     /// Page ouverte, nil = menu racine.
     @State private var page: Page? = nil
 
@@ -341,6 +346,7 @@ struct SettingsView: View {
                     autoclaimCard
                     veilleCard
                     historiqueCard
+                    backupCard
                     cacheCard
                 case .player:
                     lecteurCard
@@ -834,6 +840,48 @@ struct SettingsView: View {
                     }
                 }
             }
+        }
+    }
+
+    @ViewBuilder private var backupCard: some View {
+        // ── Sauvegarde ──────────────────────────────────────
+        settingCard {
+            VStack(alignment: .leading, spacing: 12) {
+                label("arrow.up.arrow.down.circle.fill", store.t("backup"))
+                Text(store.t("backup_sub"))
+                    .font(.tMeta).foregroundColor(.tMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: TSpace.sm) {
+                    TSecondaryButton(title: store.t("export_data"), icon: "square.and.arrow.up",
+                                     tint: .tPrimary, fullWidth: true) {
+                        exportDoc = BackupDocument(data: Backup.export(store: store))
+                        showExporter = true
+                    }
+                    TSecondaryButton(title: store.t("import_data"), icon: "square.and.arrow.down",
+                                     tint: .tPrimary, fullWidth: true) {
+                        showImporter = true
+                    }
+                }
+                if let backupMessage {
+                    Text(backupMessage)
+                        .font(.tMeta).foregroundColor(.tMuted)
+                }
+            }
+        }
+        .fileExporter(isPresented: $showExporter, document: exportDoc,
+                      contentType: .json, defaultFilename: Backup.fileName()) { result in
+            if case .success = result { backupMessage = store.t("export_done") }
+        }
+        .fileImporter(isPresented: $showImporter, allowedContentTypes: [.json]) { result in
+            guard case .success(let url) = result else { return }
+            let scoped = url.startAccessingSecurityScopedResource()
+            defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+            guard let data = try? Data(contentsOf: url),
+                  let added = try? Backup.importData(data, store: store) else {
+                backupMessage = store.t("import_bad"); return
+            }
+            backupMessage = String(format: store.t("import_done"), added)
+            logger.info("SAUVEGARDE", "Import : \(added) chaîne(s) ajoutée(s)", nil)
         }
     }
 

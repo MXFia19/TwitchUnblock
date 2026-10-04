@@ -1,4 +1,5 @@
 import SwiftUI
+import AVFoundation
 
 struct MainTabView: View {
     @EnvironmentObject private var store: AppStore
@@ -6,6 +7,9 @@ struct MainTabView: View {
 
     // ── Player state ─────────────────────────────────────────────────────
     @State private var playerMode: PlayerMode? = nil
+    /// Playlist lancée avec « Tout lire » : la VOD suivante démarre à la fin.
+    @State private var vodQueue: [VodData] = []
+    @State private var vodQueueStreamer: String? = nil
     @State private var qualityLinks: QualityLinks? = nil
     @State private var playerVisible = false
     @State private var loading = false
@@ -155,7 +159,8 @@ struct MainTabView: View {
                     case .home:    HomeView(onPlayStream: { playLive($0) })
                     case .search:  SearchView(onPlayVod: { playVod($0, $1, $2, $3) },
                                               onPlayLive: { playLive($0) },
-                                              onPlayClip: { playClip($0, $1) })
+                                              onPlayClip: { playClip($0, $1) },
+                                              onPlayQueue: { playQueue($0, $1) })
                     case .library: LibraryView(onPlayVod: { playVod($0, $1, $2, $3) })
                     }
                 }
@@ -274,10 +279,14 @@ struct MainTabView: View {
             SearchView(onPlayVod: { id, t, th, s in channelSheet = nil; playVod(id, t, th, s) },
                        onPlayLive: { l in channelSheet = nil; playLive(l) },
                        onPlayClip: { slug, t in channelSheet = nil; playClip(slug, t) },
+                       onPlayQueue: { list, s in channelSheet = nil; playQueue(list, s) },
                        initialChannel: item.login,
                        onClose: { channelSheet = nil })
                 .environmentObject(store)
                 .presentationDragIndicator(.visible)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .AVPlayerItemDidPlayToEndTime)) { _ in
+            playNextInQueue()
         }
         .onReceive(NotificationCenter.default.publisher(for: .openLiveChannel)) { note in
             if let login = note.userInfo?["login"] as? String, !login.isEmpty { playLive(login) }
@@ -739,6 +748,8 @@ struct MainTabView: View {
     private func playVod(_ id: String, _ title: String? = nil,
                          _ thumb: String? = nil, _ streamer: String? = nil,
                          soft: Bool = false) {
+        // Une VOD hors de la playlist en cours met fin à l'enchaînement.
+        if !vodQueue.contains(where: { $0.id == id }) { vodQueue = [] }
         // Historique des VODs vues : centralisé ici pour couvrir TOUS les points
         // d'entrée (Découverte, Streamer, Lien/ID, rembobinage…). Avant, seul
         // l'onglet Lien/ID enregistrait, donc l'onglet VODs restait vide.
@@ -750,10 +761,26 @@ struct MainTabView: View {
         ))
         startPlayback(.vod(id: id, title: title, thumb: thumb, streamer: streamer), soft: soft)
     }
+    private func playQueue(_ list: [VodData], _ streamer: String?) {
+        guard let first = list.first else { return }
+        vodQueue = list
+        vodQueueStreamer = streamer
+        playVod(first.id, first.title, first.previewThumbnailURL, streamer)
+    }
+    /// Fin d'une vidéo : la suivante de la playlist, s'il y en a une.
+    private func playNextInQueue() {
+        guard case .vod(let id, _, _, _) = playerMode,
+              let i = vodQueue.firstIndex(where: { $0.id == id }) else { return }
+        guard i + 1 < vodQueue.count else { vodQueue = []; return }
+        let next = vodQueue[i + 1]
+        playVod(next.id, next.title, next.previewThumbnailURL, vodQueueStreamer)
+    }
     private func playClip(_ slug: String, _ title: String?) {
+        vodQueue = []
         startPlayback(.clip(slug: slug, title: title))
     }
     private func playLive(_ channel: String, soft: Bool = false) {
+        vodQueue = []
         startPlayback(.live(channelName: channel), soft: soft)
     }
 

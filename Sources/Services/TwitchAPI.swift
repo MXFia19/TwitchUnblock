@@ -947,6 +947,40 @@ func getClips(login: String, period: String) async -> [ClipData] {
     }
 }
 
+/// Playlists (collections) d'une chaîne, avec leurs vidéos — vides exclues.
+func getCollections(login: String) async -> [PlaylistData] {
+    let q = """
+    query($l: String!) { user(login: $l) { collections(first: 20) { edges { node {
+      id title description
+      items(first: 50) { totalCount edges { node { ... on Video {
+        id title lengthSeconds createdAt previewThumbnailURL(width: 320, height: 180)
+      } } } }
+    } } } }
+    """
+    guard let d = await gqlRequest(q, ["l": login.lowercased()]),
+          let user = d["user"] as? [String: Any],
+          let cols = user["collections"] as? [String: Any],
+          let edges = cols["edges"] as? [[String: Any]] else { return [] }
+    return edges.compactMap { e -> PlaylistData? in
+        guard let n = e["node"] as? [String: Any], let id = n["id"] as? String,
+              let items = n["items"] as? [String: Any] else { return nil }
+        let videos: [VodData] = (items["edges"] as? [[String: Any]] ?? []).compactMap { ie in
+            guard let v = ie["node"] as? [String: Any], let vid = v["id"] as? String else { return nil }
+            return VodData(id: vid,
+                           title: v["title"] as? String ?? "",
+                           previewThumbnailURL: v["previewThumbnailURL"] as? String ?? "",
+                           publishedAt: v["createdAt"] as? String ?? "",
+                           lengthSeconds: v["lengthSeconds"] as? Int ?? 0)
+        }
+        guard !videos.isEmpty else { return nil }
+        return PlaylistData(id: id,
+                            title: n["title"] as? String ?? "",
+                            description: n["description"] as? String ?? "",
+                            total: items["totalCount"] as? Int ?? videos.count,
+                            videos: videos)
+    }
+}
+
 /// MP4 signés d'un clip (lus directement par AVPlayer) et sa VOD d'origine.
 func getClip(slug: String) async -> ClipPlayback? {
     let q = """

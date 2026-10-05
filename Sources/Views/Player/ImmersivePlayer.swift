@@ -34,6 +34,13 @@ struct NowPlayingMeta: Equatable {
     var title: String       = ""
     var artist: String      = ""
     var artworkURL: String? = nil
+    // En plus, pour la Live Activity (PlayerActivity) : un direct y montre sa
+    // catégorie, ses spectateurs et sa durée.
+    var game: String        = ""
+    var viewers: Int        = 0
+    var startedAt: Date?    = nil
+    /// « EN DIRECT », dans la langue choisie dans l'app.
+    var liveLabel: String   = "LIVE"
 }
 
 // MARK: – Surface vidéo (AVPlayerLayer)
@@ -110,6 +117,8 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
     private var remoteTargets: [(MPRemoteCommand, Any)] = []
     private var lastNowPlayingUpdate = Date.distantPast
     private var timeControlObs: NSKeyValueObservation?
+    /// Durée de VOD déjà envoyée à la Live Activity.
+    private var activityDuration: Double = 0
 
     init(url: URL, isLive: Bool, savedTime: Double,
          onProgress: @escaping (Double) -> Void,
@@ -135,6 +144,7 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
                       self.player.currentItem != nil else { return }
                 self.isPlaying = false
                 self.refreshNowPlaying(force: true)
+                self.updateActivity()
             }
         }
         setupRemoteCommands()
@@ -157,6 +167,7 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
         isPlaying = true
         lastCatchUp = Date()   // laisse le flux démarrer avant tout rattrapage
         refreshNowPlaying(force: true)
+        updateActivity()
     }
 
     private func applyPendingSeek(on item: AVPlayerItem) {
@@ -194,6 +205,12 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
             onProgress(position)
         }
         refreshNowPlaying()
+        // Durée d'une VOD connue après coup : la barre de la Live Activity en a
+        // besoin. Celle d'un enregistrement en cours grandit sans cesse : on ne
+        // la renvoie que par paliers d'une minute.
+        if !isLive, endTime > 0, activityDuration == 0 || abs(endTime - activityDuration) > 60 {
+            updateActivity()
+        }
 
         // Latence : écart entre l'heure réelle et l'horodatage du segment lu.
         currentDate = item.currentDate()
@@ -223,6 +240,7 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
         if on { player.play() } else { player.pause() }
         isPlaying = on
         refreshNowPlaying(force: true)
+        updateActivity()
     }
 
     func seek(to s: Double, exact: Bool = true) {
@@ -233,6 +251,7 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
                     toleranceAfter:  exact ? .zero : .positiveInfinity)
         position = clamped
         refreshNowPlaying(force: true)
+        updateActivity()
     }
 
     func seekBy(_ delta: Double) { seek(to: position + delta) }
@@ -306,6 +325,15 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
         nowPlaying = meta
         if newArtwork { loadArtwork(meta.artworkURL) }
         refreshNowPlaying(force: true)
+        updateActivity()
+    }
+
+    /// Live Activity : mêmes infos, plus l'état de la lecture. PlayerActivity
+    /// n'envoie que ce qui change à l'écran.
+    private func updateActivity() {
+        activityDuration = isLive ? 0 : endTime
+        PlayerActivity.update(nowPlaying, isLive: isLive, isPlaying: isPlaying,
+                              position: position, duration: activityDuration)
     }
 
     private func loadArtwork(_ address: String?) {
@@ -352,6 +380,7 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
         remoteTargets.removeAll()
         artworkTask?.cancel()
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+        PlayerActivity.end()
     }
 }
 

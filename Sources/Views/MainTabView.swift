@@ -100,23 +100,30 @@ struct MainTabView: View {
         )
     }
 
-    /// Écran verrouillé et centre de contrôle : quoi, de qui, et une image —
-    /// l'aperçu du direct, la miniature de la VOD, sinon l'avatar.
+    /// Écran verrouillé, centre de contrôle et Live Activity : quoi, de qui, et
+    /// une image — l'aperçu du direct, la miniature de la VOD, sinon l'avatar.
+    /// Un direct y ajoute sa catégorie, ses spectateurs et son heure de début.
     private var nowPlayingMeta: NowPlayingMeta {
         switch playerMode {
         case .live(let channel)?:
             return NowPlayingMeta(
                 title: statusTitle.isEmpty ? channel : statusTitle,
                 artist: channel,
-                artworkURL: "https://static-cdn.jtvnw.net/previews-ttv/live_user_\(channel.lowercased())-640x360.jpg")
+                artworkURL: "https://static-cdn.jtvnw.net/previews-ttv/live_user_\(channel.lowercased())-640x360.jpg",
+                game: liveGame,
+                viewers: liveViewerCount,
+                startedAt: liveStartedAt,
+                liveLabel: store.t("live_on"))
         case .vod(_, let title, let thumb, let streamer)?:
             return NowPlayingMeta(title: title ?? statusTitle,
                                   artist: streamer ?? currentChannelName ?? "",
-                                  artworkURL: thumb ?? liveAvatar)
+                                  artworkURL: thumb ?? liveAvatar,
+                                  liveLabel: store.t("live_on"))
         case .clip(_, let title)?:
             return NowPlayingMeta(title: title ?? statusTitle,
                                   artist: currentChannelName ?? "",
-                                  artworkURL: liveAvatar)
+                                  artworkURL: liveAvatar,
+                                  liveLabel: store.t("live_on"))
         case nil:
             return NowPlayingMeta()
         }

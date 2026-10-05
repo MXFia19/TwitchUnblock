@@ -35,7 +35,7 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
         context.coordinator.lowLatency = lowLatency && isLive
         context.coordinator.configureLatency(player)
         context.coordinator.setupObserver(player: player, onProgress: onProgress, onLatency: onLatency)
-        context.coordinator.applyMetadata(nowPlaying, to: player)
+        context.coordinator.applyMetadata(nowPlaying, isLive: isLive, to: player)
         // Restore position
         if savedTime > 5 {
             player.seek(to: CMTime(seconds: savedTime, preferredTimescale: 600))
@@ -62,13 +62,14 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
             }
             player.play()
         }
-        if let player = vc.player { context.coordinator.applyMetadata(nowPlaying, to: player) }
+        if let player = vc.player { context.coordinator.applyMetadata(nowPlaying, isLive: isLive, to: player) }
     }
 
     // Force l'arrêt de la vidéo quand la vue est détruite
     static func dismantleUIViewController(_ vc: AVPlayerViewController, coordinator: Coordinator) {
         vc.player?.pause()
         vc.player = nil
+        PlayerActivity.end()
     }
 
     func makeCoordinator() -> Coordinator { Coordinator() }
@@ -161,9 +162,11 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
         private var artworkData: Data?
         private var artworkTask: Task<Void, Never>?
 
-        func applyMetadata(_ meta: NowPlayingMeta, to player: AVPlayer) {
+        func applyMetadata(_ meta: NowPlayingMeta, isLive: Bool, to player: AVPlayer) {
             guard let item = player.currentItem,
                   meta != metadataShown || item !== metadataItem else { return }
+            // Live Activity : ce lecteur ne suit pas la pause, elle reste en lecture.
+            PlayerActivity.update(meta, isLive: isLive, isPlaying: true)
             if meta.artworkURL != metadataShown?.artworkURL {
                 artworkData = nil
                 artworkTask?.cancel()

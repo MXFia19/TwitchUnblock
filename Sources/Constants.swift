@@ -11,9 +11,9 @@ let kDeepLinkScheme  = "twitchunblock://"
 /// Workers de secours, sur un autre compte Cloudflare : le principal est
 /// limité à 100 000 requêtes par jour (« error code: 1027 » au-delà, jusqu'à
 /// minuit UTC). Seules les routes sans base D1 y passent — VODs et lives — ;
-/// sauvegarde, comptage et annonces restent sur le principal. Vide tant
-/// qu'aucun secours n'est déployé (README du site, « Fallback Worker »).
-let kAPIFallbackURLs: [String] = []
+/// sauvegarde, comptage et annonces restent sur le principal (README du site,
+/// « Fallback Worker »).
+let kAPIFallbackURLs: [String] = ["https://test2-fallback.vxcraftmanpetit.workers.dev"]
 
 /// Miroirs Luminous (source « sans pub »), essayés dans l'ordre : si l'un est
 /// indisponible on passe au suivant. as = Asie (historique),

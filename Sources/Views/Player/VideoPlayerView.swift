@@ -18,9 +18,13 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
     /// Mode faible latence : ne s'applique qu'au direct.
     var lowLatency: Bool = false
     var isLive: Bool = false
+    /// Titre, chaîne et image affichés sur l'écran verrouillé.
+    var nowPlaying = NowPlayingMeta()
 
     func makeUIViewController(context: Context) -> AVPlayerViewController {
         let player = AVPlayer(url: url)
+        // Le son continue écran verrouillé, comme dans le lecteur immersif.
+        player.audiovisualBackgroundPlaybackPolicy = .continuesIfPossible
         let vc = AVPlayerViewController()
         vc.player = player
         vc.allowsPictureInPicturePlayback = true
@@ -31,6 +35,7 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
         context.coordinator.lowLatency = lowLatency && isLive
         context.coordinator.configureLatency(player)
         context.coordinator.setupObserver(player: player, onProgress: onProgress, onLatency: onLatency)
+        context.coordinator.applyMetadata(nowPlaying, to: player)
         // Restore position
         if savedTime > 5 {
             player.seek(to: CMTime(seconds: savedTime, preferredTimescale: 600))
@@ -47,6 +52,7 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
             vc.player?.pause()
             
             let player = AVPlayer(url: url)
+            player.audiovisualBackgroundPlaybackPolicy = .continuesIfPossible
             vc.player = player
             context.coordinator.lowLatency = lowLatency && isLive
             context.coordinator.configureLatency(player)
@@ -56,6 +62,7 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
             }
             player.play()
         }
+        if let player = vc.player { context.coordinator.applyMetadata(nowPlaying, to: player) }
     }
 
     // Force l'arrêt de la vidéo quand la vue est détruite
@@ -145,9 +152,59 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
             }
         }
 
+        // MARK: Écran verrouillé
+        // AVPlayerViewController publie lui-même la lecture et ses commandes sur
+        // l'écran verrouillé ; il lui manquait seulement le titre, la chaîne et
+        // l'image, qu'il lit dans les métadonnées de l'élément lu.
+        private var metadataShown: NowPlayingMeta?
+        private weak var metadataItem: AVPlayerItem?
+        private var artworkData: Data?
+        private var artworkTask: Task<Void, Never>?
+
+        func applyMetadata(_ meta: NowPlayingMeta, to player: AVPlayer) {
+            guard let item = player.currentItem,
+                  meta != metadataShown || item !== metadataItem else { return }
+            if meta.artworkURL != metadataShown?.artworkURL {
+                artworkData = nil
+                artworkTask?.cancel()
+                if let address = meta.artworkURL, let url = URL(string: address) {
+                    artworkTask = Task { [weak self, weak player] in
+                        guard let (data, _) = try? await URLSession.shared.data(from: url),
+                              !Task.isCancelled else { return }
+                        await MainActor.run {
+                            guard let self, let item = player?.currentItem else { return }
+                            self.artworkData = data
+                            self.writeMetadata(meta, to: item)
+                        }
+                    }
+                }
+            }
+            metadataShown = meta
+            metadataItem = item
+            writeMetadata(meta, to: item)
+        }
+
+        private func writeMetadata(_ meta: NowPlayingMeta, to item: AVPlayerItem) {
+            func entry(_ identifier: AVMetadataIdentifier,
+                       _ value: NSCopying & NSObjectProtocol) -> AVMetadataItem {
+                let m = AVMutableMetadataItem()
+                m.identifier = identifier
+                m.value = value
+                m.extendedLanguageTag = "und"
+                return m
+            }
+            var items = [entry(.commonIdentifierTitle, meta.title as NSString),
+                         entry(.commonIdentifierArtist, meta.artist as NSString)]
+            if let artworkData {
+                items.append(entry(.commonIdentifierArtwork, artworkData as NSData))
+            }
+            item.externalMetadata = items
+        }
+
         deinit {
             if let obs = timeObserver { playerRef?.removeTimeObserver(obs) }
             if let stopObserver { NotificationCenter.default.removeObserver(stopObserver) }
+            artworkTask?.cancel()
         }
     }
 }
@@ -159,6 +216,8 @@ struct VideoPlayerView: View {
     /// Mode compact (chat ouvert) : masque la barre Source / le lien pour laisser
     /// un maximum de place au chat. Seul le lecteur reste visible.
     var compact: Bool = false
+    /// Titre, chaîne et image affichés sur l'écran verrouillé.
+    var nowPlaying = NowPlayingMeta()
     /// Position de lecture remontee au parent (utilisee par le chat des VODs).
     var onTime: (Double) -> Void = { _ in }
     /// Latence du direct remontee au parent (synchro auto du chat).
@@ -295,7 +354,8 @@ struct VideoPlayerView: View {
                 onLatency(measured)
             },
             lowLatency: store.lowLatency,
-            isLive: isLive
+            isLive: isLive,
+            nowPlaying: nowPlaying
         )
         .aspectRatio(16/9, contentMode: .fit)
         .background(Color.black)

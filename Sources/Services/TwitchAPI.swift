@@ -112,6 +112,75 @@ private func storyboardHack(vodId: String) async -> QualityLinks {
     return found
 }
 
+// MARK: – Worker (principal, puis secours)
+/// Workers mis de côté, jusqu'à une date : on ne retente pas à chaque requête
+/// celui qui vient de refuser. Partagé entre tâches concurrentes, d'où le verrou.
+private final class WorkerHealth {
+    static let shared = WorkerHealth()
+    private var downUntil: [String: Date] = [:]
+    private let lock = NSLock()
+
+    func isDown(_ base: String) -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        return (downUntil[base] ?? .distantPast) > Date()
+    }
+
+    func markDown(_ base: String, until: Date) {
+        lock.lock(); defer { lock.unlock() }
+        downUntil[base] = until
+    }
+}
+
+/// Minuit UTC suivant : le quota journalier de Cloudflare repart à cette heure-là.
+private func nextUTCMidnight() -> Date {
+    var cal = Calendar(identifier: .gregorian)
+    cal.timeZone = TimeZone(identifier: "UTC") ?? .current
+    let today = cal.startOfDay(for: Date())
+    return cal.date(byAdding: .day, value: 1, to: today) ?? Date().addingTimeInterval(3600)
+}
+
+/// JSON d'une route du Worker qui ne touche pas à sa base D1 (VODs, lives), en
+/// passant au Worker de secours quand le principal est hors service — quota du
+/// jour atteint : 429 « error code: 1027 », jusqu'à minuit UTC.
+/// Une réponse d'erreur du Worker lui-même (404…) n'est pas une panne : un
+/// autre Worker répondrait la même chose, on s'arrête là.
+private func workerJSON(_ path: String) async -> [String: Any]? {
+    let bases = [kAPIURL] + kAPIFallbackURLs
+    let health = WorkerHealth.shared
+    let ordered = bases.filter { !health.isDown($0) } + bases.filter { health.isDown($0) }
+    var unreachable: [String] = []
+
+    for base in ordered {
+        guard let url = URL(string: base + path) else { continue }
+        let data: Data, code: Int
+        do {
+            let (d, resp) = try await URLSession.shared.data(from: url)
+            data = d
+            code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+        } catch {
+            // Injoignable : panne du Worker, ou réseau de l'appareil. On ne le
+            // met de côté que si un autre Worker répond ensuite.
+            logger.warn("WORKER", "Worker injoignable", "\(base) — \(error.localizedDescription)")
+            unreachable.append(base)
+            continue
+        }
+        if code == 429 || (502...504).contains(code) {
+            let quota = String(data: data, encoding: .utf8)?.contains("1027") == true
+            if bases.count > 1 {
+                health.markDown(base, until: quota ? nextUTCMidnight() : Date().addingTimeInterval(30 * 60))
+            }
+            logger.warn("WORKER", quota ? "Quota du jour atteint (1027)" : "Worker indisponible (\(code))",
+                        bases.count > 1 ? "\(base) → secours" : base)
+            continue
+        }
+        for b in unreachable { health.markDown(b, until: Date().addingTimeInterval(30 * 60)) }
+        if base != kAPIURL { logger.info("WORKER", "Réponse du Worker de secours", base) }
+        guard code == 200 else { return nil }
+        return try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+    }
+    return nil
+}
+
 // MARK: – getM3U8 (VODs)
 func getM3U8(vodId: String) async -> M3U8Data {
     logger.info("M3U8", "Lancement VOD \(vodId)")
@@ -149,10 +218,7 @@ func getM3U8(vodId: String) async -> M3U8Data {
         return M3U8Data(links: sbLinks, error: nil)
     }
 
-    if let url = URL(string: "\(kAPIURL)/api/get-m3u8?id=\(vodId)&proxy=false"),
-       let (data, resp) = try? await URLSession.shared.data(from: url),
-       (resp as? HTTPURLResponse)?.statusCode == 200,
-       let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+    if let json = await workerJSON("/api/get-m3u8?id=\(vodId)&proxy=false"),
        let links = json["links"] as? QualityLinks, !links.isEmpty {
         logger.success("M3U8", "[3/3] ✅ Worker \(links.count) qualités")
         return M3U8Data(links: links, error: nil)
@@ -292,9 +358,7 @@ func getLive(channelName: String) async -> LiveData {
     // 3 - Cloudflare Worker
     if links.isEmpty && (sourcePref == "auto" || sourcePref == "cloudflare") {
         logger.info("LIVE", "Tentative Cloudflare Worker...")
-        if let url = URL(string: "\(kAPIURL)/api/get-live?name=\(login)&proxy=false"),
-           let (data, _) = try? await URLSession.shared.data(from: url),
-           let json2 = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+        if let json2 = await workerJSON("/api/get-live?name=\(login)&proxy=false"),
            let fbLinks = json2["links"] as? QualityLinks {
             links = fbLinks
             logger.success("LIVE", "✅ Cloudflare Worker : \(links.count) qualités")

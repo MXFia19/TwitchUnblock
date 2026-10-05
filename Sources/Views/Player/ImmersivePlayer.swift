@@ -1,6 +1,7 @@
 import SwiftUI
 import AVKit
 import AVFoundation
+import MediaPlayer
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  Lecteur immersif : les informations et les commandes se superposent à
@@ -24,6 +25,22 @@ struct PlayerOverlayInfo {
     var viewers: Int     = 0
     var uptime: String   = ""
     var latency: Double? = nil
+}
+
+// MARK: – Écran verrouillé
+/// Ce que l'écran verrouillé et le centre de contrôle affichent pendant la
+/// lecture : quoi, de qui, et une image.
+struct NowPlayingMeta: Equatable {
+    var title: String       = ""
+    var artist: String      = ""
+    var artworkURL: String? = nil
+    // En plus, pour la Live Activity (PlayerActivity) : un direct y montre sa
+    // catégorie, ses spectateurs et sa durée.
+    var game: String        = ""
+    var viewers: Int        = 0
+    var startedAt: Date?    = nil
+    /// « EN DIRECT », dans la langue choisie dans l'app.
+    var liveLabel: String   = "LIVE"
 }
 
 // MARK: – Surface vidéo (AVPlayerLayer)
@@ -93,6 +110,16 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
     private var lastCatchUp = Date.distantPast
     private var latency = LiveLatencyController()
 
+    // Écran verrouillé / centre de contrôle
+    private var nowPlaying = NowPlayingMeta()
+    private var artwork: MPMediaItemArtwork?
+    private var artworkTask: Task<Void, Never>?
+    private var remoteTargets: [(MPRemoteCommand, Any)] = []
+    private var lastNowPlayingUpdate = Date.distantPast
+    private var timeControlObs: NSKeyValueObservation?
+    /// Durée de VOD déjà envoyée à la Live Activity.
+    private var activityDuration: Double = 0
+
     init(url: URL, isLive: Bool, savedTime: Double,
          onProgress: @escaping (Double) -> Void,
          onLatency:  @escaping (Double?) -> Void) {
@@ -100,10 +127,27 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
         self.onProgress = onProgress
         self.onLatency  = onLatency
         super.init()
+        // Le son continue écran verrouillé et dans une autre app : sans ça,
+        // iOS mettait la vidéo en pause au verrouillage, et les commandes de
+        // l'écran verrouillé ne pouvaient rien relancer.
+        player.audiovisualBackgroundPlaybackPolicy = .continuesIfPossible
         load(url: url, seek: savedTime)
         timeObs = player.addPeriodicTimeObserver(
             forInterval: CMTime(seconds: 0.5, preferredTimescale: 600), queue: .main
         ) { [weak self] t in self?.tick(t) }
+        // Pause venue d'ailleurs (appel, casque débranché, fin de la VOD) : le
+        // bouton et l'écran verrouillé doivent la refléter, sinon il fallait
+        // appuyer deux fois sur lecture.
+        timeControlObs = player.observe(\.timeControlStatus, options: [.new]) { [weak self] p, _ in
+            DispatchQueue.main.async {
+                guard let self, p.timeControlStatus == .paused, self.isPlaying,
+                      self.player.currentItem != nil else { return }
+                self.isPlaying = false
+                self.refreshNowPlaying(force: true)
+                self.updateActivity()
+            }
+        }
+        setupRemoteCommands()
     }
 
     func load(url: URL, seek: Double = 0, isLive: Bool? = nil) {
@@ -122,6 +166,8 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
         player.play()
         isPlaying = true
         lastCatchUp = Date()   // laisse le flux démarrer avant tout rattrapage
+        refreshNowPlaying(force: true)
+        updateActivity()
     }
 
     private func applyPendingSeek(on item: AVPlayerItem) {
@@ -158,6 +204,13 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
             position = t.seconds
             onProgress(position)
         }
+        refreshNowPlaying()
+        // Durée d'une VOD connue après coup : la barre de la Live Activity en a
+        // besoin. Celle d'un enregistrement en cours grandit sans cesse : on ne
+        // la renvoie que par paliers d'une minute.
+        if !isLive, endTime > 0, activityDuration == 0 || abs(endTime - activityDuration) > 60 {
+            updateActivity()
+        }
 
         // Latence : écart entre l'heure réelle et l'horodatage du segment lu.
         currentDate = item.currentDate()
@@ -181,9 +234,13 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
 
     var atLiveEdge: Bool { isLive && (endTime - position) < 12 }
 
-    func togglePlay() {
-        if isPlaying { player.pause() } else { player.play() }
-        isPlaying.toggle()
+    func togglePlay() { setPlaying(!isPlaying) }
+
+    func setPlaying(_ on: Bool) {
+        if on { player.play() } else { player.pause() }
+        isPlaying = on
+        refreshNowPlaying(force: true)
+        updateActivity()
     }
 
     func seek(to s: Double, exact: Bool = true) {
@@ -193,6 +250,8 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
                     toleranceBefore: exact ? .zero : .positiveInfinity,
                     toleranceAfter:  exact ? .zero : .positiveInfinity)
         position = clamped
+        refreshNowPlaying(force: true)
+        updateActivity()
     }
 
     func seekBy(_ delta: Double) { seek(to: position + delta) }
@@ -221,13 +280,108 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
     func teardown() {
         if let o = timeObs { player.removeTimeObserver(o); timeObs = nil }
         statusObs = nil
+        timeControlObs = nil
         pendingSeek = nil
         player.pause()
         player.replaceCurrentItem(with: nil)
         pip = nil
+        clearNowPlaying()
     }
 
-    deinit { if let o = timeObs { player.removeTimeObserver(o) } }
+    deinit {
+        if let o = timeObs { player.removeTimeObserver(o) }
+        for (command, target) in remoteTargets { command.removeTarget(target) }
+    }
+
+    // MARK: Écran verrouillé / centre de contrôle
+    /// Lecture, pause et sauts de ±10 s depuis l'écran verrouillé, le centre de
+    /// contrôle ou des écouteurs ; position réglable sur une VOD.
+    private func setupRemoteCommands() {
+        let center = MPRemoteCommandCenter.shared()
+        func add(_ command: MPRemoteCommand,
+                 _ handler: @escaping (MPRemoteCommandEvent) -> MPRemoteCommandHandlerStatus) {
+            command.isEnabled = true
+            remoteTargets.append((command, command.addTarget(handler: handler)))
+        }
+        add(center.playCommand)  { [weak self] _ in self?.setPlaying(true);  return .success }
+        add(center.pauseCommand) { [weak self] _ in self?.setPlaying(false); return .success }
+        add(center.togglePlayPauseCommand) { [weak self] _ in self?.togglePlay(); return .success }
+        center.skipBackwardCommand.preferredIntervals = [10]
+        center.skipForwardCommand.preferredIntervals  = [10]
+        add(center.skipBackwardCommand) { [weak self] _ in self?.seekBy(-10); return .success }
+        add(center.skipForwardCommand)  { [weak self] _ in self?.seekBy(10);  return .success }
+        add(center.changePlaybackPositionCommand) { [weak self] event in
+            guard let self, !self.isLive,
+                  let e = event as? MPChangePlaybackPositionCommandEvent else { return .commandFailed }
+            self.seek(to: e.positionTime)
+            return .success
+        }
+    }
+
+    /// Titre, chaîne et image : l'image est téléchargée une fois par adresse.
+    func setNowPlaying(_ meta: NowPlayingMeta) {
+        guard meta != nowPlaying else { return }
+        let newArtwork = meta.artworkURL != nowPlaying.artworkURL
+        nowPlaying = meta
+        if newArtwork { loadArtwork(meta.artworkURL) }
+        refreshNowPlaying(force: true)
+        updateActivity()
+    }
+
+    /// Live Activity : mêmes infos, plus l'état de la lecture. PlayerActivity
+    /// n'envoie que ce qui change à l'écran.
+    private func updateActivity() {
+        activityDuration = isLive ? 0 : endTime
+        PlayerActivity.update(nowPlaying, isLive: isLive, isPlaying: isPlaying,
+                              position: position, duration: activityDuration)
+    }
+
+    private func loadArtwork(_ address: String?) {
+        artworkTask?.cancel()
+        artwork = nil
+        guard let address, let url = URL(string: address) else { return }
+        artworkTask = Task { [weak self] in
+            guard let (data, _) = try? await URLSession.shared.data(from: url),
+                  let image = UIImage(data: data), !Task.isCancelled else { return }
+            await MainActor.run {
+                guard let self else { return }
+                self.artwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
+                self.refreshNowPlaying(force: true)
+            }
+        }
+    }
+
+    /// iOS fait avancer seul le temps affiché à partir de la vitesse : on ne
+    /// réécrit qu'aux changements d'état, et toutes les 5 s contre la dérive.
+    private func refreshNowPlaying(force: Bool = false) {
+        guard !nowPlaying.title.isEmpty || !nowPlaying.artist.isEmpty, player.currentItem != nil else { return }
+        guard force || Date().timeIntervalSince(lastNowPlayingUpdate) > 5 else { return }
+        lastNowPlayingUpdate = Date()
+        var info: [String: Any] = [
+            MPMediaItemPropertyTitle: nowPlaying.title,
+            MPMediaItemPropertyArtist: nowPlaying.artist,
+            MPNowPlayingInfoPropertyPlaybackRate: isPlaying ? 1.0 : 0.0,
+            MPNowPlayingInfoPropertyIsLiveStream: isLive,
+            MPNowPlayingInfoPropertyMediaType: MPNowPlayingInfoMediaType.video.rawValue,
+        ]
+        // Un direct n'a pas de durée : l'écran verrouillé affiche « EN DIRECT »
+        // sans barre de progression.
+        if !isLive, endTime > 0 {
+            info[MPMediaItemPropertyPlaybackDuration] = endTime
+            info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = position
+        }
+        if let artwork { info[MPMediaItemPropertyArtwork] = artwork }
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+        MPRemoteCommandCenter.shared().changePlaybackPositionCommand.isEnabled = !isLive
+    }
+
+    private func clearNowPlaying() {
+        for (command, target) in remoteTargets { command.removeTarget(target) }
+        remoteTargets.removeAll()
+        artworkTask?.cancel()
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+        PlayerActivity.end()
+    }
 }
 
 extension ImmersivePlayerModel: AVPictureInPictureControllerDelegate {
@@ -277,6 +431,8 @@ struct ImmersivePlayer: View {
     /// Rembobinage au-delà de la fenêtre DVR : le direct ne sait pas y aller,
     /// on bascule sur l'enregistrement à ce nombre de secondes du début.
     var onSeekToArchive: (Double) -> Void = { _ in }
+    /// Titre, chaîne et image affichés sur l'écran verrouillé.
+    var nowPlaying = NowPlayingMeta()
 
     var onProgress: (Double) -> Void = { _ in }
     var onLatency:  (Double?) -> Void = { _ in }
@@ -307,6 +463,17 @@ struct ImmersivePlayer: View {
     @State private var seekResetTask: Task<Void, Never>? = nil
     /// Liste des chapitres ouverte (feuille : ne se referme pas toute seule).
     @State private var showChapters = false
+    /// Largeur de la bulle du temps visé, mesurée : elle la garde dans la barre
+    /// près des bords.
+    @State private var bubbleWidth: CGFloat = 0
+    /// Zoom à deux doigts sur l'image (1 = taille normale) et décalage de
+    /// l'image agrandie. Les valeurs « base » sont celles d'avant le geste en
+    /// cours, qui s'y ajoute.
+    @State private var zoom: CGFloat = 1
+    @State private var zoomBase: CGFloat = 1
+    @State private var pan: CGSize = .zero
+    @State private var panBase: CGSize = .zero
+    @State private var surfaceSize: CGSize = .zero
 
     init(url: URL, isLive: Bool, dvrEnabled: Bool, savedTime: Double,
          info: PlayerOverlayInfo,
@@ -320,6 +487,7 @@ struct ImmersivePlayer: View {
          streamStartedAt: Date? = nil,
          archiveAvailable: Bool = false,
          chapters: [VodChapter] = [],
+         nowPlaying: NowPlayingMeta = NowPlayingMeta(),
          onProgress: @escaping (Double) -> Void = { _ in },
          onLatency:  @escaping (Double?) -> Void = { _ in },
          onReduce:   @escaping () -> Void = {},
@@ -337,7 +505,7 @@ struct ImmersivePlayer: View {
         self.isLandscape = isLandscape; self.controlsInset = controlsInset
         self.fillScreen = fillScreen; self.canReturnToLive = canReturnToLive
         self.streamStartedAt = streamStartedAt; self.archiveAvailable = archiveAvailable
-        self.chapters = chapters
+        self.chapters = chapters; self.nowPlaying = nowPlaying
         self.onReduce = onReduce; self.onClose = onClose
         self.onMenu = onMenu; self.onRefresh = onRefresh
         self.onToggleChat = onToggleChat; self.onSleep = onSleep
@@ -403,8 +571,24 @@ struct ImmersivePlayer: View {
 
     var body: some View {
         ZStack {
-            PlayerLayerView(player: model.player, fill: croppingFill) { layer in
-                model.attachPiP(layer: layer)
+            // Surface vidéo, agrandie et déplacée par le zoom à deux doigts.
+            // Rognée à sa propre boîte : agrandie, l'image débordait sinon sur
+            // le chat en portrait. Cette boîte ignore déjà la zone sûre en
+            // paysage (plus bas) : « remplir l'écran » n'y perd rien.
+            GeometryReader { geo in
+                PlayerLayerView(player: model.player, fill: croppingFill) { layer in
+                    model.attachPiP(layer: layer)
+                }
+                .scaleEffect(zoom)
+                .offset(pan)
+                .frame(width: geo.size.width, height: geo.size.height)
+                .clipped()
+                .onAppear { surfaceSize = geo.size }
+                .onChange(of: geo.size) { size in
+                    surfaceSize = size
+                    pan = clampedPan(pan)
+                    panBase = pan
+                }
             }
             // En paysage la surface va toujours jusqu'aux bords physiques,
             // encoche comprise : sans ça une bande noire restait collée à
@@ -447,15 +631,24 @@ struct ImmersivePlayer: View {
         // image à ses propres limites, y compris en `resizeAspectFill`.
         .contentShape(Rectangle())
         .onTapGesture { toggleControls() }
+        // Zoom à deux doigts, comme sur l'app Twitch ; une fois agrandie,
+        // l'image se déplace au doigt. Le déplacement ne s'active qu'en zoom :
+        // à taille normale, glisser ne doit rien faire.
+        .simultaneousGesture(zoomGesture)
+        .gesture(panGesture, including: zoom > 1 ? .all : .subviews)
         // Changement de source (direct ↔ enregistrement) : la position voulue
         // et la nature du flux doivent suivre. Sans elles, basculer sur
         // l'enregistrement rouvrait la VOD à 0:00 — il fallait re-balayer la
         // barre — et le modèle continuait de se croire en direct.
         .onChange(of: url) { model.load(url: $0, seek: savedTime, isLive: isLive) }
+        // La boîte change du tout au tout : on repart de l'image entière.
+        .onChange(of: isLandscape) { _ in resetZoom() }
         .onAppear {
             model.lowLatency = store.lowLatency && isLive
+            model.setNowPlaying(nowPlaying)
             scheduleAutoHide()
         }
+        .onChange(of: nowPlaying) { model.setNowPlaying($0) }
         .onChange(of: store.lowLatency) { model.lowLatency = $0 && isLive }
         .onDisappear {
             hideTask?.cancel()
@@ -658,6 +851,13 @@ struct ImmersivePlayer: View {
                     }
                     .allowsHitTesting(false)
                 }
+                // Instant visé, compté depuis le début du live (comme la durée).
+                .overlay {
+                    if dragging {
+                        scrubBubble(fraction: dragValue / max(span.total, 1),
+                                    label: timeLabel(dragValue))
+                    }
+                }
 
             } else if canScrub, model.endTime > model.startTime {
                 // Même gel des bornes : sur un direct sans enregistrement, la
@@ -703,6 +903,16 @@ struct ImmersivePlayer: View {
                         .allowsHitTesting(false)
                     }
                 }
+                // Instant visé : la position dans la VOD (et son chapitre), ou
+                // le retard sur le direct quand on remonte sa fenêtre.
+                .overlay {
+                    if dragging {
+                        let range = max(bounds.upperBound - bounds.lowerBound, 1)
+                        scrubBubble(fraction: (dragValue - bounds.lowerBound) / range,
+                                    label: isLive ? "−\(timeLabel(bounds.upperBound - dragValue))"
+                                                  : scrubLabel(dragValue))
+                    }
+                }
 
             } else if canScrub {
                 // Bornes encore inconnues — le temps qu'une nouvelle source se
@@ -738,9 +948,11 @@ struct ImmersivePlayer: View {
                                     text: String(format: "%.0f s", max(0, l)))
                     }
                 } else {
-                    Text("\(timeLabel(model.position)) / \(timeLabel(model.endTime))")
+                    // Pendant un glissement, l'instant visé plutôt que la
+                    // position courante (en violet : ce n'est pas encore lu).
+                    Text("\(timeLabel(dragging ? dragValue : model.position)) / \(timeLabel(model.endTime))")
                         .font(.system(size: 12, weight: .semibold).monospacedDigit())
-                        .foregroundColor(.white)
+                        .foregroundColor(dragging ? .tPurple : .white)
                     // Chapitre en cours ; un appui liste les chapitres pour y sauter.
                     if chapters.count > 1 {
                         Button {
@@ -828,12 +1040,7 @@ struct ImmersivePlayer: View {
     }
 
     // MARK: – Briques d'interface
-    @ViewBuilder
-    private var currentChapter: VodChapter? {
-        var found: VodChapter? = nil
-        for c in chapters where c.start <= model.position + 0.5 { found = c }
-        return found
-    }
+    private var currentChapter: VodChapter? { chapter(at: model.position) }
 
     private func overlayButton(icon: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
@@ -855,6 +1062,96 @@ struct ImmersivePlayer: View {
         }
         .foregroundColor(.white.opacity(0.85))
         .fixedSize()
+    }
+
+    /// Bulle au-dessus du curseur pendant un glissement : l'instant visé. Avant,
+    /// rien ne l'indiquait — le compteur gardait la position courante — et on
+    /// cherchait le bon moment à l'aveugle. `fraction` : place sur la barre (0…1).
+    private func scrubBubble(fraction: Double, label: String) -> some View {
+        GeometryReader { geo in
+            // Le curseur du Slider s'arrête à une demi-largeur de pouce des bords.
+            let inset: CGFloat = 14
+            let x = inset + CGFloat(min(max(fraction, 0), 1)) * max(1, geo.size.width - inset * 2)
+            // Bornée par sa propre largeur : près des bords, la bulle reste
+            // entière au lieu de sortir de l'écran.
+            let half = min(bubbleWidth / 2, geo.size.width / 2)
+            Text(label)
+                .font(.system(size: 14, weight: .bold).monospacedDigit())
+                .foregroundColor(.white)
+                .lineLimit(1)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(Color.black.opacity(0.8))
+                .clipShape(Capsule())
+                .fixedSize()
+                .background(GeometryReader { g in
+                    Color.clear.preference(key: BubbleWidthKey.self, value: g.size.width)
+                })
+                .position(x: min(max(x, half), geo.size.width - half), y: -18)
+        }
+        .onPreferenceChange(BubbleWidthKey.self) { bubbleWidth = $0 }
+        .allowsHitTesting(false)
+    }
+
+    /// « 1:23:45 · Just Chatting » : l'instant, et le chapitre où il tombe.
+    private func scrubLabel(_ t: Double) -> String {
+        guard chapters.count > 1, let c = chapter(at: t) else { return timeLabel(t) }
+        let title = c.title.count > 28 ? String(c.title.prefix(27)) + "…" : c.title
+        return "\(timeLabel(t)) · \(title)"
+    }
+
+    private func chapter(at t: Double) -> VodChapter? {
+        var found: VodChapter? = nil
+        for c in chapters where c.start <= t + 0.5 { found = c }
+        return found
+    }
+
+    // MARK: – Zoom à deux doigts
+    private var zoomGesture: some Gesture {
+        MagnificationGesture()
+            .onChanged { value in
+                zoom = min(max(zoomBase * value, 1), 4)
+                pan = clampedPan(pan)
+            }
+            .onEnded { _ in
+                // Rapetissée jusqu'au bout, l'image reprend sa place.
+                if zoom < 1.05 {
+                    resetZoom()
+                } else {
+                    zoomBase = zoom
+                    panBase = pan
+                    flash(String(format: "%.1f×", Double(zoom)))
+                }
+            }
+    }
+
+    private var panGesture: some Gesture {
+        DragGesture(minimumDistance: 8)
+            .onChanged { value in
+                // Un glissement sur la barre de lecture ne déplace pas l'image.
+                guard !dragging else { return }
+                pan = clampedPan(CGSize(width: panBase.width + value.translation.width,
+                                        height: panBase.height + value.translation.height))
+            }
+            .onEnded { _ in panBase = pan }
+    }
+
+    /// L'image agrandie ne laisse jamais apparaître de vide : le décalage est
+    /// borné à ce qui dépasse de la boîte.
+    private func clampedPan(_ p: CGSize) -> CGSize {
+        let maxX = surfaceSize.width  * (zoom - 1) / 2
+        let maxY = surfaceSize.height * (zoom - 1) / 2
+        return CGSize(width:  min(max(p.width,  -maxX), maxX),
+                      height: min(max(p.height, -maxY), maxY))
+    }
+
+    private func resetZoom() {
+        withAnimation(.easeOut(duration: 0.2)) {
+            zoom = 1
+            pan = .zero
+        }
+        zoomBase = 1
+        panBase = .zero
     }
 
     /// Moitié d'écran qui recule ou avance de 10 s au double-tap.
@@ -931,6 +1228,14 @@ struct ImmersivePlayer: View {
         // Sans ça, iOS peut garder l'ancienne orientation tant qu'aucune vue
         // ne redemande la mise à jour.
         UIViewController.attemptRotationToDeviceOrientation()
+    }
+}
+
+/// Largeur mesurée de la bulle du temps visé (voir `scrubBubble`).
+private struct BubbleWidthKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
     }
 }
 

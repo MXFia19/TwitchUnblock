@@ -12,6 +12,8 @@ on:
     # source apps.json, auth.html ou le dossier worker ne déclenchent rien.
     paths:
       - 'Sources/**'
+      - 'Shared/**'
+      - 'Widgets/**'
       - 'Info.plist'
       - 'project.yml'
       - 'VERSION'
@@ -49,7 +51,7 @@ jobs:
           SINCE=$(git log -1 --format=%H -- VERSION)
           if [ -n "$SINCE" ]; then
             # Seuls les commits qui touchent l'app comptent (pas les README…).
-            PATCH=$(git rev-list --count "$SINCE"..HEAD -- Sources Info.plist project.yml buildipa.sh assets/icon.png)
+            PATCH=$(git rev-list --count "$SINCE"..HEAD -- Sources Shared Widgets Info.plist project.yml buildipa.sh assets/icon.png)
           else
             PATCH=${{ github.run_number }}
           fi
@@ -96,10 +98,14 @@ jobs:
         run: |
           echo "--- Préparation du project.yml pour l'icône ---"
           if [ -f "project.yml" ]; then
-            sed -i '' "s/PRODUCT_NAME: TwitchUnblock/PRODUCT_NAME: TwitchUnblock\n        MARKETING_VERSION: ${{ steps.vars.outputs.version }}\n        CURRENT_PROJECT_VERSION: ${{ github.run_number }}\n        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon/g" project.yml
+            # Ancré en fin de ligne : sans `$`, la cible TwitchUnblockWidgets
+            # (même début de nom) recevait aussi ces réglages, et son nom.
+            sed -i '' "s/PRODUCT_NAME: TwitchUnblock$/PRODUCT_NAME: TwitchUnblock\n        MARKETING_VERSION: ${{ steps.vars.outputs.version }}\n        CURRENT_PROJECT_VERSION: ${{ github.run_number }}\n        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon/g" project.yml
             # Build de test : identifiant à part, installé à côté de l'app normale.
+            # L'extension suit : son identifiant doit commencer par celui de l'app.
             if [ "${{ steps.vars.outputs.channel }}" = "test" ]; then
               sed -i '' "s/PRODUCT_BUNDLE_IDENTIFIER: com.mxfia19.TwitchUnblock$/PRODUCT_BUNDLE_IDENTIFIER: com.mxfia19.TwitchUnblock.test/" project.yml
+              sed -i '' "s/PRODUCT_BUNDLE_IDENTIFIER: com.mxfia19.TwitchUnblock.Widgets$/PRODUCT_BUNDLE_IDENTIFIER: com.mxfia19.TwitchUnblock.test.Widgets/" project.yml
             fi
           fi
 
@@ -111,25 +117,33 @@ jobs:
       - name: Post-Generation Fix (Anti-Black Bars, Identity & PiP)
         run: |
           echo "--- Fix Info.plist (Plein écran, ID, Version, PiP) ---"
+          # L'Info.plist de l'app seulement. Avant, `find . -name Info.plist`
+          # les prenait tous : celui de l'extension des Live Activities aurait
+          # reçu l'identifiant de l'app, et iOS refuse alors l'installation.
+          APP_PLIST=./Info.plist
+          EXT_PLIST=./Widgets/Info.plist
           # Identifiants et version
           if [ "${{ steps.vars.outputs.channel }}" = "test" ]; then
-            find . -name "Info.plist" -exec plutil -replace CFBundleIdentifier -string "com.mxfia19.TwitchUnblock.test" {} \;
-            find . -name "Info.plist" -exec plutil -replace CFBundleDisplayName -string "TU Test" {} \;
+            plutil -replace CFBundleIdentifier -string "com.mxfia19.TwitchUnblock.test" "$APP_PLIST"
+            plutil -replace CFBundleDisplayName -string "TU Test" "$APP_PLIST"
           else
-            find . -name "Info.plist" -exec plutil -replace CFBundleIdentifier -string "com.mxfia19.TwitchUnblock" {} \;
+            plutil -replace CFBundleIdentifier -string "com.mxfia19.TwitchUnblock" "$APP_PLIST"
           fi
           # Canal lu par l'app : source de mises à jour (apps.json ou apps-test.json).
-          find . -name "Info.plist" -exec plutil -replace TUChannel -string "${{ steps.vars.outputs.channel }}" {} \;
-          find . -name "Info.plist" -exec plutil -replace CFBundleShortVersionString -string "${{ steps.vars.outputs.version }}" {} \;
-          find . -name "Info.plist" -exec plutil -replace CFBundleVersion -string "${{ github.run_number }}" {} \;
-          find . -name "Info.plist" -exec plutil -replace CFBundleIconName -string "AppIcon" {} \;
-          
+          plutil -replace TUChannel -string "${{ steps.vars.outputs.channel }}" "$APP_PLIST"
+          # Même version pour l'app et son extension (iOS l'exige).
+          for P in "$APP_PLIST" "$EXT_PLIST"; do
+            plutil -replace CFBundleShortVersionString -string "${{ steps.vars.outputs.version }}" "$P"
+            plutil -replace CFBundleVersion -string "${{ github.run_number }}" "$P"
+          done
+          plutil -replace CFBundleIconName -string "AppIcon" "$APP_PLIST"
+
           # Force le plein écran sans bandes noires
-          find . -name "Info.plist" -exec plutil -remove UILaunchStoryboardName {} \; || true
-          find . -name "Info.plist" -exec plutil -replace UILaunchScreen -xml "<dict/>" {} \;
-          
+          plutil -remove UILaunchStoryboardName "$APP_PLIST" || true
+          plutil -replace UILaunchScreen -xml "<dict/>" "$APP_PLIST"
+
           # ✨ RÉPARATION DU PIP ET DE L'AUDIO EN ARRIÈRE-PLAN
-          find . -name "Info.plist" -exec plutil -replace UIBackgroundModes -json '["audio","fetch"]' {} \;
+          plutil -replace UIBackgroundModes -json '["audio","fetch"]' "$APP_PLIST"
 
       - name: Make build script executable
         run: chmod +x ./buildipa.sh
@@ -150,7 +164,9 @@ jobs:
           # Notes de version : les commits qui touchent l'app depuis le build
           # précédent de ce canal (commit gardé dans la source). Une ligne
           # « Changelog: … » dans le corps d'un commit remplace son titre ;
-          # les commits automatiques « [skip ci] » sont ignorés.
+          # les commits automatiques « [skip ci] » sont ignorés, ainsi que ceux
+          # listés dans .github/changelog-ignore (une fonction ajoutée puis
+          # retirée ne doit pas être annoncée).
           python3 - <<'PY'
           import json, os, subprocess
           src = os.environ['SOURCE']
@@ -159,18 +175,25 @@ jobs:
               prev = json.load(open(src))['apps'][0]['versions'][0].get('commit')
           except Exception:
               pass
+          ignored = []
+          try:
+              ignored = [l.split()[0] for l in open('.github/changelog-ignore')
+                         if l.strip() and not l.lstrip().startswith('#')]
+          except FileNotFoundError:
+              pass
           def is_ancestor(c):
               return subprocess.run(['git', 'merge-base', '--is-ancestor', c, 'HEAD'], capture_output=True).returncode == 0
-          args = ['git', 'log', '--no-merges', '--format=%s%x1f%b%x1e']
+          args = ['git', 'log', '--no-merges', '--format=%H%x1f%s%x1f%b%x1e']
           args += [f'{prev}..HEAD'] if prev and is_ancestor(prev) else ['-n', '8']
-          args += ['--', 'Sources', 'Info.plist', 'project.yml', 'buildipa.sh', 'assets/icon.png']
+          args += ['--', 'Sources', 'Shared', 'Widgets', 'Info.plist', 'project.yml', 'buildipa.sh', 'assets/icon.png']
           out = subprocess.run(args, capture_output=True, text=True).stdout
           lines = []
           for rec in out.split('\x1e'):
               if not rec.strip():
                   continue
-              subject, _, body = rec.strip('\n').partition('\x1f')
-              if '[skip ci]' in subject:
+              sha, _, rest = rec.strip('\n').partition('\x1f')
+              subject, _, body = rest.partition('\x1f')
+              if '[skip ci]' in subject or any(sha.startswith(i) for i in ignored):
                   continue
               custom = [l.split(':', 1)[1].strip() for l in body.splitlines() if l.lower().startswith('changelog:')]
               for item in (custom or [subject.strip()]):

@@ -47,6 +47,10 @@
         <string>fetch</string>
     </array>
 
+    <!-- ── Live Activity du lecteur (extension TwitchUnblockWidgets) ── -->
+    <key>NSSupportsLiveActivities</key>
+    <true/>
+
     <!-- ── External app URL schemes (canOpenURL whitelist) ────── -->
     <key>LSApplicationQueriesSchemes</key>
     <array>

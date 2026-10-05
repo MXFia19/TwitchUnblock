@@ -22,6 +22,13 @@ targets:
 
     sources:
       - path: Sources
+      # Type de la Live Activity, compilé aussi dans l'extension.
+      - path: Shared
+
+    # Extension des Live Activities, copiée dans l'app (PlugIns).
+    dependencies:
+      - target: TwitchUnblockWidgets
+        codeSign: false
 
     # Pas de bloc `info:` : xcodegen réécrirait Info.plist avec un fichier
     # minimal et ferait disparaître nos clés (tâche d'arrière-plan des
@@ -40,3 +47,37 @@ targets:
         CODE_SIGN_ENTITLEMENTS: ""
         DEVELOPMENT_TEAM: ""
         UILaunchStoryboardName: "LaunchScreen"
+        # ActivityKit n'existe qu'à partir d'iOS 16.1 : lien faible, sinon
+        # l'app ne se lancerait plus du tout sur iOS 16.0.
+        OTHER_LDFLAGS: "$(inherited) -weak_framework ActivityKit"
+
+  # Live Activity du lecteur (écran verrouillé, Dynamic Island). iOS 16.2
+  # minimum : l'app, elle, reste en 16.0 et s'en passe en dessous.
+  TwitchUnblockWidgets:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "16.2"
+
+    sources:
+      - path: Widgets
+        excludes:
+          - Info.plist
+      - path: Shared
+
+    settings:
+      base:
+        # Doit commencer par l'identifiant de l'app (la CI ajoute « .test »
+        # aux deux pour le build de test).
+        PRODUCT_BUNDLE_IDENTIFIER: com.mxfia19.TwitchUnblock.Widgets
+        PRODUCT_NAME: TwitchUnblockWidgets
+        INFOPLIST_FILE: Widgets/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        SWIFT_VERSION: 5.9
+        APPLICATION_EXTENSION_API_ONLY: YES
+        SKIP_INSTALL: YES
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: ""
+        CODE_SIGNING_REQUIRED: NO
+        CODE_SIGNING_ALLOWED: NO
+        CODE_SIGN_ENTITLEMENTS: ""
+        DEVELOPMENT_TEAM: ""

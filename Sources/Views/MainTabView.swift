@@ -100,6 +100,35 @@ struct MainTabView: View {
         )
     }
 
+    /// Écran verrouillé, centre de contrôle et Live Activity : quoi, de qui, et
+    /// une image — l'aperçu du direct, la miniature de la VOD, sinon l'avatar.
+    /// Un direct y ajoute sa catégorie, ses spectateurs et son heure de début.
+    private var nowPlayingMeta: NowPlayingMeta {
+        switch playerMode {
+        case .live(let channel)?:
+            return NowPlayingMeta(
+                title: statusTitle.isEmpty ? channel : statusTitle,
+                artist: channel,
+                artworkURL: "https://static-cdn.jtvnw.net/previews-ttv/live_user_\(channel.lowercased())-640x360.jpg",
+                game: liveGame,
+                viewers: liveViewerCount,
+                startedAt: liveStartedAt,
+                liveLabel: store.t("live_on"))
+        case .vod(_, let title, let thumb, let streamer)?:
+            return NowPlayingMeta(title: title ?? statusTitle,
+                                  artist: streamer ?? currentChannelName ?? "",
+                                  artworkURL: thumb ?? liveAvatar,
+                                  liveLabel: store.t("live_on"))
+        case .clip(_, let title)?:
+            return NowPlayingMeta(title: title ?? statusTitle,
+                                  artist: currentChannelName ?? "",
+                                  artworkURL: liveAvatar,
+                                  liveLabel: store.t("live_on"))
+        case nil:
+            return NowPlayingMeta()
+        }
+    }
+
     /// Chaîne de ce qu'on regarde (direct, ou streamer de la VOD) : pour ouvrir
     /// sa page en touchant le pseudo.
     private var playerChannelLogin: String? {
@@ -549,6 +578,7 @@ struct MainTabView: View {
                 streamStartedAt: liveStartedAt,
                 archiveAvailable: liveDvrVideoId != nil,
                 chapters: vodChapters,
+                nowPlaying: nowPlayingMeta,
                 onProgress: { time in
                     // Pendant une bascule, `playerMode` désigne déjà la
                     // nouvelle source alors que le lecteur en place joue encore
@@ -584,6 +614,7 @@ struct MainTabView: View {
                 vodId: currentVodId,
                 compact: false,  // garde qualité / rembobiner ; le bouton Chat, lui,
                                  // n'a plus lieu d'être (le chat est toujours affiché)
+                nowPlaying: nowPlayingMeta,
                 onTime: { vodPlaybackTime = $0 },
                 onLatency: { updateLatency($0) },
                 onChat: nil,
@@ -739,10 +770,14 @@ struct MainTabView: View {
         .cornerRadius(TRadius.card)
         .overlay(RoundedRectangle(cornerRadius: TRadius.card)
             .stroke(Color.tPrimary.opacity(0.4), lineWidth: 1))
-        .padding(.horizontal, TSpace.md)
-        .padding(.bottom, 92)
+        // La zone tactile est fixée AVANT les marges : sinon le rectangle
+        // tactile englobait les 92 pt de marge basse, qui recouvrent la barre
+        // d'onglets — appuyer sur « Recherche » ou « VODs » rouvrait le lecteur
+        // en plein écran au lieu de changer d'onglet.
         .contentShape(Rectangle())
         .onTapGesture { withAnimation { playerVisible = true } }
+        .padding(.horizontal, TSpace.md)
+        .padding(.bottom, 92)
     }
 
     // MARK: – Playback

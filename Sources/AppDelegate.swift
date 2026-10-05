@@ -12,6 +12,8 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         // Notifications de live : tâche d'arrière-plan et réception des touches.
         LiveNotifier.register()
         UNUserNotificationCenter.current().delegate = self
+        // Live Activity restée d'une session précédente (app tuée en lecture).
+        PlayerActivity.endOthers()
         return true
     }
 
@@ -39,6 +41,10 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
     /// changement d'app (ou du PiP) rechargerait tout pour rien.
     func applicationWillTerminate(_ application: UIApplication) {
         ImageCache.shared.purgeIfNeeded()
+        // L'app fermée, la lecture s'arrête : sa Live Activity aussi, sinon
+        // iOS la laisserait affichée des heures.
+        PlayerActivity.end()
+        PlayerActivity.endOthers(wait: true)
     }
 
     private func configureAudioSession() {

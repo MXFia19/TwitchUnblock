@@ -21,6 +21,51 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.2.8",
+          "buildVersion": "226",
+          "date": "2026-10-05",
+          "localizedDescription": "- Live Activity: the stream you are watching on the lock screen and in the Dynamic Island, with viewers and uptime, or the VOD's progress.",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-226/TwitchUnblock.ipa",
+          "size": 1809743,
+          "commit": "59d5e502f7d9c1641c911996a1e116a2937ace76"
+        },
+        {
+          "version": "1.2.7",
+          "buildVersion": "225",
+          "date": "2026-10-05",
+          "localizedDescription": "- Ready to switch VODs and lives to a backup server when the main one reaches its daily limit.\n- Seek bar: while dragging, a bubble shows the exact time you are seeking to (and the chapter on VODs).\n- Pinch with two fingers to zoom into the video, then drag to move around; pinch out to reset.\n- Lock screen and Control Center: title, channel and picture, with play/pause and ±10 s controls. Audio keeps playing when the phone is locked.",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-225/TwitchUnblock.ipa",
+          "size": 1733170,
+          "commit": "ee34401ebbdb21db777c00cbee38f1af22d3f799"
+        },
+        {
+          "version": "1.2.5",
+          "buildVersion": "224",
+          "date": "2026-10-05",
+          "localizedDescription": "- Retrait du secours VODs abonnés/masquées (option A)",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-224/TwitchUnblock.ipa",
+          "size": 1707923,
+          "commit": "ef44a116eaa26a6046bb7518d7fbce687a6a75d8"
+        },
+        {
+          "version": "1.2.4",
+          "buildVersion": "223",
+          "date": "2026-10-04",
+          "localizedDescription": "- More subscriber-only or hidden VODs now play: the fallback finds the video even when Twitch no longer provides its usual preview.",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-223/TwitchUnblock.ipa",
+          "size": 1708891,
+          "commit": "8d337bbbb1692840b0ca64c49efeda9efed6c69e"
+        },
+        {
+          "version": "1.2.3",
+          "buildVersion": "222",
+          "date": "2026-10-04",
+          "localizedDescription": "- Minimized player: tapping the Search or VODs tab no longer re-opens the player full screen.",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-222/TwitchUnblock.ipa",
+          "size": 1707923,
+          "commit": "d716dee6593d036cecbc64595f2903341ad4475d"
+        },
+        {
           "version": "1.2.2",
           "buildVersion": "220",
           "date": "2026-10-04",
@@ -88,10 +133,10 @@
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.2.2",
-      "versionDate": "2026-10-04",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-220/TwitchUnblock.ipa",
-      "size": 1707540
+      "version": "1.2.8",
+      "versionDate": "2026-10-05",
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-226/TwitchUnblock.ipa",
+      "size": 1809743
     }
   ],
   "news": []

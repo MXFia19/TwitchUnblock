@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.2.9",
+          "buildVersion": "228",
+          "date": "2026-10-05",
+          "localizedDescription": "- If the main server reaches its daily limit, VODs and lives switch to a backup server automatically.\n- Live Activity: the stream you are watching on the lock screen and in the Dynamic Island, with viewers and uptime, or the VOD's progress.\n- Seek bar: while dragging, a bubble shows the exact time you are seeking to (and the chapter on VODs).\n- Pinch with two fingers to zoom into the video, then drag to move around; pinch out to reset.\n- Lock screen and Control Center: title, channel and picture, with play/pause and ±10 s controls. Audio keeps playing when the phone is locked.\n- Minimized player: tapping the Search or VODs tab no longer re-opens the player full screen.",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/nightly-228/TwitchUnblock.ipa",
+          "size": 1809240,
+          "commit": "23e8cae3e8ff4cee0014433e8a7ea5fcb1d953a1"
+        },
+        {
           "version": "1.2.2",
           "buildVersion": "221",
           "date": "2026-10-04",
@@ -69,10 +78,10 @@
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.2.2",
-      "versionDate": "2026-10-04",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/nightly-221/TwitchUnblock.ipa",
-      "size": 1707520
+      "version": "1.2.9",
+      "versionDate": "2026-10-05",
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/nightly-228/TwitchUnblock.ipa",
+      "size": 1809240
     }
   ],
   "news": []

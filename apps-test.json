@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.2.7",
+          "buildVersion": "225",
+          "date": "2026-10-05",
+          "localizedDescription": "- Ready to switch VODs and lives to a backup server when the main one reaches its daily limit.\n- Seek bar: while dragging, a bubble shows the exact time you are seeking to (and the chapter on VODs).\n- Pinch with two fingers to zoom into the video, then drag to move around; pinch out to reset.\n- Lock screen and Control Center: title, channel and picture, with play/pause and ±10 s controls. Audio keeps playing when the phone is locked.",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-225/TwitchUnblock.ipa",
+          "size": 1733170,
+          "commit": "ee34401ebbdb21db777c00cbee38f1af22d3f799"
+        },
+        {
           "version": "1.2.5",
           "buildVersion": "224",
           "date": "2026-10-05",
@@ -115,10 +124,10 @@
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.2.5",
+      "version": "1.2.7",
       "versionDate": "2026-10-05",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-224/TwitchUnblock.ipa",
-      "size": 1707923
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-225/TwitchUnblock.ipa",
+      "size": 1733170
     }
   ],
   "news": []

@@ -1,0 +1,5 @@
+# Commits à ne pas reprendre dans les notes de version (build.yml) : une
+# fonction ajoutée puis retirée entre deux versions ne doit pas être annoncée.
+# Un commit par ligne : empreinte (complète ou abrégée), puis un commentaire.
+8d337bbbb1692840b0ca64c49efeda9efed6c69e  option A (VODs abonnés/masquées), retirée ensuite
+ef44a116eaa26a6046bb7518d7fbce687a6a75d8  retrait de l'option A

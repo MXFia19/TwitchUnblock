@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.2.5",
+          "buildVersion": "224",
+          "date": "2026-10-05",
+          "localizedDescription": "- Retrait du secours VODs abonnés/masquées (option A)",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-224/TwitchUnblock.ipa",
+          "size": 1707923,
+          "commit": "ef44a116eaa26a6046bb7518d7fbce687a6a75d8"
+        },
+        {
           "version": "1.2.4",
           "buildVersion": "223",
           "date": "2026-10-04",
@@ -106,10 +115,10 @@
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.2.4",
-      "versionDate": "2026-10-04",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-223/TwitchUnblock.ipa",
-      "size": 1708891
+      "version": "1.2.5",
+      "versionDate": "2026-10-05",
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-224/TwitchUnblock.ipa",
+      "size": 1707923
     }
   ],
   "news": []

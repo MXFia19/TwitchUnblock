@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.2.9",
+          "buildVersion": "227",
+          "date": "2026-10-05",
+          "localizedDescription": "- If the main server reaches its daily limit, VODs and lives switch to a backup server automatically.",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-227/TwitchUnblock.ipa",
+          "size": 1809263,
+          "commit": "268b0ecc3ea8984bff2fba158d7730809dff7e80"
+        },
+        {
           "version": "1.2.8",
           "buildVersion": "226",
           "date": "2026-10-05",
@@ -133,10 +142,10 @@
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.2.8",
+      "version": "1.2.9",
       "versionDate": "2026-10-05",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-226/TwitchUnblock.ipa",
-      "size": 1809743
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-227/TwitchUnblock.ipa",
+      "size": 1809263
     }
   ],
   "news": []

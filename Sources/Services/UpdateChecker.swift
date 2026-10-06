@@ -23,7 +23,25 @@ final class UpdateChecker: ObservableObject {
         let version: String
         let build: Int
         let items: [String]
+        /// Date du build telle qu'écrite par le CI (« 2026-10-06 »).
+        var date = ""
         var id: Int { build }
+
+        /// Une entrée `versions` de la source ; ses notes sont les lignes
+        /// « - … » de `localizedDescription`. nil sans numéro ni notes.
+        init?(entry v: [String: Any]) {
+            guard let b = Int(v["buildVersion"] as? String ?? "") else { return nil }
+            let items = (v["localizedDescription"] as? String ?? "")
+                .split(separator: "\n")
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+                .filter { $0.hasPrefix("- ") }
+                .map { String($0.dropFirst(2)) }
+            guard !items.isEmpty else { return nil }
+            self.version = v["version"] as? String ?? "build \(b)"
+            self.build = b
+            self.items = items
+            self.date = v["date"] as? String ?? ""
+        }
     }
 
     /// Version plus récente que celle installée, sinon nil.
@@ -65,30 +83,14 @@ final class UpdateChecker: ObservableObject {
         // Build local (Xcode) : pas de numéro fiable, rien à comparer.
         guard Self.installedBuild > 1 else { return }
 
-        // Contourne le cache du CDN de GitHub (quelques minutes).
-        guard let url = URL(string: "\(Self.sourceURL)?t=\(Int(Date().timeIntervalSince1970 / 600))") else { return }
-        var req = URLRequest(url: url)
-        req.cachePolicy = .reloadIgnoringLocalCacheData
-        guard let (data, resp) = try? await URLSession.shared.data(for: req),
-              (resp as? HTTPURLResponse)?.statusCode == 200,
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let app = (json["apps"] as? [[String: Any]])?.first,
-              let versions = app["versions"] as? [[String: Any]],
+        guard let versions = await Self.fetchVersions(),
               let latest = versions.first,
               let buildStr = latest["buildVersion"] as? String, let build = Int(buildStr) else { return }
         ud.set(Date().timeIntervalSince1970, forKey: lastCheckKey)
 
         guard build > Self.installedBuild else { available = nil; return }
         // Notes de tous les builds plus récents que celui installé.
-        let changes: [Changes] = versions.compactMap { v in
-            guard let b = Int(v["buildVersion"] as? String ?? ""), b > Self.installedBuild else { return nil }
-            let items = (v["localizedDescription"] as? String ?? "")
-                .split(separator: "\n")
-                .map { $0.trimmingCharacters(in: .whitespaces) }
-                .filter { $0.hasPrefix("- ") }
-                .map { String($0.dropFirst(2)) }
-            return items.isEmpty ? nil : Changes(version: v["version"] as? String ?? "build \(b)", build: b, items: items)
-        }
+        let changes = versions.compactMap(Changes.init(entry:)).filter { $0.build > Self.installedBuild }
         let update = Update(version: latest["version"] as? String ?? "build \(build)",
                             build: build,
                             downloadURL: latest["downloadURL"] as? String,
@@ -96,6 +98,26 @@ final class UpdateChecker: ObservableObject {
         available = update
         logger.info("UPDATE", "Mise à jour disponible", "\(Self.installedVersion) → \(update.version)")
         if ud.integer(forKey: dismissedKey) < build { showAlert = true }
+    }
+
+    /// Historique de la source (`versions`, du plus récent au plus ancien).
+    /// nil si elle est injoignable.
+    private static func fetchVersions() async -> [[String: Any]]? {
+        // Contourne le cache du CDN de GitHub (quelques minutes).
+        guard let url = URL(string: "\(sourceURL)?t=\(Int(Date().timeIntervalSince1970 / 600))") else { return nil }
+        var req = URLRequest(url: url)
+        req.cachePolicy = .reloadIgnoringLocalCacheData
+        guard let (data, resp) = try? await URLSession.shared.data(for: req),
+              (resp as? HTTPURLResponse)?.statusCode == 200,
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let app = (json["apps"] as? [[String: Any]])?.first else { return nil }
+        return app["versions"] as? [[String: Any]]
+    }
+
+    /// Journal des modifications des réglages : les notes de chaque build
+    /// publié par la source (les 30 derniers, que garde le CI).
+    static func history() async -> [Changes]? {
+        await fetchVersions()?.compactMap(Changes.init(entry:))
     }
 
     /// Ouvre l'app de sideload installée (Feather, SideStore, AltStore) pour

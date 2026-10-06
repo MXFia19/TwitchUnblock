@@ -73,7 +73,7 @@ struct MainTabView: View {
     @State private var showDiscordPrompt = false
     /// Page d'une chaîne ouverte en feuille (sans passer par l'onglet Recherche).
     @State private var channelSheet: ChannelSheetItem? = nil
-    /// Tutoriel du tout premier lancement (revu depuis les réglages).
+    /// Visite guidée du tout premier lancement (revue depuis les réglages).
     @AppStorage("onboarding_done") private var onboardingDone = false
     /// Clip en cours : VOD d'origine et position, pour en rejouer le chat.
     @State private var clipVodId: String? = nil
@@ -175,6 +175,14 @@ struct MainTabView: View {
             case .library: return store.t("tab_library")
             }
         }
+        /// Onglets que la visite guidée fait toucher.
+        var tourTarget: TourTarget? {
+            switch self {
+            case .home:    return nil
+            case .search:  return .tabSearch
+            case .library: return .tabLibrary
+            }
+        }
     }
 
     var body: some View {
@@ -258,13 +266,9 @@ struct MainTabView: View {
             showDiscordPrompt = true
         }
         // Fenêtres « mise à jour » et « Discord » dans le style de l'app.
+        // Jamais pendant la visite guidée, qui passe avant tout le reste.
         .overlay {
-            if !onboardingDone {
-                // Le tutoriel passe avant tout le reste (mise à jour, Discord).
-                OnboardingView { withAnimation(.easeInOut(duration: 0.3)) { onboardingDone = true } }
-                    .transition(.opacity)
-                    .zIndex(20)
-            } else if updater.showAlert, let up = updater.available {
+            if onboardingDone, updater.showAlert, let up = updater.available {
                 TPromptCard(
                     icon: "arrow.down.circle.fill",
                     title: store.t("update_title"),
@@ -277,7 +281,7 @@ struct MainTabView: View {
                     // Nouveautés de chaque build manquant, du plus récent au plus ancien.
                     sections: up.changes.map { .init(title: $0.version, items: $0.items) })
                 .zIndex(10)
-            } else if showDiscordPrompt {
+            } else if onboardingDone, showDiscordPrompt {
                 TPromptCard(
                     icon: "bubble.left.and.bubble.right.fill",
                     title: store.t("discord_title"),
@@ -298,6 +302,29 @@ struct MainTabView: View {
                     })
                 .zIndex(10)
             }
+        }
+        // Visite guidée (premier lancement, ou revue depuis les réglages) :
+        // par-dessus tout, elle éclaire les vrais boutons de l'app, dont les
+        // positions remontent par `TourAnchorKey`.
+        .overlayPreferenceValue(TourAnchorKey.self) { anchors in
+            Group {
+                if !onboardingDone {
+                    GeometryReader { proxy in
+                        OnboardingTour(rects: anchors.mapValues { proxy[$0] },
+                                       size: proxy.size,
+                                       activeTab: $activeTab) {
+                            withAnimation(.easeInOut(duration: 0.3)) { onboardingDone = true }
+                        }
+                    }
+                    .ignoresSafeArea()
+                    .transition(.opacity)
+                }
+            }
+        }
+        // Visite relancée pendant une lecture : le lecteur se réduit, sinon
+        // il cacherait les boutons montrés.
+        .onChange(of: onboardingDone) { done in
+            if !done { withAnimation(.easeInOut(duration: 0.2)) { playerVisible = false } }
         }
         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: updater.showAlert)
         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: showDiscordPrompt)
@@ -1103,6 +1130,7 @@ struct CustomTabBar: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .tourAnchor(tab.tourTarget)
             }
         }
         .padding(.top, 10)

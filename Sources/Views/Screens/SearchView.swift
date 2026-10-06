@@ -41,7 +41,8 @@ struct SearchView: View {
     @State private var hasMoreVods  = false
     @State private var isLoadingMore = false
 
-    // Onglets de la chaîne : 0 VODs, 1 Highlights, 2 Playlists, 3 Clips, 4 Supprimées
+    // Onglets de la chaîne : 0 VODs, 1 Highlights, 2 Playlists, 3 Clips,
+    // 4 Supprimées (affiché juste après les VODs, voir `results`).
     @State private var channelTab   = 0
     // Onglet « Supprimées » : récupération de VODs effacées via une source externe.
     @StateObject private var recovery = VodRecoveryService()
@@ -121,6 +122,7 @@ struct SearchView: View {
                         Task { await submit() }
                     }
                 }
+                .tourAnchor(.searchField)
 
                 // Indique ce qui va se passer : l'utilisateur n'a pas à deviner.
                 if !query.trimmingCharacters(in: .whitespaces).isEmpty {
@@ -363,7 +365,9 @@ struct SearchView: View {
         }
 
         if liveData != nil {
-            TSegmented(items: [0, 1, 2, 3, 4], selection: $channelTab) {
+            // « Supprimées » en 2ᵉ : ce sont des VODs aussi, celles que Twitch
+            // a effacées ; l'ordre d'affichage ne change pas les numéros.
+            TSegmented(items: [0, 4, 1, 2, 3], selection: $channelTab) {
                 [store.t("vods"), store.t("highlights"), store.t("playlists"),
                  store.t("clips"), store.t("recover_tab")][$0]
             }

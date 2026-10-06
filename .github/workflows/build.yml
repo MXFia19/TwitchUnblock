@@ -115,6 +115,11 @@ jobs:
           xcodegen generate --spec project.yml
 
       - name: Post-Generation Fix (Anti-Black Bars, Identity & PiP)
+        env:
+          # Secret du dépôt officiel, non hérité par les forks : seul le build
+          # officiel porte ce jeton, et le Worker ne compte que les pings qui le
+          # présentent. Vide si le secret n'est pas défini → build non compté.
+          PING_KEY: ${{ secrets.PING_KEY }}
         run: |
           echo "--- Fix Info.plist (Plein écran, ID, Version, PiP) ---"
           # L'Info.plist de l'app seulement. Avant, `find . -name Info.plist`
@@ -137,6 +142,10 @@ jobs:
             plutil -replace CFBundleVersion -string "${{ github.run_number }}" "$P"
           done
           plutil -replace CFBundleIconName -string "AppIcon" "$APP_PLIST"
+
+          # Jeton de comptage, seulement sur le build officiel (secret absent
+          # des forks). Vide si non défini : le build n'est alors pas compté.
+          plutil -replace TUPingKey -string "$PING_KEY" "$APP_PLIST"
 
           # Force le plein écran sans bandes noires
           plutil -remove UILaunchStoryboardName "$APP_PLIST" || true

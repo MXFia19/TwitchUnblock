@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.2.11",
+          "buildVersion": "230",
+          "date": "2026-10-06",
+          "localizedDescription": "- New \"Deleted\" tab on a channel page: recover recently deleted VODs while Twitch still serves their segments.",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-230/TwitchUnblock.ipa",
+          "size": 1842921,
+          "commit": "54e947072d512b5d9f95950c3feda637b304e3d4"
+        },
+        {
           "version": "1.2.10",
           "buildVersion": "229",
           "date": "2026-10-06",
@@ -151,10 +160,10 @@
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.2.10",
+      "version": "1.2.11",
       "versionDate": "2026-10-06",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-229/TwitchUnblock.ipa",
-      "size": 1809924
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-230/TwitchUnblock.ipa",
+      "size": 1842921
     }
   ],
   "news": []

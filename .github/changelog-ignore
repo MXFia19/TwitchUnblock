@@ -4,3 +4,4 @@
 8d337bbbb1692840b0ca64c49efeda9efed6c69e  option A (VODs abonnés/masquées), retirée ensuite
 ef44a116eaa26a6046bb7518d7fbce687a6a75d8  retrait de l'option A
 ee34401ebbdb21db777c00cbee38f1af22d3f799  secours « prêt » : annoncé par le commit qui l'active
+06039382e9828e61377b53711f47c8cc64049b4c  comptage : mesure serveur interne, pas une fonctionnalité

@@ -168,6 +168,8 @@ struct RecoverableStream: Identifiable {
     let title: String
     let game: String
     let maxViews: Int
+    /// Durée en secondes, 0 si inconnue (direct en cours, source muette).
+    var duration: Int = 0
 }
 
 /// Une VOD supprimée dont les liens ont été reconstruits et validés : prête à lire.

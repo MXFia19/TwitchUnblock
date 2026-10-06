@@ -181,6 +181,53 @@ private func workerJSON(_ path: String) async -> [String: Any]? {
     return nil
 }
 
+// MARK: – Passages coupés (droits d'auteur)
+/// Les playlists du CDN des VODs listent les passages coupés en
+/// « N-unmuted.ts », que le CDN refuse (403) : la lecture bloquait dès le
+/// premier. Seul « N-muted.ts » (son coupé) se lit. AVPlayer ne sait pas
+/// réécrire une playlist : quand il y en a, elle passe par le proxy du Worker,
+/// qui fait la substitution ; les segments, eux, viennent toujours du CDN
+/// (`isVod=false`). Sans passage coupé, rien ne change.
+func playableMutedLinks(_ links: QualityLinks) async -> QualityLinks {
+    guard let source = links["Source"] ?? links.values.first, let url = URL(string: source),
+          let (data, _) = try? await URLSession.shared.data(from: url),
+          String(decoding: data, as: UTF8.self).contains("-unmuted.ts"),
+          let base = await workingProxyBase(for: source) else { return links }
+    var out: QualityLinks = [:]
+    for (label, link) in links { out[label] = proxiedPlaylistURL(link, base: base) }
+    logger.info("M3U8", "Passages coupés : playlists réécrites par le Worker", base)
+    return out
+}
+
+private func proxiedPlaylistURL(_ url: String, base: String) -> String {
+    let enc = url.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? url
+    return "\(base)/api/proxy?url=\(enc)&isVod=false"
+}
+
+/// Worker (principal, puis secours) qui sert vraiment cette playlist ; nil si
+/// aucun. Même tri que `workerJSON` : le quota du jour atteint (429) le met
+/// de côté jusqu'à minuit UTC.
+private func workingProxyBase(for url: String) async -> String? {
+    let bases = [kAPIURL] + kAPIFallbackURLs
+    let health = WorkerHealth.shared
+    let ordered = bases.filter { !health.isDown($0) } + bases.filter { health.isDown($0) }
+    for base in ordered {
+        guard let u = URL(string: proxiedPlaylistURL(url, base: base)),
+              let (data, resp) = try? await URLSession.shared.data(from: u) else { continue }
+        let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+        if code == 429 || (502...504).contains(code) {
+            let quota = String(data: data, encoding: .utf8)?.contains("1027") == true
+            if bases.count > 1 {
+                health.markDown(base, until: quota ? nextUTCMidnight() : Date().addingTimeInterval(30 * 60))
+            }
+            continue
+        }
+        // Le Worker répond sans playlist : un autre ferait pareil.
+        return code == 200 && String(decoding: data.prefix(7), as: UTF8.self) == "#EXTM3U" ? base : nil
+    }
+    return nil
+}
+
 // MARK: – getM3U8 (VODs)
 func getM3U8(vodId: String) async -> M3U8Data {
     logger.info("M3U8", "Lancement VOD \(vodId)")
@@ -215,7 +262,8 @@ func getM3U8(vodId: String) async -> M3U8Data {
     let sbLinks = await storyboardHack(vodId: vodId)
     if !sbLinks.isEmpty {
         logger.success("M3U8", "[2/3] ✅ Storyboard \(sbLinks.count) qualités")
-        return M3U8Data(links: sbLinks, error: nil)
+        // Playlists lues directement sur le CDN : mêmes passages coupés.
+        return M3U8Data(links: await playableMutedLinks(sbLinks), error: nil)
     }
 
     if let json = await workerJSON("/api/get-m3u8?id=\(vodId)&proxy=false"),
@@ -761,7 +809,7 @@ func formatDuration(_ seconds: Int) -> String {
 
 /// Twitch date ses VODs sans fractions de seconde et ses lives avec : on
 /// accepte les deux formats.
-private func parseTwitchDate(_ s: String?) -> Date? {
+func parseTwitchDate(_ s: String?) -> Date? {
     guard let s else { return nil }
     let df = ISO8601DateFormatter()
     df.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -1019,6 +1067,50 @@ func getFollowedCategoriesGQL(webToken: String) async -> [TwitchCategory]? {
 func getUserIdGQL(login: String) async -> String? {
     let d = await gqlRequest("query($l: String!) { user(login: $l) { id } }", ["l": login.lowercased()])
     return (d?["user"] as? [String: Any])?["id"] as? String
+}
+
+// MARK: – Catégories sans compte (GQL public)
+// Helix demande un jeton ; ces requêtes-là non. Mais Twitch refuse leur
+// pagination (« failed integrity check » dès la 2ᵉ page, avec ou sans
+// requête persistée) : sans compte, une seule page de 100, la plus grande
+// qu'il accepte. Connecté, Helix pagine sans limite.
+private func categoryFromGQL(_ n: [String: Any]) -> TwitchCategory? {
+    guard let id = n["id"] as? String else { return nil }
+    return TwitchCategory(id: id, name: n["displayName"] as? String ?? "",
+                          boxArtURL: n["boxArtURL"] as? String ?? "",
+                          viewers: n["viewersCount"] as? Int)
+}
+
+/// Catégories les plus regardées, avec leur audience. nil si Twitch n'a pas répondu.
+func getTopCategoriesGQL() async -> [TwitchCategory]? {
+    let q = "query { games(first: 100) { edges { node { id displayName boxArtURL(width: 570, height: 760) viewersCount } } } }"
+    guard let d = await gqlRequest(q, [:]),
+          let edges = (d["games"] as? [String: Any])?["edges"] as? [[String: Any]] else { return nil }
+    return edges.compactMap { ($0["node"] as? [String: Any]).flatMap(categoryFromGQL) }
+}
+
+/// Recherche de catégories par nom. nil si Twitch n'a pas répondu.
+func searchCategoriesGQL(query: String) async -> [TwitchCategory]? {
+    let q = "query($q: String!) { searchCategories(query: $q, first: 30) { edges { node { id displayName boxArtURL(width: 570, height: 760) viewersCount } } } }"
+    guard let d = await gqlRequest(q, ["q": query]),
+          let edges = (d["searchCategories"] as? [String: Any])?["edges"] as? [[String: Any]] else { return nil }
+    return edges.compactMap { ($0["node"] as? [String: Any]).flatMap(categoryFromGQL) }
+}
+
+/// Les 100 lives les plus regardés d'une catégorie. nil si Twitch n'a pas répondu.
+func getStreamsByCategoryGQL(gameId: String) async -> [TwitchStream]? {
+    let q = """
+    query($id: ID!) { game(id: $id) { streams(first: 100) { edges { node {
+      title viewersCount previewImageURL(width: 440, height: 248) game { displayName }
+      broadcaster { id login displayName } } } } } }
+    """
+    guard let d = await gqlRequest(q, ["id": gameId]),
+          let edges = ((d["game"] as? [String: Any])?["streams"] as? [String: Any])?["edges"] as? [[String: Any]]
+    else { return nil }
+    return edges.compactMap { e in
+        guard let n = e["node"] as? [String: Any], let b = n["broadcaster"] as? [String: Any] else { return nil }
+        return streamFromGQL(user: b, stream: n)
+    }
 }
 
 /// Top des lives sans jeton (GQL public) ; `lang` au format Helix (« fr », « zh-hk »).

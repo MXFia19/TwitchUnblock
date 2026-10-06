@@ -190,9 +190,20 @@ struct CategoriesView: View {
 
     // MARK: – Chargements
     @MainActor private func loadTop() async {
-        guard let token = store.twitchToken else { return }
         if categories.isEmpty { loading = true }
         errorMsg = nil
+        guard let token = store.twitchToken else {
+            // Sans compte : GQL public, une seule page de 100 (Twitch en
+            // refuse la suite sans jeton d'intégrité), audience comprise.
+            if let list = await getTopCategoriesGQL() {
+                categories = list
+                cursor = nil
+            } else if categories.isEmpty {
+                errorMsg = store.t("err_loading")
+            }
+            loading = false
+            return
+        }
         do {
             let page = try await getTopCategories(token: token)
             categories = page.categories
@@ -241,9 +252,15 @@ struct CategoriesView: View {
         }
         searchTask = Task {
             try? await Task.sleep(nanoseconds: 350_000_000)
-            guard !Task.isCancelled, let token = store.twitchToken else { return }
-            guard let found = try? await searchCategories(token: token, query: q),
-                  !Task.isCancelled else { return }
+            guard !Task.isCancelled else { return }
+            // Avec compte, Helix ; sans, la recherche GQL publique.
+            let result: [TwitchCategory]?
+            if let token = store.twitchToken {
+                result = try? await searchCategories(token: token, query: q)
+            } else {
+                result = await searchCategoriesGQL(query: q)
+            }
+            guard let found = result, !Task.isCancelled else { return }
             await MainActor.run {
                 categories = found
                 cursor     = nil
@@ -364,9 +381,20 @@ struct CategoryStreamsView: View {
     }
 
     @MainActor private func load() async {
-        guard let token = store.twitchToken else { return }
         if streams.isEmpty { loading = true }
         errorMsg = nil
+        guard let token = store.twitchToken else {
+            // Sans compte : les 100 lives les plus regardés (GQL public, pas
+            // de page suivante sans jeton d'intégrité).
+            if let list = await getStreamsByCategoryGQL(gameId: category.id) {
+                streams = list
+                cursor = nil
+            } else if streams.isEmpty {
+                errorMsg = store.t("err_loading")
+            }
+            loading = false
+            return
+        }
         do {
             let page = try await getStreamsByCategory(token: token, gameId: category.id)
             streams = page.streams

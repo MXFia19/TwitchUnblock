@@ -51,22 +51,16 @@ struct HomeView: View {
                            GridItem(.flexible(), alignment: .top)]
 
     var body: some View {
-        Group {
-            if store.twitchToken == nil {
-                // Sans compte : lives des chaînes suivies sur cet appareil et
-                // top (requêtes publiques), avec une invitation à se connecter.
+        // Avec ou sans compte : sans, lives et catégories passent par des
+        // requêtes publiques, et l'accueil invite à se connecter.
+        VStack(spacing: 0) {
+            TSegmented(items: HomeSection.allCases,
+                       selection: $section) { $0.label(store) }
+
+            if section == .live {
                 liveSection
             } else {
-                VStack(spacing: 0) {
-                    TSegmented(items: HomeSection.allCases,
-                               selection: $section) { $0.label(store) }
-
-                    if section == .live {
-                        liveSection
-                    } else {
-                        CategoriesView(onPlayStream: onPlayStream)
-                    }
-                }
+                CategoriesView(onPlayStream: onPlayStream)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

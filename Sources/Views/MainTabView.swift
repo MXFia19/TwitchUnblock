@@ -38,8 +38,12 @@ struct MainTabView: View {
     @State private var uptimeTimer: Timer? = nil
 
     // ── Débogage / synchro ────────────────────────────────────────────────
-    /// Latence mesurée du direct, arrondie à la seconde (synchro auto du chat).
+    /// Latence mesurée du direct, arrondie à la seconde (affichée).
     @State private var liveLatency: Double = 0
+    /// Distance au bord du direct, arrondie à la seconde (synchro auto du chat).
+    @State private var liveBehind: Double = 0
+    /// Glissé vers le bas du lecteur en cours : décalage suivi au doigt.
+    @State private var playerPull: CGFloat = 0
 
     // ── Minuteur de veille ────────────────────────────────────────────────
     @ObservedObject private var sleepTimer = SleepTimerService.shared
@@ -81,10 +85,15 @@ struct MainTabView: View {
     /// Chapitres de la VOD en cours (changements de jeu).
     @State private var vodChapters: [VodChapter] = []
 
-    /// Décalage à appliquer au chat : la latence mesurée, si la synchro est active.
+    /// Décalage à appliquer au chat, si la synchro est active : notre retard
+    /// sur le bord du direct. Les messages viennent de spectateurs qui
+    /// regardent eux-mêmes près de ce bord. La latence totale (horodatage de
+    /// Twitch → écran) compte en plus leur propre retard et, surtout, le délai
+    /// que certaines chaînes ajoutent à leur diffusion — que ces spectateurs
+    /// subissent aussi : le chat arrivait alors 10 s trop tard, ou plus.
     private var chatDelay: Double {
         guard store.autoChatDelay, isLivePlaying else { return 0 }
-        return max(0, min(liveLatency, 60))   // borne haute : évite un décalage absurde
+        return max(0, min(liveBehind, 60))   // borne haute : évite un décalage absurde
     }
 
     /// Infos affichées par-dessus l'image en mode immersif.
@@ -224,6 +233,8 @@ struct MainTabView: View {
             // ── Player overlay ────────────────────────────────────────
             if playerMode != nil {
                 playerOverlay
+                    // Glissé vers le bas : le lecteur suit le doigt.
+                    .offset(y: playerPull)
                     .opacity(playerVisible ? 1 : 0)
                     .allowsHitTesting(playerVisible)
                     .zIndex(100)
@@ -626,7 +637,9 @@ struct MainTabView: View {
                     if let id = currentVodId { store.setVodProgress(id, time: time) }
                 },
                 onLatency: { updateLatency($0) },
-                onReduce: { withAnimation { playerVisible = false } },
+                onBehind: { updateBehind($0) },
+                onPull: { pullPlayer($0) },
+                onReduce: { reducePlayer() },
                 onClose:  { stopPlayer() },
                 onMenu:   { showPlayerMenu = true },
                 onRefresh: { reloadCurrent() },
@@ -652,6 +665,7 @@ struct MainTabView: View {
                 nowPlaying: nowPlayingMeta,
                 onTime: { vodPlaybackTime = $0 },
                 onLatency: { updateLatency($0) },
+                onBehind: { updateBehind($0) },
                 onChat: nil,
                 onRewind: rewindAction,
                 onBackToLive: backToLiveAction
@@ -663,7 +677,7 @@ struct MainTabView: View {
     @ViewBuilder
     private var playerTopBar: some View {
         HStack(spacing: TSpace.sm) {
-            Button { withAnimation { playerVisible = false } } label: {
+            Button { reducePlayer() } label: {
                 Image(systemName: "chevron.down")
                     .font(.system(size: 14, weight: .bold))
                     .foregroundColor(.tPrimary)
@@ -732,6 +746,8 @@ struct MainTabView: View {
         .padding(.bottom, TSpace.sm)
         .background(Color.tCard)
         .overlay(Divider().background(Color.tBorder), alignment: .bottom)
+        .contentShape(Rectangle())
+        .gesture(topBarPull)
     }
 
     /// Qualité en cours pour le lecteur immersif : celle choisie, sinon la meilleure.
@@ -745,6 +761,43 @@ struct MainTabView: View {
     private func updateLatency(_ value: Double?) {
         let rounded = (value ?? 0).rounded()
         if abs(rounded - liveLatency) >= 1 { liveLatency = rounded }
+    }
+
+    private func updateBehind(_ value: Double?) {
+        let rounded = max(0, value ?? 0).rounded()
+        if abs(rounded - liveBehind) >= 1 { liveBehind = rounded }
+    }
+
+    /// Réduit le lecteur en mini-barre (flèche, ou glissé vers le bas).
+    private func reducePlayer() {
+        withAnimation(.easeInOut(duration: 0.25)) { playerVisible = false }
+        // Le décalage du glissé retombe une fois le lecteur masqué, pour qu'il
+        // revienne à sa place à la prochaine ouverture.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { playerPull = 0 }
+    }
+
+    /// Le lecteur suit le doigt ; 0 = relâché trop tôt, il revient en place.
+    private func pullPlayer(_ y: CGFloat) {
+        if y <= 0 {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { playerPull = 0 }
+        } else {
+            playerPull = y
+        }
+    }
+
+    /// Bandeau du lecteur natif : le tirer vers le bas réduit le lecteur.
+    /// (Sur l'image, le lecteur d'Apple garde ses propres gestes.)
+    private var topBarPull: some Gesture {
+        DragGesture(minimumDistance: 12)
+            .onChanged { v in pullPlayer(max(0, v.translation.height)) }
+            .onEnded { v in
+                let down = v.translation.height
+                if down > 110 || (down > 40 && v.predictedEndTranslation.height > 260) {
+                    reducePlayer()
+                } else {
+                    pullPlayer(0)
+                }
+            }
     }
 
     /// Recharge le flux courant (bouton ⟳ du lecteur).
@@ -878,6 +931,8 @@ struct MainTabView: View {
         vodPlaybackTime = 0
         liveDvrVideoId  = nil
         liveLatency     = 0
+        liveBehind      = 0
+        playerPull      = 0
 
         if soft {
             switchingSource = true
@@ -1049,6 +1104,8 @@ struct MainTabView: View {
             liveStartedAt      = nil
             liveUptimeText     = ""
             liveLatency        = 0
+            liveBehind         = 0
+            playerPull         = 0
             liveAvatar         = nil
             clipVodId          = nil
             liveGame           = ""

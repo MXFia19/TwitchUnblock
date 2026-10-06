@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.2.12",
+          "buildVersion": "232",
+          "date": "2026-10-06",
+          "localizedDescription": "- New interactive tutorial: a guided tour over the real screens (replay it from Settings > About)\n- Home: offline followed channels now have their own \"Offline\" tab, next to Top streams\n- Settings: new \"Changelog\" page listing every version and what changed\n- Channel page: the \"Deleted\" tab now comes right after VODs\n- New \"Deleted\" tab on a channel page: recover recently deleted VODs while Twitch still serves their segments.",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/nightly-232/TwitchUnblock.ipa",
+          "size": 1888465,
+          "commit": "5229ca86b09707b9a470cdd1d346068428d43821"
+        },
+        {
           "version": "1.2.9",
           "buildVersion": "228",
           "date": "2026-10-05",
@@ -78,10 +87,10 @@
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.2.9",
-      "versionDate": "2026-10-05",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/nightly-228/TwitchUnblock.ipa",
-      "size": 1809240
+      "version": "1.2.12",
+      "versionDate": "2026-10-06",
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/nightly-232/TwitchUnblock.ipa",
+      "size": 1888465
     }
   ],
   "news": []

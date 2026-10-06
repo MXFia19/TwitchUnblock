@@ -157,11 +157,34 @@ struct LossyDecodable<T: Decodable>: Decodable {
     init(from decoder: Decoder) throws { value = try? T(from: decoder) }
 }
 
+// MARK: – Récupération de VODs supprimées
+/// Une diffusion passée listée par la source externe (voir VodRecoveryService).
+/// `streamID` + `startedAt` suffisent à reconstruire le dossier CDN de sa VOD.
+struct RecoverableStream: Identifiable {
+    var id: String { streamID }
+    let streamID: String
+    let login: String
+    let startedAt: Date
+    let title: String
+    let game: String
+    let maxViews: Int
+}
+
+/// Une VOD supprimée dont les liens ont été reconstruits et validés : prête à lire.
+struct RecoveredVod {
+    let streamID: String
+    let title: String
+    let streamer: String
+    let links: QualityLinks
+}
+
 // MARK: – Player Mode
 enum PlayerMode {
     case vod(id: String, title: String?, thumb: String?, streamer: String?)
     case live(channelName: String)
     case clip(slug: String, title: String?)
+    /// VOD supprimée récupérée : liens déjà résolus, aucune requête de lecture.
+    case recovered(RecoveredVod)
 }
 
 // MARK: – Log

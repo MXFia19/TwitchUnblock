@@ -35,6 +35,7 @@ struct HeaderView: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(store.t("settings"))
+            .tourAnchor(.settings)
         }
         .padding(.horizontal, TSpace.lg)
         .padding(.top, safeTop + 4)

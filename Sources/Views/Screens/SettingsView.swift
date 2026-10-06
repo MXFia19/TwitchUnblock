@@ -134,48 +134,52 @@ struct SettingsView: View {
     // MARK: – Pages de réglages
     /// Les destinations du menu.
     enum Page: Hashable {
-        case account, general, player, chat, labs, other
+        case account, general, player, chat, labs, other, changelog
 
         var titleKey: String {
             switch self {
-            case .account: return "twitch_account"
-            case .general: return "sec_general"
-            case .player:  return "sec_player"
-            case .chat:    return "sec_chat"
-            case .labs:    return "debug_section"
-            case .other:   return "sec_other"
+            case .account:   return "twitch_account"
+            case .general:   return "sec_general"
+            case .player:    return "sec_player"
+            case .chat:      return "sec_chat"
+            case .labs:      return "debug_section"
+            case .other:     return "sec_other"
+            case .changelog: return "changelog"
             }
         }
         var subtitleKey: String {
             switch self {
-            case .account: return "sec_account_sub"
-            case .general: return "sec_general_sub"
-            case .player:  return "sec_player_sub"
-            case .chat:    return "sec_chat_sub"
-            case .labs:    return "sec_labs_sub"
-            case .other:   return "sec_other_sub"
+            case .account:   return "sec_account_sub"
+            case .general:   return "sec_general_sub"
+            case .player:    return "sec_player_sub"
+            case .chat:      return "sec_chat_sub"
+            case .labs:      return "sec_labs_sub"
+            case .other:     return "sec_other_sub"
+            case .changelog: return "changelog_sub"
             }
         }
         var icon: String {
             switch self {
-            case .account: return "person.crop.circle.fill"
-            case .general: return "gearshape.fill"
-            case .player:  return "play.rectangle.fill"
-            case .chat:    return "bubble.left.and.bubble.right.fill"
-            case .labs:    return "flask.fill"
-            case .other:   return "info.circle.fill"
+            case .account:   return "person.crop.circle.fill"
+            case .general:   return "gearshape.fill"
+            case .player:    return "play.rectangle.fill"
+            case .chat:      return "bubble.left.and.bubble.right.fill"
+            case .labs:      return "flask.fill"
+            case .other:     return "info.circle.fill"
+            case .changelog: return "sparkles"
             }
         }
         /// Une teinte par domaine : on repère la ligne à la couleur avant
         /// d'avoir lu le libellé.
         var tint: Color {
             switch self {
-            case .account: return .tPurple
-            case .general: return .tPrimary
-            case .player:  return .tOutplayer
-            case .chat:    return .tSuccess
-            case .labs:    return .tWarning
-            case .other:   return .tMuted
+            case .account:   return .tPurple
+            case .general:   return .tPrimary
+            case .player:    return .tOutplayer
+            case .chat:      return .tSuccess
+            case .labs:      return .tWarning
+            case .other:     return .tMuted
+            case .changelog: return .tVLC
             }
         }
     }
@@ -240,6 +244,8 @@ struct SettingsView: View {
                     menuRow(.labs)
                     rowSeparator
                     menuRow(.other)
+                    rowSeparator
+                    menuRow(.changelog)
                 }
                 .tCard()
 
@@ -358,6 +364,8 @@ struct SettingsView: View {
                     debugCard
                 case .other:
                     aboutCard
+                case .changelog:
+                    ChangelogList()
                 }
                 Spacer(minLength: 32)
             }

@@ -22,6 +22,11 @@
     <key>CFBundlePackageType</key>
     <string>APPL</string>
 
+    <!-- Jeton de comptage : vide ici, la CI du dépôt officiel y met un secret
+         que les forks n'héritent pas (voir .github/workflows/build.yml). -->
+    <key>TUPingKey</key>
+    <string></string>
+
     <!-- ── Deep Link URL Scheme (twitchunblock://) ───────────── -->
     <key>CFBundleURLTypes</key>
     <array>

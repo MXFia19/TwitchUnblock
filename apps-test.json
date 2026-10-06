@@ -21,6 +21,42 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.2.12",
+          "buildVersion": "231",
+          "date": "2026-10-06",
+          "localizedDescription": "- New interactive tutorial: a guided tour over the real screens (replay it from Settings > About)\n- Home: offline followed channels now have their own \"Offline\" tab, next to Top streams\n- Settings: new \"Changelog\" page listing every version and what changed\n- Channel page: the \"Deleted\" tab now comes right after VODs",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-231/TwitchUnblock.ipa",
+          "size": 1888489,
+          "commit": "6ff7e129a953f063955493717d2d8f8b4fd95916"
+        },
+        {
+          "version": "1.2.11",
+          "buildVersion": "230",
+          "date": "2026-10-06",
+          "localizedDescription": "- New \"Deleted\" tab on a channel page: recover recently deleted VODs while Twitch still serves their segments.",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-230/TwitchUnblock.ipa",
+          "size": 1842921,
+          "commit": "54e947072d512b5d9f95950c3feda637b304e3d4"
+        },
+        {
+          "version": "1.2.10",
+          "buildVersion": "229",
+          "date": "2026-10-06",
+          "localizedDescription": "- Améliorations et corrections",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-229/TwitchUnblock.ipa",
+          "size": 1809924,
+          "commit": "076fbda9e093ba023d290d2f4bd570c50fa328ee"
+        },
+        {
+          "version": "1.2.9",
+          "buildVersion": "227",
+          "date": "2026-10-05",
+          "localizedDescription": "- If the main server reaches its daily limit, VODs and lives switch to a backup server automatically.",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-227/TwitchUnblock.ipa",
+          "size": 1809263,
+          "commit": "268b0ecc3ea8984bff2fba158d7730809dff7e80"
+        },
+        {
           "version": "1.2.8",
           "buildVersion": "226",
           "date": "2026-10-05",
@@ -133,10 +169,10 @@
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.2.8",
-      "versionDate": "2026-10-05",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-226/TwitchUnblock.ipa",
-      "size": 1809743
+      "version": "1.2.12",
+      "versionDate": "2026-10-06",
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-231/TwitchUnblock.ipa",
+      "size": 1888489
     }
   ],
   "news": []

@@ -73,7 +73,7 @@ struct MainTabView: View {
     @State private var showDiscordPrompt = false
     /// Page d'une chaîne ouverte en feuille (sans passer par l'onglet Recherche).
     @State private var channelSheet: ChannelSheetItem? = nil
-    /// Tutoriel du tout premier lancement (revu depuis les réglages).
+    /// Visite guidée du tout premier lancement (revue depuis les réglages).
     @AppStorage("onboarding_done") private var onboardingDone = false
     /// Clip en cours : VOD d'origine et position, pour en rejouer le chat.
     @State private var clipVodId: String? = nil
@@ -124,6 +124,11 @@ struct MainTabView: View {
                                   artist: currentChannelName ?? "",
                                   artworkURL: liveAvatar,
                                   liveLabel: store.t("live_on"))
+        case .recovered(let rec)?:
+            return NowPlayingMeta(title: rec.title.isEmpty ? statusTitle : rec.title,
+                                  artist: rec.streamer,
+                                  artworkURL: liveAvatar,
+                                  liveLabel: store.t("live_on"))
         case nil:
             return NowPlayingMeta()
         }
@@ -134,6 +139,7 @@ struct MainTabView: View {
     private var playerChannelLogin: String? {
         if let ch = currentChannelName { return ch }
         if case .vod(_, _, _, let streamer)? = playerMode, let s = streamer, !s.isEmpty { return s.lowercased() }
+        if case .recovered(let rec)? = playerMode, !rec.streamer.isEmpty { return rec.streamer.lowercased() }
         return nil
     }
 
@@ -169,6 +175,14 @@ struct MainTabView: View {
             case .library: return store.t("tab_library")
             }
         }
+        /// Onglets que la visite guidée fait toucher.
+        var tourTarget: TourTarget? {
+            switch self {
+            case .home:    return nil
+            case .search:  return .tabSearch
+            case .library: return .tabLibrary
+            }
+        }
     }
 
     var body: some View {
@@ -189,7 +203,8 @@ struct MainTabView: View {
                     case .search:  SearchView(onPlayVod: { playVod($0, $1, $2, $3) },
                                               onPlayLive: { playLive($0) },
                                               onPlayClip: { playClip($0, $1) },
-                                              onPlayQueue: { playQueue($0, $1) })
+                                              onPlayQueue: { playQueue($0, $1) },
+                                              onRecovered: { playRecovered($0) })
                     case .library: LibraryView(onPlayVod: { playVod($0, $1, $2, $3) })
                     }
                 }
@@ -251,13 +266,9 @@ struct MainTabView: View {
             showDiscordPrompt = true
         }
         // Fenêtres « mise à jour » et « Discord » dans le style de l'app.
+        // Jamais pendant la visite guidée, qui passe avant tout le reste.
         .overlay {
-            if !onboardingDone {
-                // Le tutoriel passe avant tout le reste (mise à jour, Discord).
-                OnboardingView { withAnimation(.easeInOut(duration: 0.3)) { onboardingDone = true } }
-                    .transition(.opacity)
-                    .zIndex(20)
-            } else if updater.showAlert, let up = updater.available {
+            if onboardingDone, updater.showAlert, let up = updater.available {
                 TPromptCard(
                     icon: "arrow.down.circle.fill",
                     title: store.t("update_title"),
@@ -270,7 +281,7 @@ struct MainTabView: View {
                     // Nouveautés de chaque build manquant, du plus récent au plus ancien.
                     sections: up.changes.map { .init(title: $0.version, items: $0.items) })
                 .zIndex(10)
-            } else if showDiscordPrompt {
+            } else if onboardingDone, showDiscordPrompt {
                 TPromptCard(
                     icon: "bubble.left.and.bubble.right.fill",
                     title: store.t("discord_title"),
@@ -292,6 +303,29 @@ struct MainTabView: View {
                 .zIndex(10)
             }
         }
+        // Visite guidée (premier lancement, ou revue depuis les réglages) :
+        // par-dessus tout, elle éclaire les vrais boutons de l'app, dont les
+        // positions remontent par `TourAnchorKey`.
+        .overlayPreferenceValue(TourAnchorKey.self) { anchors in
+            Group {
+                if !onboardingDone {
+                    GeometryReader { proxy in
+                        OnboardingTour(rects: anchors.mapValues { proxy[$0] },
+                                       size: proxy.size,
+                                       activeTab: $activeTab) {
+                            withAnimation(.easeInOut(duration: 0.3)) { onboardingDone = true }
+                        }
+                    }
+                    .ignoresSafeArea()
+                    .transition(.opacity)
+                }
+            }
+        }
+        // Visite relancée pendant une lecture : le lecteur se réduit, sinon
+        // il cacherait les boutons montrés.
+        .onChange(of: onboardingDone) { done in
+            if !done { withAnimation(.easeInOut(duration: 0.2)) { playerVisible = false } }
+        }
         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: updater.showAlert)
         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: showDiscordPrompt)
         // Notification « en live » touchée : on ouvre le direct.
@@ -309,6 +343,7 @@ struct MainTabView: View {
                        onPlayLive: { l in channelSheet = nil; playLive(l) },
                        onPlayClip: { slug, t in channelSheet = nil; playClip(slug, t) },
                        onPlayQueue: { list, s in channelSheet = nil; playQueue(list, s) },
+                       onRecovered: { rec in channelSheet = nil; playRecovered(rec) },
                        initialChannel: item.login,
                        onClose: { channelSheet = nil })
                 .environmentObject(store)
@@ -815,6 +850,11 @@ struct MainTabView: View {
         vodQueue = []
         startPlayback(.clip(slug: slug, title: title))
     }
+    /// VOD supprimée déjà reconstruite (liens prêts) : on lit directement.
+    private func playRecovered(_ rec: RecoveredVod) {
+        vodQueue = []
+        startPlayback(.recovered(rec))
+    }
     private func playLive(_ channel: String, soft: Bool = false) {
         vodQueue = []
         startPlayback(.live(channelName: channel), soft: soft)
@@ -923,6 +963,23 @@ struct MainTabView: View {
                         loading         = false
                         switchingSource = false
                     }
+                }
+
+            case .recovered(let rec):
+                // Liens déjà reconstruits et validés : aucune requête de lecture.
+                if !rec.streamer.isEmpty {
+                    Task { @MainActor in
+                        let avatar = await channelAvatar(login: rec.streamer.lowercased(),
+                                                         token: store.twitchToken)
+                        if gen == loadGeneration { liveAvatar = avatar }
+                    }
+                }
+                await MainActor.run {
+                    guard gen == loadGeneration else { return }
+                    qualityLinks    = rec.links
+                    statusTitle     = rec.title.isEmpty ? store.t("recover_title") : rec.title
+                    loading         = false
+                    switchingSource = false
                 }
 
             case .live(let channel):
@@ -1073,6 +1130,7 @@ struct CustomTabBar: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .tourAnchor(tab.tourTarget)
             }
         }
         .padding(.top, 10)

@@ -220,6 +220,10 @@ struct TSegmented<Item: Hashable>: View {
                         Text(label(item))
                             .font(.tCardTitle)
                             .foregroundColor(isOn ? .tText : .tMuted)
+                            // Cinq onglets sur un iPhone étroit : un libellé
+                            // un peu réduit plutôt que coupé sur deux lignes.
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.75)
                         Rectangle()
                             .fill(isOn ? Color.tPrimary : .clear)
                             .frame(height: 2)

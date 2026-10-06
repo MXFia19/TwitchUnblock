@@ -103,6 +103,14 @@ final class UsageService: ObservableObject {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
     }
 
+    /// Jeton de comptage propre au build officiel (clé `TUPingKey` d'Info.plist,
+    /// posée par la CI depuis un secret). nil ou vide dans tout autre build.
+    private var buildPingKey: String? {
+        let key = (Bundle.main.infoDictionary?["TUPingKey"] as? String ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return key.isEmpty ? nil : key
+    }
+
     // MARK: – Ping
     /// Signale l'installation au Worker. Sans effet si le comptage est coupé.
     func ping(enabled: Bool, force: Bool = false) async {
@@ -115,6 +123,13 @@ final class UsageService: ObservableObject {
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        // Jeton de build : seul le build officiel le porte (injecté par la CI
+        // depuis un secret que les forks n'héritent pas). Le Worker ne compte
+        // que les pings qui le présentent — un fork qui réutilise ce backend
+        // n'alourdit ni la base ni le quota. Absent du build : pas d'en-tête.
+        if let key = buildPingKey {
+            req.setValue(key, forHTTPHeaderField: "X-TU-Key")
+        }
         // Connecté : le compte Twitch est compté (une seule fois sur l'app et le
         // site) plutôt que l'identifiant aléatoire ; l'effacement le vise aussi.
         if let token = Keychain.loadToken("twitch_token"), !token.isEmpty {

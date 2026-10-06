@@ -25,6 +25,28 @@ let kLuminousHosts = [
     "eu3.luminous.dev"
 ]
 
+/// Récupération de VODs supprimées : distributions CloudFront où Twitch range
+/// les VODs (les plus fréquentes d'abord), plus des hôtes historiques. Le
+/// dossier d'une VOD vaut SHA1("login_streamID_epoch")[:20]_login_streamID_epoch
+/// — on le reconstruit puis on cherche sa playlist. Observé en octobre 2026 ;
+/// voir VodRecoveryService.
+let kVodRecoveryHosts = [
+    "d3vd9lfkzbru3h.cloudfront.net", "d2nvs31859zcd8.cloudfront.net",
+    "d3stzm2eumvgb4.cloudfront.net", "d1m7jfoe9zdc1j.cloudfront.net",
+    "d2vi6trrdongqn.cloudfront.net", "d3fi1amfgojobc.cloudfront.net",
+    "dgeft87wbj63p.cloudfront.net", "ddacn6pr5v0tl.cloudfront.net",
+    "d2e2de1etea730.cloudfront.net", "dqrpb9wgowsf5.cloudfront.net",
+    "ds0h3roq6wcgc.cloudfront.net", "d2aba1wr3818hz.cloudfront.net",
+    "d3c27h4odz752x.cloudfront.net", "d1ymi26ma8va5x.cloudfront.net",
+    "d1mhjrowxxagfy.cloudfront.net", "d36nr0u3xmc4mm.cloudfront.net",
+    "d1oca24q5dwo6d.cloudfront.net", "d2um2qdswy1tb0.cloudfront.net",
+    "vod-secure.twitch.tv", "vod-metro.twitch.tv", "vod-pop-secure.twitch.tv",
+]
+/// Source externe des métadonnées (id de diffusion + heure de début) des lives
+/// passés : nécessaire car Twitch efface ces infos une fois la VOD supprimée.
+/// Seul le nom public de la chaîne lui est transmis (voir VodRecoveryService).
+let kVodRecoveryMetaAPI = "https://api.vodvod.top/channels/@"
+
 // MARK: – Colors
 extension Color {
     static let tPrimary   = Color(hex: "9146ff")
@@ -213,6 +235,15 @@ private let translations: [Lang: [String: String]] = [
         "cache_section": "Cache emotes & badges",
         "vod_chat": "Chat de la VOD",
         "rewind": "Rembobiner", "back_to_live": "Direct",
+        "recover_tab": "Supprimées",
+        "recover_title": "Diffusions récupérables",
+        "recover_hint": "Diffusions passées reconstruites depuis une source externe, tant que Twitch sert encore leurs segments. Les plus anciennes peuvent avoir disparu.",
+        "recover_loading": "Recherche des diffusions récupérables…",
+        "recover_empty": "Aucune diffusion récupérable pour cette chaîne.",
+        "recover_play": "Récupérer",
+        "recover_resolving": "Reconstruction…",
+        "recover_failed": "Cette diffusion n'est plus disponible sur les serveurs.",
+        "recover_views": "vues max",
         "switching_source": "Changement de source…",
         "fill_screen": "Remplir l'écran (paysage)",
         "fill_screen_sub": "Agrandit l'image jusqu'aux bords en paysage, au prix du haut et du bas. Désactivé, l'image reste entière et laisse des bandes égales sur les côtés. Sans effet en portrait.",
@@ -438,6 +469,15 @@ private let translations: [Lang: [String: String]] = [
         "cache_section": "Emote & badge cache",
         "vod_chat": "VOD chat",
         "rewind": "Rewind", "back_to_live": "Live",
+        "recover_tab": "Deleted",
+        "recover_title": "Recoverable broadcasts",
+        "recover_hint": "Past broadcasts rebuilt from an external source, while Twitch still serves their segments. Older ones may be gone.",
+        "recover_loading": "Looking for recoverable broadcasts…",
+        "recover_empty": "No recoverable broadcast for this channel.",
+        "recover_play": "Recover",
+        "recover_resolving": "Rebuilding…",
+        "recover_failed": "This broadcast is no longer available on the servers.",
+        "recover_views": "peak viewers",
         "switching_source": "Switching source…",
         "fill_screen": "Fill the screen (landscape)",
         "fill_screen_sub": "Zooms the picture to the edges in landscape, at the cost of the top and bottom. Left off, the whole picture shows with even bars on the sides. No effect in portrait.",
@@ -663,6 +703,15 @@ private let translations: [Lang: [String: String]] = [
         "cache_section": "Caché de emotes y placas",
         "vod_chat": "Chat del VOD",
         "rewind": "Rebobinar", "back_to_live": "Directo",
+        "recover_tab": "Eliminados",
+        "recover_title": "Directos recuperables",
+        "recover_hint": "Directos pasados reconstruidos desde una fuente externa, mientras Twitch siga sirviendo sus segmentos. Los más antiguos pueden haber desaparecido.",
+        "recover_loading": "Buscando directos recuperables…",
+        "recover_empty": "Ningún directo recuperable para este canal.",
+        "recover_play": "Recuperar",
+        "recover_resolving": "Reconstruyendo…",
+        "recover_failed": "Este directo ya no está disponible en los servidores.",
+        "recover_views": "espectadores máx.",
         "switching_source": "Cambiando de fuente…",
         "fill_screen": "Rellenar la pantalla (horizontal)",
         "fill_screen_sub": "Amplía la imagen hasta los bordes en horizontal, a costa de la parte superior e inferior. Desactivado, se ve la imagen completa con franjas iguales a los lados. Sin efecto en vertical.",

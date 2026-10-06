@@ -124,6 +124,11 @@ struct MainTabView: View {
                                   artist: currentChannelName ?? "",
                                   artworkURL: liveAvatar,
                                   liveLabel: store.t("live_on"))
+        case .recovered(let rec)?:
+            return NowPlayingMeta(title: rec.title.isEmpty ? statusTitle : rec.title,
+                                  artist: rec.streamer,
+                                  artworkURL: liveAvatar,
+                                  liveLabel: store.t("live_on"))
         case nil:
             return NowPlayingMeta()
         }
@@ -134,6 +139,7 @@ struct MainTabView: View {
     private var playerChannelLogin: String? {
         if let ch = currentChannelName { return ch }
         if case .vod(_, _, _, let streamer)? = playerMode, let s = streamer, !s.isEmpty { return s.lowercased() }
+        if case .recovered(let rec)? = playerMode, !rec.streamer.isEmpty { return rec.streamer.lowercased() }
         return nil
     }
 
@@ -189,7 +195,8 @@ struct MainTabView: View {
                     case .search:  SearchView(onPlayVod: { playVod($0, $1, $2, $3) },
                                               onPlayLive: { playLive($0) },
                                               onPlayClip: { playClip($0, $1) },
-                                              onPlayQueue: { playQueue($0, $1) })
+                                              onPlayQueue: { playQueue($0, $1) },
+                                              onRecovered: { playRecovered($0) })
                     case .library: LibraryView(onPlayVod: { playVod($0, $1, $2, $3) })
                     }
                 }
@@ -309,6 +316,7 @@ struct MainTabView: View {
                        onPlayLive: { l in channelSheet = nil; playLive(l) },
                        onPlayClip: { slug, t in channelSheet = nil; playClip(slug, t) },
                        onPlayQueue: { list, s in channelSheet = nil; playQueue(list, s) },
+                       onRecovered: { rec in channelSheet = nil; playRecovered(rec) },
                        initialChannel: item.login,
                        onClose: { channelSheet = nil })
                 .environmentObject(store)
@@ -815,6 +823,11 @@ struct MainTabView: View {
         vodQueue = []
         startPlayback(.clip(slug: slug, title: title))
     }
+    /// VOD supprimée déjà reconstruite (liens prêts) : on lit directement.
+    private func playRecovered(_ rec: RecoveredVod) {
+        vodQueue = []
+        startPlayback(.recovered(rec))
+    }
     private func playLive(_ channel: String, soft: Bool = false) {
         vodQueue = []
         startPlayback(.live(channelName: channel), soft: soft)
@@ -923,6 +936,23 @@ struct MainTabView: View {
                         loading         = false
                         switchingSource = false
                     }
+                }
+
+            case .recovered(let rec):
+                // Liens déjà reconstruits et validés : aucune requête de lecture.
+                if !rec.streamer.isEmpty {
+                    Task { @MainActor in
+                        let avatar = await channelAvatar(login: rec.streamer.lowercased(),
+                                                         token: store.twitchToken)
+                        if gen == loadGeneration { liveAvatar = avatar }
+                    }
+                }
+                await MainActor.run {
+                    guard gen == loadGeneration else { return }
+                    qualityLinks    = rec.links
+                    statusTitle     = rec.title.isEmpty ? store.t("recover_title") : rec.title
+                    loading         = false
+                    switchingSource = false
                 }
 
             case .live(let channel):

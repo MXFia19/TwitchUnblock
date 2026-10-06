@@ -16,6 +16,8 @@ struct SearchView: View {
     var onPlayClip: (String, String?) -> Void = { _, _ in }
     /// « Tout lire » d'une playlist : la liste, et le nom de la chaîne.
     var onPlayQueue: ([VodData], String?) -> Void = { _, _ in }
+    /// VOD supprimée reconstruite : liens prêts à lire.
+    var onRecovered: (RecoveredVod) -> Void = { _ in }
     /// Ouverte en feuille sur une chaîne précise (pseudo du lecteur, chaîne
     /// hors ligne de l'accueil) : pas de barre de recherche, un bouton fermer.
     var initialChannel: String? = nil
@@ -39,8 +41,12 @@ struct SearchView: View {
     @State private var hasMoreVods  = false
     @State private var isLoadingMore = false
 
-    // Onglets de la chaîne : 0 VODs, 1 Highlights, 2 Playlists, 3 Clips
+    // Onglets de la chaîne : 0 VODs, 1 Highlights, 2 Playlists, 3 Clips, 4 Supprimées
     @State private var channelTab   = 0
+    // Onglet « Supprimées » : récupération de VODs effacées via une source externe.
+    @StateObject private var recovery = VodRecoveryService()
+    @State private var resolvingID: String? = nil   // diffusion en cours de reconstruction
+    @State private var recoverFailedID: String? = nil
     @State private var highlights: [VodData] = []
     @State private var highlightsFor = ""
     @State private var loadingHighlights = false
@@ -357,17 +363,21 @@ struct SearchView: View {
         }
 
         if liveData != nil {
-            TSegmented(items: [0, 1, 2, 3], selection: $channelTab) {
-                [store.t("vods"), store.t("highlights"), store.t("playlists"), store.t("clips")][$0]
+            TSegmented(items: [0, 1, 2, 3, 4], selection: $channelTab) {
+                [store.t("vods"), store.t("highlights"), store.t("playlists"),
+                 store.t("clips"), store.t("recover_tab")][$0]
             }
                 .onChange(of: channelTab) { tab in
                     if tab == 1 { Task { await loadHighlights() } }
                     if tab == 2 { Task { await loadPlaylists() } }
                     if tab == 3 { Task { await loadClips() } }
+                    if tab == 4 { Task { await recovery.load(channel: channelName) } }
                 }
         }
 
-        if channelTab == 3 {
+        if channelTab == 4 {
+            recoverySection
+        } else if channelTab == 3 {
             clipsSection
         } else if channelTab == 2 {
             playlistsSection
@@ -554,6 +564,89 @@ struct SearchView: View {
         loadingClips = false
     }
 
+    // MARK: – Récupération de VODs supprimées
+    @ViewBuilder private var recoverySection: some View {
+        VStack(alignment: .leading, spacing: TSpace.md) {
+            Text(store.t("recover_hint"))
+                .font(.tMeta).foregroundColor(.tMuted)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, TSpace.lg)
+
+            if recovery.loading {
+                TLoader()
+            } else if recovery.failed || recovery.streams.isEmpty {
+                TEmptyState(icon: "trash.slash", title: store.t("recover_empty"))
+            } else {
+                VStack(spacing: TSpace.sm) {
+                    ForEach(recovery.streams) { recoverRow($0) }
+                }
+                .padding(.horizontal, TSpace.lg)
+            }
+        }
+    }
+
+    @ViewBuilder private func recoverRow(_ s: RecoverableStream) -> some View {
+        let resolving = resolvingID == s.streamID
+        VStack(alignment: .leading, spacing: 6) {
+            Text(s.title.isEmpty ? s.login : s.title)
+                .font(.tCardTitle).foregroundColor(.tText).lineLimit(2)
+            HStack(spacing: TSpace.sm) {
+                Text(recoverDateText(s.startedAt)).font(.tMeta).foregroundColor(.tMuted)
+                if s.maxViews > 0 {
+                    Label("\(formatViewers(s.maxViews)) \(store.t("recover_views"))",
+                          systemImage: "eye.fill")
+                        .font(.tMeta).foregroundColor(.tMuted)
+                }
+            }
+            if !s.game.isEmpty {
+                Text(s.game).font(.tMeta).foregroundColor(.tMuted).lineLimit(1)
+            }
+            if recoverFailedID == s.streamID {
+                Text(store.t("recover_failed")).font(.tMeta).foregroundColor(.tDanger)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Button { Task { await recover(s) } } label: {
+                HStack(spacing: 6) {
+                    if resolving { ProgressView().scaleEffect(0.8).tint(.tPrimary) }
+                    else { Image(systemName: "arrow.down.circle") }
+                    Text(resolving ? store.t("recover_resolving") : store.t("recover_play"))
+                        .font(.system(size: 14, weight: .bold))
+                }
+                .foregroundColor(.tPrimary)
+                .padding(.horizontal, 14).padding(.vertical, 8)
+                .background(Color.tPrimary.opacity(0.14))
+                .clipShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .disabled(resolving)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(TSpace.md)
+        .background(Color.tCard)
+        .cornerRadius(TRadius.card)
+    }
+
+    @MainActor private func recover(_ s: RecoverableStream) async {
+        resolvingID = s.streamID; recoverFailedID = nil
+        let links = await recovery.resolve(s)
+        resolvingID = nil
+        if let links, !links.isEmpty {
+            onRecovered(RecoveredVod(
+                streamID: s.streamID,
+                title: s.title.isEmpty ? s.login : s.title,
+                streamer: s.login, links: links))
+        } else {
+            recoverFailedID = s.streamID
+        }
+    }
+
+    private func recoverDateText(_ d: Date) -> String {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: store.lang.rawValue)
+        f.dateStyle = .medium; f.timeStyle = .short
+        return f.string(from: d)
+    }
+
     // MARK: – Actions
     /// Aiguille vers la VOD ou la chaîne selon ce qui a été saisi.
     @MainActor private func submit() async {
@@ -589,6 +682,7 @@ struct SearchView: View {
         loading = true; errorMsg = nil; liveData = nil; vods = []
         filterText = ""; searchedName = login; suggestions = []
         channelTab = 0; clips = []; clipsFor = ""
+        resolvingID = nil; recoverFailedID = nil
         playlists = []; playlistsFor = ""; loadingPlaylists = false
         highlights = []; highlightsFor = ""; loadingHighlights = false
         vodCursor = nil; hasMoreVods = false; isLoadingMore = false

@@ -56,6 +56,10 @@ struct MainTabView: View {
     @State private var showSleepSheet  = false
     @State private var showSettings    = false
     @State private var showPlayerMenu  = false
+    /// Formulaire de retour, et ce qui se lisait quand on l'a ouvert depuis
+    /// le lecteur (joint au message).
+    @State private var showFeedback    = false
+    @State private var feedbackContext: String? = nil
     /// Qualité retenue par le lecteur immersif (vide = meilleure disponible).
     @State private var immersiveQuality = ""
     /// Largeur du chat au début d'un glissement : la translation du geste est
@@ -158,6 +162,14 @@ struct MainTabView: View {
         return nil
     }
 
+    /// Ce qui se lit, joint à un signalement fait depuis le lecteur.
+    private var playerFeedbackContext: String? {
+        guard playerMode != nil else { return nil }
+        let parts: [String?] = [isLivePlaying ? "live" : "vod", playerChannelLogin,
+                                isLivePlaying ? nil : currentVodId]
+        return parts.compactMap { $0 }.joined(separator: " ")
+    }
+
     /// Y a-t-il un chat à afficher sous le lecteur ?
     private var chatTarget: String? {
         if let ch = currentChannelName { return ch }
@@ -205,7 +217,9 @@ struct MainTabView: View {
             Color.tDark.ignoresSafeArea()
 
             VStack(spacing: 0) {
-                HeaderView(title: activeTab.label(store)) { showSettings = true }
+                HeaderView(title: activeTab.label(store),
+                           onOpenSettings: { showSettings = true },
+                           onFeedback: { feedbackContext = nil; showFeedback = true })
                     .zIndex(10)
 
                 Group {
@@ -262,13 +276,23 @@ struct MainTabView: View {
                                     showSleepSheet = true } },
                 onSettings: { showPlayerMenu = false
                               DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-                                  showSettings = true } }
+                                  showSettings = true } },
+                onFeedback: { showPlayerMenu = false
+                              feedbackContext = playerFeedbackContext
+                              DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                                  showFeedback = true } }
             )
             .presentationDetents([.medium])
         }
         // Réglages : ouverts depuis l'avatar de l'en-tête.
         .sheet(isPresented: $showSettings) {
             SettingsView()
+        }
+        // Signaler un bug ou proposer une idée (en-tête, menu du lecteur).
+        .sheet(isPresented: $showFeedback) {
+            FeedbackSheet(context: feedbackContext)
+                .environmentObject(store)
+                .presentationDetents([.large])
         }
         // Invitation au Discord : à chaque lancement à partir du 2ᵉ, tant
         // qu'on n'a pas choisi « Ne plus afficher » (ou rejoint), et jamais en

@@ -256,6 +256,8 @@ struct SettingsView: View {
                 }
                 .tCard()
 
+                feedbackRow
+
                 Text(versionLabel)
                     .font(.tMeta).foregroundColor(.tMuted)
 
@@ -299,6 +301,41 @@ struct SettingsView: View {
                            startPoint: .topLeading, endPoint: .bottomTrailing)
         )
         .cornerRadius(TRadius.card)
+        .overlay(RoundedRectangle(cornerRadius: TRadius.card)
+            .stroke(Color.tPrimary.opacity(0.35), lineWidth: 1))
+    }
+
+    /// Signaler un bug ou proposer une idée : en vue dès l'ouverture des
+    /// réglages, pas au fond de la page « Autres ».
+    private var feedbackRow: some View {
+        Button { showFeedback = true } label: {
+            HStack(spacing: TSpace.md) {
+                RoundedRectangle(cornerRadius: 9)
+                    .fill(Color.tPrimary.opacity(0.18))
+                    .frame(width: 34, height: 34)
+                    .overlay {
+                        Image(systemName: "ladybug.fill")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(.tPrimary)
+                    }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(store.t("feedback"))
+                        .font(.tCardTitle).foregroundColor(.tText)
+                    Text(store.t("feedback_sub"))
+                        .font(.tMeta).foregroundColor(.tMuted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.tMuted.opacity(0.7))
+            }
+            .padding(.horizontal, TSpace.lg)
+            .padding(.vertical, TSpace.md)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .tCard()
         .overlay(RoundedRectangle(cornerRadius: TRadius.card)
             .stroke(Color.tPrimary.opacity(0.35), lineWidth: 1))
     }

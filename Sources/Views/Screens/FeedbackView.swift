@@ -16,15 +16,24 @@ struct FeedbackSheet: View {
         var placeholder: String { "fb_ph_\(rawValue)" }
     }
 
+    /// Ce qui se lisait (« live xqc », « vod xqc 2893568220 ») quand le
+    /// formulaire a été ouvert depuis le lecteur.
+    let context: String?
+
     @EnvironmentObject private var store: AppStore
     @Environment(\.dismiss) private var dismiss
-    @State private var kind: Kind = .bug
+    @State private var kind: Kind
     @State private var message = ""
     @State private var contact = ""
     @State private var sending = false
     @State private var failure: String? = nil
     @State private var sent = false
     @FocusState private var messageFocused: Bool
+
+    init(initialKind: Kind = .bug, context: String? = nil) {
+        self.context = context
+        _kind = State(initialValue: initialKind)
+    }
 
     private var trimmed: String { message.trimmingCharacters(in: .whitespacesAndNewlines) }
 
@@ -36,17 +45,21 @@ struct FeedbackSheet: View {
         let model = withUnsafeBytes(of: &machine) { raw in
             String(decoding: raw.prefix { $0 != 0 }, as: UTF8.self)
         }
-        return [
+        var out: [String: String] = [
             "device": model,
             "ios": UIDevice.current.systemVersion,
             "build": Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?",
             "lang": store.lang.rawValue,
         ]
+        if let context, !context.isEmpty { out["watching"] = context }
+        return out
     }
 
     private var infoSummary: String {
         let i = info
-        return "\(i["device"] ?? "?") · iOS \(i["ios"] ?? "?") · \(UsageService.shared.appVersion) (\(i["build"] ?? "?")) · \(i["lang"] ?? "")"
+        let base = "\(i["device"] ?? "?") · iOS \(i["ios"] ?? "?") · \(UsageService.shared.appVersion) (\(i["build"] ?? "?")) · \(i["lang"] ?? "")"
+        if let watching = i["watching"] { return base + " · " + watching }
+        return base
     }
 
     var body: some View {

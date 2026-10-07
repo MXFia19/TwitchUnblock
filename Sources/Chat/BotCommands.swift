@@ -192,37 +192,57 @@ struct BotCommandsSheet: View {
         }
     }
 
+    /// Une commande : la toucher l'utilise (ou la copie). Les liens de sa
+    /// réponse s'ouvrent, eux, dans Safari : la réponse n'est alors pas dans
+    /// le bouton, qui avalerait le toucher.
     private func commandRow(_ cmd: BotCommand) -> some View {
-        Button {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            if let onUse {
-                onUse(cmd.name)
-                dismiss()
-            } else {
-                UIPasteboard.general.string = cmd.name
-                withAnimation { copied = store.t("copied_cmd").replacingOccurrences(of: "{c}", with: cmd.name) }
-                Task {
-                    try? await Task.sleep(nanoseconds: 1_200_000_000)
-                    await MainActor.run { withAnimation { copied = nil } }
-                }
-            }
-        } label: {
-            VStack(alignment: .leading, spacing: 3) {
+        let response = richText(cmd.response)
+        let hasLinks = response.runs.contains { $0.link != nil }
+        return VStack(alignment: .leading, spacing: 3) {
+            Button { use(cmd) } label: {
                 Text(cmd.name)
                     .font(.system(size: 14, weight: .bold, design: .monospaced))
                     .foregroundColor(.tPurple)
-                if !cmd.response.isEmpty {
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            if !cmd.response.isEmpty {
+                if hasLinks {
+                    Text(response)
+                        .font(.system(size: 13))
+                        .foregroundColor(.tMuted)
+                        .tint(.tPrimary)
+                        .lineLimit(4)
+                        .multilineTextAlignment(.leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
                     Text(cmd.response)
                         .font(.system(size: 13))
                         .foregroundColor(.tMuted)
                         .lineLimit(4)
                         .multilineTextAlignment(.leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
+                        .onTapGesture { use(cmd) }
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, TSpace.lg)
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .padding(.horizontal, TSpace.lg)
+    }
+
+    private func use(_ cmd: BotCommand) {
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        if let onUse {
+            onUse(cmd.name)
+            dismiss()
+        } else {
+            UIPasteboard.general.string = cmd.name
+            withAnimation { copied = store.t("copied_cmd").replacingOccurrences(of: "{c}", with: cmd.name) }
+            Task {
+                try? await Task.sleep(nanoseconds: 1_200_000_000)
+                await MainActor.run { withAnimation { copied = nil } }
+            }
+        }
     }
 }

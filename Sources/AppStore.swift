@@ -229,6 +229,10 @@ final class AppStore: ObservableObject {
     @Published var homeListLayout: Bool = false {
         didSet { UserDefaults.standard.set(homeListLayout, forKey: "cfg_home_list") }
     }
+    /// Recherche : raccourcis vers les dernières chaînes ouvertes.
+    @Published var showRecentChannels: Bool = true {
+        didSet { UserDefaults.standard.set(showRecentChannels, forKey: "cfg_recent") }
+    }
 
     /// « Audio seul » choisi dans le lecteur : retenu pour les lectures
     /// suivantes, jusqu'à ce qu'on choisisse une autre qualité (comme l'app Twitch).
@@ -360,6 +364,7 @@ final class AppStore: ObservableObject {
             ud.set(true, forKey: "onboarding_done")
         }
         homeListLayout     = ud.bool(forKey: "cfg_home_list")
+        showRecentChannels = ud.object(forKey: "cfg_recent") as? Bool ?? true
         preferAudioOnly    = ud.bool(forKey: "cfg_audio_only")
         showLatency        = ud.object(forKey: "dbg_latency")    as? Bool ?? false
         autoChatDelay      = ud.object(forKey: "dbg_chat_delay") as? Bool ?? false

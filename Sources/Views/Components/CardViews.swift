@@ -29,6 +29,7 @@ private struct Thumbnail: View {
 struct StreamCardView: View {
     let stream: TwitchStream
     let onPress: () -> Void
+    @EnvironmentObject private var store: AppStore
 
     private var thumbURL: String {
         stream.thumbnailURL
@@ -67,10 +68,14 @@ struct StreamCardView: View {
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
 
-                    Text(stream.userName)
-                        .font(.tMeta)
-                        .foregroundColor(.tPurple)
-                        .lineLimit(1)
+                    // Le pseudo ouvre la chaîne (comme sur Twitch), la carte le direct.
+                    Button { store.openChannelPage(stream.userLogin) } label: {
+                        Text(stream.userName)
+                            .font(.tMeta)
+                            .foregroundColor(.tPurple)
+                            .lineLimit(1)
+                    }
+                    .buttonStyle(.plain)
 
                     if !stream.gameName.isEmpty {
                         Text(stream.gameName)
@@ -433,6 +438,7 @@ struct ChannelHeroView: View {
 struct StreamRowView: View {
     let stream: TwitchStream
     let onPress: () -> Void
+    @EnvironmentObject private var store: AppStore
 
     private var thumbURL: String {
         stream.thumbnailURL
@@ -459,10 +465,13 @@ struct StreamRowView: View {
                     .padding(5)
                 }
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(stream.userName)
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundColor(.tText)
-                        .lineLimit(1)
+                    Button { store.openChannelPage(stream.userLogin) } label: {
+                        Text(stream.userName)
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundColor(.tText)
+                            .lineLimit(1)
+                    }
+                    .buttonStyle(.plain)
                     Text(stream.title)
                         .font(.system(size: 13))
                         .foregroundColor(.tMuted)

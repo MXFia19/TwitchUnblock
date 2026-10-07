@@ -43,7 +43,9 @@ struct MainTabView: View {
     /// Distance au bord du direct, arrondie à la seconde (synchro auto du chat).
     @State private var liveBehind: Double = 0
     /// Glissé vers le bas du lecteur en cours : décalage suivi au doigt.
-    @State private var playerPull: CGFloat = 0
+    /// Objet gardé en @State sans être observé ici : seul PlayerPullEffect
+    /// se redessine pendant le geste (voir PlayerPull.swift).
+    @State private var pull = PlayerPull()
 
     // ── Minuteur de veille ────────────────────────────────────────────────
     @ObservedObject private var sleepTimer = SleepTimerService.shared
@@ -234,7 +236,7 @@ struct MainTabView: View {
             if playerMode != nil {
                 playerOverlay
                     // Glissé vers le bas : le lecteur suit le doigt.
-                    .offset(y: playerPull)
+                    .modifier(PlayerPullEffect(pull: pull))
                     .opacity(playerVisible ? 1 : 0)
                     .allowsHitTesting(playerVisible)
                     .zIndex(100)
@@ -768,27 +770,36 @@ struct MainTabView: View {
         if abs(rounded - liveBehind) >= 1 { liveBehind = rounded }
     }
 
-    /// Réduit le lecteur en mini-barre (flèche, ou glissé vers le bas).
+    /// Réduit le lecteur en mini-barre (flèche, ou glissé vers le bas) : il
+    /// file vers le bas en s'effaçant, comme dans l'app Twitch.
     private func reducePlayer() {
-        withAnimation(.easeInOut(duration: 0.25)) { playerVisible = false }
-        // Le décalage du glissé retombe une fois le lecteur masqué, pour qu'il
-        // revienne à sa place à la prochaine ouverture.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { playerPull = 0 }
+        withAnimation(.easeOut(duration: 0.25)) {
+            pull.y = max(pull.y, 0) + 320
+            playerVisible = false
+        }
+        // Le décalage retombe une fois le lecteur masqué, pour qu'il revienne
+        // à sa place à la prochaine ouverture.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            if !playerVisible { pull.y = 0 }
+        }
     }
 
     /// Le lecteur suit le doigt ; 0 = relâché trop tôt, il revient en place.
     private func pullPlayer(_ y: CGFloat) {
         if y <= 0 {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { playerPull = 0 }
+            guard pull.y != 0 else { return }
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { pull.y = 0 }
         } else {
-            playerPull = y
+            pull.y = y
         }
     }
 
     /// Bandeau du lecteur natif : le tirer vers le bas réduit le lecteur.
     /// (Sur l'image, le lecteur d'Apple garde ses propres gestes.)
+    /// Repère global : le bandeau descend avec le doigt ; mesuré dans son
+    /// propre repère, le déplacement se fausserait à chaque image (à-coups).
     private var topBarPull: some Gesture {
-        DragGesture(minimumDistance: 12)
+        DragGesture(minimumDistance: 12, coordinateSpace: CoordinateSpace.global)
             .onChanged { v in pullPlayer(max(0, v.translation.height)) }
             .onEnded { v in
                 let down = v.translation.height
@@ -863,7 +874,10 @@ struct MainTabView: View {
         // d'onglets — appuyer sur « Recherche » ou « VODs » rouvrait le lecteur
         // en plein écran au lieu de changer d'onglet.
         .contentShape(Rectangle())
-        .onTapGesture { withAnimation { playerVisible = true } }
+        .onTapGesture {
+            pull.y = 0
+            withAnimation { playerVisible = true }
+        }
         .padding(.horizontal, TSpace.md)
         .padding(.bottom, 92)
     }
@@ -932,7 +946,7 @@ struct MainTabView: View {
         liveDvrVideoId  = nil
         liveLatency     = 0
         liveBehind      = 0
-        playerPull      = 0
+        pull.y          = 0
 
         if soft {
             switchingSource = true
@@ -1105,7 +1119,7 @@ struct MainTabView: View {
             liveUptimeText     = ""
             liveLatency        = 0
             liveBehind         = 0
-            playerPull         = 0
+            pull.y             = 0
             liveAvatar         = nil
             clipVodId          = nil
             liveGame           = ""

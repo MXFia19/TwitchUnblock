@@ -389,6 +389,9 @@ struct SettingsView: View {
                 Divider().background(Color.tBorder)
                 toggleRow(store.t("home_list"), store.t("home_list_sub"),
                           $store.homeListLayout, log: "Accueil en liste")
+                Divider().background(Color.tBorder)
+                toggleRow(store.t("show_recent"), store.t("show_recent_sub"),
+                          $store.showRecentChannels, log: "Streamers récents")
             }
         }
     }

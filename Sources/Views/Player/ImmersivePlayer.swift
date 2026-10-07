@@ -1146,8 +1146,11 @@ struct ImmersivePlayer: View {
             }
     }
 
+    /// Repère global : pendant le glissé vers le bas, le lecteur descend avec
+    /// le doigt ; mesuré dans son propre repère (qui bouge), le déplacement se
+    /// faussait à chaque image et le lecteur avançait par à-coups.
     private var panGesture: some Gesture {
-        DragGesture(minimumDistance: 12)
+        DragGesture(minimumDistance: 12, coordinateSpace: CoordinateSpace.global)
             .onChanged { value in
                 // Un glissement sur la barre de lecture ne déplace rien.
                 guard !dragging else { return }

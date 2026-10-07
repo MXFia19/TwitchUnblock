@@ -41,7 +41,7 @@ struct SearchView: View {
     @State private var hasMoreVods  = false
     @State private var isLoadingMore = false
 
-    // Onglets de la chaîne : 0 VODs, 1 Highlights, 2 Playlists, 3 Clips
+    // Onglets de la chaîne : 0 VODs, 1 Highlights, 2 Playlists, 3 Clips, 4 À propos
     @State private var channelTab   = 0
     // VODs non listées (supprimées ou masquées) : diffusions récentes connues
     // d'une source externe, sans VOD dans la liste de Twitch. Rangées à leur
@@ -62,6 +62,16 @@ struct SearchView: View {
     @State private var clipPeriod   = "LAST_WEEK"
     @State private var clipsFor     = ""
     @State private var loadingClips = false
+    /// Twitch en a d'autres que les 100 premiers ; la suite vient de Helix
+    /// (compte connecté), à partir de ce curseur.
+    @State private var clipsMore    = false
+    @State private var clipsCursor: String? = nil
+    @State private var loadingMoreClips = false
+
+    // Onglet « À propos » (description, réseaux, panneaux)
+    @State private var about: ChannelAbout? = nil
+    @State private var aboutFor     = ""
+    @State private var loadingAbout = false
 
     // Suggestions de chaînes pendant la frappe
     @State private var suggestions: [AutocompleteSuggestion] = []
@@ -326,7 +336,9 @@ struct SearchView: View {
 
     // MARK: – Chaînes récentes
     private var recentChannelItems: [HistoryItem] {
-        store.history.filter { $0.type == .channel }.prefix(10).map { $0 }
+        // Masquables dans les réglages (« Streamers récents »).
+        guard store.showRecentChannels else { return [] }
+        return store.history.filter { $0.type == .channel }.prefix(10).map { $0 }
     }
 
     @ViewBuilder private var recentChannels: some View {
@@ -420,17 +432,21 @@ struct SearchView: View {
         }
 
         if liveData != nil {
-            TSegmented(items: [0, 1, 2, 3], selection: $channelTab) {
-                [store.t("vods"), store.t("highlights"), store.t("playlists"), store.t("clips")][$0]
+            TSegmented(items: [0, 1, 2, 3, 4], selection: $channelTab) {
+                [store.t("vods"), store.t("highlights"), store.t("playlists"),
+                 store.t("clips"), store.t("about")][$0]
             }
                 .onChange(of: channelTab) { tab in
                     if tab == 1 { Task { await loadHighlights() } }
                     if tab == 2 { Task { await loadPlaylists() } }
                     if tab == 3 { Task { await loadClips() } }
+                    if tab == 4 { Task { await loadAbout() } }
                 }
         }
 
-        if channelTab == 3 {
+        if channelTab == 4 {
+            aboutSection
+        } else if channelTab == 3 {
             clipsSection
         } else if channelTab == 2 {
             playlistsSection
@@ -620,6 +636,18 @@ struct SearchView: View {
                     }
                 }
                 .padding(.horizontal, TSpace.lg)
+
+                // Au-delà des 100 premiers : il faut le compte (Helix).
+                if clipsMore {
+                    if store.twitchToken != nil {
+                        TLoadMoreButton(busy: loadingMoreClips) { Task { await loadMoreClips() } }
+                    } else {
+                        Text(store.t("more_needs_login"))
+                            .font(.tMeta).foregroundColor(.tMuted)
+                            .frame(maxWidth: .infinity)
+                            .padding(.top, TSpace.sm)
+                    }
+                }
             }
         }
     }
@@ -632,9 +660,66 @@ struct SearchView: View {
         loadingClips = true
         let result = await getClips(login: login, period: clipPeriod)
         guard key == "\(searchedName.lowercased())|\(clipPeriod)" else { return }
-        clips = result
+        clips = result.clips
+        clipsMore = result.more
+        clipsCursor = nil
         clipsFor = key
         loadingClips = false
+    }
+
+    /// Clips au-delà des 100 premiers : Helix, avec le compte. Helix repart du
+    /// début (ses 100 premiers recouvrent ceux déjà là) : jusqu'à 3 pages pour
+    /// trouver du neuf.
+    @MainActor private func loadMoreClips() async {
+        guard clipsMore, !loadingMoreClips, let token = store.twitchToken else { return }
+        let key = clipsFor
+        let login = searchedName.lowercased()
+        loadingMoreClips = true
+        defer { loadingMoreClips = false }
+        var broadcaster = liveData?.userId ?? ""
+        if broadcaster.isEmpty { broadcaster = await getUserIdGQL(login: login) ?? "" }
+        guard !broadcaster.isEmpty else { clipsMore = false; return }
+        var known = Set(clips.map(\.id))
+        var cursor = clipsCursor
+        var fresh: [ClipData] = []
+        for _ in 0..<3 {
+            let page = await getClipsHelix(token: token, broadcasterId: broadcaster,
+                                           period: clipPeriod, cursor: cursor)
+            cursor = page.cursor
+            for c in page.clips where !known.contains(c.id) {
+                known.insert(c.id)
+                fresh.append(c)
+            }
+            if !fresh.isEmpty || cursor == nil { break }
+        }
+        guard key == clipsFor else { return }
+        clips += fresh
+        clipsCursor = cursor
+        clipsMore = cursor != nil
+    }
+
+    // MARK: – À propos
+    @ViewBuilder private var aboutSection: some View {
+        if loadingAbout {
+            TLoader()
+        } else if let about {
+            ChannelAboutView(about: about, name: channelName)
+                .padding(.horizontal, TSpace.lg)
+        } else {
+            TEmptyState(icon: "info.circle", title: store.t("about_empty"))
+        }
+    }
+
+    @MainActor private func loadAbout() async {
+        let login = searchedName.lowercased()
+        guard !login.isEmpty, aboutFor != login else { return }
+        loadingAbout = true
+        let result = await getChannelAbout(login: login)
+        guard login == searchedName.lowercased() else { return }
+        about = result
+        // Échec réseau : on retentera en revenant sur l'onglet.
+        if result != nil { aboutFor = login }
+        loadingAbout = false
     }
 
     // MARK: – VODs non listées (reconstruction)
@@ -684,13 +769,21 @@ struct SearchView: View {
     }
 
     @MainActor private func searchChannel(_ name: String) async {
-        let login = name.trimmingCharacters(in: .whitespaces)
+        var login = name.trimmingCharacters(in: .whitespaces)
             .components(separatedBy: " ").first?.lowercased() ?? ""
+        // Lien Twitch collé (« twitch.tv/xqc », « https://www.twitch.tv/xqc/clips ») :
+        // on en garde la chaîne.
+        if let r = login.range(of: #"twitch\.tv/([a-z0-9_]{1,25})"#, options: .regularExpression) {
+            let path = login[r].replacingOccurrences(of: "twitch.tv/", with: "")
+            if !["videos", "directory"].contains(path) { login = path }
+        }
         guard !login.isEmpty else { return }
 
         loading = true; errorMsg = nil; liveData = nil; vods = []
         filterText = ""; searchedName = login; suggestions = []
         channelTab = 0; clips = []; clipsFor = ""
+        clipsMore = false; clipsCursor = nil; loadingMoreClips = false
+        about = nil; aboutFor = ""; loadingAbout = false
         resolvingID = nil; goneIDs = []
         playlists = []; playlistsFor = ""; loadingPlaylists = false
         highlights = []; highlightsFor = ""; loadingHighlights = false

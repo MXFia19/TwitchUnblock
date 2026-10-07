@@ -40,6 +40,7 @@ enum Backup {
             "lang": store.lang.rawValue,
             "topLang": store.topLang.map { $0 as Any } ?? NSNull(),
             "homeList": store.homeListLayout,
+            "showRecent": store.showRecentChannels,
             "timestamps": store.chatTimestamps,
             "keepDeleted": store.chatShowDeleted,
             "loadHistory": store.chatLoadRecent,
@@ -120,6 +121,7 @@ enum Backup {
         if s["topLang"] is NSNull { store.topLang = nil }
         else if let t = s["topLang"] as? String, t.count <= 8 { store.topLang = t }
         bool("homeList") { store.homeListLayout = $0 }
+        bool("showRecent") { store.showRecentChannels = $0 }
         bool("timestamps") { store.chatTimestamps = $0 }
         bool("keepDeleted") { store.chatShowDeleted = $0 }
         bool("loadHistory") { store.chatLoadRecent = $0 }

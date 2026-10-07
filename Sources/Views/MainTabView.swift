@@ -46,6 +46,10 @@ struct MainTabView: View {
     /// Objet gardé en @State sans être observé ici : seul PlayerPullEffect
     /// se redessine pendant le geste (voir PlayerPull.swift).
     @State private var pull = PlayerPull()
+    /// Glissé du bandeau du lecteur natif en cours (revient seul à faux,
+    /// même si le geste est interrompu).
+    @GestureState private var topBarDragging = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     // ── Minuteur de veille ────────────────────────────────────────────────
     @ObservedObject private var sleepTimer = SleepTimerService.shared
@@ -394,6 +398,9 @@ struct MainTabView: View {
 
             ZStack(alignment: .top) {
                 Color.tDark.ignoresSafeArea()
+                    // Hauteur du lecteur : seuil du glissé et glissade finale.
+                    .onAppear { pull.height = geo.size.height }
+                    .onChange(of: geo.size.height) { pull.height = $0 }
 
                 if loading {
                     VStack(spacing: TSpace.md) {
@@ -641,6 +648,7 @@ struct MainTabView: View {
                 onLatency: { updateLatency($0) },
                 onBehind: { updateBehind($0) },
                 onPull: { pullPlayer($0) },
+                onPullEnd: { endPull($0, predicted: $1) },
                 onReduce: { reducePlayer() },
                 onClose:  { stopPlayer() },
                 onMenu:   { showPlayerMenu = true },
@@ -750,6 +758,10 @@ struct MainTabView: View {
         .overlay(Divider().background(Color.tBorder), alignment: .bottom)
         .contentShape(Rectangle())
         .gesture(topBarPull)
+        // Geste interrompu en plein glissé : le lecteur reprend sa place.
+        .onChange(of: topBarDragging) { active in
+            if !active, playerVisible, pull.y > 0 { pullPlayer(0) }
+        }
     }
 
     /// Qualité en cours pour le lecteur immersif : celle choisie, sinon la meilleure.
@@ -771,16 +783,32 @@ struct MainTabView: View {
     }
 
     /// Réduit le lecteur en mini-barre (flèche, ou glissé vers le bas) : il
-    /// file vers le bas en s'effaçant, comme dans l'app Twitch.
+    /// file jusqu'en bas en s'effaçant, comme dans l'app Twitch. Avec
+    /// « Réduire les animations », un simple fondu.
     private func reducePlayer() {
-        withAnimation(.easeOut(duration: 0.25)) {
-            pull.y = max(pull.y, 0) + 320
-            playerVisible = false
+        if reduceMotion {
+            withAnimation(.easeOut(duration: 0.15)) { playerVisible = false }
+        } else {
+            withAnimation(.spring(response: 0.35, dampingFraction: 1)) {
+                pull.y = pull.height
+                playerVisible = false
+            }
         }
         // Le décalage retombe une fois le lecteur masqué, pour qu'il revienne
         // à sa place à la prochaine ouverture.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             if !playerVisible { pull.y = 0 }
+        }
+    }
+
+    /// Doigt levé : assez loin (seuil selon la hauteur), ou lancé
+    /// franchement, on réduit ; sinon le lecteur revient à sa place.
+    private func endPull(_ distance: CGFloat, predicted: CGFloat) {
+        let threshold = PlayerPull.threshold(for: pull.height)
+        if distance >= threshold || (distance > 20 && predicted >= threshold * 1.8) {
+            reducePlayer()
+        } else {
+            pullPlayer(0)
         }
     }
 
@@ -800,14 +828,10 @@ struct MainTabView: View {
     /// propre repère, le déplacement se fausserait à chaque image (à-coups).
     private var topBarPull: some Gesture {
         DragGesture(minimumDistance: 12, coordinateSpace: CoordinateSpace.global)
+            .updating($topBarDragging) { _, active, _ in active = true }
             .onChanged { v in pullPlayer(max(0, v.translation.height)) }
             .onEnded { v in
-                let down = v.translation.height
-                if down > 110 || (down > 40 && v.predictedEndTranslation.height > 260) {
-                    reducePlayer()
-                } else {
-                    pullPlayer(0)
-                }
+                endPull(max(0, v.translation.height), predicted: v.predictedEndTranslation.height)
             }
     }
 

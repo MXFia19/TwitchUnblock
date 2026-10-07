@@ -447,6 +447,9 @@ struct ImmersivePlayer: View {
     /// Glissé vers le bas en cours (décalage en points, 0 = relâché sans
     /// réduire) : le parent fait suivre le lecteur au doigt.
     var onPull:     (CGFloat) -> Void = { _ in }
+    /// Doigt levé : distance glissée et distance projetée (élan). Le parent
+    /// décide de réduire ou de remettre le lecteur en place.
+    var onPullEnd:  (CGFloat, CGFloat) -> Void = { _, _ in }
     var onReduce:   () -> Void = {}
     var onClose:    () -> Void = {}
     var onMenu:     () -> Void = {}
@@ -488,6 +491,10 @@ struct ImmersivePlayer: View {
     /// Glissé vers le bas pour réduire le lecteur : décidé au début du geste
     /// (nil tant qu'on ne sait pas si le doigt descend ou va de côté).
     @State private var pulling: Bool? = nil
+    /// Vrai pendant le geste. Revient seul à faux quand le geste s'arrête,
+    /// y compris interrompu (Centre de contrôle, appel) — cas où onEnded
+    /// n'est jamais appelé et où le lecteur restait décalé.
+    @GestureState private var panActive = false
     /// Zoom à deux doigts en cours : il prime sur le glissé vers le bas.
     @State private var pinching = false
 
@@ -508,6 +515,7 @@ struct ImmersivePlayer: View {
          onLatency:  @escaping (Double?) -> Void = { _ in },
          onBehind:   @escaping (Double?) -> Void = { _ in },
          onPull:     @escaping (CGFloat) -> Void = { _ in },
+         onPullEnd:  @escaping (CGFloat, CGFloat) -> Void = { _, _ in },
          onReduce:   @escaping () -> Void = {},
          onClose:    @escaping () -> Void = {},
          onMenu:     @escaping () -> Void = {},
@@ -519,7 +527,7 @@ struct ImmersivePlayer: View {
         self.url = url; self.isLive = isLive; self.dvrEnabled = dvrEnabled
         self.savedTime = savedTime; self.info = info; self.onChannel = onChannel
         self.onProgress = onProgress; self.onLatency = onLatency
-        self.onBehind = onBehind; self.onPull = onPull
+        self.onBehind = onBehind; self.onPull = onPull; self.onPullEnd = onPullEnd
         self.sleepLabel = sleepLabel; self.chatMode = chatMode
         self.isLandscape = isLandscape; self.controlsInset = controlsInset
         self.fillScreen = fillScreen; self.canReturnToLive = canReturnToLive
@@ -655,6 +663,13 @@ struct ImmersivePlayer: View {
         // réduit le lecteur, comme la flèche en haut à gauche.
         .simultaneousGesture(zoomGesture)
         .gesture(panGesture)
+        // Geste interrompu en plein glissé : le lecteur reprend sa place.
+        .onChange(of: panActive) { active in
+            if !active, pulling == true {
+                pulling = nil
+                onPull(0)
+            }
+        }
         // Changement de source (direct ↔ enregistrement) : la position voulue
         // et la nature du flux doivent suivre. Sans elles, basculer sur
         // l'enregistrement rouvrait la VOD à 0:00 — il fallait re-balayer la
@@ -1151,6 +1166,7 @@ struct ImmersivePlayer: View {
     /// faussait à chaque image et le lecteur avançait par à-coups.
     private var panGesture: some Gesture {
         DragGesture(minimumDistance: 12, coordinateSpace: CoordinateSpace.global)
+            .updating($panActive) { _, active, _ in active = true }
             .onChanged { value in
                 // Un glissement sur la barre de lecture ne déplace rien.
                 guard !dragging else { return }
@@ -1176,14 +1192,7 @@ struct ImmersivePlayer: View {
                 defer { pulling = nil }
                 if zoom > 1 { panBase = pan; return }
                 guard pulling == true else { return }
-                // Assez loin, ou lancé franchement : on réduit. Sinon le
-                // lecteur revient à sa place.
-                let down = value.translation.height
-                if down > 110 || (down > 40 && value.predictedEndTranslation.height > 260) {
-                    onReduce()
-                } else {
-                    onPull(0)
-                }
+                onPullEnd(max(0, value.translation.height), value.predictedEndTranslation.height)
             }
     }
 

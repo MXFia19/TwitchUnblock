@@ -3,6 +3,7 @@ import SwiftUI
 struct SettingsView: View {
     @EnvironmentObject private var store: AppStore
     @State private var showLogs        = false
+    @State private var showFeedback    = false
     @ObservedObject private var updater = UpdateChecker.shared
     @State private var checkingUpdate  = false
     @State private var upToDate        = false
@@ -101,6 +102,12 @@ struct SettingsView: View {
                 },
                 onCancel: { showWebLogin = false }
             )
+        }
+        // ── Retour : bug, idée ─────────────────────────────────────────
+        .sheet(isPresented: $showFeedback) {
+            FeedbackSheet()
+                .environmentObject(store)
+                .presentationDetents([.large])
         }
         // ── Minuteur de veille (préréglages + durée personnalisée) ───
         .sheet(isPresented: $showSleepSheet) {
@@ -1110,6 +1117,22 @@ struct SettingsView: View {
                 Text(store.t("not_affiliated"))
                     .font(.tMeta)
                     .foregroundColor(.tMuted.opacity(0.8))
+
+                // Signaler un bug ou proposer une idée (arrive sur Discord).
+                Button { showFeedback = true } label: {
+                    HStack(spacing: TSpace.sm) {
+                        Image(systemName: "ladybug.fill")
+                            .font(.system(size: 13, weight: .semibold))
+                        Text(store.t("feedback")).font(.tLabel)
+                        Spacer()
+                    }
+                    .foregroundColor(.tPrimary)
+                    .padding(.horizontal, TSpace.md)
+                    .frame(height: 44)
+                    .background(Color.tPrimary.opacity(0.12))
+                    .cornerRadius(12)
+                }
+                .buttonStyle(.plain)
 
                 // Revoir le tutoriel du premier lancement.
                 Button {

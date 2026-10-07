@@ -54,6 +54,29 @@ struct ClipData: Identifiable {
     let curator: String?
 }
 
+/// Fiche « À propos » d'une chaîne, comme sous le lecteur de Twitch :
+/// description, followers, réseaux et panneaux (image, lien, texte).
+struct ChannelAbout {
+    struct Social: Identifiable {
+        let id: String
+        let name: String
+        let title: String
+        let url: URL
+    }
+    struct Panel: Identifiable {
+        let id: String
+        let title: String
+        let imageURL: URL?
+        let linkURL: URL?
+        /// Markdown simple (liens, gras, titres, listes).
+        let text: String
+    }
+    let description: String
+    let followers: Int?
+    let socials: [Social]
+    let panels: [Panel]
+}
+
 /// Clip prêt à lire : MP4 signés par qualité, et la VOD d'origine (chat).
 struct ClipPlayback {
     let links: QualityLinks
@@ -168,6 +191,8 @@ struct RecoverableStream: Identifiable {
     let title: String
     let game: String
     let maxViews: Int
+    /// Durée en secondes, 0 si inconnue (direct en cours, source muette).
+    var duration: Int = 0
 }
 
 /// Une VOD supprimée dont les liens ont été reconstruits et validés : prête à lire.

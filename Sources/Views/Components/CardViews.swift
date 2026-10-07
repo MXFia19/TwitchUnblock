@@ -29,6 +29,7 @@ private struct Thumbnail: View {
 struct StreamCardView: View {
     let stream: TwitchStream
     let onPress: () -> Void
+    @EnvironmentObject private var store: AppStore
 
     private var thumbURL: String {
         stream.thumbnailURL
@@ -67,10 +68,14 @@ struct StreamCardView: View {
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
 
-                    Text(stream.userName)
-                        .font(.tMeta)
-                        .foregroundColor(.tPurple)
-                        .lineLimit(1)
+                    // Le pseudo ouvre la chaîne (comme sur Twitch), la carte le direct.
+                    Button { store.openChannelPage(stream.userLogin) } label: {
+                        Text(stream.userName)
+                            .font(.tMeta)
+                            .foregroundColor(.tPurple)
+                            .lineLimit(1)
+                    }
+                    .buttonStyle(.plain)
 
                     if !stream.gameName.isEmpty {
                         Text(stream.gameName)
@@ -160,6 +165,90 @@ struct VodCardView: View {
             .cornerRadius(TRadius.card)
         }
         .buttonStyle(.plain)
+    }
+}
+
+// MARK: – Carte de VOD non listée
+/// Diffusion sans VOD dans la liste de Twitch (supprimée ou masquée), que
+/// l'app sait reconstruire : rangée à sa date parmi les VODs, même gabarit,
+/// mais sans vignette — Twitch n'en sert plus.
+struct UnlistedVodCardView: View {
+    let stream: RecoverableStream
+    var resolving = false
+    /// La reconstruction a échoué : le CDN ne sert plus ses segments.
+    var gone = false
+    let onPress: () -> Void
+
+    @EnvironmentObject private var store: AppStore
+
+    private var meta: String {
+        let df = DateFormatter()
+        df.dateStyle = .short
+        df.timeStyle = .none
+        return [df.string(from: stream.startedAt), stream.game]
+            .filter { !$0.isEmpty }
+            .joined(separator: " · ")
+    }
+
+    var body: some View {
+        Button(action: onPress) {
+            VStack(alignment: .leading, spacing: 0) {
+                ZStack {
+                    LinearGradient(colors: [Color.tSurface, Color.tCard],
+                                   startPoint: .top, endPoint: .bottom)
+                        .aspectRatio(16/9, contentMode: .fit)
+                    if resolving {
+                        ProgressView().tint(.tPrimary)
+                    } else {
+                        Image(systemName: gone ? "xmark.octagon" : "eye.slash")
+                            .font(.system(size: 22))
+                            .foregroundColor(.tMuted)
+                    }
+                    VStack(spacing: 0) {
+                        HStack(spacing: TSpace.xs) {
+                            Text(store.t(gone ? "unlisted_gone" : "unlisted_vod"))
+                                .font(.tBadge)
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 5).padding(.vertical, 2)
+                                .background(gone ? Color.tDanger.opacity(0.85) : Color.tPrimary.opacity(0.9))
+                                .cornerRadius(4)
+                            Spacer(minLength: 0)
+                            if stream.duration > 0 {
+                                Text(formatDuration(stream.duration))
+                                    .font(.tBadge)
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 5).padding(.vertical, 2)
+                                    .background(Color.black.opacity(0.65))
+                                    .cornerRadius(4)
+                            }
+                        }
+                        .padding(TSpace.sm)
+                        Spacer(minLength: 0)
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(stream.title.isEmpty ? stream.login : stream.title)
+                        .font(.tCardTitle)
+                        .foregroundColor(.tText)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+
+                    Text(meta)
+                        .font(.tMeta)
+                        .foregroundColor(.tMuted)
+                        .lineLimit(1)
+                }
+                .frame(height: cardTextHeight, alignment: .top)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(TSpace.md)
+            }
+            .background(Color.tCard)
+            .cornerRadius(TRadius.card)
+            .opacity(gone ? 0.6 : 1)
+        }
+        .buttonStyle(.plain)
+        .disabled(resolving)
     }
 }
 
@@ -349,6 +438,7 @@ struct ChannelHeroView: View {
 struct StreamRowView: View {
     let stream: TwitchStream
     let onPress: () -> Void
+    @EnvironmentObject private var store: AppStore
 
     private var thumbURL: String {
         stream.thumbnailURL
@@ -375,10 +465,13 @@ struct StreamRowView: View {
                     .padding(5)
                 }
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(stream.userName)
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundColor(.tText)
-                        .lineLimit(1)
+                    Button { store.openChannelPage(stream.userLogin) } label: {
+                        Text(stream.userName)
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundColor(.tText)
+                            .lineLimit(1)
+                    }
+                    .buttonStyle(.plain)
                     Text(stream.title)
                         .font(.system(size: 13))
                         .foregroundColor(.tMuted)

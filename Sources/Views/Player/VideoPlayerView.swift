@@ -15,6 +15,8 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
     let onProgress: (Double) -> Void
     /// Latence mesurée du direct (nil si la playlist ne porte pas d'horodatage).
     var onLatency: (Double?) -> Void = { _ in }
+    /// Distance au bord du direct, en secondes (nil hors direct).
+    var onBehind: (Double?) -> Void = { _ in }
     /// Mode faible latence : ne s'applique qu'au direct.
     var lowLatency: Bool = false
     var isLive: Bool = false
@@ -34,7 +36,8 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
         context.coordinator.playerVC = vc
         context.coordinator.lowLatency = lowLatency && isLive
         context.coordinator.configureLatency(player)
-        context.coordinator.setupObserver(player: player, onProgress: onProgress, onLatency: onLatency)
+        context.coordinator.setupObserver(player: player, onProgress: onProgress,
+                                          onLatency: onLatency, onBehind: onBehind)
         context.coordinator.applyMetadata(nowPlaying, isLive: isLive, to: player)
         // Restore position
         if savedTime > 5 {
@@ -56,7 +59,8 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
             vc.player = player
             context.coordinator.lowLatency = lowLatency && isLive
             context.coordinator.configureLatency(player)
-            context.coordinator.setupObserver(player: player, onProgress: onProgress, onLatency: onLatency)
+            context.coordinator.setupObserver(player: player, onProgress: onProgress,
+                                              onLatency: onLatency, onBehind: onBehind)
             if savedTime > 5 {
                 player.seek(to: CMTime(seconds: savedTime, preferredTimescale: 600))
             }
@@ -135,7 +139,8 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
 
         func setupObserver(player: AVPlayer,
                            onProgress: @escaping (Double) -> Void,
-                           onLatency: @escaping (Double?) -> Void = { _ in }) {
+                           onLatency: @escaping (Double?) -> Void = { _ in },
+                           onBehind: @escaping (Double?) -> Void = { _ in }) {
             if let existing = timeObserver { playerRef?.removeTimeObserver(existing) }
             playerRef = player
             // 1 s : assez fin pour synchroniser le chat des VODs.
@@ -148,6 +153,14 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
                     onLatency(Date().timeIntervalSince(date))
                 } else {
                     onLatency(nil)
+                }
+                // Distance au bord du direct (fin de la plage cherchable) : la
+                // base de la synchro du chat. Un direct n'a pas de durée finie.
+                if let item = player?.currentItem, item.duration.isIndefinite,
+                   let edge = item.seekableTimeRanges.last?.timeRangeValue.end, edge.isNumeric {
+                    onBehind((edge - item.currentTime()).seconds)
+                } else {
+                    onBehind(nil)
                 }
                 self?.catchUpIfNeeded()
             }
@@ -223,8 +236,10 @@ struct VideoPlayerView: View {
     var nowPlaying = NowPlayingMeta()
     /// Position de lecture remontee au parent (utilisee par le chat des VODs).
     var onTime: (Double) -> Void = { _ in }
-    /// Latence du direct remontee au parent (synchro auto du chat).
+    /// Latence du direct remontee au parent (affichage).
     var onLatency: (Double?) -> Void = { _ in }
+    /// Distance au bord du direct remontee au parent (synchro auto du chat).
+    var onBehind: (Double?) -> Void = { _ in }
     // Actions affichees a cote du bouton Source (nil = bouton masque).
     var onChat: (() -> Void)? = nil
     var onRewind: (() -> Void)? = nil
@@ -356,6 +371,7 @@ struct VideoPlayerView: View {
                 if latency != measured { latency = measured }
                 onLatency(measured)
             },
+            onBehind: { value in onBehind(isLive ? value : nil) },
             lowLatency: store.lowLatency,
             isLive: isLive,
             nowPlaying: nowPlaying

@@ -38,14 +38,28 @@ struct MainTabView: View {
     @State private var uptimeTimer: Timer? = nil
 
     // ── Débogage / synchro ────────────────────────────────────────────────
-    /// Latence mesurée du direct, arrondie à la seconde (synchro auto du chat).
+    /// Latence mesurée du direct, arrondie à la seconde (affichée).
     @State private var liveLatency: Double = 0
+    /// Distance au bord du direct, arrondie à la seconde (synchro auto du chat).
+    @State private var liveBehind: Double = 0
+    /// Glissé vers le bas du lecteur en cours : décalage suivi au doigt.
+    /// Objet gardé en @State sans être observé ici : seul PlayerPullEffect
+    /// se redessine pendant le geste (voir PlayerPull.swift).
+    @State private var pull = PlayerPull()
+    /// Glissé du bandeau du lecteur natif en cours (revient seul à faux,
+    /// même si le geste est interrompu).
+    @GestureState private var topBarDragging = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     // ── Minuteur de veille ────────────────────────────────────────────────
     @ObservedObject private var sleepTimer = SleepTimerService.shared
     @State private var showSleepSheet  = false
     @State private var showSettings    = false
     @State private var showPlayerMenu  = false
+    /// Formulaire de retour, et ce qui se lisait quand on l'a ouvert depuis
+    /// le lecteur (joint au message).
+    @State private var showFeedback    = false
+    @State private var feedbackContext: String? = nil
     /// Qualité retenue par le lecteur immersif (vide = meilleure disponible).
     @State private var immersiveQuality = ""
     /// Largeur du chat au début d'un glissement : la translation du geste est
@@ -81,10 +95,15 @@ struct MainTabView: View {
     /// Chapitres de la VOD en cours (changements de jeu).
     @State private var vodChapters: [VodChapter] = []
 
-    /// Décalage à appliquer au chat : la latence mesurée, si la synchro est active.
+    /// Décalage à appliquer au chat, si la synchro est active : notre retard
+    /// sur le bord du direct. Les messages viennent de spectateurs qui
+    /// regardent eux-mêmes près de ce bord. La latence totale (horodatage de
+    /// Twitch → écran) compte en plus leur propre retard et, surtout, le délai
+    /// que certaines chaînes ajoutent à leur diffusion — que ces spectateurs
+    /// subissent aussi : le chat arrivait alors 10 s trop tard, ou plus.
     private var chatDelay: Double {
         guard store.autoChatDelay, isLivePlaying else { return 0 }
-        return max(0, min(liveLatency, 60))   // borne haute : évite un décalage absurde
+        return max(0, min(liveBehind, 60))   // borne haute : évite un décalage absurde
     }
 
     /// Infos affichées par-dessus l'image en mode immersif.
@@ -143,6 +162,14 @@ struct MainTabView: View {
         return nil
     }
 
+    /// Ce qui se lit, joint à un signalement fait depuis le lecteur.
+    private var playerFeedbackContext: String? {
+        guard playerMode != nil else { return nil }
+        let parts: [String?] = [isLivePlaying ? "live" : "vod", playerChannelLogin,
+                                isLivePlaying ? nil : currentVodId]
+        return parts.compactMap { $0 }.joined(separator: " ")
+    }
+
     /// Y a-t-il un chat à afficher sous le lecteur ?
     private var chatTarget: String? {
         if let ch = currentChannelName { return ch }
@@ -190,7 +217,9 @@ struct MainTabView: View {
             Color.tDark.ignoresSafeArea()
 
             VStack(spacing: 0) {
-                HeaderView(title: activeTab.label(store)) { showSettings = true }
+                HeaderView(title: activeTab.label(store),
+                           onOpenSettings: { showSettings = true },
+                           onFeedback: { feedbackContext = nil; showFeedback = true })
                     .zIndex(10)
 
                 Group {
@@ -224,6 +253,8 @@ struct MainTabView: View {
             // ── Player overlay ────────────────────────────────────────
             if playerMode != nil {
                 playerOverlay
+                    // Glissé vers le bas : le lecteur suit le doigt.
+                    .modifier(PlayerPullEffect(pull: pull))
                     .opacity(playerVisible ? 1 : 0)
                     .allowsHitTesting(playerVisible)
                     .zIndex(100)
@@ -245,13 +276,23 @@ struct MainTabView: View {
                                     showSleepSheet = true } },
                 onSettings: { showPlayerMenu = false
                               DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-                                  showSettings = true } }
+                                  showSettings = true } },
+                onFeedback: { showPlayerMenu = false
+                              feedbackContext = playerFeedbackContext
+                              DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                                  showFeedback = true } }
             )
             .presentationDetents([.medium])
         }
         // Réglages : ouverts depuis l'avatar de l'en-tête.
         .sheet(isPresented: $showSettings) {
             SettingsView()
+        }
+        // Signaler un bug ou proposer une idée (en-tête, menu du lecteur).
+        .sheet(isPresented: $showFeedback) {
+            FeedbackSheet(context: feedbackContext)
+                .environmentObject(store)
+                .presentationDetents([.large])
         }
         // Invitation au Discord : à chaque lancement à partir du 2ᵉ, tant
         // qu'on n'a pas choisi « Ne plus afficher » (ou rejoint), et jamais en
@@ -381,6 +422,9 @@ struct MainTabView: View {
 
             ZStack(alignment: .top) {
                 Color.tDark.ignoresSafeArea()
+                    // Hauteur du lecteur : seuil du glissé et glissade finale.
+                    .onAppear { pull.height = geo.size.height }
+                    .onChange(of: geo.size.height) { pull.height = $0 }
 
                 if loading {
                     VStack(spacing: TSpace.md) {
@@ -626,7 +670,10 @@ struct MainTabView: View {
                     if let id = currentVodId { store.setVodProgress(id, time: time) }
                 },
                 onLatency: { updateLatency($0) },
-                onReduce: { withAnimation { playerVisible = false } },
+                onBehind: { updateBehind($0) },
+                onPull: { pullPlayer($0) },
+                onPullEnd: { endPull($0, predicted: $1) },
+                onReduce: { reducePlayer() },
                 onClose:  { stopPlayer() },
                 onMenu:   { showPlayerMenu = true },
                 onRefresh: { reloadCurrent() },
@@ -652,6 +699,7 @@ struct MainTabView: View {
                 nowPlaying: nowPlayingMeta,
                 onTime: { vodPlaybackTime = $0 },
                 onLatency: { updateLatency($0) },
+                onBehind: { updateBehind($0) },
                 onChat: nil,
                 onRewind: rewindAction,
                 onBackToLive: backToLiveAction
@@ -663,7 +711,7 @@ struct MainTabView: View {
     @ViewBuilder
     private var playerTopBar: some View {
         HStack(spacing: TSpace.sm) {
-            Button { withAnimation { playerVisible = false } } label: {
+            Button { reducePlayer() } label: {
                 Image(systemName: "chevron.down")
                     .font(.system(size: 14, weight: .bold))
                     .foregroundColor(.tPrimary)
@@ -732,6 +780,12 @@ struct MainTabView: View {
         .padding(.bottom, TSpace.sm)
         .background(Color.tCard)
         .overlay(Divider().background(Color.tBorder), alignment: .bottom)
+        .contentShape(Rectangle())
+        .gesture(topBarPull)
+        // Geste interrompu en plein glissé : le lecteur reprend sa place.
+        .onChange(of: topBarDragging) { active in
+            if !active, playerVisible, pull.y > 0 { pullPlayer(0) }
+        }
     }
 
     /// Qualité en cours pour le lecteur immersif : celle choisie, sinon la meilleure.
@@ -745,6 +799,64 @@ struct MainTabView: View {
     private func updateLatency(_ value: Double?) {
         let rounded = (value ?? 0).rounded()
         if abs(rounded - liveLatency) >= 1 { liveLatency = rounded }
+    }
+
+    private func updateBehind(_ value: Double?) {
+        let rounded = max(0, value ?? 0).rounded()
+        if abs(rounded - liveBehind) >= 1 { liveBehind = rounded }
+    }
+
+    /// Réduit le lecteur en mini-barre (flèche, ou glissé vers le bas) : il
+    /// file jusqu'en bas en s'effaçant, comme dans l'app Twitch. Avec
+    /// « Réduire les animations », un simple fondu.
+    private func reducePlayer() {
+        if reduceMotion {
+            withAnimation(.easeOut(duration: 0.15)) { playerVisible = false }
+        } else {
+            withAnimation(.spring(response: 0.35, dampingFraction: 1)) {
+                pull.y = pull.height
+                playerVisible = false
+            }
+        }
+        // Le décalage retombe une fois le lecteur masqué, pour qu'il revienne
+        // à sa place à la prochaine ouverture.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            if !playerVisible { pull.y = 0 }
+        }
+    }
+
+    /// Doigt levé : assez loin (seuil selon la hauteur), ou lancé
+    /// franchement, on réduit ; sinon le lecteur revient à sa place.
+    private func endPull(_ distance: CGFloat, predicted: CGFloat) {
+        let threshold = PlayerPull.threshold(for: pull.height)
+        if distance >= threshold || (distance > 20 && predicted >= threshold * 1.8) {
+            reducePlayer()
+        } else {
+            pullPlayer(0)
+        }
+    }
+
+    /// Le lecteur suit le doigt ; 0 = relâché trop tôt, il revient en place.
+    private func pullPlayer(_ y: CGFloat) {
+        if y <= 0 {
+            guard pull.y != 0 else { return }
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { pull.y = 0 }
+        } else {
+            pull.y = y
+        }
+    }
+
+    /// Bandeau du lecteur natif : le tirer vers le bas réduit le lecteur.
+    /// (Sur l'image, le lecteur d'Apple garde ses propres gestes.)
+    /// Repère global : le bandeau descend avec le doigt ; mesuré dans son
+    /// propre repère, le déplacement se fausserait à chaque image (à-coups).
+    private var topBarPull: some Gesture {
+        DragGesture(minimumDistance: 12, coordinateSpace: CoordinateSpace.global)
+            .updating($topBarDragging) { _, active, _ in active = true }
+            .onChanged { v in pullPlayer(max(0, v.translation.height)) }
+            .onEnded { v in
+                endPull(max(0, v.translation.height), predicted: v.predictedEndTranslation.height)
+            }
     }
 
     /// Recharge le flux courant (bouton ⟳ du lecteur).
@@ -810,7 +922,10 @@ struct MainTabView: View {
         // d'onglets — appuyer sur « Recherche » ou « VODs » rouvrait le lecteur
         // en plein écran au lieu de changer d'onglet.
         .contentShape(Rectangle())
-        .onTapGesture { withAnimation { playerVisible = true } }
+        .onTapGesture {
+            pull.y = 0
+            withAnimation { playerVisible = true }
+        }
         .padding(.horizontal, TSpace.md)
         .padding(.bottom, 92)
     }
@@ -878,6 +993,8 @@ struct MainTabView: View {
         vodPlaybackTime = 0
         liveDvrVideoId  = nil
         liveLatency     = 0
+        liveBehind      = 0
+        pull.y          = 0
 
         if soft {
             switchingSource = true
@@ -1049,6 +1166,8 @@ struct MainTabView: View {
             liveStartedAt      = nil
             liveUptimeText     = ""
             liveLatency        = 0
+            liveBehind         = 0
+            pull.y             = 0
             liveAvatar         = nil
             clipVodId          = nil
             liveGame           = ""

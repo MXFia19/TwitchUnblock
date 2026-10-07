@@ -41,13 +41,15 @@ struct SearchView: View {
     @State private var hasMoreVods  = false
     @State private var isLoadingMore = false
 
-    // Onglets de la chaîne : 0 VODs, 1 Highlights, 2 Playlists, 3 Clips,
-    // 4 Supprimées (affiché juste après les VODs, voir `results`).
+    // Onglets de la chaîne : 0 VODs, 1 Highlights, 2 Playlists, 3 Clips, 4 À propos
     @State private var channelTab   = 0
-    // Onglet « Supprimées » : récupération de VODs effacées via une source externe.
+    // VODs non listées (supprimées ou masquées) : diffusions récentes connues
+    // d'une source externe, sans VOD dans la liste de Twitch. Rangées à leur
+    // date parmi les VODs, reconstruites au toucher.
     @StateObject private var recovery = VodRecoveryService()
     @State private var resolvingID: String? = nil   // diffusion en cours de reconstruction
-    @State private var recoverFailedID: String? = nil
+    /// Diffusions dont le CDN ne sert plus les segments.
+    @State private var goneIDs: Set<String> = []
     @State private var highlights: [VodData] = []
     @State private var highlightsFor = ""
     @State private var loadingHighlights = false
@@ -60,6 +62,16 @@ struct SearchView: View {
     @State private var clipPeriod   = "LAST_WEEK"
     @State private var clipsFor     = ""
     @State private var loadingClips = false
+    /// Twitch en a d'autres que les 100 premiers ; la suite vient de Helix
+    /// (compte connecté), à partir de ce curseur.
+    @State private var clipsMore    = false
+    @State private var clipsCursor: String? = nil
+    @State private var loadingMoreClips = false
+
+    // Onglet « À propos » (description, réseaux, panneaux)
+    @State private var about: ChannelAbout? = nil
+    @State private var aboutFor     = ""
+    @State private var loadingAbout = false
 
     // Suggestions de chaînes pendant la frappe
     @State private var suggestions: [AutocompleteSuggestion] = []
@@ -86,6 +98,59 @@ struct SearchView: View {
         let kw = filterText.trimmingCharacters(in: .whitespaces).lowercased()
         guard !kw.isEmpty else { return vods }
         return vods.filter { $0.title.lowercased().contains(kw) }
+    }
+
+    /// Entrée de la grille des VODs : une vraie VOD, ou une diffusion dont la
+    /// VOD n'est pas listée.
+    private enum VodEntry: Identifiable {
+        case vod(VodData)
+        case unlisted(RecoverableStream)
+        var id: String {
+            switch self {
+            case .vod(let v):      return "v\(v.id)"
+            case .unlisted(let s): return "u\(s.streamID)"
+            }
+        }
+    }
+
+    /// Diffusions récentes sans VOD dans la liste de Twitch. Une VOD les
+    /// couvre si sa vignette porte leur id de diffusion, ou si elle commence
+    /// à la même heure (vignette « en cours de traitement »). Plus ancienne
+    /// que la dernière VOD chargée, une diffusion reste de côté tant que la
+    /// liste n'est pas complète : sa VOD est peut-être à la page suivante.
+    private var unlistedStreams: [RecoverableStream] {
+        guard !channelName.isEmpty, recovery.channel == channelName.lowercased() else { return [] }
+        let window: TimeInterval = 15 * 60
+        var dated: [(vod: VodData, date: Date)] = []
+        for v in vods {
+            if let d = parseTwitchDate(v.publishedAt) { dated.append((vod: v, date: d)) }
+        }
+        let oldest = hasMoreVods ? dated.map { $0.date }.min() : nil
+        // Le direct en cours a sa propre page : pas une VOD perdue.
+        let liveStart = liveData?.error == nil ? liveData?.startedAt : nil
+        return recovery.streams.filter { s in
+            if dated.contains(where: { $0.vod.previewThumbnailURL.contains("_\(s.streamID)_")
+                                       || abs($0.date.timeIntervalSince(s.startedAt)) < window }) { return false }
+            if let liveStart, abs(liveStart.timeIntervalSince(s.startedAt)) < window { return false }
+            if let oldest, s.startedAt < oldest.addingTimeInterval(-window) { return false }
+            return true
+        }
+    }
+
+    /// VODs et diffusions non listées, de la plus récente à la plus ancienne,
+    /// filtrées par le mot-clé.
+    private var vodEntries: [VodEntry] {
+        let kw = filterText.trimmingCharacters(in: .whitespaces).lowercased()
+        let extra = unlistedStreams.filter { kw.isEmpty || $0.title.lowercased().contains(kw) }
+        guard !extra.isEmpty else { return filteredVods.map { VodEntry.vod($0) } }
+        var items: [(date: Date, entry: VodEntry)] = []
+        for v in filteredVods {
+            items.append((date: parseTwitchDate(v.publishedAt) ?? .distantPast, entry: .vod(v)))
+        }
+        for s in extra {
+            items.append((date: s.startedAt, entry: .unlisted(s)))
+        }
+        return items.sorted { $0.date > $1.date }.map { $0.entry }
     }
 
     private var offlineSinceText: String? {
@@ -271,7 +336,9 @@ struct SearchView: View {
 
     // MARK: – Chaînes récentes
     private var recentChannelItems: [HistoryItem] {
-        store.history.filter { $0.type == .channel }.prefix(10).map { $0 }
+        // Masquables dans les réglages (« Streamers récents »).
+        guard store.showRecentChannels else { return [] }
+        return store.history.filter { $0.type == .channel }.prefix(10).map { $0 }
     }
 
     @ViewBuilder private var recentChannels: some View {
@@ -365,22 +432,20 @@ struct SearchView: View {
         }
 
         if liveData != nil {
-            // « Supprimées » en 2ᵉ : ce sont des VODs aussi, celles que Twitch
-            // a effacées ; l'ordre d'affichage ne change pas les numéros.
-            TSegmented(items: [0, 4, 1, 2, 3], selection: $channelTab) {
+            TSegmented(items: [0, 1, 2, 3, 4], selection: $channelTab) {
                 [store.t("vods"), store.t("highlights"), store.t("playlists"),
-                 store.t("clips"), store.t("recover_tab")][$0]
+                 store.t("clips"), store.t("about")][$0]
             }
                 .onChange(of: channelTab) { tab in
                     if tab == 1 { Task { await loadHighlights() } }
                     if tab == 2 { Task { await loadPlaylists() } }
                     if tab == 3 { Task { await loadClips() } }
-                    if tab == 4 { Task { await recovery.load(channel: channelName) } }
+                    if tab == 4 { Task { await loadAbout() } }
                 }
         }
 
         if channelTab == 4 {
-            recoverySection
+            aboutSection
         } else if channelTab == 3 {
             clipsSection
         } else if channelTab == 2 {
@@ -388,7 +453,9 @@ struct SearchView: View {
         } else if channelTab == 1 {
             highlightsSection
         } else {
-            if !vods.isEmpty {
+            let entries = vodEntries
+            let unlistedCount = unlistedStreams.count
+            if !vods.isEmpty || unlistedCount > 0 {
                 VStack(alignment: .leading, spacing: TSpace.md) {
                     TSectionHeader("\(vods.count) \(store.t("vods_found"))", icon: "film")
 
@@ -396,25 +463,43 @@ struct SearchView: View {
                     TSearchField(text: $filterText, placeholder: store.t("ph_keyword"))
                         .padding(.horizontal, TSpace.lg)
 
-                    if filteredVods.isEmpty {
+                    // D'où viennent les cartes « VOD non listée », une fois.
+                    if unlistedCount > 0 {
+                        Label(store.t("unlisted_hint"), systemImage: "eye.slash")
+                            .font(.tMeta)
+                            .foregroundColor(.tMuted)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.horizontal, TSpace.lg)
+                    }
+
+                    if entries.isEmpty {
                         TEmptyState(icon: "line.3.horizontal.decrease.circle",
                                     title: store.t("no_result"))
                     } else {
                         LazyVGrid(columns: columns, spacing: TSpace.md) {
-                            ForEach(filteredVods) { vod in
-                                let saved = store.getVodProgress(vod.id)
-                                let progress = vod.lengthSeconds > 0
-                                    ? saved / Double(vod.lengthSeconds) : 0
-                                VodCardView(vod: vod, progress: progress) {
-                                    onPlayVod(vod.id, vod.title, vod.previewThumbnailURL, channelName)
-                                }
-                                .onAppear {
-                                    // Défilement infini : charge la suite quand la
-                                    // dernière carte apparaît.
-                                    guard vod.id == filteredVods.last?.id,
-                                          hasMoreVods, !isLoadingMore else { return }
-                                    isLoadingMore = true
-                                    Task { await loadMoreVods() }
+                            ForEach(entries) { entry in
+                                switch entry {
+                                case .vod(let vod):
+                                    let saved = store.getVodProgress(vod.id)
+                                    let progress = vod.lengthSeconds > 0
+                                        ? saved / Double(vod.lengthSeconds) : 0
+                                    VodCardView(vod: vod, progress: progress) {
+                                        onPlayVod(vod.id, vod.title, vod.previewThumbnailURL, channelName)
+                                    }
+                                    .onAppear {
+                                        // Défilement infini : charge la suite quand la
+                                        // dernière VOD apparaît.
+                                        guard vod.id == filteredVods.last?.id,
+                                              hasMoreVods, !isLoadingMore else { return }
+                                        isLoadingMore = true
+                                        Task { await loadMoreVods() }
+                                    }
+                                case .unlisted(let s):
+                                    UnlistedVodCardView(stream: s,
+                                                        resolving: resolvingID == s.streamID,
+                                                        gone: goneIDs.contains(s.streamID)) {
+                                        Task { await recover(s) }
+                                    }
                                 }
                             }
                         }
@@ -551,6 +636,18 @@ struct SearchView: View {
                     }
                 }
                 .padding(.horizontal, TSpace.lg)
+
+                // Au-delà des 100 premiers : il faut le compte (Helix).
+                if clipsMore {
+                    if store.twitchToken != nil {
+                        TLoadMoreButton(busy: loadingMoreClips) { Task { await loadMoreClips() } }
+                    } else {
+                        Text(store.t("more_needs_login"))
+                            .font(.tMeta).foregroundColor(.tMuted)
+                            .frame(maxWidth: .infinity)
+                            .padding(.top, TSpace.sm)
+                    }
+                }
             }
         }
     }
@@ -563,75 +660,75 @@ struct SearchView: View {
         loadingClips = true
         let result = await getClips(login: login, period: clipPeriod)
         guard key == "\(searchedName.lowercased())|\(clipPeriod)" else { return }
-        clips = result
+        clips = result.clips
+        clipsMore = result.more
+        clipsCursor = nil
         clipsFor = key
         loadingClips = false
     }
 
-    // MARK: – Récupération de VODs supprimées
-    @ViewBuilder private var recoverySection: some View {
-        VStack(alignment: .leading, spacing: TSpace.md) {
-            Text(store.t("recover_hint"))
-                .font(.tMeta).foregroundColor(.tMuted)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, TSpace.lg)
-
-            if recovery.loading {
-                TLoader()
-            } else if recovery.failed || recovery.streams.isEmpty {
-                TEmptyState(icon: "trash.slash", title: store.t("recover_empty"))
-            } else {
-                VStack(spacing: TSpace.sm) {
-                    ForEach(recovery.streams) { recoverRow($0) }
-                }
-                .padding(.horizontal, TSpace.lg)
+    /// Clips au-delà des 100 premiers : Helix, avec le compte. Helix repart du
+    /// début (ses 100 premiers recouvrent ceux déjà là) : jusqu'à 3 pages pour
+    /// trouver du neuf.
+    @MainActor private func loadMoreClips() async {
+        guard clipsMore, !loadingMoreClips, let token = store.twitchToken else { return }
+        let key = clipsFor
+        let login = searchedName.lowercased()
+        loadingMoreClips = true
+        defer { loadingMoreClips = false }
+        var broadcaster = liveData?.userId ?? ""
+        if broadcaster.isEmpty { broadcaster = await getUserIdGQL(login: login) ?? "" }
+        guard !broadcaster.isEmpty else { clipsMore = false; return }
+        var known = Set(clips.map(\.id))
+        var cursor = clipsCursor
+        var fresh: [ClipData] = []
+        for _ in 0..<3 {
+            let page = await getClipsHelix(token: token, broadcasterId: broadcaster,
+                                           period: clipPeriod, cursor: cursor)
+            cursor = page.cursor
+            for c in page.clips where !known.contains(c.id) {
+                known.insert(c.id)
+                fresh.append(c)
             }
+            if !fresh.isEmpty || cursor == nil { break }
+        }
+        guard key == clipsFor else { return }
+        clips += fresh
+        clipsCursor = cursor
+        clipsMore = cursor != nil
+    }
+
+    // MARK: – À propos
+    @ViewBuilder private var aboutSection: some View {
+        if loadingAbout {
+            TLoader()
+        } else if let about {
+            ChannelAboutView(about: about, name: channelName)
+                .padding(.horizontal, TSpace.lg)
+        } else {
+            TEmptyState(icon: "info.circle", title: store.t("about_empty"))
         }
     }
 
-    @ViewBuilder private func recoverRow(_ s: RecoverableStream) -> some View {
-        let resolving = resolvingID == s.streamID
-        VStack(alignment: .leading, spacing: 6) {
-            Text(s.title.isEmpty ? s.login : s.title)
-                .font(.tCardTitle).foregroundColor(.tText).lineLimit(2)
-            HStack(spacing: TSpace.sm) {
-                Text(recoverDateText(s.startedAt)).font(.tMeta).foregroundColor(.tMuted)
-                if s.maxViews > 0 {
-                    Label("\(formatViewers(s.maxViews)) \(store.t("recover_views"))",
-                          systemImage: "eye.fill")
-                        .font(.tMeta).foregroundColor(.tMuted)
-                }
-            }
-            if !s.game.isEmpty {
-                Text(s.game).font(.tMeta).foregroundColor(.tMuted).lineLimit(1)
-            }
-            if recoverFailedID == s.streamID {
-                Text(store.t("recover_failed")).font(.tMeta).foregroundColor(.tDanger)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Button { Task { await recover(s) } } label: {
-                HStack(spacing: 6) {
-                    if resolving { ProgressView().scaleEffect(0.8).tint(.tPrimary) }
-                    else { Image(systemName: "arrow.down.circle") }
-                    Text(resolving ? store.t("recover_resolving") : store.t("recover_play"))
-                        .font(.system(size: 14, weight: .bold))
-                }
-                .foregroundColor(.tPrimary)
-                .padding(.horizontal, 14).padding(.vertical, 8)
-                .background(Color.tPrimary.opacity(0.14))
-                .clipShape(Capsule())
-            }
-            .buttonStyle(.plain)
-            .disabled(resolving)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(TSpace.md)
-        .background(Color.tCard)
-        .cornerRadius(TRadius.card)
+    @MainActor private func loadAbout() async {
+        let login = searchedName.lowercased()
+        guard !login.isEmpty, aboutFor != login else { return }
+        loadingAbout = true
+        let result = await getChannelAbout(login: login)
+        guard login == searchedName.lowercased() else { return }
+        about = result
+        // Échec réseau : on retentera en revenant sur l'onglet.
+        if result != nil { aboutFor = login }
+        loadingAbout = false
     }
 
+    // MARK: – VODs non listées (reconstruction)
+    /// Reconstruit les liens d'une diffusion non listée, puis la lit. Si le CDN
+    /// ne la sert plus, sa carte le dit ; un nouvel essai reste possible.
     @MainActor private func recover(_ s: RecoverableStream) async {
-        resolvingID = s.streamID; recoverFailedID = nil
+        guard resolvingID == nil else { return }
+        resolvingID = s.streamID
+        goneIDs.remove(s.streamID)
         let links = await recovery.resolve(s)
         resolvingID = nil
         if let links, !links.isEmpty {
@@ -640,15 +737,8 @@ struct SearchView: View {
                 title: s.title.isEmpty ? s.login : s.title,
                 streamer: s.login, links: links))
         } else {
-            recoverFailedID = s.streamID
+            goneIDs.insert(s.streamID)
         }
-    }
-
-    private func recoverDateText(_ d: Date) -> String {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: store.lang.rawValue)
-        f.dateStyle = .medium; f.timeStyle = .short
-        return f.string(from: d)
     }
 
     // MARK: – Actions
@@ -679,14 +769,22 @@ struct SearchView: View {
     }
 
     @MainActor private func searchChannel(_ name: String) async {
-        let login = name.trimmingCharacters(in: .whitespaces)
+        var login = name.trimmingCharacters(in: .whitespaces)
             .components(separatedBy: " ").first?.lowercased() ?? ""
+        // Lien Twitch collé (« twitch.tv/xqc », « https://www.twitch.tv/xqc/clips ») :
+        // on en garde la chaîne.
+        if let r = login.range(of: #"twitch\.tv/([a-z0-9_]{1,25})"#, options: .regularExpression) {
+            let path = login[r].replacingOccurrences(of: "twitch.tv/", with: "")
+            if !["videos", "directory"].contains(path) { login = path }
+        }
         guard !login.isEmpty else { return }
 
         loading = true; errorMsg = nil; liveData = nil; vods = []
         filterText = ""; searchedName = login; suggestions = []
         channelTab = 0; clips = []; clipsFor = ""
-        resolvingID = nil; recoverFailedID = nil
+        clipsMore = false; clipsCursor = nil; loadingMoreClips = false
+        about = nil; aboutFor = ""; loadingAbout = false
+        resolvingID = nil; goneIDs = []
         playlists = []; playlistsFor = ""; loadingPlaylists = false
         highlights = []; highlightsFor = ""; loadingHighlights = false
         vodCursor = nil; hasMoreVods = false; isLoadingMore = false
@@ -710,6 +808,8 @@ struct SearchView: View {
             vods        = ch.videos
             vodCursor   = ch.cursor
             hasMoreVods = ch.cursor != nil
+            // VODs non listées : en arrière-plan, la grille s'affiche sans attendre.
+            Task { await recovery.load(channel: login) }
         }
         loading = false
     }

@@ -153,7 +153,7 @@ struct ChatView: View {
 
             // ── Événements live (sondage / prédiction / hype train) ─
             if store.showLiveEvents {
-                LiveEventsBanner(events: events)
+                LiveEventsBanner(events: events, points: pointsService)
             }
 
             // ── Raid sortant ────────────────────────────────────────

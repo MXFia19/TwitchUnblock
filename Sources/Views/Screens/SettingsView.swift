@@ -3,6 +3,7 @@ import SwiftUI
 struct SettingsView: View {
     @EnvironmentObject private var store: AppStore
     @State private var showLogs        = false
+    @State private var showFeedback    = false
     @ObservedObject private var updater = UpdateChecker.shared
     @State private var checkingUpdate  = false
     @State private var upToDate        = false
@@ -101,6 +102,12 @@ struct SettingsView: View {
                 },
                 onCancel: { showWebLogin = false }
             )
+        }
+        // ── Retour : bug, idée ─────────────────────────────────────────
+        .sheet(isPresented: $showFeedback) {
+            FeedbackSheet()
+                .environmentObject(store)
+                .presentationDetents([.large])
         }
         // ── Minuteur de veille (préréglages + durée personnalisée) ───
         .sheet(isPresented: $showSleepSheet) {
@@ -249,6 +256,8 @@ struct SettingsView: View {
                 }
                 .tCard()
 
+                feedbackRow
+
                 Text(versionLabel)
                     .font(.tMeta).foregroundColor(.tMuted)
 
@@ -292,6 +301,41 @@ struct SettingsView: View {
                            startPoint: .topLeading, endPoint: .bottomTrailing)
         )
         .cornerRadius(TRadius.card)
+        .overlay(RoundedRectangle(cornerRadius: TRadius.card)
+            .stroke(Color.tPrimary.opacity(0.35), lineWidth: 1))
+    }
+
+    /// Signaler un bug ou proposer une idée : en vue dès l'ouverture des
+    /// réglages, pas au fond de la page « Autres ».
+    private var feedbackRow: some View {
+        Button { showFeedback = true } label: {
+            HStack(spacing: TSpace.md) {
+                RoundedRectangle(cornerRadius: 9)
+                    .fill(Color.tPrimary.opacity(0.18))
+                    .frame(width: 34, height: 34)
+                    .overlay {
+                        Image(systemName: "ladybug.fill")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(.tPrimary)
+                    }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(store.t("feedback"))
+                        .font(.tCardTitle).foregroundColor(.tText)
+                    Text(store.t("feedback_sub"))
+                        .font(.tMeta).foregroundColor(.tMuted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.tMuted.opacity(0.7))
+            }
+            .padding(.horizontal, TSpace.lg)
+            .padding(.vertical, TSpace.md)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .tCard()
         .overlay(RoundedRectangle(cornerRadius: TRadius.card)
             .stroke(Color.tPrimary.opacity(0.35), lineWidth: 1))
     }
@@ -389,6 +433,9 @@ struct SettingsView: View {
                 Divider().background(Color.tBorder)
                 toggleRow(store.t("home_list"), store.t("home_list_sub"),
                           $store.homeListLayout, log: "Accueil en liste")
+                Divider().background(Color.tBorder)
+                toggleRow(store.t("show_recent"), store.t("show_recent_sub"),
+                          $store.showRecentChannels, log: "Streamers récents")
             }
         }
     }
@@ -1107,6 +1154,22 @@ struct SettingsView: View {
                 Text(store.t("not_affiliated"))
                     .font(.tMeta)
                     .foregroundColor(.tMuted.opacity(0.8))
+
+                // Signaler un bug ou proposer une idée (arrive sur Discord).
+                Button { showFeedback = true } label: {
+                    HStack(spacing: TSpace.sm) {
+                        Image(systemName: "ladybug.fill")
+                            .font(.system(size: 13, weight: .semibold))
+                        Text(store.t("feedback")).font(.tLabel)
+                        Spacer()
+                    }
+                    .foregroundColor(.tPrimary)
+                    .padding(.horizontal, TSpace.md)
+                    .frame(height: 44)
+                    .background(Color.tPrimary.opacity(0.12))
+                    .cornerRadius(12)
+                }
+                .buttonStyle(.plain)
 
                 // Revoir le tutoriel du premier lancement.
                 Button {

@@ -181,6 +181,53 @@ private func workerJSON(_ path: String) async -> [String: Any]? {
     return nil
 }
 
+// MARK: – Passages coupés (droits d'auteur)
+/// Les playlists du CDN des VODs listent les passages coupés en
+/// « N-unmuted.ts », que le CDN refuse (403) : la lecture bloquait dès le
+/// premier. Seul « N-muted.ts » (son coupé) se lit. AVPlayer ne sait pas
+/// réécrire une playlist : quand il y en a, elle passe par le proxy du Worker,
+/// qui fait la substitution ; les segments, eux, viennent toujours du CDN
+/// (`isVod=false`). Sans passage coupé, rien ne change.
+func playableMutedLinks(_ links: QualityLinks) async -> QualityLinks {
+    guard let source = links["Source"] ?? links.values.first, let url = URL(string: source),
+          let (data, _) = try? await URLSession.shared.data(from: url),
+          String(decoding: data, as: UTF8.self).contains("-unmuted.ts"),
+          let base = await workingProxyBase(for: source) else { return links }
+    var out: QualityLinks = [:]
+    for (label, link) in links { out[label] = proxiedPlaylistURL(link, base: base) }
+    logger.info("M3U8", "Passages coupés : playlists réécrites par le Worker", base)
+    return out
+}
+
+private func proxiedPlaylistURL(_ url: String, base: String) -> String {
+    let enc = url.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? url
+    return "\(base)/api/proxy?url=\(enc)&isVod=false"
+}
+
+/// Worker (principal, puis secours) qui sert vraiment cette playlist ; nil si
+/// aucun. Même tri que `workerJSON` : le quota du jour atteint (429) le met
+/// de côté jusqu'à minuit UTC.
+private func workingProxyBase(for url: String) async -> String? {
+    let bases = [kAPIURL] + kAPIFallbackURLs
+    let health = WorkerHealth.shared
+    let ordered = bases.filter { !health.isDown($0) } + bases.filter { health.isDown($0) }
+    for base in ordered {
+        guard let u = URL(string: proxiedPlaylistURL(url, base: base)),
+              let (data, resp) = try? await URLSession.shared.data(from: u) else { continue }
+        let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+        if code == 429 || (502...504).contains(code) {
+            let quota = String(data: data, encoding: .utf8)?.contains("1027") == true
+            if bases.count > 1 {
+                health.markDown(base, until: quota ? nextUTCMidnight() : Date().addingTimeInterval(30 * 60))
+            }
+            continue
+        }
+        // Le Worker répond sans playlist : un autre ferait pareil.
+        return code == 200 && String(decoding: data.prefix(7), as: UTF8.self) == "#EXTM3U" ? base : nil
+    }
+    return nil
+}
+
 // MARK: – getM3U8 (VODs)
 func getM3U8(vodId: String) async -> M3U8Data {
     logger.info("M3U8", "Lancement VOD \(vodId)")
@@ -215,7 +262,8 @@ func getM3U8(vodId: String) async -> M3U8Data {
     let sbLinks = await storyboardHack(vodId: vodId)
     if !sbLinks.isEmpty {
         logger.success("M3U8", "[2/3] ✅ Storyboard \(sbLinks.count) qualités")
-        return M3U8Data(links: sbLinks, error: nil)
+        // Playlists lues directement sur le CDN : mêmes passages coupés.
+        return M3U8Data(links: await playableMutedLinks(sbLinks), error: nil)
     }
 
     if let json = await workerJSON("/api/get-m3u8?id=\(vodId)&proxy=false"),
@@ -761,7 +809,7 @@ func formatDuration(_ seconds: Int) -> String {
 
 /// Twitch date ses VODs sans fractions de seconde et ses lives avec : on
 /// accepte les deux formats.
-private func parseTwitchDate(_ s: String?) -> Date? {
+func parseTwitchDate(_ s: String?) -> Date? {
     guard let s else { return nil }
     let df = ISO8601DateFormatter()
     df.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -1021,6 +1069,50 @@ func getUserIdGQL(login: String) async -> String? {
     return (d?["user"] as? [String: Any])?["id"] as? String
 }
 
+// MARK: – Catégories sans compte (GQL public)
+// Helix demande un jeton ; ces requêtes-là non. Mais Twitch refuse leur
+// pagination (« failed integrity check » dès la 2ᵉ page, avec ou sans
+// requête persistée) : sans compte, une seule page de 100, la plus grande
+// qu'il accepte. Connecté, Helix pagine sans limite.
+private func categoryFromGQL(_ n: [String: Any]) -> TwitchCategory? {
+    guard let id = n["id"] as? String else { return nil }
+    return TwitchCategory(id: id, name: n["displayName"] as? String ?? "",
+                          boxArtURL: n["boxArtURL"] as? String ?? "",
+                          viewers: n["viewersCount"] as? Int)
+}
+
+/// Catégories les plus regardées, avec leur audience. nil si Twitch n'a pas répondu.
+func getTopCategoriesGQL() async -> [TwitchCategory]? {
+    let q = "query { games(first: 100) { edges { node { id displayName boxArtURL(width: 570, height: 760) viewersCount } } } }"
+    guard let d = await gqlRequest(q, [:]),
+          let edges = (d["games"] as? [String: Any])?["edges"] as? [[String: Any]] else { return nil }
+    return edges.compactMap { ($0["node"] as? [String: Any]).flatMap(categoryFromGQL) }
+}
+
+/// Recherche de catégories par nom. nil si Twitch n'a pas répondu.
+func searchCategoriesGQL(query: String) async -> [TwitchCategory]? {
+    let q = "query($q: String!) { searchCategories(query: $q, first: 30) { edges { node { id displayName boxArtURL(width: 570, height: 760) viewersCount } } } }"
+    guard let d = await gqlRequest(q, ["q": query]),
+          let edges = (d["searchCategories"] as? [String: Any])?["edges"] as? [[String: Any]] else { return nil }
+    return edges.compactMap { ($0["node"] as? [String: Any]).flatMap(categoryFromGQL) }
+}
+
+/// Les 100 lives les plus regardés d'une catégorie. nil si Twitch n'a pas répondu.
+func getStreamsByCategoryGQL(gameId: String) async -> [TwitchStream]? {
+    let q = """
+    query($id: ID!) { game(id: $id) { streams(first: 100) { edges { node {
+      title viewersCount previewImageURL(width: 440, height: 248) game { displayName }
+      broadcaster { id login displayName } } } } } }
+    """
+    guard let d = await gqlRequest(q, ["id": gameId]),
+          let edges = ((d["game"] as? [String: Any])?["streams"] as? [String: Any])?["edges"] as? [[String: Any]]
+    else { return nil }
+    return edges.compactMap { e in
+        guard let n = e["node"] as? [String: Any], let b = n["broadcaster"] as? [String: Any] else { return nil }
+        return streamFromGQL(user: b, stream: n)
+    }
+}
+
 /// Top des lives sans jeton (GQL public) ; `lang` au format Helix (« fr », « zh-hk »).
 func getTopStreamsGQL(lang: String?) async -> [TwitchStream] {
     let q = """
@@ -1039,17 +1131,21 @@ func getTopStreamsGQL(lang: String?) async -> [TwitchStream] {
 }
 
 /// Clips les plus vus d'une chaîne sur la période (LAST_DAY, LAST_WEEK, LAST_MONTH, ALL_TIME).
-func getClips(login: String, period: String) async -> [ClipData] {
+/// Les 100 premiers d'un coup : en GQL public, Twitch refuse la page suivante
+/// (« failed integrity check »). `more` : il y en a d'autres — Helix, avec le
+/// compte, prend la suite (getClipsHelix).
+func getClips(login: String, period: String) async -> (clips: [ClipData], more: Bool) {
     let q = """
-    query($l: String!, $p: ClipsPeriod) { user(login: $l) { clips(first: 30, criteria: { period: $p, sort: VIEWS_DESC }) {
+    query($l: String!, $p: ClipsPeriod) { user(login: $l) { clips(first: 100, criteria: { period: $p, sort: VIEWS_DESC }) {
       edges { node { slug title viewCount durationSeconds createdAt thumbnailURL(width: 480, height: 272) curator { displayName } } }
+      pageInfo { hasNextPage }
     } } }
     """
     guard let d = await gqlRequest(q, ["l": login.lowercased(), "p": period]),
           let user = d["user"] as? [String: Any],
           let clips = user["clips"] as? [String: Any],
-          let edges = clips["edges"] as? [[String: Any]] else { return [] }
-    return edges.compactMap { e in
+          let edges = clips["edges"] as? [[String: Any]] else { return ([], false) }
+    let list: [ClipData] = edges.compactMap { e in
         guard let n = e["node"] as? [String: Any], let slug = n["slug"] as? String else { return nil }
         return ClipData(id: slug,
                         title: n["title"] as? String ?? "",
@@ -1059,6 +1155,85 @@ func getClips(login: String, period: String) async -> [ClipData] {
                         createdAt: n["createdAt"] as? String ?? "",
                         curator: (n["curator"] as? [String: Any])?["displayName"] as? String)
     }
+    let more = (clips["pageInfo"] as? [String: Any])?["hasNextPage"] as? Bool ?? false
+    return (list, more)
+}
+
+/// Suite des clips avec le compte (Helix) : même période, même ordre (vues
+/// décroissantes). Helix repart du début : ses 100 premiers recouvrent ceux
+/// de GQL, l'appelant écarte les doublons. `cursor` nil = depuis le début.
+func getClipsHelix(token: String, broadcasterId: String, period: String,
+                   cursor: String? = nil) async -> (clips: [ClipData], cursor: String?) {
+    var urlStr = "https://api.twitch.tv/helix/clips?broadcaster_id=\(broadcasterId)&first=100"
+    let days: [String: Double] = ["LAST_DAY": 1, "LAST_WEEK": 7, "LAST_MONTH": 30]
+    if let n = days[period] {
+        // Sans date de fin, Helix s'arrête une semaine après le début.
+        let f = ISO8601DateFormatter()
+        let now = Date()
+        urlStr += "&started_at=\(f.string(from: now.addingTimeInterval(-n * 86_400)))&ended_at=\(f.string(from: now))"
+    }
+    if let cursor { urlStr += "&after=\(cursor)" }
+    guard let url = URL(string: urlStr) else { return ([], nil) }
+    var req = URLRequest(url: url)
+    req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+    req.setValue(kHelixClientID, forHTTPHeaderField: "Client-Id")
+    guard let (data, resp) = try? await URLSession.shared.data(for: req),
+          (resp as? HTTPURLResponse)?.statusCode == 200,
+          let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return ([], nil) }
+    let arr = json["data"] as? [[String: Any]] ?? []
+    let next = (json["pagination"] as? [String: Any])?["cursor"] as? String
+    let list: [ClipData] = arr.compactMap { c in
+        guard let slug = c["id"] as? String else { return nil }
+        return ClipData(id: slug,
+                        title: c["title"] as? String ?? "",
+                        thumbnailURL: c["thumbnail_url"] as? String ?? "",
+                        viewCount: c["view_count"] as? Int ?? 0,
+                        durationSeconds: Int(c["duration"] as? Double ?? 0),
+                        createdAt: c["created_at"] as? String ?? "",
+                        curator: c["creator_name"] as? String)
+    }
+    logger.success("HELIX", "\(list.count) clips (suite)")
+    return (list, arr.isEmpty ? nil : next)
+}
+
+/// Fiche « À propos » d'une chaîne (requête GQL publique).
+func getChannelAbout(login: String) async -> ChannelAbout? {
+    let q = """
+    query($l: String!) { user(login: $l) {
+      description followers { totalCount }
+      channel { socialMedias { id name title url } }
+      panels { id type ... on DefaultPanel { title imageURL linkURL description } }
+    } }
+    """
+    guard let d = await gqlRequest(q, ["l": login.lowercased()]),
+          let u = d["user"] as? [String: Any] else { return nil }
+    // Adresses web seulement (pas de javascript:, mailto:…).
+    func web(_ v: Any?) -> URL? {
+        guard let s = v as? String, let url = URL(string: s),
+              ["http", "https"].contains(url.scheme?.lowercased() ?? "") else { return nil }
+        return url
+    }
+    var socials: [ChannelAbout.Social] = []
+    let rawSocials = (u["channel"] as? [String: Any])?["socialMedias"] as? [[String: Any]] ?? []
+    for s in rawSocials {
+        guard let url = web(s["url"]) else { continue }
+        let name = s["name"] as? String ?? ""
+        let title = s["title"] as? String ?? ""
+        socials.append(ChannelAbout.Social(id: s["id"] as? String ?? url.absoluteString, name: name,
+                                           title: title.isEmpty ? name : title, url: url))
+    }
+    var panels: [ChannelAbout.Panel] = []
+    for p in u["panels"] as? [[String: Any]] ?? [] where p["type"] as? String == "DEFAULT" {
+        let title = p["title"] as? String ?? ""
+        let text = p["description"] as? String ?? ""
+        let image = web(p["imageURL"])
+        guard !title.isEmpty || !text.isEmpty || image != nil else { continue }
+        panels.append(ChannelAbout.Panel(id: p["id"] as? String ?? UUID().uuidString, title: title,
+                                         imageURL: image, linkURL: web(p["linkURL"]), text: text))
+    }
+    return ChannelAbout(description: u["description"] as? String ?? "",
+                        followers: (u["followers"] as? [String: Any])?["totalCount"] as? Int,
+                        socials: socials, panels: panels)
 }
 
 /// Highlights d'une chaîne (les 50 plus récents).

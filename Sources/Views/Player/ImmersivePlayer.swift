@@ -99,6 +99,8 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
 
     private let onProgress: (Double) -> Void
     private let onLatency:  (Double?) -> Void
+    /// Distance au bord du direct (s), base de la synchro du chat.
+    private let onBehind:   (Double?) -> Void
     private var timeObs: Any?
     private var statusObs: NSKeyValueObservation?
     /// Position demandée avant que l'élément ne soit prêt. Chercher tout de
@@ -122,10 +124,12 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
 
     init(url: URL, isLive: Bool, savedTime: Double,
          onProgress: @escaping (Double) -> Void,
-         onLatency:  @escaping (Double?) -> Void) {
+         onLatency:  @escaping (Double?) -> Void,
+         onBehind:   @escaping (Double?) -> Void = { _ in }) {
         self.isLive     = isLive
         self.onProgress = onProgress
         self.onLatency  = onLatency
+        self.onBehind   = onBehind
         super.init()
         // Le son continue écran verrouillé et dans une autre app : sans ça,
         // iOS mettait la vidéo en pause au verrouillage, et les commandes de
@@ -219,6 +223,9 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
         } else {
             onLatency(nil)
         }
+        // Distance au bord du direct : c'est elle qui sépare le chat de
+        // l'image (voir MainTabView.chatDelay), pas la latence totale.
+        onBehind(isLive && endTime > position ? endTime - position : nil)
 
         catchUpIfNeeded(item)
     }
@@ -436,6 +443,13 @@ struct ImmersivePlayer: View {
 
     var onProgress: (Double) -> Void = { _ in }
     var onLatency:  (Double?) -> Void = { _ in }
+    var onBehind:   (Double?) -> Void = { _ in }
+    /// Glissé vers le bas en cours (décalage en points, 0 = relâché sans
+    /// réduire) : le parent fait suivre le lecteur au doigt.
+    var onPull:     (CGFloat) -> Void = { _ in }
+    /// Doigt levé : distance glissée et distance projetée (élan). Le parent
+    /// décide de réduire ou de remettre le lecteur en place.
+    var onPullEnd:  (CGFloat, CGFloat) -> Void = { _, _ in }
     var onReduce:   () -> Void = {}
     var onClose:    () -> Void = {}
     var onMenu:     () -> Void = {}
@@ -474,6 +488,15 @@ struct ImmersivePlayer: View {
     @State private var pan: CGSize = .zero
     @State private var panBase: CGSize = .zero
     @State private var surfaceSize: CGSize = .zero
+    /// Glissé vers le bas pour réduire le lecteur : décidé au début du geste
+    /// (nil tant qu'on ne sait pas si le doigt descend ou va de côté).
+    @State private var pulling: Bool? = nil
+    /// Vrai pendant le geste. Revient seul à faux quand le geste s'arrête,
+    /// y compris interrompu (Centre de contrôle, appel) — cas où onEnded
+    /// n'est jamais appelé et où le lecteur restait décalé.
+    @GestureState private var panActive = false
+    /// Zoom à deux doigts en cours : il prime sur le glissé vers le bas.
+    @State private var pinching = false
 
     init(url: URL, isLive: Bool, dvrEnabled: Bool, savedTime: Double,
          info: PlayerOverlayInfo,
@@ -490,6 +513,9 @@ struct ImmersivePlayer: View {
          nowPlaying: NowPlayingMeta = NowPlayingMeta(),
          onProgress: @escaping (Double) -> Void = { _ in },
          onLatency:  @escaping (Double?) -> Void = { _ in },
+         onBehind:   @escaping (Double?) -> Void = { _ in },
+         onPull:     @escaping (CGFloat) -> Void = { _ in },
+         onPullEnd:  @escaping (CGFloat, CGFloat) -> Void = { _, _ in },
          onReduce:   @escaping () -> Void = {},
          onClose:    @escaping () -> Void = {},
          onMenu:     @escaping () -> Void = {},
@@ -501,6 +527,7 @@ struct ImmersivePlayer: View {
         self.url = url; self.isLive = isLive; self.dvrEnabled = dvrEnabled
         self.savedTime = savedTime; self.info = info; self.onChannel = onChannel
         self.onProgress = onProgress; self.onLatency = onLatency
+        self.onBehind = onBehind; self.onPull = onPull; self.onPullEnd = onPullEnd
         self.sleepLabel = sleepLabel; self.chatMode = chatMode
         self.isLandscape = isLandscape; self.controlsInset = controlsInset
         self.fillScreen = fillScreen; self.canReturnToLive = canReturnToLive
@@ -512,7 +539,7 @@ struct ImmersivePlayer: View {
         self.onBackToLive = onBackToLive; self.onSeekToArchive = onSeekToArchive
         _model = StateObject(wrappedValue: ImmersivePlayerModel(
             url: url, isLive: isLive, savedTime: savedTime,
-            onProgress: onProgress, onLatency: onLatency))
+            onProgress: onProgress, onLatency: onLatency, onBehind: onBehind))
     }
 
     /// Un direct sans DVR n'est pas rembobinable : la barre reste décorative.
@@ -632,10 +659,17 @@ struct ImmersivePlayer: View {
         .contentShape(Rectangle())
         .onTapGesture { toggleControls() }
         // Zoom à deux doigts, comme sur l'app Twitch ; une fois agrandie,
-        // l'image se déplace au doigt. Le déplacement ne s'active qu'en zoom :
-        // à taille normale, glisser ne doit rien faire.
+        // l'image se déplace au doigt. À taille normale, glisser vers le bas
+        // réduit le lecteur, comme la flèche en haut à gauche.
         .simultaneousGesture(zoomGesture)
-        .gesture(panGesture, including: zoom > 1 ? .all : .subviews)
+        .gesture(panGesture)
+        // Geste interrompu en plein glissé : le lecteur reprend sa place.
+        .onChange(of: panActive) { active in
+            if !active, pulling == true {
+                pulling = nil
+                onPull(0)
+            }
+        }
         // Changement de source (direct ↔ enregistrement) : la position voulue
         // et la nature du flux doivent suivre. Sans elles, basculer sur
         // l'enregistrement rouvrait la VOD à 0:00 — il fallait re-balayer la
@@ -1110,10 +1144,12 @@ struct ImmersivePlayer: View {
     private var zoomGesture: some Gesture {
         MagnificationGesture()
             .onChanged { value in
+                pinching = true
                 zoom = min(max(zoomBase * value, 1), 4)
                 pan = clampedPan(pan)
             }
             .onEnded { _ in
+                pinching = false
                 // Rapetissée jusqu'au bout, l'image reprend sa place.
                 if zoom < 1.05 {
                     resetZoom()
@@ -1125,15 +1161,39 @@ struct ImmersivePlayer: View {
             }
     }
 
+    /// Repère global : pendant le glissé vers le bas, le lecteur descend avec
+    /// le doigt ; mesuré dans son propre repère (qui bouge), le déplacement se
+    /// faussait à chaque image et le lecteur avançait par à-coups.
     private var panGesture: some Gesture {
-        DragGesture(minimumDistance: 8)
+        DragGesture(minimumDistance: 12, coordinateSpace: CoordinateSpace.global)
+            .updating($panActive) { _, active, _ in active = true }
             .onChanged { value in
-                // Un glissement sur la barre de lecture ne déplace pas l'image.
+                // Un glissement sur la barre de lecture ne déplace rien.
                 guard !dragging else { return }
-                pan = clampedPan(CGSize(width: panBase.width + value.translation.width,
-                                        height: panBase.height + value.translation.height))
+                if zoom > 1 {
+                    pan = clampedPan(CGSize(width: panBase.width + value.translation.width,
+                                            height: panBase.height + value.translation.height))
+                    return
+                }
+                // Deux doigts : c'est un zoom, le lecteur reste en place.
+                if pinching {
+                    if pulling == true { onPull(0) }
+                    pulling = false
+                    return
+                }
+                // Taille normale : seul un geste qui part vers le bas compte ;
+                // un glissement de côté ne fait rien, comme avant.
+                if pulling == nil {
+                    pulling = value.translation.height > abs(value.translation.width)
+                }
+                if pulling == true { onPull(max(0, value.translation.height)) }
             }
-            .onEnded { _ in panBase = pan }
+            .onEnded { value in
+                defer { pulling = nil }
+                if zoom > 1 { panBase = pan; return }
+                guard pulling == true else { return }
+                onPullEnd(max(0, value.translation.height), value.predictedEndTranslation.height)
+            }
     }
 
     /// L'image agrandie ne laisse jamais apparaître de vide : le décalage est

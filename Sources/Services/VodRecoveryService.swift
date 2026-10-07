@@ -60,13 +60,19 @@ final class VodRecoveryService: ObservableObject {
             guard let streamID = sid, !streamID.isEmpty,
                   let startStr = m["StartTime"] as? String,
                   let start = iso.date(from: startStr) else { continue }
+            // { "Float64": 48056.9, "Valid": true } ; Valid à false tant que
+            // la diffusion est en cours.
+            let hls = m["HlsDurationSeconds"] as? [String: Any]
+            let duration = (hls?["Valid"] as? Bool == true)
+                ? Int((hls?["Float64"] as? NSNumber)?.doubleValue ?? 0) : 0
             out.append(RecoverableStream(
                 streamID: streamID,
                 login: (m["StreamerLoginAtStart"] as? String ?? login).lowercased(),
                 startedAt: start,
                 title: m["TitleAtStart"] as? String ?? "",
                 game: m["GameNameAtStart"] as? String ?? "",
-                maxViews: (m["MaxViews"] as? NSNumber)?.intValue ?? 0))
+                maxViews: (m["MaxViews"] as? NSNumber)?.intValue ?? 0,
+                duration: duration))
         }
         streams = out
         logger.info("RECOVER", "\(out.count) diffusions récupérables listées", login)
@@ -87,7 +93,8 @@ final class VodRecoveryService: ObservableObject {
                 let folder = folderName(login: s.login, streamID: s.streamID, epoch: epoch0 + off)
                 if let host = await firstHost(folder: folder, hosts: hosts) {
                     logger.success("RECOVER", "VOD reconstruite", "\(host) · décalage \(off)")
-                    return await buildLinks(host: host, folder: folder)
+                    // Passages coupés pour droits d'auteur : voir playableMutedLinks.
+                    return await playableMutedLinks(await buildLinks(host: host, folder: folder))
                 }
             }
         }

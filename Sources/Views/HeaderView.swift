@@ -11,6 +11,8 @@ import SwiftUI
 struct HeaderView: View {
     let title: String
     let onOpenSettings: () -> Void
+    /// Signaler un bug ou proposer une idée : en vue sur tous les onglets.
+    var onFeedback: (() -> Void)? = nil
 
     @EnvironmentObject private var store: AppStore
 
@@ -29,6 +31,19 @@ struct HeaderView: View {
                 .minimumScaleFactor(0.7)
 
             Spacer(minLength: TSpace.sm)
+
+            if let onFeedback {
+                Button(action: onFeedback) {
+                    Image(systemName: "ladybug.fill")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(.tPrimary)
+                        .frame(width: 34, height: 34)
+                        .background(Color.tPrimary.opacity(0.15))
+                        .clipShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(store.t("feedback"))
+            }
 
             Button(action: onOpenSettings) {
                 avatar

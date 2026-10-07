@@ -21,6 +21,42 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.2.16",
+          "buildVersion": "236",
+          "date": "2026-10-07",
+          "localizedDescription": "- The bug report / idea form is now one tap away: header, Settings home and the player ⋯ menu",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-236/TwitchUnblock.ipa",
+          "size": 2017903,
+          "commit": "fcf736da47aa23dde6b91449b90550371142f930"
+        },
+        {
+          "version": "1.2.15",
+          "buildVersion": "235",
+          "date": "2026-10-07",
+          "localizedDescription": "- New \"Report a bug or suggest an idea\" form in Settings\n- Swiping the player down recovers if interrupted, adapts to the screen size and respects Reduce Motion\n- Without an account, the app explains why lists stop at 100",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-235/TwitchUnblock.ipa",
+          "size": 2009715,
+          "commit": "89676cd22c1a6cc7caa97a522d91f2d63c65de5a"
+        },
+        {
+          "version": "1.2.14",
+          "buildVersion": "234",
+          "date": "2026-10-07",
+          "localizedDescription": "- Predictions: you can now place bets (tap an outcome, pick an amount, Predict)\n- Swiping the player down is now smooth and slides it away like the Twitch app\n- Channel page: new \"About\" tab with the description, social links and panels\n- Clips: 100 at once instead of 30, and \"Load more\" when logged in\n- Links in bot command replies are now tappable\n- Tapping a streamer's name on a stream card opens their channel\n- Settings: option to hide recent streamers\n- Pasting a Twitch link (twitch.tv/xqc) in Search opens the channel",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-234/TwitchUnblock.ipa",
+          "size": 1977408,
+          "commit": "48f131039bd25a83235a56384d73d257c3b809d6"
+        },
+        {
+          "version": "1.2.13",
+          "buildVersion": "233",
+          "date": "2026-10-06",
+          "localizedDescription": "- The Categories tab is now available without a Twitch account\n- Deleted or hidden VODs now appear right among a channel's VODs, marked \"Unlisted VOD\" (the \"Deleted\" tab is gone)\n- Recovered VODs that start with a muted (copyrighted) part now play\n- Swipe down on the player to minimize it, like the back arrow\n- Auto chat sync no longer lags 10+ s behind on channels that stream with a delay",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-233/TwitchUnblock.ipa",
+          "size": 1909625,
+          "commit": "dc32c0605f64caa0700825455bc7d560d64dadf1"
+        },
+        {
           "version": "1.2.12",
           "buildVersion": "231",
           "date": "2026-10-06",
@@ -169,10 +205,10 @@
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.2.12",
-      "versionDate": "2026-10-06",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-231/TwitchUnblock.ipa",
-      "size": 1888489
+      "version": "1.2.16",
+      "versionDate": "2026-10-07",
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-236/TwitchUnblock.ipa",
+      "size": 2017903
     }
   ],
   "news": []

@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.2.15",
+          "buildVersion": "235",
+          "date": "2026-10-07",
+          "localizedDescription": "- New \"Report a bug or suggest an idea\" form in Settings\n- Swiping the player down recovers if interrupted, adapts to the screen size and respects Reduce Motion\n- Without an account, the app explains why lists stop at 100",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-235/TwitchUnblock.ipa",
+          "size": 2009715,
+          "commit": "89676cd22c1a6cc7caa97a522d91f2d63c65de5a"
+        },
+        {
           "version": "1.2.14",
           "buildVersion": "234",
           "date": "2026-10-07",
@@ -187,10 +196,10 @@
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.2.14",
+      "version": "1.2.15",
       "versionDate": "2026-10-07",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-234/TwitchUnblock.ipa",
-      "size": 1977408
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-235/TwitchUnblock.ipa",
+      "size": 2009715
     }
   ],
   "news": []

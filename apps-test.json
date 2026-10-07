@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.2.14",
+          "buildVersion": "234",
+          "date": "2026-10-07",
+          "localizedDescription": "- Predictions: you can now place bets (tap an outcome, pick an amount, Predict)\n- Swiping the player down is now smooth and slides it away like the Twitch app\n- Channel page: new \"About\" tab with the description, social links and panels\n- Clips: 100 at once instead of 30, and \"Load more\" when logged in\n- Links in bot command replies are now tappable\n- Tapping a streamer's name on a stream card opens their channel\n- Settings: option to hide recent streamers\n- Pasting a Twitch link (twitch.tv/xqc) in Search opens the channel",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-234/TwitchUnblock.ipa",
+          "size": 1977408,
+          "commit": "48f131039bd25a83235a56384d73d257c3b809d6"
+        },
+        {
           "version": "1.2.13",
           "buildVersion": "233",
           "date": "2026-10-06",
@@ -178,10 +187,10 @@
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.2.13",
-      "versionDate": "2026-10-06",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-233/TwitchUnblock.ipa",
-      "size": 1909625
+      "version": "1.2.14",
+      "versionDate": "2026-10-07",
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-234/TwitchUnblock.ipa",
+      "size": 1977408
     }
   ],
   "news": []

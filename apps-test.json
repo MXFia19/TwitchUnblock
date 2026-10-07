@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.2.16",
+          "buildVersion": "236",
+          "date": "2026-10-07",
+          "localizedDescription": "- The bug report / idea form is now one tap away: header, Settings home and the player ⋯ menu",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-236/TwitchUnblock.ipa",
+          "size": 2017903,
+          "commit": "fcf736da47aa23dde6b91449b90550371142f930"
+        },
+        {
           "version": "1.2.15",
           "buildVersion": "235",
           "date": "2026-10-07",
@@ -196,10 +205,10 @@
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.2.15",
+      "version": "1.2.16",
       "versionDate": "2026-10-07",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-235/TwitchUnblock.ipa",
-      "size": 2009715
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-236/TwitchUnblock.ipa",
+      "size": 2017903
     }
   ],
   "news": []

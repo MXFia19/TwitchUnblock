@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.2.16",
+          "buildVersion": "237",
+          "date": "2026-10-07",
+          "localizedDescription": "- The bug report / idea form is now one tap away: header, Settings home and the player ⋯ menu\n- New \"Report a bug or suggest an idea\" form in Settings\n- Swiping the player down recovers if interrupted, adapts to the screen size and respects Reduce Motion\n- Without an account, the app explains why lists stop at 100\n- Predictions: you can now place bets (tap an outcome, pick an amount, Predict)\n- Swiping the player down is now smooth and slides it away like the Twitch app\n- Channel page: new \"About\" tab with the description, social links and panels\n- Clips: 100 at once instead of 30, and \"Load more\" when logged in\n- Links in bot command replies are now tappable\n- Tapping a streamer's name on a stream card opens their channel\n- Settings: option to hide recent streamers\n- Pasting a Twitch link (twitch.tv/xqc) in Search opens the channel\n- The Categories tab is now available without a Twitch account\n- Deleted or hidden VODs now appear right among a channel's VODs, marked \"Unlisted VOD\" (the \"Deleted\" tab is gone)\n- Recovered VODs that start with a muted (copyrighted) part now play",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/nightly-237/TwitchUnblock.ipa",
+          "size": 2017880,
+          "commit": "bce7e5375fc21e0369c730c3448b419ca35e96d8"
+        },
+        {
           "version": "1.2.12",
           "buildVersion": "232",
           "date": "2026-10-06",
@@ -87,10 +96,10 @@
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.2.12",
-      "versionDate": "2026-10-06",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/nightly-232/TwitchUnblock.ipa",
-      "size": 1888465
+      "version": "1.2.16",
+      "versionDate": "2026-10-07",
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/nightly-237/TwitchUnblock.ipa",
+      "size": 2017880
     }
   ],
   "news": []

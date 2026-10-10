@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.2.21",
+          "buildVersion": "244",
+          "date": "2026-10-10",
+          "localizedDescription": "- Live streams are much closer to real time: about 6 seconds of delay instead of about 20 (Low latency mode, now on by default).",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/nightly-244/TwitchUnblock.ipa",
+          "size": 2205851,
+          "commit": "1949fc3df09263d1e4dbeb48b41f1a3b2697e618"
+        },
+        {
           "version": "1.2.20",
           "buildVersion": "242",
           "date": "2026-10-10",
@@ -114,10 +123,10 @@
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.2.20",
+      "version": "1.2.21",
       "versionDate": "2026-10-10",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/nightly-242/TwitchUnblock.ipa",
-      "size": 2200796
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/nightly-244/TwitchUnblock.ipa",
+      "size": 2205851
     }
   ],
   "news": []

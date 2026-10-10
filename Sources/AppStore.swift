@@ -372,7 +372,9 @@ final class AppStore: ObservableObject {
         showLiveEvents     = ud.object(forKey: "cfg_events") as? Bool ?? true
         enableRaids        = ud.object(forKey: "cfg_raids")  as? Bool ?? true
         autoPurgeImageCache = ud.object(forKey: "cfg_purge_cache") as? Bool ?? true
-        lowLatency         = ud.object(forKey: "cfg_low_latency") as? Bool ?? false
+        // Actif par défaut depuis la 1.2.21 (direct à quelques secondes au lieu
+        // d'une vingtaine) ; qui l'a coupé à la main le garde coupé.
+        lowLatency         = ud.object(forKey: "cfg_low_latency") as? Bool ?? true
         immersivePlayer    = ud.object(forKey: "cfg_immersive")   as? Bool ?? true
         fillScreen         = ud.object(forKey: "cfg_fill_screen") as? Bool ?? false
         landscapeChat      = LandscapeChat(rawValue: ud.string(forKey: "cfg_landscape_chat") ?? "")

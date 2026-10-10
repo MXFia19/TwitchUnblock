@@ -1143,9 +1143,13 @@ struct MainTabView: View {
                         errorMsg = err; loading = false; switchingSource = false
                     }
                 } else if let links = data.links, !links.isEmpty {
+                    // Mode faible latence : playlist réécrite avec la vraie
+                    // durée des segments (LivePlaylistLoader), relue toutes les
+                    // 2 s au lieu de 6 — le lecteur peut tenir près du bord.
+                    let playable = store.lowLatency ? LivePlaylistLoader.wrap(links) : links
                     await MainActor.run {
                         guard gen == loadGeneration else { return }
-                        qualityLinks      = links
+                        qualityLinks      = playable
                         statusTitle       = data.title.isEmpty ? channel : data.title
                         liveViewerCount   = data.viewerCount
                         liveStartedAt     = data.startedAt

@@ -50,6 +50,14 @@ no key to paste. The backend is already hosted and shared by every install.
 * 📡 **AirPlay** — send the stream to an Apple TV or a compatible TV.
 * 🧭 **VOD chapters** — game changes marked on the progress bar; tap the current
   chapter to jump to another.
+* 🔇 **Muted parts** — passages Twitch muted for copyrighted music show in orange
+  on the progress bar, with a notice and a **Skip** button. For a day or two
+  after a stream, Twitch's CDN still serves the original sound: the app puts it
+  back automatically (Settings → Player; not over AirPlay).
+* 🗂 **Unlisted & deleted broadcasts** — streams whose VOD is hidden or was
+  deleted show up among the channel's VODs as "Unlisted VOD", rebuilt from
+  Twitch's CDN as long as it still has them (stream IDs from `vodvod.top`,
+  third party).
 * ✂️ **Clips** — a Clips tab on every channel (24 h, 7 days, 30 days, all time),
   played with the original chat replayed.
 
@@ -70,16 +78,18 @@ no key to paste. The backend is already hosted and shared by every install.
   in this session, reply, mention, copy.
 * 📌 **Pinned messages** — compact banner with badges, emotes, who pinned it and
   a countdown; collapse it to a chip.
-* 📊 **Polls, predictions, hype train** — vote, see the countdown, the results
-  and the winning outcome.
+* 📊 **Polls, predictions, hype train** — vote, bet channel points on a
+  prediction, see the countdown, the results and the winning outcome.
 * 🚀 **Raids** — follow the streamer to the raided channel automatically;
   incoming raids shown with a link to the raider. Each of these can be switched off.
 * 🔦 **Highlights & filters** — messages mentioning you or containing your words
   stand out; hide bots, `!commands`, muted words or someone in particular.
 * 🔥 **Watch streak** and a **follow / unfollow** button.
 * 🎁 **Channel points** — balance, rewards, and automatic bonus chest claiming.
-* ⏱ **Auto-sync chat delay** — offsets the chat by the measured stream latency
-  so it lines up with the picture.
+* ⏱ **Auto-sync chat delay** — delays the chat by how far behind live you are,
+  measured from the stream's timestamps so it doesn't drift each time the
+  playlist reloads. Still off on a given stream? Nudge it by ±1 s from the ⏱
+  badge above the chat, or in Settings.
 * 📼 **VOD chat** — replayed in sync with playback position.
 
 ### Chat layout
@@ -98,6 +108,7 @@ no key to paste. The backend is already hosted and shared by every install.
   worldwide).
 * 🎮 **Categories** — browse by game, then the live channels in it.
 * 🔍 **Search** — by streamer name, channel link, or VOD ID.
+* ℹ️ **About** — a channel's description, followers, social links and panels.
 * 🕒 **History** — recently watched VODs and channels, each removable.
 * 🔄 **Cloud sync** — watch progress and history follow your Twitch account, so
   you pick up where you left off on another device.
@@ -106,9 +117,26 @@ no key to paste. The backend is already hosted and shared by every install.
 * 🔔 **Live notifications** — be told when a followed channel goes live
   (checked in the background, as often as iOS allows).
 
+### Look & feel
+
+* 🎨 **Themes** — 7 accent colours and 3 backgrounds (dark, OLED black, slate),
+  in Settings → General → Appearance.
+* 🫧 **Liquid Glass** — optional on iOS 26: a floating tab bar and glass buttons
+  over the picture.
+
 ### The rest
 
-* 🌍 **Three languages** — English (default), French, Spanish.
+* 🌍 **Four languages** — English (default), French, Spanish and Russian. The
+  Russian translation was made with AI: the app says so next to the language
+  picker, with a button to report a mistake.
+* 🐞 **Bug reports & ideas** — a form in the header, in Settings and in the
+  player menu, screenshots included. **My reports** shows where each one stands
+  (received, accepted, in progress, done, declined) and the developer's reply,
+  and lets you answer back; a badge flags new replies, and open conversations
+  refresh on their own.
+* 👥 **Switch account** — sign in with another Twitch account from Settings.
+  After logging out, the next sign-in asks which account to use instead of
+  quietly reusing the previous one.
 * 🔐 **Web session check** — the Twitch web session has no known expiry date;
   it's verified at launch, and you're told when it needs restoring instead of
   channel points silently going quiet.

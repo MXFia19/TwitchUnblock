@@ -16,11 +16,14 @@ struct LiveLatencyController {
     private var lastSeek = Date.distantPast
     private(set) var speedingUp = false
 
-    /// Retard visé par rapport au bord jouable.
+    /// Retard visé par rapport au bord jouable. Le recul recommandé par AVPlayer
+    /// vaut trois fois la durée cible de la playlist : 18 s sur une playlist
+    /// Twitch d'origine (cible plafonnée à 8 s), 6 s sur une playlist réécrite
+    /// (LivePlaylistLoader, relue toutes les 2 s : cible 4 s).
     static func target(for item: AVPlayerItem) -> Double {
         let rec = item.recommendedTimeOffsetFromLive
         let r = rec.isValid && rec.isNumeric ? rec.seconds : 6
-        return min(8, max(4, r))
+        return min(8, max(3.5, r - 2))
     }
 
     /// `behind` : secondes entre la position et le bord jouable (fin de la

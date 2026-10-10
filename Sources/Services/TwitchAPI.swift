@@ -11,17 +11,29 @@ private let qualityOrder = ["chunked","source","1080p60","1080p30","720p60","720
                              "480p30","360p30","160p30","audio_only"]
 
 // MARK: – M3U8 Parser
+/// Valeur d'un attribut d'une ligne #EXT-X-STREAM-INF (`,NOM="valeur"`).
+private func m3u8Attr(_ line: String, _ name: String) -> String? {
+    for sep in [",", ":"] {
+        guard let r = line.range(of: "\(sep)\(name)=\"") else { continue }
+        let rest = line[r.upperBound...]
+        if let end = rest.firstIndex(of: "\"") { return String(rest[..<end]) }
+    }
+    return nil
+}
+
 func parseM3U8(_ content: String, baseURL: URL? = nil) -> QualityLinks {
     var links: QualityLinks = [:]
     let lines = content.components(separatedBy: "\n")
     for i in 0..<lines.count {
         let line = lines[i].trimmingCharacters(in: .whitespaces)
         guard line.hasPrefix("#EXT-X-STREAM-INF") else { continue }
-        let nameMatch = line.range(of: #"VIDEO="([^"]+)""#, options: .regularExpression)
+        // Deux formats : VIDEO="chunked" (l'ancien) et STABLE-VARIANT-ID="1080p60"
+        // + IVS-VARIANT-SOURCE="source" (serveurs IVS, que renvoie le miroir
+        // européen de Luminous). Sans ce dernier, la résolution servait de nom
+        // et l'audio seul devenait « unknown ».
         var quality = "unknown"
-        if let r = nameMatch {
-            let raw = String(line[r]).replacingOccurrences(of: "VIDEO=\"", with: "").replacingOccurrences(of: "\"", with: "")
-            quality = raw == "chunked" ? "Source" : raw
+        if let name = m3u8Attr(line, "VIDEO") ?? m3u8Attr(line, "STABLE-VARIANT-ID") ?? m3u8Attr(line, "IVS-NAME") {
+            quality = name == "chunked" || m3u8Attr(line, "IVS-VARIANT-SOURCE") == "source" ? "Source" : name
         } else if let r = line.range(of: #"RESOLUTION=(\d+x\d+)"#, options: .regularExpression) {
             quality = String(line[r]).replacingOccurrences(of: "RESOLUTION=", with: "")
         }

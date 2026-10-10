@@ -4,8 +4,10 @@ import UIKit
 // ═══════════════════════════════════════════════════════════════════════════
 //  Retour (bug, idée, autre) envoyé au Worker, qui le range (base D1) et le
 //  transmet sur Discord. Ce qui part est affiché avant l'envoi : le message,
-//  le contact s'il est rempli, le modèle d'iPhone, la version d'iOS et de
-//  l'app, la langue. Ni compte Twitch ni identifiant d'installation.
+//  les captures jointes, le contact s'il est rempli, le modèle d'iPhone, la
+//  version d'iOS et de l'app, la langue. Ni compte Twitch ni identifiant
+//  d'installation. Le Worker rend un jeton : la discussion se suit ensuite
+//  dans « Mes signalements » (MyFeedbackView).
 // ═══════════════════════════════════════════════════════════════════════════
 
 struct FeedbackSheet: View {
@@ -28,6 +30,10 @@ struct FeedbackSheet: View {
     @State private var sending = false
     @State private var failure: String? = nil
     @State private var sent = false
+    @State private var followUp = false
+    @State private var images: [UIImage] = []
+    @State private var showMine = false
+    @ObservedObject private var inbox = FeedbackStore.shared
     @FocusState private var messageFocused: Bool
 
     init(initialKind: Kind = .bug, context: String? = nil) {
@@ -69,6 +75,27 @@ struct FeedbackSheet: View {
                     .font(.tSection).foregroundColor(.tText)
                     .lineLimit(2)
                 Spacer(minLength: TSpace.sm)
+                // Retours déjà envoyés : réponses et état.
+                if !inbox.reports.isEmpty {
+                    Button { showMine = true } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: "tray.full.fill").font(.system(size: 13, weight: .semibold))
+                            Text(store.t("fb_mine")).font(.tLabel).lineLimit(1)
+                            if inbox.unreadCount > 0 {
+                                Text("\(inbox.unreadCount)")
+                                    .font(.system(size: 11, weight: .heavy))
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 6).frame(minWidth: 18, minHeight: 18)
+                                    .background(Color.tLive).clipShape(Capsule())
+                            }
+                        }
+                        .foregroundColor(.tPrimary)
+                        .padding(.horizontal, 10).frame(height: 32)
+                        .background(Color.tPrimary.opacity(0.12))
+                        .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
                 TIconButton(icon: "xmark") { dismiss() }
             }
             .padding(TSpace.lg)
@@ -100,6 +127,9 @@ struct FeedbackSheet: View {
                     .background(Color.tSurface)
                     .cornerRadius(TRadius.control)
 
+                    // Captures d'écran : 3 au plus, réduites avant l'envoi.
+                    FeedbackPhotoPicker(images: $images)
+
                     TextField(store.t("fb_contact_ph"), text: $contact)
                         .font(.tBody).foregroundColor(.tText)
                         .autocorrectionDisabled()
@@ -122,8 +152,9 @@ struct FeedbackSheet: View {
                     }
 
                     if sent {
-                        Label(store.t("fb_thanks"), systemImage: "checkmark.circle.fill")
+                        Label(store.t(followUp ? "fb_thanks_follow" : "fb_thanks"), systemImage: "checkmark.circle.fill")
                             .font(.tLabel).foregroundColor(.tSuccess)
+                            .fixedSize(horizontal: false, vertical: true)
                     } else {
                         Button { Task { await send() } } label: {
                             HStack(spacing: TSpace.sm) {
@@ -150,6 +181,12 @@ struct FeedbackSheet: View {
         }
         .background(Color.tDark.ignoresSafeArea())
         .onAppear { messageFocused = true }
+        .task { await inbox.refresh() }
+        .sheet(isPresented: $showMine) {
+            NavigationStack { MyFeedbackList() }
+                .environmentObject(store)
+                .preferredColorScheme(.dark)
+        }
     }
 
     private func send() async {
@@ -167,15 +204,22 @@ struct FeedbackSheet: View {
             "platform": "ios",
             "version": UsageService.shared.appVersion,
             "info": info,
+            "photos": images.compactMap { $0.feedbackJPEG()?.base64EncodedString() },
         ]
         req.httpBody = try? JSONSerialization.data(withJSONObject: body)
         do {
-            let (_, resp) = try await URLSession.shared.data(for: req)
+            let (data, resp) = try await URLSession.shared.data(for: req)
             let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
             guard code == 200 else {
                 failure = store.t(code == 429 ? "fb_too_many" : "fb_failed")
                 logger.warn("FEEDBACK", "Retour refusé", "HTTP \(code)")
                 return
+            }
+            // Jeton du retour : la discussion se suit dans « Mes signalements ».
+            if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let id = json["id"] as? String, let token = json["token"] as? String {
+                inbox.add(id: id, token: token, kind: kind.rawValue, text: trimmed)
+                followUp = true
             }
             logger.success("FEEDBACK", "Retour envoyé", kind.rawValue)
             withAnimation { sent = true }

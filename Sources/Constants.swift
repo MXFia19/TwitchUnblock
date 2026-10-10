@@ -49,18 +49,21 @@ let kVodRecoveryMetaAPI = "https://api.vodvod.top/channels/@"
 
 // MARK: – Colors
 extension Color {
-    static let tPrimary   = Color(hex: "9146ff")
-    static let tDark      = Color(hex: "0e0e10")
-    static let tCard      = Color(hex: "18181b")
-    static let tSurface   = Color(hex: "26262c")
-    static let tBorder    = Color(hex: "3a3a40")
+    // Couleurs du thème choisi (accent, fonds) : voir Theme.swift.
+    static var tPrimary: Color { Theme.palette.primary }
+    static var tDark:    Color { Theme.palette.dark }
+    static var tCard:    Color { Theme.palette.card }
+    static var tSurface: Color { Theme.palette.surface }
+    static var tBorder:  Color { Theme.palette.border }
+    /// Version claire de l'accent (violet clair avec le thème Twitch).
+    static var tPurple:  Color { Theme.palette.light }
+    // Couleurs fixes, quel que soit le thème.
     static let tText      = Color(hex: "efeff1")
     static let tMuted     = Color(hex: "888888")
     static let tDanger    = Color(hex: "ff4f4d")
     static let tLive      = Color(hex: "e91916")
     static let tSuccess   = Color(hex: "00ff88")
     static let tWarning   = Color(hex: "e6e619")
-    static let tPurple    = Color(hex: "bf94ff")
     static let tVLC       = Color(hex: "ff8800")
     static let tOutplayer = Color(hex: "007aff")
     static let tInfuse    = Color(hex: "fc3c44")
@@ -102,14 +105,17 @@ extension Color {
 
 // MARK: – Language
 enum Lang: String, CaseIterable, Identifiable {
-    case fr, en, es
+    case fr, en, es, ru
     var id: String { rawValue }
     var flag: String {
-        switch self { case .fr: "🇫🇷"; case .en: "🇬🇧"; case .es: "🇪🇸" }
+        switch self { case .fr: "🇫🇷"; case .en: "🇬🇧"; case .es: "🇪🇸"; case .ru: "🇷🇺" }
     }
     var label: String {
-        switch self { case .fr: "Français"; case .en: "English"; case .es: "Español" }
+        switch self { case .fr: "Français"; case .en: "English"; case .es: "Español"; case .ru: "Русский" }
     }
+    /// Traduite avec l'IA, sans relecture : on le dit à côté du choix de
+    /// langue, avec un lien pour signaler les erreurs.
+    var machineTranslated: Bool { self == .ru }
 }
 
 // ✨ NOUVEAU : Les sources se traduisent automatiquement !
@@ -408,6 +414,54 @@ private let translations: [Lang: [String: String]] = [
         "no_followed_live": "Aucune de vos chaînes n'est en direct",
         "no_followed_live_msg": "Jetez un œil au Top ou aux catégories en attendant.",
         "history_vods_empty_msg": "Les VODs que vous lancez apparaîtront ici, avec la reprise de lecture.",
+        "chat_sync_hint": "Chat en avance ou en retard sur l'image ?",
+        "chat_sync_later": "Retarder le chat (+1 s)",
+        "chat_sync_earlier": "Avancer le chat (−1 s)",
+        "chat_sync_reset": "Revenir à la synchro auto seule",
+        "chat_sync_adjust": "Ajustement de la synchro",
+        "chat_sync_adjust_sub": "Chat encore en avance sur l'image ? Ajoute quelques secondes. En retard ? Retires-en. Aussi depuis la pastille ⏱ au-dessus du chat.",
+        "lang_ai_note": "Traduction faite avec l'IA, pas encore relue : si une phrase sonne faux, dis-le-nous.",
+        "lang_ai_report": "Signaler une erreur de traduction",
+        "lang_ai_badge": "Traduit avec l'IA",
+        "switch_account": "Changer de compte",
+        "switch_account_sub": "Twitch demandera tes identifiants : connecte-toi avec l'autre compte.",
+        "vod_muted_here": "Son coupé par Twitch (musique protégée)",
+        "vod_muted_skip": "Passer",
+        "vod_unmuted": "Son d'origine rétabli sur les passages coupés",
+        "restore_muted": "Rétablir le son des passages coupés",
+        "restore_muted_sub": "Twitch coupe le son des passages avec de la musique protégée. Un jour ou deux après le live, l'original est encore disponible : l'app le remet quand elle peut. Sans effet sur AirPlay.",
+        "appearance": "Apparence",
+        "accent_color": "Couleur d'accent",
+        "background_theme": "Fond",
+        "accent_twitch": "Violet Twitch",
+        "accent_blue": "Bleu",
+        "accent_green": "Vert",
+        "accent_pink": "Rose",
+        "accent_orange": "Orange",
+        "accent_red": "Rouge",
+        "accent_teal": "Turquoise",
+        "bg_dark": "Sombre",
+        "bg_oled": "Noir OLED",
+        "bg_slate": "Ardoise",
+        "liquid_glass": "Verre liquide",
+        "liquid_glass_sub": "Barre d'onglets flottante et boutons en verre, façon iOS 26.",
+        "liquid_glass_unavailable": "Nécessite iOS 26 ou plus récent.",
+        "fb_add_photos": "Ajouter des captures",
+        "fb_mine": "Mes signalements",
+        "fb_mine_empty": "Les retours envoyés depuis l'app apparaîtront ici, avec les réponses.",
+        "fb_thanks_follow": "Merci ! Tu suivras la réponse dans « Mes signalements ».",
+        "fb_reply_ph": "Répondre…",
+        "fb_reply_send": "Envoyer",
+        "fb_reply_failed": "Réponse non envoyée, réessaie.",
+        "fb_team": "TwitchUnblock",
+        "fb_you": "Toi",
+        "fb_status_line": "État : {s}",
+        "fb_gone": "Ce retour n'est plus disponible.",
+        "fb_status_new": "Reçu",
+        "fb_status_accepted": "Accepté",
+        "fb_status_progress": "En cours",
+        "fb_status_done": "Fait",
+        "fb_status_refused": "Refusé",
     ],
     .en: [
         "title": "Watch Twitch No Sub",
@@ -664,6 +718,54 @@ private let translations: [Lang: [String: String]] = [
         "no_followed_live": "None of your channels are live",
         "no_followed_live_msg": "Have a look at the Top or the categories meanwhile.",
         "history_vods_empty_msg": "VODs you play show up here, with resume playback.",
+        "chat_sync_hint": "Chat ahead of or behind the video?",
+        "chat_sync_later": "Delay chat (+1 s)",
+        "chat_sync_earlier": "Show chat sooner (−1 s)",
+        "chat_sync_reset": "Back to auto sync only",
+        "chat_sync_adjust": "Sync adjustment",
+        "chat_sync_adjust_sub": "Chat still ahead of the video? Add a few seconds. Behind? Take some off. Also from the ⏱ badge above the chat.",
+        "lang_ai_note": "Translated with AI, not yet reviewed: if something sounds off, let us know.",
+        "lang_ai_report": "Report a translation mistake",
+        "lang_ai_badge": "Translated with AI",
+        "switch_account": "Switch account",
+        "switch_account_sub": "Twitch will ask for your credentials: sign in with the other account.",
+        "vod_muted_here": "Sound muted by Twitch (copyrighted music)",
+        "vod_muted_skip": "Skip",
+        "vod_unmuted": "Original sound restored on muted parts",
+        "restore_muted": "Restore muted sound",
+        "restore_muted_sub": "Twitch mutes parts with copyrighted music. For a day or two after the stream the original is still available: the app puts it back when it can. No effect over AirPlay.",
+        "appearance": "Appearance",
+        "accent_color": "Accent color",
+        "background_theme": "Background",
+        "accent_twitch": "Twitch purple",
+        "accent_blue": "Blue",
+        "accent_green": "Green",
+        "accent_pink": "Pink",
+        "accent_orange": "Orange",
+        "accent_red": "Red",
+        "accent_teal": "Teal",
+        "bg_dark": "Dark",
+        "bg_oled": "OLED black",
+        "bg_slate": "Slate",
+        "liquid_glass": "Liquid Glass",
+        "liquid_glass_sub": "Floating tab bar and glass buttons, iOS 26 style.",
+        "liquid_glass_unavailable": "Requires iOS 26 or later.",
+        "fb_add_photos": "Add screenshots",
+        "fb_mine": "My reports",
+        "fb_mine_empty": "Reports sent from the app will show up here, with the replies.",
+        "fb_thanks_follow": "Thanks! Follow the reply in “My reports”.",
+        "fb_reply_ph": "Reply…",
+        "fb_reply_send": "Send",
+        "fb_reply_failed": "Reply not sent, try again.",
+        "fb_team": "TwitchUnblock",
+        "fb_you": "You",
+        "fb_status_line": "Status: {s}",
+        "fb_gone": "This report is no longer available.",
+        "fb_status_new": "Received",
+        "fb_status_accepted": "Accepted",
+        "fb_status_progress": "In progress",
+        "fb_status_done": "Done",
+        "fb_status_refused": "Declined",
     ],
     .es: [
         "title": "Ver Twitch sin Sub",
@@ -920,9 +1022,61 @@ private let translations: [Lang: [String: String]] = [
         "no_followed_live": "Ninguno de tus canales está en directo",
         "no_followed_live_msg": "Echa un vistazo al Top o a las categorías mientras tanto.",
         "history_vods_empty_msg": "Los VODs que reproduzcas aparecerán aquí, con reanudación.",
+        "chat_sync_hint": "¿El chat va adelantado o atrasado respecto a la imagen?",
+        "chat_sync_later": "Retrasar el chat (+1 s)",
+        "chat_sync_earlier": "Adelantar el chat (−1 s)",
+        "chat_sync_reset": "Volver solo a la sincronía automática",
+        "chat_sync_adjust": "Ajuste de la sincronía",
+        "chat_sync_adjust_sub": "¿El chat sigue adelantado? Añade unos segundos. ¿Atrasado? Quita algunos. También desde la etiqueta ⏱ encima del chat.",
+        "lang_ai_note": "Traducido con IA, aún sin revisar: si algo suena raro, avísanos.",
+        "lang_ai_report": "Reportar un error de traducción",
+        "lang_ai_badge": "Traducido con IA",
+        "switch_account": "Cambiar de cuenta",
+        "switch_account_sub": "Twitch te pedirá tus credenciales: inicia sesión con la otra cuenta.",
+        "vod_muted_here": "Sonido silenciado por Twitch (música protegida)",
+        "vod_muted_skip": "Saltar",
+        "vod_unmuted": "Sonido original restaurado en las partes silenciadas",
+        "restore_muted": "Restaurar el sonido silenciado",
+        "restore_muted_sub": "Twitch silencia las partes con música protegida. Uno o dos días después del directo, el original aún está disponible: la app lo restaura cuando puede. Sin efecto por AirPlay.",
+        "appearance": "Apariencia",
+        "accent_color": "Color de acento",
+        "background_theme": "Fondo",
+        "accent_twitch": "Morado Twitch",
+        "accent_blue": "Azul",
+        "accent_green": "Verde",
+        "accent_pink": "Rosa",
+        "accent_orange": "Naranja",
+        "accent_red": "Rojo",
+        "accent_teal": "Turquesa",
+        "bg_dark": "Oscuro",
+        "bg_oled": "Negro OLED",
+        "bg_slate": "Pizarra",
+        "liquid_glass": "Liquid Glass",
+        "liquid_glass_sub": "Barra de pestañas flotante y botones de cristal, al estilo de iOS 26.",
+        "liquid_glass_unavailable": "Requiere iOS 26 o posterior.",
+        "fb_add_photos": "Añadir capturas",
+        "fb_mine": "Mis reportes",
+        "fb_mine_empty": "Los reportes enviados desde la app aparecerán aquí, con las respuestas.",
+        "fb_thanks_follow": "¡Gracias! Sigue la respuesta en «Mis reportes».",
+        "fb_reply_ph": "Responder…",
+        "fb_reply_send": "Enviar",
+        "fb_reply_failed": "Respuesta no enviada, inténtalo de nuevo.",
+        "fb_team": "TwitchUnblock",
+        "fb_you": "Tú",
+        "fb_status_line": "Estado: {s}",
+        "fb_gone": "Este reporte ya no está disponible.",
+        "fb_status_new": "Recibido",
+        "fb_status_accepted": "Aceptado",
+        "fb_status_progress": "En curso",
+        "fb_status_done": "Hecho",
+        "fb_status_refused": "Rechazado",
     ],
+    // Russe : dans son propre fichier (Localization/RussianStrings.swift).
+    .ru: kRussianStrings,
 ]
 
+/// Une clé absente d'une langue retombe sur l'anglais, puis sur la clé
+/// elle-même : une traduction en retard n'affiche jamais un identifiant.
 func translate(_ key: String, _ lang: Lang) -> String {
-    translations[lang]?[key] ?? key
+    translations[lang]?[key] ?? translations[.en]?[key] ?? key
 }

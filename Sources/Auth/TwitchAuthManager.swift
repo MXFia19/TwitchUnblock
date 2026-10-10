@@ -8,10 +8,23 @@ final class TwitchAuthManager: NSObject, ASWebAuthenticationPresentationContextP
 
     private var session: ASWebAuthenticationSession?
 
+    /// Posé à la première déconnexion, jamais retiré : dès lors, chaque
+    /// connexion se fait dans une session privée, sans les cookies de Safari.
+    /// Twitch s'y souvient du compte et reconnectait aussitôt le même — se
+    /// déconnecter pour passer sur un autre compte ramenait au premier.
+    /// Gardé ensuite : une reconnexion ordinaire repasserait sinon par Safari,
+    /// toujours connecté à l'ancien compte.
+    static let privateSessionKey = "auth_private_session"
+
     /// Ouvre le flow OAuth Twitch et retourne le token si succès.
     /// - Parameter forceVerify: false = silencieux si déjà connecté dans Safari (< 1s)
     ///                          true  = re-login visible garanti (token fraîchement émis)
-    func login(forceVerify: Bool = false) async -> String? {
+    /// - Parameter chooseAccount: session privée, identifiants demandés
+    ///                            (changement de compte).
+    func login(forceVerify: Bool = false, chooseAccount: Bool = false) async -> String? {
+        let isPrivate = chooseAccount || UserDefaults.standard.bool(forKey: Self.privateSessionKey)
+        if chooseAccount { UserDefaults.standard.set(true, forKey: Self.privateSessionKey) }
+        let forceVerify = forceVerify || isPrivate
         let expectedState = UUID().uuidString
         var comps = URLComponents(string: "https://id.twitch.tv/oauth2/authorize")!
         comps.queryItems = [
@@ -29,7 +42,8 @@ final class TwitchAuthManager: NSObject, ASWebAuthenticationPresentationContextP
         guard let authURL = comps.url else { return nil }
 
         logger.info("AUTH", forceVerify ? "Login Twitch (force_verify: true)…"
-                                        : "Login Twitch silencieux (force_verify: false)…", nil)
+                                        : "Login Twitch silencieux (force_verify: false)…",
+                    isPrivate ? "session privée" : nil)
 
         return await withCheckedContinuation { continuation in
             let s = ASWebAuthenticationSession(
@@ -69,8 +83,9 @@ final class TwitchAuthManager: NSObject, ASWebAuthenticationPresentationContextP
                 continuation.resume(returning: nil)
             }
             s.presentationContextProvider = self
-            // false = partage la session Safari (l'utilisateur reste connecté entre les logins)
-            s.prefersEphemeralWebBrowserSession = false
+            // false = partage la session Safari (l'utilisateur reste connecté
+            // entre les logins) ; true après une déconnexion, voir plus haut.
+            s.prefersEphemeralWebBrowserSession = isPrivate
             self.session = s
             DispatchQueue.main.async { s.start() }
         }

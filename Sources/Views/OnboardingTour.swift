@@ -305,6 +305,19 @@ struct OnboardingTour: View {
 
     /// La langue d'abord : toute la visite la suit aussitôt.
     private var languagePicker: some View {
+        VStack(spacing: 6) {
+            languageButtons
+            // Traduction faite avec l'IA : dit dès le choix de la langue.
+            if store.lang.machineTranslated {
+                Text(store.t("lang_ai_note"))
+                    .font(.tMeta).foregroundColor(.tMuted)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private var languageButtons: some View {
         HStack(spacing: 8) {
             ForEach(Lang.allCases) { l in
                 let on = store.lang == l

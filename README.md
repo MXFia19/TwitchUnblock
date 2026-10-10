@@ -7,7 +7,7 @@
 
 **TwitchUnblock** is an open-source Twitch client that lets you watch VODs and
 live streams without a subscription, at full quality. Native iOS app built with
-SwiftUI — also available [in your browser](https://test2-fawn-eta.vercel.app).
+SwiftUI — also available [in your browser](https://twitchunblock.vercel.app).
 
 > 🤖 **Vibe-coded project.** TwitchUnblock is built with AI coding assistants
 > (prompted, reviewed and tested by a human). Expect rough edges: bug reports
@@ -19,7 +19,7 @@ no key to paste. The backend is already hosted and shared by every install.
 | | |
 |---|---|
 | **iOS** | SwiftUI, iOS 16+, sideloaded |
-| **Web** | [test2-fawn-eta.vercel.app](https://test2-fawn-eta.vercel.app) — source in [TwitchUnblock-Web](https://github.com/MXFia19/TwitchUnblock-Web) |
+| **Web** | [twitchunblock.vercel.app](https://twitchunblock.vercel.app) — source in [TwitchUnblock-Web](https://github.com/MXFia19/TwitchUnblock-Web) |
 | **Setup needed** | None — sign in with Twitch and watch |
 
 ---
@@ -115,7 +115,7 @@ no key to paste. The backend is already hosted and shared by every install.
 * 📊 **Usage count** — logged in, your Twitch account (counted once across the
   app and the website); logged out, a random install ID. Plus the app version,
   at most once an hour. No channels watched, no IP address. Switching it off
-  erases it server-side. Public numbers: [/stats](https://test2-fawn-eta.vercel.app/stats). See
+  erases it server-side. Public numbers: [/stats](https://twitchunblock.vercel.app/stats). See
   [`Sources/Services/UsageService.swift`](Sources/Services/UsageService.swift).
 * 🪵 **System logs** — everything the app does, visible in Settings.
 
@@ -147,7 +147,7 @@ with Sideloadly, AltStore, or TrollStore if your device supports it.
 
 ## 🌐 Web version
 
-**No install? Use it in your browser: https://test2-fawn-eta.vercel.app**
+**No install? Use it in your browser: https://twitchunblock.vercel.app**
 
 The website has its own repository, [TwitchUnblock-Web](https://github.com/MXFia19/TwitchUnblock-Web),
 and shares this app's backend (the Cloudflare Worker, which now lives there too).

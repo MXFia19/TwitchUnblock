@@ -43,6 +43,22 @@ struct VodChapter: Identifiable, Hashable {
     let title: String
 }
 
+/// Passage d'une VOD dont Twitch a coupé le son (musique protégée).
+struct MutedRange: Identifiable, Hashable {
+    var id: Double { start }
+    let start: Double      // secondes
+    let end: Double
+
+    func contains(_ t: Double) -> Bool { t >= start && t < end }
+}
+
+/// Repères d'une VOD : chapitres, passages coupés, date de diffusion.
+struct VodMarkers {
+    var chapters: [VodChapter] = []
+    var muted: [MutedRange] = []
+    var createdAt: Date? = nil
+}
+
 /// Clip d'une chaîne (liste de la page chaîne).
 struct ClipData: Identifiable {
     let id: String            // slug

@@ -4,6 +4,8 @@ struct SettingsView: View {
     @EnvironmentObject private var store: AppStore
     @State private var showLogs        = false
     @State private var showFeedback    = false
+    /// Contexte joint au retour (ex. « traduction ru »), nil = retour libre.
+    @State private var feedbackContext: String? = nil
     @ObservedObject private var updater = UpdateChecker.shared
     @State private var checkingUpdate  = false
     @State private var upToDate        = false
@@ -104,8 +106,9 @@ struct SettingsView: View {
             )
         }
         // ── Retour : bug, idée ─────────────────────────────────────────
-        .sheet(isPresented: $showFeedback) {
-            FeedbackSheet()
+        .sheet(isPresented: $showFeedback, onDismiss: { feedbackContext = nil }) {
+            FeedbackSheet(initialKind: feedbackContext == nil ? .bug : .other,
+                          context: feedbackContext)
                 .environmentObject(store)
                 .presentationDetents([.large])
         }
@@ -326,6 +329,7 @@ struct SettingsView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 0)
+                FeedbackUnreadBadge()
                 Image(systemName: "chevron.right")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(.tMuted.opacity(0.7))
@@ -393,6 +397,7 @@ struct SettingsView: View {
                     usageCard
                 case .general:
                     langueCard
+                    apparenceCard
                     autoclaimCard
                     veilleCard
                     historiqueCard
@@ -429,6 +434,27 @@ struct SettingsView: View {
                         langButton(lang)
                     }
                 }
+                // Langue traduite avec l'IA : on le dit, et on invite à
+                // signaler ce qui sonne faux.
+                if store.lang.machineTranslated {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label(store.t("lang_ai_note"), systemImage: "sparkles")
+                            .font(.tMeta).foregroundColor(.tMuted)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Button {
+                            feedbackContext = "translation \(store.lang.rawValue)"
+                            showFeedback = true
+                        } label: {
+                            Label(store.t("lang_ai_report"), systemImage: "text.bubble")
+                                .font(.tLabel).foregroundColor(.tPrimary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.tSurface)
+                    .cornerRadius(10)
+                }
                 topLangRow
                 Divider().background(Color.tBorder)
                 toggleRow(store.t("home_list"), store.t("home_list_sub"),
@@ -436,6 +462,67 @@ struct SettingsView: View {
                 Divider().background(Color.tBorder)
                 toggleRow(store.t("show_recent"), store.t("show_recent_sub"),
                           $store.showRecentChannels, log: "Streamers récents")
+            }
+        }
+    }
+
+    /// Couleur d'accent, fond, verre liquide (iOS 26) : voir Theme.swift.
+    @ViewBuilder private var apparenceCard: some View {
+        settingCard {
+            VStack(alignment: .leading, spacing: 14) {
+                label("paintpalette.fill", store.t("appearance"))
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(store.t("accent_color"))
+                        .font(.tCardTitle).foregroundColor(.tText)
+                    HStack(spacing: 8) {
+                        ForEach(AccentTheme.allCases) { a in
+                            let on = store.accent == a
+                            Button {
+                                logger.settingChanged("Couleur d'accent", value: a.rawValue)
+                                store.accent = a
+                            } label: {
+                                Circle().fill(a.color)
+                                    .frame(width: 28, height: 28)
+                                    .overlay(Circle().stroke(Color.white, lineWidth: on ? 2.5 : 0))
+                                    .overlay {
+                                        if on {
+                                            Image(systemName: "checkmark")
+                                                .font(.system(size: 11, weight: .bold))
+                                                .foregroundColor(.white)
+                                        }
+                                    }
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel(store.t(a.labelKey))
+                        }
+                    }
+                }
+                Divider().background(Color.tBorder)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(store.t("background_theme"))
+                        .font(.tCardTitle).foregroundColor(.tText)
+                    HStack(spacing: 8) {
+                        ForEach(BackgroundTheme.allCases) { b in
+                            TChip(title: store.t(b.labelKey), isOn: store.background == b) {
+                                logger.settingChanged("Fond", value: b.rawValue)
+                                store.background = b
+                            }
+                        }
+                    }
+                }
+                Divider().background(Color.tBorder)
+                if Theme.glassSupported {
+                    toggleRow(store.t("liquid_glass"), store.t("liquid_glass_sub"),
+                              $store.liquidGlass, log: "Verre liquide")
+                } else {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(store.t("liquid_glass"))
+                            .font(.tCardTitle).foregroundColor(.tMuted)
+                        Text(store.t("liquid_glass_unavailable"))
+                            .font(.tMeta).foregroundColor(.tMuted)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
             }
         }
     }
@@ -600,6 +687,9 @@ struct SettingsView: View {
                 Divider().background(Color.tBorder)
                 toggleRow(store.t("dbg_chat_delay"), store.t("dbg_chat_delay_sub"),
                           $store.autoChatDelay, log: "Synchro auto du chat")
+                if store.autoChatDelay {
+                    chatSyncNudgeRow
+                }
                 Divider().background(Color.tBorder)
                 VStack(alignment: .leading, spacing: 6) {
                     Text(store.t("muted_words"))
@@ -725,6 +815,9 @@ struct SettingsView: View {
                 Divider().background(Color.tBorder)
                 toggleRow(store.t("fill_screen"), store.t("fill_screen_sub"),
                           $store.fillScreen, log: "Remplir l'écran")
+                Divider().background(Color.tBorder)
+                toggleRow(store.t("restore_muted"), store.t("restore_muted_sub"),
+                          $store.restoreMutedAudio, log: "Rétablir le son des passages coupés")
                 Divider().background(Color.tBorder)
                 toggleRow(store.t("dbg_latency"), store.t("dbg_latency_sub"),
                           $store.showLatency, log: "Afficher la latence")
@@ -854,6 +947,28 @@ struct SettingsView: View {
                 ) {
                     if store.twitchToken != nil { showLogoutAlert = true }
                     else { Task { await handleApiLogin() } }
+                }
+
+                // Passer sur un autre compte sans repasser par Safari, qui
+                // reconnectait aussitôt le compte dont il se souvient.
+                if store.twitchToken != nil {
+                    Button { Task { await switchAccount() } } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "arrow.left.arrow.right.circle.fill")
+                                .font(.system(size: 16))
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(store.t("switch_account")).font(.tLabel)
+                                Text(store.t("switch_account_sub"))
+                                    .font(.tMeta).foregroundColor(.tMuted)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            Spacer(minLength: 0)
+                        }
+                        .foregroundColor(.tPrimary)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(apiLoggingIn)
                 }
 
                 Divider().background(Color.tBorder)
@@ -1142,7 +1257,7 @@ struct SettingsView: View {
                            url: "https://github.com/MXFia19/TwitchUnblock")
                 creditLink(icon: "globe",
                            title: store.t("web_version"),
-                           url: "https://test2-fawn-eta.vercel.app")
+                           url: "https://twitchunblock.vercel.app")
                 creditLink(icon: "bubble.left.and.bubble.right.fill",
                            title: store.t("discord_join"),
                            url: kDiscordURL)
@@ -1295,6 +1410,30 @@ struct SettingsView: View {
         }
     }
 
+    /// Changer de compte : Twitch demande les identifiants dans une session
+    /// privée. Le compte actuel reste en place tant que le nouveau n'est pas
+    /// connecté — annuler ne déconnecte pas.
+    private func switchAccount() async {
+        apiLoggingIn = true
+        defer { apiLoggingIn = false }
+        logger.info("AUTH", "Changement de compte…", nil)
+        let previous = store.twitchUserId
+        guard let token = await TwitchAuthManager.shared.login(chooseAccount: true) else { return }
+        let user = await getTwitchUser(token: token)
+        // Autre compte : la session web (points de chaîne) était celle de l'ancien.
+        if user == nil || user?.id != previous, store.twitchWebToken != nil {
+            store.twitchWebToken = nil
+            await TwitchWebSession.clear()
+        }
+        store.adoptToken(token)
+        if let user {
+            store.twitchUserId = user.id
+            store.twitchLogin  = user.login
+            if !user.profileImageURL.isEmpty { store.twitchAvatar = user.profileImageURL }
+        }
+        logger.success("AUTH", "Compte changé", user?.login)
+    }
+
     private func startWebLogin() {
         // Re-login forcé seulement si un token existe déjà mais est invalide.
         webLoginClear = false
@@ -1361,6 +1500,31 @@ struct SettingsView: View {
             content()
         }
         .tCard()
+    }
+
+    /// Retouche de la synchro auto du chat, à la seconde (+ = chat plus tard).
+    @ViewBuilder private var chatSyncNudgeRow: some View {
+        HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(store.t("chat_sync_adjust"))
+                    .font(.tCardTitle)
+                    .foregroundColor(.tText)
+                Text(store.t("chat_sync_adjust_sub"))
+                    .font(.tMeta)
+                    .foregroundColor(.tMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 8)
+            Text(store.chatSyncNudge == 0 ? "0 s" : String(format: "%+.0f s", store.chatSyncNudge))
+                .font(.system(size: 14, weight: .bold).monospacedDigit())
+                .foregroundColor(store.chatSyncNudge == 0 ? .tMuted : .tPrimary)
+            Stepper("", value: $store.chatSyncNudge, in: -20...20, step: 1)
+                .labelsHidden()
+                .onChange(of: store.chatSyncNudge) { v in
+                    logger.settingChanged("Retouche de la synchro du chat", value: String(format: "%+.0f s", v))
+                }
+        }
+        .padding(.leading, 4)
     }
 
     @ViewBuilder
@@ -1452,9 +1616,16 @@ struct SettingsView: View {
         } label: {
             HStack(spacing: 12) {
                 Text(lang.flag).font(.system(size: 22))
-                Text(lang.label)
-                    .font(.tCardTitle)
-                    .foregroundColor(isSelected ? .tPrimary : .tText)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(lang.label)
+                        .font(.tCardTitle)
+                        .foregroundColor(isSelected ? .tPrimary : .tText)
+                    // Dans la langue elle-même : c'est à ses lecteurs qu'on parle.
+                    if lang.machineTranslated {
+                        Text(translate("lang_ai_badge", lang))
+                            .font(.tMeta).foregroundColor(.tMuted)
+                    }
+                }
                 Spacer()
                 if isSelected {
                     Image(systemName: "checkmark.circle.fill")

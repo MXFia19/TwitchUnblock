@@ -24,7 +24,7 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
     var nowPlaying = NowPlayingMeta()
 
     func makeUIViewController(context: Context) -> AVPlayerViewController {
-        let player = AVPlayer(url: url)
+        let player = AVPlayer(playerItem: VodUnmuteLoader.playerItem(url: url))
         // Le son continue écran verrouillé, comme dans le lecteur immersif.
         player.audiovisualBackgroundPlaybackPolicy = .continuesIfPossible
         let vc = AVPlayerViewController()
@@ -54,7 +54,7 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
             // avant de le remplacer par la nouvelle qualité !
             vc.player?.pause()
             
-            let player = AVPlayer(url: url)
+            let player = AVPlayer(playerItem: VodUnmuteLoader.playerItem(url: url))
             player.audiovisualBackgroundPlaybackPolicy = .continuesIfPossible
             vc.player = player
             context.coordinator.lowLatency = lowLatency && isLive
@@ -82,11 +82,13 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
         weak var playerVC: AVPlayerViewController?
         private var timeObserver: Any?
         private var playerRef: AVPlayer?
+        private var externalObs: NSKeyValueObservation?
 
         /// Mode faible latence actif (direct uniquement).
         var lowLatency = false
         private var lastCatchUp = Date.distantPast
         private var latency = LiveLatencyController()
+        private var sync = LiveSyncEstimator()
 
 
         /// Prépare le direct : le mode faible latence tient ensuite le bord du
@@ -143,22 +145,26 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
                            onBehind: @escaping (Double?) -> Void = { _ in }) {
             if let existing = timeObserver { playerRef?.removeTimeObserver(existing) }
             playerRef = player
+            sync.reset()
+            // AirPlay ne lit pas les playlists réécrites : retour à celle du CDN.
+            externalObs = player.observe(\.isExternalPlaybackActive, options: [.new]) { p, _ in
+                DispatchQueue.main.async { VodUnmuteLoader.fallBackForAirPlay(p) }
+            }
             // 1 s : assez fin pour synchroniser le chat des VODs.
             let interval = CMTime(seconds: 1, preferredTimescale: 600)
             timeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self, weak player] time in
                 onProgress(time.seconds)
                 // Latence = écart entre l'heure réelle et l'horodatage du segment lu
                 // (EXT-X-PROGRAM-DATE-TIME de la playlist HLS). nil si absent.
-                if let date = player?.currentItem?.currentDate() {
-                    onLatency(Date().timeIntervalSince(date))
-                } else {
-                    onLatency(nil)
-                }
-                // Distance au bord du direct (fin de la plage cherchable) : la
-                // base de la synchro du chat. Un direct n'a pas de durée finie.
-                if let item = player?.currentItem, item.duration.isIndefinite,
+                let total = player?.currentItem?.currentDate().map { Date().timeIntervalSince($0) }
+                onLatency(total)
+                // Retard sur le direct tel que le voient les autres spectateurs :
+                // la base de la synchro du chat (LiveSyncEstimator). Un direct
+                // n'a pas de durée finie.
+                if let self, let item = player?.currentItem, item.duration.isIndefinite,
                    let edge = item.seekableTimeRanges.last?.timeRangeValue.end, edge.isNumeric {
-                    onBehind((edge - item.currentTime()).seconds)
+                    onBehind(self.sync.offset(latency: total,
+                                              behind: (edge - item.currentTime()).seconds))
                 } else {
                     onBehind(nil)
                 }

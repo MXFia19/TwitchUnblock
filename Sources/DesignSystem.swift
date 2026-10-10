@@ -122,8 +122,8 @@ struct TPrimaryButton: View {
             .frame(maxWidth: fullWidth ? .infinity : nil)
             .padding(.horizontal, fullWidth ? 0 : TSpace.lg)
             .frame(height: 44)
-            .background(Color.tPrimary)
-            .cornerRadius(TRadius.control)
+            .tGlass(in: RoundedRectangle(cornerRadius: TRadius.control, style: .continuous),
+                    fallback: .tPrimary, tint: .tPrimary)
         }
         .buttonStyle(.plain)
     }
@@ -171,8 +171,7 @@ struct TIconButton: View {
                 .font(.system(size: size * 0.4, weight: .semibold))
                 .foregroundColor(tint)
                 .frame(width: size, height: size)
-                .background(Color.tSurface)
-                .clipShape(Circle())
+                .tGlass(in: Circle(), fallback: .tSurface)
         }
         .buttonStyle(.plain)
     }

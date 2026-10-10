@@ -16,6 +16,8 @@ struct TwitchUnblockApp: App {
                 .task { await UpdateChecker.shared.checkIfDue(atLaunch: true) }
                 // Annonce du développeur en cours ?
                 .task { await AnnouncementService.shared.refresh(force: true) }
+                // Réponses aux retours envoyés depuis l'app (pastille).
+                .task { await FeedbackStore.shared.refresh(force: true) }
                 .onChange(of: scenePhase) { phase in
                     switch phase {
                     case .background:
@@ -36,6 +38,7 @@ struct TwitchUnblockApp: App {
                         // au prochain réveil pour un live déjà découvert ici.
                         Task { await LiveNotifier.check(notify: false) }
                         Task { await AnnouncementService.shared.refresh() }
+                        Task { await FeedbackStore.shared.refresh() }
                     default:
                         break
                     }

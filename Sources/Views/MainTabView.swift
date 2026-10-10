@@ -94,6 +94,10 @@ struct MainTabView: View {
     @State private var clipOffset: Double = 0
     /// Chapitres de la VOD en cours (changements de jeu).
     @State private var vodChapters: [VodChapter] = []
+    /// Passages de la VOD dont Twitch a coupé le son (et que l'app n'a pas pu
+    /// rétablir), et nombre de segments rétablis (VodUnmuteLoader).
+    @State private var vodMuted: [MutedRange] = []
+    @State private var vodUnmuted = 0
 
     /// Décalage à appliquer au chat, si la synchro est active : notre retard
     /// sur le bord du direct. Les messages viennent de spectateurs qui
@@ -103,7 +107,9 @@ struct MainTabView: View {
     /// subissent aussi : le chat arrivait alors 10 s trop tard, ou plus.
     private var chatDelay: Double {
         guard store.autoChatDelay, isLivePlaying else { return 0 }
-        return max(0, min(liveBehind, 60))   // borne haute : évite un décalage absurde
+        // Borne haute : évite un décalage absurde. La retouche manuelle
+        // (pastille du chat, réglages) s'ajoute à l'estimation.
+        return max(0, min(liveBehind + store.chatSyncNudge, 60))
     }
 
     /// Infos affichées par-dessus l'image en mode immersif.
@@ -238,10 +244,23 @@ struct MainTabView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                // Verre liquide (iOS 26) : la barre d'onglets flotte sur le
+                // contenu, qui défile dessous et transparaît à travers.
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    if store.liquidGlass && Theme.glassSupported {
+                        CustomTabBar(activeTab: $activeTab, floating: true)
+                    }
+                }
 
-                CustomTabBar(activeTab: $activeTab)
+                if !(store.liquidGlass && Theme.glassSupported) {
+                    CustomTabBar(activeTab: $activeTab)
+                }
             }
             .ignoresSafeArea()
+            // Thème changé dans les réglages : les onglets sont reconstruits,
+            // pour qu'aucune vue ne garde les anciennes couleurs. Le lecteur et
+            // la feuille des réglages, hors de ce bloc, restent en place.
+            .id(store.themeID)
 
             // ── Mini bar ──────────────────────────────────────────────
             // `!closingPlayer` : sans lui, la mini-barre apparaîtrait le temps du
@@ -392,6 +411,15 @@ struct MainTabView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .AVPlayerItemDidPlayToEndTime)) { _ in
             playNextInQueue()
+        }
+        // Playlist réécrite par VodUnmuteLoader : passages encore muets (pour
+        // la barre de lecture) et nombre de segments rétablis.
+        .onReceive(NotificationCenter.default.publisher(for: VodUnmuteLoader.resultNotification)) { note in
+            guard let url = note.userInfo?["url"] as? String,
+                  let links = qualityLinks,
+                  links.values.contains(where: { VodUnmuteLoader.unwrap($0) == url }) else { return }
+            if let remaining = note.userInfo?["remaining"] as? [MutedRange] { vodMuted = remaining }
+            vodUnmuted = note.userInfo?["restored"] as? Int ?? 0
         }
         .onReceive(NotificationCenter.default.publisher(for: .openLiveChannel)) { note in
             if let login = note.userInfo?["login"] as? String, !login.isEmpty { playLive(login) }
@@ -657,6 +685,8 @@ struct MainTabView: View {
                 streamStartedAt: liveStartedAt,
                 archiveAvailable: liveDvrVideoId != nil,
                 chapters: vodChapters,
+                mutedRanges: vodMuted,
+                unmutedCount: vodUnmuted,
                 nowPlaying: nowPlayingMeta,
                 onProgress: { time in
                     // Pendant une bascule, `playerMode` désigne déjà la
@@ -913,10 +943,10 @@ struct MainTabView: View {
         }
         .padding(.horizontal, TSpace.md)
         .padding(.vertical, TSpace.sm)
-        .background(Color.tCard)
-        .cornerRadius(TRadius.card)
-        .overlay(RoundedRectangle(cornerRadius: TRadius.card)
-            .stroke(Color.tPrimary.opacity(0.4), lineWidth: 1))
+        .tGlass(in: RoundedRectangle(cornerRadius: TRadius.card, style: .continuous),
+                fallback: .tCard)
+        .overlay(RoundedRectangle(cornerRadius: TRadius.card, style: .continuous)
+            .stroke(Color.tPrimary.opacity(store.liquidGlass ? 0.25 : 0.4), lineWidth: 1))
         // La zone tactile est fixée AVANT les marges : sinon le rectangle
         // tactile englobait les 92 pt de marge basse, qui recouvrent la barre
         // d'onglets — appuyer sur « Recherche » ou « VODs » rouvrait le lecteur
@@ -1026,12 +1056,8 @@ struct MainTabView: View {
         let gen = loadGeneration
         clipVodId = nil; clipOffset = 0
         vodChapters = []
-        if case .vod(let vid, _, _, _) = mode {
-            Task {
-                let ch = await getVodChapters(vodId: vid)
-                await MainActor.run { if gen == loadGeneration { vodChapters = ch } }
-            }
-        }
+        vodMuted = []
+        vodUnmuted = 0
         Task {
             switch mode {
             case .clip(let slug, let title):
@@ -1066,16 +1092,26 @@ struct MainTabView: View {
                         if gen == loadGeneration { liveAvatar = avatar }
                     }
                 }
+                // Repères (chapitres, passages coupés) en même temps que les
+                // liens : ils décident de la playlist à donner au lecteur.
+                async let markersTask = getVodMarkers(vodId: id)
                 let data = await getM3U8(vodId: id)
+                let markers = await markersTask
                 if let err = data.error, data.links.isEmpty {
                     await MainActor.run {
                         guard gen == loadGeneration else { return }
                         errorMsg = err; loading = false; switchingSource = false
                     }
                 } else {
+                    // VOD récente avec des passages coupés : le son d'origine
+                    // est peut-être encore sur le CDN (VodUnmuteLoader).
+                    let unmute = store.restoreMutedAudio && VodUnmuteLoader.worthTrying(markers)
+                    let links = unmute ? VodUnmuteLoader.wrap(data.links) : data.links
                     await MainActor.run {
                         guard gen == loadGeneration else { return }
-                        qualityLinks    = data.links
+                        vodChapters     = markers.chapters
+                        vodMuted        = markers.muted
+                        qualityLinks    = links
                         statusTitle     = title ?? "VOD \(id)"
                         loading         = false
                         switchingSource = false
@@ -1221,6 +1257,8 @@ struct MainTabView: View {
 // MARK: – Custom Tab Bar
 struct CustomTabBar: View {
     @Binding var activeTab: MainTabView.TabName
+    /// Verre liquide : capsule flottante au-dessus du contenu.
+    var floating = false
     @EnvironmentObject private var store: AppStore
 
     private var bottomInset: CGFloat {
@@ -1230,6 +1268,24 @@ struct CustomTabBar: View {
     }
 
     var body: some View {
+        if floating {
+            tabs
+                .padding(.vertical, 8)
+                .padding(.horizontal, 6)
+                .tGlass(in: Capsule(), fallback: .tCard)
+                .padding(.horizontal, 28)
+                .padding(.top, 6)
+                .padding(.bottom, max(bottomInset - 12, 10))
+        } else {
+            tabs
+                .padding(.top, 10)
+                .padding(.bottom, bottomInset + 6)
+                .background(.ultraThinMaterial)
+                .overlay(Divider().background(Color.tBorder), alignment: .top)
+        }
+    }
+
+    private var tabs: some View {
         HStack(spacing: 0) {
             ForEach(MainTabView.TabName.allCases, id: \.self) { tab in
                 let isActive = activeTab == tab
@@ -1252,10 +1308,6 @@ struct CustomTabBar: View {
                 .tourAnchor(tab.tourTarget)
             }
         }
-        .padding(.top, 10)
-        .padding(.bottom, bottomInset + 6)
-        .background(.ultraThinMaterial)
-        .overlay(Divider().background(Color.tBorder), alignment: .top)
     }
 }
 

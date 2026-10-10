@@ -177,9 +177,10 @@ final class VodUnmuteLoader: NSObject, AVAssetResourceLoaderDelegate {
                     base.deletingLastPathComponent().lastPathComponent)
         let restored = available.count
         let playlistURL = base.absoluteString
+        let stillMuted = remaining
         await MainActor.run {
             NotificationCenter.default.post(name: Self.resultNotification, object: nil, userInfo: [
-                "url": playlistURL, "restored": restored, "remaining": remaining,
+                "url": playlistURL, "restored": restored, "remaining": stillMuted,
             ])
         }
         return lines.joined(separator: "\n")

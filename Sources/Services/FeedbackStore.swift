@@ -97,9 +97,9 @@ final class FeedbackStore: ObservableObject {
     }
 
     /// État de toutes les discussions en une requête — au plus toutes les
-    /// 10 min sans `force`. Un retour effacé ou expiré quitte la liste.
+    /// 3 min sans `force`. Un retour effacé ou expiré quitte la liste.
     func refresh(force: Bool = false) async {
-        guard !reports.isEmpty, force || Date().timeIntervalSince(checkedAt) > 600 else { return }
+        guard !reports.isEmpty, force || Date().timeIntervalSince(checkedAt) > 180 else { return }
         checkedAt = Date()
         let items = reports.map { ["id": $0.id, "token": $0.token] }
         guard let data = await post("/api/feedback/thread", ["items": items]),

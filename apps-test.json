@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.2.20",
+          "buildVersion": "241",
+          "date": "2026-10-10",
+          "localizedDescription": "- Liquid Glass: buttons in the player (and the way back to home) work again while watching a stream.\n- My reports: replies and status changes now show up on their own, no need to refresh.",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-241/TwitchUnblock.ipa",
+          "size": 2200820,
+          "commit": "a63155a675daf193424f85330706ae490ea9e547"
+        },
+        {
           "version": "1.2.19",
           "buildVersion": "239",
           "date": "2026-10-10",
@@ -223,10 +232,10 @@
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.2.19",
+      "version": "1.2.20",
       "versionDate": "2026-10-10",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-239/TwitchUnblock.ipa",
-      "size": 2200788
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-241/TwitchUnblock.ipa",
+      "size": 2200820
     }
   ],
   "news": []

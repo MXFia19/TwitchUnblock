@@ -96,7 +96,14 @@ struct MyFeedbackList: View {
                 Button(store.t("close")) { dismiss() }
             }
         }
-        .task { await inbox.refresh(force: true) }
+        // Liste à jour toute seule : état et réponses arrivent sans tirer
+        // pour rafraîchir. Arrêté dès que la liste n'est plus affichée.
+        .task {
+            while !Task.isCancelled {
+                await inbox.refresh(force: true)
+                try? await Task.sleep(nanoseconds: 30_000_000_000)
+            }
+        }
         .refreshable { await inbox.refresh(force: true) }
     }
 
@@ -212,10 +219,15 @@ struct FeedbackThreadView: View {
             }
         }
         .navigationBarTitleDisplayMode(.inline)
+        // Discussion ouverte : relue toutes les 20 s, la réponse apparaît
+        // sans rien toucher. La tâche s'arrête quand on quitte l'écran.
         .task {
             inbox.markSeen(id)
-            await inbox.refresh(force: true)
-            inbox.markSeen(id)
+            while !Task.isCancelled {
+                await inbox.refresh(force: true)
+                inbox.markSeen(id)
+                try? await Task.sleep(nanoseconds: 20_000_000_000)
+            }
         }
         .sheet(item: Binding(get: { zoomed.map(ZoomedPhoto.init) }, set: { zoomed = $0?.url })) { z in
             ZoomedPhotoView(url: z.url)

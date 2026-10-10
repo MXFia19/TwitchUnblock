@@ -84,11 +84,14 @@ enum Theme {
 }
 
 // MARK: – Verre liquide
+/// Verre purement visuel, pas « interactif » : la réaction du verre interactif
+/// au toucher ignore le test de touche des vues — elle s'allumait même quand
+/// l'appui n'atteignait pas le bouton, qui ne faisait alors rien.
 @available(iOS 26, *)
 private func tuGlass(tint: Color?, clear: Bool) -> Glass {
     var g: Glass = clear ? .clear : .regular
     if let tint { g = g.tint(tint) }
-    return g.interactive()
+    return g
 }
 
 extension View {
@@ -101,7 +104,13 @@ extension View {
                           clear: Bool = false) -> some View {
         if #available(iOS 26, *) {
             if Theme.useGlass {
+                // `contentShape` : le verre, lui, ne reçoit pas les touchers.
+                // Sans elle, seul le symbole d'un bouton répondait ; un appui
+                // à côté traversait jusqu'au voile du lecteur, qui masquait
+                // les commandes — boutons et retour à l'accueil inutilisables
+                // pendant un live. Un fond plein, lui, comptait déjà.
                 self.glassEffect(tuGlass(tint: tint, clear: clear), in: shape)
+                    .contentShape(shape)
             } else {
                 self.background(fallback).clipShape(shape)
             }

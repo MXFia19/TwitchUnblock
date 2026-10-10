@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.2.19",
+          "buildVersion": "239",
+          "date": "2026-10-10",
+          "localizedDescription": "- Passages coupés : plus d'avertissement de concurrence à la publication du résultat",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-239/TwitchUnblock.ipa",
+          "size": 2200788,
+          "commit": "a9859acd86aea48f43c7f5e7b7024cdb1004d51c"
+        },
+        {
           "version": "1.2.18",
           "buildVersion": "238",
           "date": "2026-10-10",
@@ -214,9 +223,9 @@
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.2.18",
+      "version": "1.2.19",
       "versionDate": "2026-10-10",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-238/TwitchUnblock.ipa",
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-239/TwitchUnblock.ipa",
       "size": 2200788
     }
   ],

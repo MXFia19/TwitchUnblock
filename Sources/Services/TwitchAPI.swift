@@ -24,6 +24,12 @@ private func m3u8Attr(_ line: String, _ name: String) -> String? {
 func parseM3U8(_ content: String, baseURL: URL? = nil) -> QualityLinks {
     var links: QualityLinks = [:]
     let lines = content.components(separatedBy: "\n")
+    // Groupes vidéo nommés « … (source) » (EXT-X-MEDIA) : certains proxys
+    // appellent la version d'origine « 1080p60 » plutôt que « chunked ».
+    let sourceGroups = Set(lines.compactMap { l -> String? in
+        guard l.hasPrefix("#EXT-X-MEDIA"), l.lowercased().contains("(source)") else { return nil }
+        return m3u8Attr(l, "GROUP-ID")
+    })
     for i in 0..<lines.count {
         let line = lines[i].trimmingCharacters(in: .whitespaces)
         guard line.hasPrefix("#EXT-X-STREAM-INF") else { continue }
@@ -33,7 +39,8 @@ func parseM3U8(_ content: String, baseURL: URL? = nil) -> QualityLinks {
         // et l'audio seul devenait « unknown ».
         var quality = "unknown"
         if let name = m3u8Attr(line, "VIDEO") ?? m3u8Attr(line, "STABLE-VARIANT-ID") ?? m3u8Attr(line, "IVS-NAME") {
-            quality = name == "chunked" || m3u8Attr(line, "IVS-VARIANT-SOURCE") == "source" ? "Source" : name
+            quality = name == "chunked" || sourceGroups.contains(name)
+                || m3u8Attr(line, "IVS-VARIANT-SOURCE") == "source" ? "Source" : name
         } else if let r = line.range(of: #"RESOLUTION=(\d+x\d+)"#, options: .regularExpression) {
             quality = String(line[r]).replacingOccurrences(of: "RESOLUTION=", with: "")
         }
@@ -379,6 +386,30 @@ func getLive(channelName: String) async -> LiveData {
             } catch {
                 logger.error("LIVE", "❌ Erreur Luminous \(host)", error.localizedDescription)
             }
+        }
+    }
+
+    // 1 bis - Proxy albanais (format TTV.LOL : la requête usher encodée après
+    // /playlist/<chaîne>.m3u8), sans pub lui aussi.
+    if links.isEmpty && sourcePref == "auto" {
+        var allowed = CharacterSet.alphanumerics
+        allowed.insert(charactersIn: "-._~")
+        let query = "allow_source=true&allow_audio_only=true&fast_bread=true"
+            .addingPercentEncoding(withAllowedCharacters: allowed) ?? ""
+        for host in kTTVLOLHosts where links.isEmpty {
+            guard let url = URL(string: "https://\(host)/playlist/\(login).m3u8%3F\(query)") else { continue }
+            logger.info("LIVE", "Tentative proxy TTV.LOL (Sans Pub)…", host)
+            var req = URLRequest(url: url, timeoutInterval: 10)
+            req.setValue("https://ttv.lol/donate", forHTTPHeaderField: "X-Donate-To")
+            guard let (data, resp) = try? await URLSession.shared.data(for: req),
+                  (resp as? HTTPURLResponse)?.statusCode == 200 else {
+                logger.warn("LIVE", "⚠️ Proxy \(host) indisponible", "source suivante…")
+                continue
+            }
+            let body = String(decoding: data, as: UTF8.self)
+            guard body.contains("#EXT-X-STREAM-INF") else { continue }
+            links = parseM3U8(body, baseURL: url)
+            if !links.isEmpty { logger.success("LIVE", "✅ Proxy TTV.LOL OK (\(host))", "\(links.count) qualités") }
         }
     }
 

@@ -25,6 +25,11 @@ let kLuminousHosts = [
     "eu3.luminous.dev"
 ]
 
+/// Proxys sans pub au format TTV.LOL v1, essayés après Luminous. Celui-ci est
+/// en Albanie, où Twitch ne diffuse pas de pub ; ses variantes se lisent de
+/// n'importe quelle adresse et annoncent leurs segments d'avance.
+let kTTVLOLHosts = ["twitch-al.nadeko.net"]
+
 /// Récupération de VODs supprimées : distributions CloudFront où Twitch range
 /// les VODs (les plus fréquentes d'abord), plus des hôtes historiques. Le
 /// dossier d'une VOD vaut SHA1("login_streamID_epoch")[:20]_login_streamID_epoch

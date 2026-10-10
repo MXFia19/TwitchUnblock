@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.2.22",
+          "buildVersion": "245",
+          "date": "2026-10-10",
+          "localizedDescription": "- Live quality names stay correct when the app falls back to another ad-free mirror.",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-245/TwitchUnblock.ipa",
+          "size": 2206098,
+          "commit": "4394291ce9078a17006e345e2241eeb1b30445a0"
+        },
+        {
           "version": "1.2.21",
           "buildVersion": "243",
           "date": "2026-10-10",
@@ -241,10 +250,10 @@
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.2.21",
+      "version": "1.2.22",
       "versionDate": "2026-10-10",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-243/TwitchUnblock.ipa",
-      "size": 2205875
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-245/TwitchUnblock.ipa",
+      "size": 2206098
     }
   ],
   "news": []

@@ -111,6 +111,7 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
     private var pip: AVPictureInPictureController?
     private var lastCatchUp = Date.distantPast
     private var latency = LiveLatencyController()
+    private var sync = LiveSyncEstimator()
 
     // Écran verrouillé / centre de contrôle
     private var nowPlaying = NowPlayingMeta()
@@ -119,6 +120,7 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
     private var remoteTargets: [(MPRemoteCommand, Any)] = []
     private var lastNowPlayingUpdate = Date.distantPast
     private var timeControlObs: NSKeyValueObservation?
+    private var externalObs: NSKeyValueObservation?
     /// Durée de VOD déjà envoyée à la Live Activity.
     private var activityDuration: Double = 0
 
@@ -151,6 +153,10 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
                 self.updateActivity()
             }
         }
+        // AirPlay ne lit pas les playlists réécrites : retour à celle du CDN.
+        externalObs = player.observe(\.isExternalPlaybackActive, options: [.new]) { p, _ in
+            DispatchQueue.main.async { VodUnmuteLoader.fallBackForAirPlay(p) }
+        }
         setupRemoteCommands()
     }
 
@@ -159,8 +165,10 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
         // Repart d'une fenêtre vierge : garder les bornes de la source
         // précédente affichait une barre fantaisiste le temps du chargement.
         startTime = 0; endTime = 0; currentDate = nil
+        sync.reset()
 
-        let item = AVPlayerItem(url: url)
+        // Adresse `tuunmute://` : passages coupés rétablis (VodUnmuteLoader).
+        let item = VodUnmuteLoader.playerItem(url: url)
         pendingSeek = seek > 5 ? seek : nil
         statusObs = item.observe(\.status, options: [.initial, .new]) { [weak self] item, _ in
             guard item.status == .readyToPlay else { return }
@@ -218,14 +226,12 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
 
         // Latence : écart entre l'heure réelle et l'horodatage du segment lu.
         currentDate = item.currentDate()
-        if isLive, let date = currentDate {
-            onLatency(Date().timeIntervalSince(date))
-        } else {
-            onLatency(nil)
-        }
-        // Distance au bord du direct : c'est elle qui sépare le chat de
-        // l'image (voir MainTabView.chatDelay), pas la latence totale.
-        onBehind(isLive && endTime > position ? endTime - position : nil)
+        let total = isLive ? currentDate.map { Date().timeIntervalSince($0) } : nil
+        onLatency(total)
+        // Retard sur le direct tel que le voient les autres spectateurs : c'est
+        // lui qui sépare le chat de l'image (voir LiveSyncEstimator).
+        onBehind(isLive && endTime > position
+                 ? sync.offset(latency: total, behind: endTime - position) : nil)
 
         catchUpIfNeeded(item)
     }
@@ -435,6 +441,10 @@ struct ImmersivePlayer: View {
     var archiveAvailable: Bool = false
     /// Chapitres de la VOD (changements de jeu) : repères et liste pour sauter.
     var chapters: [VodChapter] = []
+    /// Passages dont Twitch a coupé le son (musique protégée), en orange sur la
+    /// barre ; et nombre de segments dont l'app a pu remettre le son.
+    var mutedRanges: [MutedRange] = []
+    var unmutedCount: Int = 0
     /// Rembobinage au-delà de la fenêtre DVR : le direct ne sait pas y aller,
     /// on bascule sur l'enregistrement à ce nombre de secondes du début.
     var onSeekToArchive: (Double) -> Void = { _ in }
@@ -510,6 +520,8 @@ struct ImmersivePlayer: View {
          streamStartedAt: Date? = nil,
          archiveAvailable: Bool = false,
          chapters: [VodChapter] = [],
+         mutedRanges: [MutedRange] = [],
+         unmutedCount: Int = 0,
          nowPlaying: NowPlayingMeta = NowPlayingMeta(),
          onProgress: @escaping (Double) -> Void = { _ in },
          onLatency:  @escaping (Double?) -> Void = { _ in },
@@ -533,6 +545,7 @@ struct ImmersivePlayer: View {
         self.fillScreen = fillScreen; self.canReturnToLive = canReturnToLive
         self.streamStartedAt = streamStartedAt; self.archiveAvailable = archiveAvailable
         self.chapters = chapters; self.nowPlaying = nowPlaying
+        self.mutedRanges = mutedRanges; self.unmutedCount = unmutedCount
         self.onReduce = onReduce; self.onClose = onClose
         self.onMenu = onMenu; self.onRefresh = onRefresh
         self.onToggleChat = onToggleChat; self.onSleep = onSleep
@@ -646,6 +659,16 @@ struct ImmersivePlayer: View {
             }
 
             if showControls { controls }
+
+            // Passage dont Twitch a coupé le son : on le dit (sinon on croit à
+            // une panne) et on propose de le sauter.
+            if let muted = currentMuted {
+                mutedNotice(muted)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    .padding(.top, showControls ? 58 : TSpace.sm)
+                    .padding(.trailing, controlsInset)
+                    .transition(.opacity)
+            }
         }
         // La boîte est fixée par le parent (16:9 en portrait, toute la colonne en
         // paysage) : ici on remplit ce qu'on nous donne, sans jamais dériver la
@@ -683,6 +706,11 @@ struct ImmersivePlayer: View {
             scheduleAutoHide()
         }
         .onChange(of: nowPlaying) { model.setNowPlaying($0) }
+        // Son rétabli sur des passages coupés : on le signale une fois.
+        .onChange(of: unmutedCount) { n in
+            if n > 0 { flash(store.t("vod_unmuted"), duration: 2_500_000_000) }
+        }
+        .animation(.easeInOut(duration: 0.2), value: currentMuted)
         .onChange(of: store.lowLatency) { model.lowLatency = $0 && isLive }
         .onDisappear {
             hideTask?.cancel()
@@ -745,6 +773,10 @@ struct ImmersivePlayer: View {
                            startPoint: .top, endPoint: .bottom)
                 .contentShape(Rectangle())
                 .onTapGesture { toggleControls() }
+                // En paysage, l'image descend jusqu'aux bords physiques : le
+                // voile suit. Sinon il s'arrêtait à la zone sûre et laissait
+                // une bande de vidéo en pleine lumière au-dessus et en dessous.
+                .ignoresSafeArea(isLandscape ? SafeAreaRegions.all : [], edges: .vertical)
 
             // Play / pause au centre — centré sur la partie visible de l'image,
             // pas sur l'écran entier : le chat superposé en masque la droite.
@@ -755,8 +787,7 @@ struct ImmersivePlayer: View {
                     .font(.system(size: 26, weight: .bold))
                     .foregroundColor(.white)
                     .frame(width: 58, height: 58)
-                    .background(Color.black.opacity(0.45))
-                    .clipShape(Circle())
+                    .tGlass(in: Circle(), fallback: Color.black.opacity(0.45), clear: true)
             }
             .buttonStyle(.plain)
             .offset(x: -controlsInset / 2)
@@ -778,17 +809,19 @@ struct ImmersivePlayer: View {
             // au doigt. Le changement de disposition, lui, est déjà animé par
             // le `withAnimation` du bouton qui le déclenche.
             .padding(.trailing, controlsInset)
+            // En paysage, la barre du bas descend jusqu'au bord physique : sans
+            // ça elle flottait à une trentaine de points du bord quand le haut
+            // n'en avait que huit — la barre d'accueil réserve cet espace.
+            //
+            // Le haut, lui, garde sa zone sûre. Sur iPad la barre d'état reste
+            // affichée en paysage (et iPadOS 26 y loge les boutons de fenêtre) :
+            // c'est le système qui reçoit les touchers à cet endroit. Glissés
+            // dessous, retour, AirPlay et fermer ne répondaient plus. Sur
+            // iPhone, rien ne change : la zone sûre du haut y est nulle en
+            // paysage. Sur les côtés non plus : l'encoche rognerait le retour.
+            .ignoresSafeArea(isLandscape ? SafeAreaRegions.all : [], edges: .bottom)
         }
         .transition(.opacity)
-        // En paysage, l'image descend jusqu'au bord physique : les commandes
-        // suivent. Sinon le voile s'arrêtait à la zone sûre et laissait une
-        // bande de vidéo en pleine lumière sous la barre, et les boutons
-        // flottaient à une trentaine de points du bord quand le haut n'en
-        // avait que huit — la barre d'accueil réserve cet espace.
-        //
-        // Verticalement seulement : sur les côtés, l'encoche rognerait le
-        // bouton retour, et la marge y est déjà celle de l'exemple.
-        .ignoresSafeArea(isLandscape ? SafeAreaRegions.all : [], edges: .vertical)
     }
 
     // ── Barre haute : qui regarde-t-on ────────────────────────────────
@@ -820,8 +853,7 @@ struct ImmersivePlayer: View {
                 // AirPlay : envoyer la vidéo vers une Apple TV ou une TV compatible.
                 AirPlayButton()
                     .frame(width: 32, height: 32)
-                    .background(Color.black.opacity(0.4))
-                    .clipShape(Circle())
+                    .tGlass(in: Circle(), fallback: Color.black.opacity(0.4), clear: true)
                 overlayButton(icon: "ellipsis", action: onMenu)
                 overlayButton(icon: "xmark", action: onClose)
             }
@@ -920,6 +952,24 @@ struct ImmersivePlayer: View {
                     }
                 )
                 .tint(.tPrimary)
+                // Passages au son coupé, en orange sur la piste.
+                .overlay {
+                    if !isLive, !mutedRanges.isEmpty, model.endTime > 0 {
+                        GeometryReader { geo in
+                            let inset: CGFloat = 12
+                            let w = max(1, geo.size.width - inset * 2)
+                            ForEach(mutedRanges) { r in
+                                let a = CGFloat(min(1, r.start / model.endTime)) * w
+                                let b = CGFloat(min(1, r.end / model.endTime)) * w
+                                Capsule()
+                                    .fill(Color.tWarning.opacity(0.9))
+                                    .frame(width: max(2, b - a), height: 4)
+                                    .position(x: inset + (a + b) / 2, y: geo.size.height / 2)
+                            }
+                        }
+                        .allowsHitTesting(false)
+                    }
+                }
                 // Repères de chapitres sur la barre.
                 .overlay {
                     if !isLive, chapters.count > 1, model.endTime > 0 {
@@ -1076,14 +1126,48 @@ struct ImmersivePlayer: View {
     // MARK: – Briques d'interface
     private var currentChapter: VodChapter? { chapter(at: model.position) }
 
+    /// Passage coupé en cours de lecture (VOD seulement).
+    private var currentMuted: MutedRange? {
+        guard !isLive, !mutedRanges.isEmpty else { return nil }
+        let t = dragging ? dragValue : model.position
+        return mutedRanges.first { $0.contains(t) }
+    }
+
+    @ViewBuilder
+    private func mutedNotice(_ r: MutedRange) -> some View {
+        HStack(spacing: TSpace.sm) {
+            Image(systemName: "speaker.slash.fill").font(.system(size: 11, weight: .bold))
+            Text(store.t("vod_muted_here"))
+                .font(.system(size: 12, weight: .semibold))
+                .lineLimit(1)
+            Button {
+                model.seek(to: min(r.end + 0.5, model.endTime))
+                scheduleAutoHide()
+            } label: {
+                HStack(spacing: 3) {
+                    Text(store.t("vod_muted_skip")).font(.system(size: 12, weight: .bold))
+                    Image(systemName: "forward.end.fill").font(.system(size: 10, weight: .bold))
+                }
+                .padding(.horizontal, 9).frame(height: 24)
+                .background(Color.white.opacity(0.18))
+                .clipShape(Capsule())
+            }
+            .buttonStyle(.plain)
+        }
+        .foregroundColor(.white)
+        .padding(.leading, 11).padding(.trailing, 4).frame(height: 32)
+        .background(Color.black.opacity(0.62))
+        .clipShape(Capsule())
+        .overlay(Capsule().stroke(Color.tWarning.opacity(0.6), lineWidth: 1))
+    }
+
     private func overlayButton(icon: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: icon)
                 .font(.system(size: 13, weight: .bold))
                 .foregroundColor(.white)
                 .frame(width: 32, height: 32)
-                .background(Color.black.opacity(0.4))
-                .clipShape(Circle())
+                .tGlass(in: Circle(), fallback: Color.black.opacity(0.4), clear: true)
         }
         .buttonStyle(.plain)
     }

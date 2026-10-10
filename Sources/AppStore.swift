@@ -247,6 +247,30 @@ final class AppStore: ObservableObject {
         didSet { UserDefaults.standard.set(topLang, forKey: "cfg_top_lang") }
     }
 
+    // MARK: – Apparence
+    /// Couleur d'accent, fond, verre liquide : voir Theme.swift. La palette
+    /// partagée est remplacée aussitôt, les vues suivent.
+    @Published var accent: AccentTheme = Theme.storedAccent {
+        didSet {
+            UserDefaults.standard.set(accent.rawValue, forKey: Theme.accentKey)
+            Theme.palette = Palette(accent: accent, background: background)
+        }
+    }
+    @Published var background: BackgroundTheme = Theme.storedBackground {
+        didSet {
+            UserDefaults.standard.set(background.rawValue, forKey: Theme.backgroundKey)
+            Theme.palette = Palette(accent: accent, background: background)
+        }
+    }
+    @Published var liquidGlass: Bool = Theme.liquidGlass {
+        didSet {
+            UserDefaults.standard.set(liquidGlass, forKey: Theme.glassKey)
+            Theme.liquidGlass = liquidGlass
+        }
+    }
+    /// Change avec le thème : MainTabView reconstruit les onglets dessus.
+    var themeID: String { "\(accent.rawValue)-\(background.rawValue)-\(liquidGlass)" }
+
     // MARK: – Débogage (section temporaire)
     /// Afficher la latence du direct par-dessus le lecteur.
     @Published var showLatency: Bool = false {
@@ -255,6 +279,17 @@ final class AppStore: ObservableObject {
     /// Retarder le chat de la latence mesurée, pour qu'il colle à l'image.
     @Published var autoChatDelay: Bool = false {
         didSet { UserDefaults.standard.set(autoChatDelay, forKey: "dbg_chat_delay") }
+    }
+    /// VODs récentes : remettre le son des passages coupés par Twitch quand
+    /// l'original est encore sur le CDN (VodUnmuteLoader).
+    @Published var restoreMutedAudio: Bool = true {
+        didSet { UserDefaults.standard.set(restoreMutedAudio, forKey: "cfg_restore_muted") }
+    }
+    /// Retouche de la synchro auto, en secondes (+ = chat plus tard). Le bon
+    /// décalage dépend aussi du retard des autres spectateurs, qu'on ne peut
+    /// qu'estimer : on laisse corriger d'une seconde ou deux.
+    @Published var chatSyncNudge: Double = 0 {
+        didSet { UserDefaults.standard.set(chatSyncNudge, forKey: "chat_sync_nudge") }
     }
 
     // MARK: – History
@@ -368,6 +403,8 @@ final class AppStore: ObservableObject {
         preferAudioOnly    = ud.bool(forKey: "cfg_audio_only")
         showLatency        = ud.object(forKey: "dbg_latency")    as? Bool ?? false
         autoChatDelay      = ud.object(forKey: "dbg_chat_delay") as? Bool ?? false
+        chatSyncNudge      = ud.double(forKey: "chat_sync_nudge")
+        restoreMutedAudio  = ud.object(forKey: "cfg_restore_muted") as? Bool ?? true
         if let data = ud.data(forKey: "twitch_vod_history"),
            let decoded = try? JSONDecoder().decode([HistoryItem].self, from: data) {
             history = decoded
@@ -416,6 +453,9 @@ final class AppStore: ObservableObject {
         twitchUserId   = nil
         twitchLogin    = nil   // ← nettoyage complet
         twitchAvatar   = nil
+        // La prochaine connexion demandera le compte au lieu de reprendre
+        // celui dont Safari se souvient (TwitchAuthManager).
+        UserDefaults.standard.set(true, forKey: TwitchAuthManager.privateSessionKey)
     }
 
     // MARK: – History management

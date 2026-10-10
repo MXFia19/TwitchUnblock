@@ -1325,18 +1325,27 @@ func getClip(slug: String) async -> ClipPlayback? {
                         vodId: vodId, vodOffset: offset)
 }
 
-// MARK: – Chapitres de VOD
-/// Changements de jeu d'une VOD (repères sur la barre de lecture).
-func getVodChapters(vodId: String) async -> [VodChapter] {
+// MARK: – Repères de VOD
+/// Changements de jeu d'une VOD (repères sur la barre de lecture), passages
+/// dont Twitch a coupé le son, et date de diffusion — en une seule requête.
+///
+/// Twitch publie les passages coupés (`muteInfo`) par blocs de 3 min ; les
+/// blocs qui se suivent sont fusionnés.
+func getVodMarkers(vodId: String) async -> VodMarkers {
     let q = """
-    query($id: ID!) { video(id: $id) { moments(first: 50, momentRequestType: VIDEO_CHAPTER_MARKERS) {
-      edges { node { positionMilliseconds durationMilliseconds description } }
-    } } }
+    query($id: ID!) { video(id: $id) {
+      createdAt
+      moments(first: 50, momentRequestType: VIDEO_CHAPTER_MARKERS) {
+        edges { node { positionMilliseconds durationMilliseconds description } }
+      }
+      muteInfo { mutedSegmentConnection { nodes { offset duration } } }
+    } }
     """
     guard let d = await gqlRequest(q, ["id": vodId]),
-          let v = d["video"] as? [String: Any],
-          let m = v["moments"] as? [String: Any],
-          let edges = m["edges"] as? [[String: Any]] else { return [] }
+          let v = d["video"] as? [String: Any] else { return VodMarkers() }
+    var out = VodMarkers()
+
+    let edges = (v["moments"] as? [String: Any])?["edges"] as? [[String: Any]] ?? []
     let chapters: [VodChapter] = edges.compactMap { e in
         guard let n = e["node"] as? [String: Any] else { return nil }
         let pos = (n["positionMilliseconds"] as? Double) ?? Double(n["positionMilliseconds"] as? Int ?? 0)
@@ -1344,5 +1353,31 @@ func getVodChapters(vodId: String) async -> [VodChapter] {
         return VodChapter(start: pos / 1000, duration: dur / 1000, title: n["description"] as? String ?? "")
     }
     // Un seul chapitre n'apporte rien (toute la VOD sur le même jeu).
-    return chapters.count > 1 ? chapters.sorted { $0.start < $1.start } : []
+    out.chapters = chapters.count > 1 ? chapters.sorted { $0.start < $1.start } : []
+
+    let nodes = ((v["muteInfo"] as? [String: Any])?["mutedSegmentConnection"] as? [String: Any])?["nodes"]
+        as? [[String: Any]] ?? []
+    func num(_ x: Any?) -> Double? { (x as? Double) ?? (x as? Int).map(Double.init) }
+    let raw = nodes.compactMap { n -> MutedRange? in
+        guard let o = num(n["offset"]), let len = num(n["duration"]), len > 0 else { return nil }
+        return MutedRange(start: o, end: o + len)
+    }.sorted { $0.start < $1.start }
+    var merged: [MutedRange] = []
+    for r in raw {
+        if let last = merged.last, r.start <= last.end + 1 {
+            merged[merged.count - 1] = MutedRange(start: last.start, end: max(last.end, r.end))
+        } else {
+            merged.append(r)
+        }
+    }
+    out.muted = merged
+
+    if let s = v["createdAt"] as? String {
+        let df = ISO8601DateFormatter()
+        out.createdAt = df.date(from: s) ?? {
+            df.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            return df.date(from: s)
+        }()
+    }
+    return out
 }

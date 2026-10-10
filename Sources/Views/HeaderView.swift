@@ -38,8 +38,11 @@ struct HeaderView: View {
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(.tPrimary)
                         .frame(width: 34, height: 34)
-                        .background(Color.tPrimary.opacity(0.15))
-                        .clipShape(Circle())
+                        .tGlass(in: Circle(), fallback: Color.tPrimary.opacity(0.15))
+                        // Réponse du développeur à un retour : on le voit d'ici.
+                        .overlay(alignment: .topTrailing) {
+                            FeedbackUnreadBadge().offset(x: 5, y: -5)
+                        }
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(store.t("feedback"))
@@ -79,5 +82,23 @@ struct HeaderView: View {
         .clipShape(Circle())
         .overlay(Circle().stroke(store.twitchToken != nil ? Color.tPrimary : Color.tBorder,
                                  lineWidth: 2))
+    }
+}
+
+/// Pastille « nouvelle réponse » d'un retour (FeedbackStore).
+struct FeedbackUnreadBadge: View {
+    @ObservedObject private var inbox = FeedbackStore.shared
+    var body: some View {
+        if inbox.unreadCount > 0 {
+            Text(inbox.unreadCount > 9 ? "9+" : String(inbox.unreadCount))
+                .font(.system(size: 10, weight: .heavy))
+                .foregroundColor(.white)
+                .padding(.horizontal, 5)
+                .frame(minWidth: 17, minHeight: 17)
+                .background(Color.tLive)
+                .clipShape(Capsule())
+                .overlay(Capsule().stroke(Color.tDark, lineWidth: 1.5))
+                .accessibilityHidden(true)
+        }
     }
 }

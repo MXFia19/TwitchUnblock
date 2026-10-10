@@ -50,3 +50,46 @@ struct LiveLatencyController {
         }
     }
 }
+
+// MARK: – Synchro du chat
+//
+// Le retard à appliquer au chat, c'est notre retard sur le direct tel que le
+// voient les autres spectateurs — ceux qui écrivent.
+//
+// La distance à la fin de la plage cherchable (`behind`) n'y suffisait pas.
+// AVPlayer ne recharge la liste de lecture que toutes les quelques secondes
+// (6 s sur Twitch) : entre deux rechargements, le bord qu'il connaît vieillit.
+// Le retard mesuré dessinait donc des dents de scie de plusieurs secondes et
+// restait en dessous de la réalité, les spectateurs de Twitch jouant les
+// segments à mesure qu'ils sont produits. D'où un chat encore en avance.
+//
+// On part maintenant de la latence totale (heure − horodatage du segment lu,
+// EXT-X-PROGRAM-DATE-TIME), qui reste lisse, et on en retire l'âge du bord le
+// plus frais vu dans la dernière minute (mesuré juste après un rechargement).
+// Le délai qu'une chaîne ajoute à sa diffusion, subi par tout le monde, est
+// compté des deux côtés et s'annule dans la soustraction.
+struct LiveSyncEstimator {
+    private var samples: [(at: Date, edge: Double)] = []
+
+    mutating func reset() { samples.removeAll() }
+
+    /// `latency` : heure − horodatage du segment lu (nil sans horodatage).
+    /// `behind` : secondes entre la position et la fin de la plage cherchable.
+    mutating func offset(latency: Double?, behind: Double) -> Double {
+        guard behind.isFinite else { return 0 }
+        guard let latency, latency.isFinite, latency > 0 else { return max(0, behind) }
+        let now = Date()
+        // Âge du bord connu d'AVPlayer. Les valeurs absurdes (horodatage d'une
+        // coupure pub, horloge qui saute) sont écartées.
+        let edge = latency - behind
+        if edge > -5, edge < 120 { samples.append((now, edge)) }
+        samples.removeAll { now.timeIntervalSince($0.at) > 60 }
+        // Pas encore assez de recul : l'ancien calcul, en attendant.
+        guard samples.count >= 6 else { return max(0, behind) }
+        // Bas de la fourchette plutôt que le minimum : une seule mesure
+        // aberrante décalerait sinon le chat pendant une minute entière.
+        let sorted = samples.map(\.edge).sorted()
+        let freshest = sorted[sorted.count / 10]
+        return max(0, latency - freshest)
+    }
+}

@@ -65,17 +65,40 @@ struct ChatView: View {
                     .frame(width: 7, height: 7)
                     .accessibilityLabel(chat.isConnected ? store.t("chat_connected") : store.t("chat_connecting"))
                 Spacer(minLength: 4)
-                // Synchro auto : décalage appliqué au chat
-                if chatDelay >= 0.5 {
-                    HStack(spacing: 2) {
-                        Image(systemName: "clock.arrow.2.circlepath").font(.system(size: 9))
-                        Text(String(format: "%.0fs", chatDelay))
-                            .font(.system(size: 10, weight: .bold).monospacedDigit())
+                // Synchro auto : décalage appliqué au chat. Un appui le retouche
+                // d'une seconde : le bon réglage dépend aussi du retard des
+                // autres spectateurs, qu'on ne peut qu'estimer.
+                if store.autoChatDelay, chatDelay >= 0.5 || store.chatSyncNudge != 0 {
+                    Menu {
+                        Section(store.t("chat_sync_hint")) {
+                            Button { nudgeChatSync(1) } label: {
+                                Label(store.t("chat_sync_later"), systemImage: "plus.circle")
+                            }
+                            Button { nudgeChatSync(-1) } label: {
+                                Label(store.t("chat_sync_earlier"), systemImage: "minus.circle")
+                            }
+                            if store.chatSyncNudge != 0 {
+                                Button { nudgeChatSync(0) } label: {
+                                    Label(store.t("chat_sync_reset"), systemImage: "arrow.counterclockwise")
+                                }
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 2) {
+                            Image(systemName: "clock.arrow.2.circlepath").font(.system(size: 9))
+                            Text(String(format: "%.0fs", chatDelay))
+                                .font(.system(size: 10, weight: .bold).monospacedDigit())
+                            if store.chatSyncNudge != 0 {
+                                Text(String(format: "(%+.0f)", store.chatSyncNudge))
+                                    .font(.system(size: 9, weight: .semibold).monospacedDigit())
+                                    .opacity(0.75)
+                            }
+                        }
+                        .foregroundColor(.tOutplayer)
+                        .fixedSize()
+                        .padding(.horizontal, 6).padding(.vertical, 3)
+                        .background(Color.tOutplayer.opacity(0.15)).cornerRadius(6)
                     }
-                    .foregroundColor(.tOutplayer)
-                    .fixedSize()
-                    .padding(.horizontal, 6).padding(.vertical, 3)
-                    .background(Color.tOutplayer.opacity(0.15)).cornerRadius(6)
                 }
                 // Série de visionnage
                 if store.showWatchStreak, events.watchStreak > 0 {
@@ -735,6 +758,14 @@ struct ChatView: View {
     private func insertEmote(_ emote: TwitchEmote) {
         messageText += (messageText.isEmpty || messageText.hasSuffix(" ") ? "" : " ")
             + emote.name + " "
+    }
+
+    /// Retouche de la synchro auto (pastille de la barre de statut) : ±1 s,
+    /// ou 0 pour revenir à l'estimation seule.
+    private func nudgeChatSync(_ step: Double) {
+        let v = step == 0 ? 0 : min(20, max(-20, store.chatSyncNudge + step))
+        store.chatSyncNudge = v
+        logger.settingChanged("Retouche de la synchro du chat", value: String(format: "%+.0f s", v))
     }
 
     /// Transforme les URLs d'un texte en liens tappables (message épinglé).

@@ -378,7 +378,8 @@ func getLive(channelName: String) async -> LiveData {
                var comps = URLComponents(string: "https://usher.ttvnw.net/api/channel/hls/\(login).m3u8") {
             // Mode faible latence : Twitch sert alors la variante « low latency »
             // (segments plus courts, playlist rafraîchie plus souvent).
-            let wantsLowLatency = UserDefaults.standard.bool(forKey: "cfg_low_latency")
+            // Même valeur par défaut que le réglage (AppStore) : actif.
+            let wantsLowLatency = UserDefaults.standard.object(forKey: "cfg_low_latency") as? Bool ?? true
             comps.queryItems = [
                 .init(name: "allow_source",              value: "true"),
                 .init(name: "allow_audio_only",           value: "true"),

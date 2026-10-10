@@ -270,7 +270,10 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
     func seekBy(_ delta: Double) { seek(to: position + delta) }
 
     func goLive() {
-        seek(to: endTime - 6, exact: false)
+        // Même recul que la tenue du direct : plus près sur une playlist
+        // relue toutes les 2 s (mode faible latence).
+        let back = player.currentItem.map { LiveLatencyController.target(for: $0) } ?? 6
+        seek(to: endTime - back, exact: false)
         if !isPlaying { togglePlay() }
     }
 

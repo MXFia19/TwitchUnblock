@@ -55,19 +55,34 @@ final class VodUnmuteLoader: NSObject, AVAssetResourceLoaderDelegate {
         link.hasPrefix(scheme + "://") ? "https://" + link.dropFirst(scheme.count + 3) : link
     }
 
-    /// Élément de lecture : passe par le chargeur pour une adresse maison.
+    /// Élément de lecture : passe par le bon chargeur pour une adresse maison
+    /// (`tuunmute://` : passages coupés ; `tulive://` : direct au plus près).
     static func playerItem(url: URL) -> AVPlayerItem {
-        guard url.scheme == scheme else { return AVPlayerItem(url: url) }
-        let asset = AVURLAsset(url: url)
-        asset.resourceLoader.setDelegate(shared, queue: shared.queue)
-        return AVPlayerItem(asset: asset)
+        switch url.scheme {
+        case scheme:
+            let asset = AVURLAsset(url: url)
+            asset.resourceLoader.setDelegate(shared, queue: shared.queue)
+            return AVPlayerItem(asset: asset)
+        case LivePlaylistLoader.scheme:
+            let asset = AVURLAsset(url: url)
+            asset.resourceLoader.setDelegate(LivePlaylistLoader.shared, queue: LivePlaylistLoader.shared.queue)
+            return AVPlayerItem(asset: asset)
+        default:
+            return AVPlayerItem(url: url)
+        }
     }
 
     /// AirPlay en cours : on repasse sur la playlist du CDN, à la même position.
     static func fallBackForAirPlay(_ player: AVPlayer) {
         guard player.isExternalPlaybackActive,
-              let asset = player.currentItem?.asset as? AVURLAsset,
-              asset.url.scheme == scheme, let plain = unwrap(asset.url) else { return }
+              let asset = player.currentItem?.asset as? AVURLAsset else { return }
+        let plain: URL?
+        switch asset.url.scheme {
+        case scheme:                  plain = unwrap(asset.url)
+        case LivePlaylistLoader.scheme: plain = LivePlaylistLoader.unwrap(asset.url)
+        default:                      plain = nil
+        }
+        guard let plain else { return }
         logger.info("UNMUTE", "AirPlay : retour à la playlist d'origine", nil)
         let t = player.currentTime()
         let item = AVPlayerItem(url: plain)

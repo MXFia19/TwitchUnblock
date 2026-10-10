@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.2.24",
+          "buildVersion": "248",
+          "date": "2026-10-10",
+          "localizedDescription": "- Another ad-free source for live streams (an Albanian proxy) when Luminous is unavailable.",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-248/TwitchUnblock.ipa",
+          "size": 2297831,
+          "commit": "31db60d909eb8f70af340519283f6419c4af89e8"
+        },
+        {
           "version": "1.2.23",
           "buildVersion": "247",
           "date": "2026-10-10",
@@ -259,10 +268,10 @@
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.2.23",
+      "version": "1.2.24",
       "versionDate": "2026-10-10",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-247/TwitchUnblock.ipa",
-      "size": 2291621
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-248/TwitchUnblock.ipa",
+      "size": 2297831
     }
   ],
   "news": []

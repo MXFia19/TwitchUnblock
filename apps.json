@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.2.19",
+          "buildVersion": "240",
+          "date": "2026-10-10",
+          "localizedDescription": "- Passages coupés : plus d'avertissement de concurrence à la publication du résultat\n- iPad: the back, AirPlay and close buttons at the top of the immersive player work again in landscape.\n- Chat auto-sync: a more accurate delay that no longer drifts every few seconds; fine-tune it by ±1 s from the chat's ⏱ badge or in Settings.\n- Themes: choose an accent color and a background (dark, OLED black, slate) in Settings > General > Appearance.\n- Liquid Glass option (iOS 26): floating tab bar and glass buttons.\n- Russian language, translated with AI (corrections welcome from Settings).\n- VODs: parts muted by Twitch show in orange with a Skip button; on recent VODs the original sound is restored when Twitch still has it.\n- Switch account button in Settings; after logging out, Twitch now asks which account to use.\n- Feedback: attach screenshots, follow your reports in \"My reports\", read the reply and answer back; a badge shows new replies.\n- The website moved to twitchunblock.vercel.app (Settings link updated).",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/nightly-240/TwitchUnblock.ipa",
+          "size": 2200764,
+          "commit": "938d0ebb261fa62d6506126eba33e08c1fd06b3d"
+        },
+        {
           "version": "1.2.16",
           "buildVersion": "237",
           "date": "2026-10-07",
@@ -96,10 +105,10 @@
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.2.16",
-      "versionDate": "2026-10-07",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/nightly-237/TwitchUnblock.ipa",
-      "size": 2017880
+      "version": "1.2.19",
+      "versionDate": "2026-10-10",
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/nightly-240/TwitchUnblock.ipa",
+      "size": 2200764
     }
   ],
   "news": []

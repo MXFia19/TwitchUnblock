@@ -17,6 +17,14 @@ final class PlayerPull: ObservableObject {
     /// distance de la glissade finale. Pas publiée : rien à redessiner.
     var height: CGFloat = 800
 
+    /// Start following as soon as the finger moves down. Small sideways jitter
+    /// stays undecided rather than rejecting the entire swipe on its first sample.
+    static func direction(for translation: CGSize) -> Bool? {
+        if translation.height > abs(translation.width) { return true }
+        if translation.height < -8 || abs(translation.width) >= 8 { return false }
+        return nil
+    }
+
     /// Glissé à partir duquel on réduit : 15 % de la hauteur, entre 80 et
     /// 120 points (un iPhone en paysage n'a pas la place d'aller plus loin).
     static func threshold(for height: CGFloat) -> CGFloat {
@@ -37,5 +45,43 @@ struct PlayerPullEffect: ViewModifier {
         content
             .scaleEffect(1 - progress * 0.12, anchor: .top)
             .offset(y: pull.y)
+    }
+}
+
+/// A downward pull on the header or native video moves their shared player surface.
+/// Gesture state stays here so tracking a finger does not redraw MainTabView.
+struct PlayerPullGesture: ViewModifier {
+    var onPull: (CGFloat) -> Void
+    var onPullEnd: (CGFloat, CGFloat) -> Void
+
+    @GestureState private var active = false
+    @State private var pulling: Bool? = nil
+
+    func body(content: Content) -> some View {
+        content
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 1, coordinateSpace: .global)
+                    .updating($active) { _, active, _ in active = true }
+                    .onChanged { value in
+                        if pulling == nil {
+                            pulling = PlayerPull.direction(for: value.translation)
+                        }
+                        guard pulling == true else { return }
+                        onPull(max(0, value.translation.height))
+                    }
+                    .onEnded { value in
+                        let shouldFinish = pulling == true
+                        pulling = nil
+                        if shouldFinish {
+                            onPullEnd(max(0, value.translation.height), value.predictedEndTranslation.height)
+                        }
+                    }
+            )
+            .onChange(of: active) { active in
+                guard !active else { return }
+                // Cancellation does not call onEnded (for example, opening Control Center).
+                if pulling == true { onPull(0) }
+                pulling = nil
+            }
     }
 }

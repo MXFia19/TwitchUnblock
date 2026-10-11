@@ -731,12 +731,13 @@ struct ImmersivePlayer: View {
         // l'image se déplace au doigt. À taille normale, glisser vers le bas
         // réduit le lecteur, comme la flèche en haut à gauche.
         .simultaneousGesture(zoomGesture)
-        .gesture(panGesture)
+        // Do not wait for the tap/double-tap recognizers to fail before following a pull.
+        .simultaneousGesture(panGesture)
         // Geste interrompu en plein glissé : le lecteur reprend sa place.
         .onChange(of: panActive) { active in
-            if !active, pulling == true {
+            if !active {
+                if pulling == true { onPull(0) }
                 pulling = nil
-                onPull(0)
             }
         }
         // Changement de source (direct ↔ enregistrement) : la position voulue
@@ -1311,7 +1312,7 @@ struct ImmersivePlayer: View {
     /// le doigt ; mesuré dans son propre repère (qui bouge), le déplacement se
     /// faussait à chaque image et le lecteur avançait par à-coups.
     private var panGesture: some Gesture {
-        DragGesture(minimumDistance: 12, coordinateSpace: CoordinateSpace.global)
+        DragGesture(minimumDistance: 1, coordinateSpace: CoordinateSpace.global)
             .updating($panActive) { _, active, _ in active = true }
             .onChanged { value in
                 // Un glissement sur la barre de lecture ne déplace rien.
@@ -1330,7 +1331,7 @@ struct ImmersivePlayer: View {
                 // Taille normale : seul un geste qui part vers le bas compte ;
                 // un glissement de côté ne fait rien, comme avant.
                 if pulling == nil {
-                    pulling = value.translation.height > abs(value.translation.width)
+                    pulling = PlayerPull.direction(for: value.translation)
                 }
                 if pulling == true { onPull(max(0, value.translation.height)) }
             }

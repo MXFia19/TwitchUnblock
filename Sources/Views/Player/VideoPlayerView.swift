@@ -275,6 +275,9 @@ struct VideoPlayerView: View {
     var onLatency: (Double?) -> Void = { _ in }
     /// Distance au bord du direct remontee au parent (synchro auto du chat).
     var onBehind: (Double?) -> Void = { _ in }
+    /// Pull the video and chat down together before collapsing to the mini-player.
+    var onPull: (CGFloat) -> Void = { _ in }
+    var onPullEnd: (CGFloat, CGFloat) -> Void = { _, _ in }
     // Actions affichees a cote du bouton Source (nil = bouton masque).
     var onChat: (() -> Void)? = nil
     var onRewind: (() -> Void)? = nil
@@ -299,6 +302,7 @@ struct VideoPlayerView: View {
             // ── Player ──────────────────────────────────────────────
             if let url = currentURL {
                 nativePlayer(url: url)
+                    .modifier(PlayerPullGesture(onPull: onPull, onPullEnd: onPullEnd))
             }
 
             // En mode compact (chat ouvert) on n'affiche que le lecteur.

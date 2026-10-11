@@ -53,9 +53,6 @@ struct MainTabView: View {
     /// Objet gardé en @State sans être observé ici : seul PlayerPullEffect
     /// se redessine pendant le geste (voir PlayerPull.swift).
     @State private var pull = PlayerPull()
-    /// Glissé du bandeau du lecteur natif en cours (revient seul à faux,
-    /// même si le geste est interrompu).
-    @GestureState private var topBarDragging = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     // ── Minuteur de veille ────────────────────────────────────────────────
@@ -778,6 +775,8 @@ struct MainTabView: View {
                 onTime: { vodPlaybackTime = $0 },
                 onLatency: { updateLatency($0) },
                 onBehind: { updateBehind($0) },
+                onPull: { pullPlayer($0) },
+                onPullEnd: { endPull($0, predicted: $1) },
                 onChat: nil,
                 onRewind: rewindAction,
                 onBackToLive: backToLiveAction
@@ -859,11 +858,10 @@ struct MainTabView: View {
         .background(Color.tCard)
         .overlay(Divider().background(Color.tBorder), alignment: .bottom)
         .contentShape(Rectangle())
-        .gesture(topBarPull)
-        // Geste interrompu en plein glissé : le lecteur reprend sa place.
-        .onChange(of: topBarDragging) { active in
-            if !active, playerVisible, pull.y > 0 { pullPlayer(0) }
-        }
+        .modifier(PlayerPullGesture(
+            onPull: { pullPlayer($0) },
+            onPullEnd: { endPull($0, predicted: $1) }
+        ))
     }
 
     /// Qualité en cours pour le lecteur immersif : celle choisie, sinon la meilleure.
@@ -888,6 +886,7 @@ struct MainTabView: View {
     /// file jusqu'en bas en s'effaçant, comme dans l'app Twitch. Avec
     /// « Réduire les animations », un simple fondu.
     private func reducePlayer() {
+        guard playerVisible, !closingPlayer else { return }
         if reduceMotion {
             withAnimation(.easeOut(duration: 0.15)) { playerVisible = false }
         } else {
@@ -906,6 +905,7 @@ struct MainTabView: View {
     /// Doigt levé : assez loin (seuil selon la hauteur), ou lancé
     /// franchement, on réduit ; sinon le lecteur revient à sa place.
     private func endPull(_ distance: CGFloat, predicted: CGFloat) {
+        guard playerVisible, !closingPlayer else { return }
         let threshold = PlayerPull.threshold(for: pull.height)
         if distance >= threshold || (distance > 20 && predicted >= threshold * 1.8) {
             reducePlayer()
@@ -916,25 +916,16 @@ struct MainTabView: View {
 
     /// Le lecteur suit le doigt ; 0 = relâché trop tôt, il revient en place.
     private func pullPlayer(_ y: CGFloat) {
+        guard playerVisible, !closingPlayer else { return }
         if y <= 0 {
             guard pull.y != 0 else { return }
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { pull.y = 0 }
+            withAnimation(reduceMotion ? .easeOut(duration: 0.15) : .spring(response: 0.3, dampingFraction: 0.8)) { pull.y = 0 }
         } else {
-            pull.y = y
+            // Follow the finger immediately, even if another animation is in progress.
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) { pull.y = min(y, pull.height) }
         }
-    }
-
-    /// Bandeau du lecteur natif : le tirer vers le bas réduit le lecteur.
-    /// (Sur l'image, le lecteur d'Apple garde ses propres gestes.)
-    /// Repère global : le bandeau descend avec le doigt ; mesuré dans son
-    /// propre repère, le déplacement se fausserait à chaque image (à-coups).
-    private var topBarPull: some Gesture {
-        DragGesture(minimumDistance: 12, coordinateSpace: CoordinateSpace.global)
-            .updating($topBarDragging) { _, active, _ in active = true }
-            .onChanged { v in pullPlayer(max(0, v.translation.height)) }
-            .onEnded { v in
-                endPull(max(0, v.translation.height), predicted: v.predictedEndTranslation.height)
-            }
     }
 
     /// VOD en cours : de quoi proposer d'en télécharger un passage (liens

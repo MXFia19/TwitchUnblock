@@ -185,6 +185,14 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   third party).
 * ✂️ **Clips** — a Clips tab on every channel (24 h, 7 days, 30 days, all time),
   played with the original chat replayed.
+* 📤 **Share & clip the moment** — **Share** in the player's ⋯ menu opens iOS's
+  share sheet with the VOD (or the rewound live) at the current time
+  (`twitch.tv/videos/<id>?t=1h2m3s`), the channel during a live, or the clip's
+  link. **Create a clip** (same menu, during a live) clips the moment on screen
+  with your Twitch account, through the web session as for channel points
+  (connect it from there if it isn't); the clip's link comes back with **Copy**
+  and **Share**. A channel that refuses clips, a stream that has ended or
+  Twitch saying no is told plainly (details in the log).
 * 📥 **Offline downloads** — download a whole VOD or just a part of it (from one
   time to another, from where you are, the next 10 minutes) in the quality you
   pick (your preferred quality is suggested first), then watch it without a connection from the My VODs tab. With the app
@@ -260,8 +268,11 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
 * 🗑 **Deleted messages** — optionally kept struck through instead of vanishing.
 * 🎨 **Username colour** — changed through Helix (needs a re-login after the
   permission was added).
-* 👤 **Tap a message** — opens the person: their avatar, everything they wrote
-  in this session, reply, mention, copy.
+* 👤 **Tap a message** — opens the person's card: avatar, name and badges, when
+  the account was created and, when Twitch tells, since when they follow the
+  channel; **Mention** (adds `@name` to your message), **Hide** (as in the chat
+  settings) and **Channel** (opens their page); then their recent messages in
+  this chat, with the reply thread below. Reply and copy too.
 * 📌 **Pinned messages** — compact banner with badges, emotes, who pinned it and
   a countdown; collapse it to a chip. Shown in landscape too, along with polls,
   predictions and raids; there, **Hide** under them folds them all into one
@@ -409,7 +420,12 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   turns away the backend's shared Cloudflare addresses, so they leave from the
   project's own server (the video relay); **Test** tells you when ntfy.sh is
   refusing messages for now (sending limit reached). **Notified channels**
-  (same place) picks which followed channels notify you, for both.
+  (same place) picks which followed channels notify you, for both. The app's
+  own notifications show the stream's thumbnail, are grouped per channel, and
+  have **Watch** and **Stop notifying for this channel** (press and hold). A
+  **bell** on a channel's page and next to **Follow** above the chat turns that
+  channel's notifications on or off (shown when live notifications are on and
+  you follow the channel).
 
 ### Look & feel
 

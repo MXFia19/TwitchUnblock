@@ -108,6 +108,16 @@ struct SearchView: View {
         searchedName.isEmpty ? "" : searchedName
     }
 
+    /// Chaîne affichée suivie (compte ou appareil), pour la cloche des
+    /// notifications. `following` : le cœur ; lu sur Twitch (session web), il
+    /// fait foi, sinon la liste des suivis du compte lue au lancement.
+    private func channelFollowed(following: Bool) -> Bool {
+        let l = channelName.lowercased()
+        if store.isLocallyFollowed(l) { return true }
+        if follow.localStore == nil { return following }
+        return store.accountFollowLogins.contains(l)
+    }
+
     private var filteredVods: [VodData] {
         let kw = filterText.trimmingCharacters(in: .whitespaces).lowercased()
         guard !kw.isEmpty else { return vods }
@@ -444,45 +454,50 @@ struct SearchView: View {
             // sur cet appareil.
             if !channelName.isEmpty, let on = follow.isFollowing {
                 let local = store.twitchWebToken == nil
-                Button {
-                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                    // Ne plus suivre se confirme (sur Twitch avec la session web).
-                    if follow.isFollowing == true {
-                        confirmUnfollow = true
-                        return
-                    }
-                    let login = channelName
-                    Task { @MainActor in
-                        await follow.toggle(token: store.twitchWebToken)
-                        // Suivie (aussi sur Twitch, sans passer par AppStore) :
-                        // elle n'a plus à être masquée.
-                        if follow.isFollowing == true { store.unhideChannel(login) }
-                    }
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: on ? "heart.fill" : "heart")
-                        Text(store.t(on ? "following" : "follow")).font(.system(size: 14, weight: .bold))
-                        if local {
-                            Text("· " + store.t("on_this_device")).font(.system(size: 12)).opacity(0.8)
+                HStack(spacing: TSpace.sm) {
+                    Button {
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        // Ne plus suivre se confirme (sur Twitch avec la session web).
+                        if follow.isFollowing == true {
+                            confirmUnfollow = true
+                            return
                         }
+                        let login = channelName
+                        Task { @MainActor in
+                            await follow.toggle(token: store.twitchWebToken)
+                            // Suivie (aussi sur Twitch, sans passer par AppStore) :
+                            // elle n'a plus à être masquée.
+                            if follow.isFollowing == true { store.unhideChannel(login) }
+                        }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: on ? "heart.fill" : "heart")
+                            Text(store.t(on ? "following" : "follow")).font(.system(size: 14, weight: .bold))
+                            if local {
+                                Text("· " + store.t("on_this_device")).font(.system(size: 12)).opacity(0.8)
+                            }
+                        }
+                        .foregroundColor(on ? .tDanger : .tPrimary)
+                        .padding(.horizontal, 14).padding(.vertical, 8)
+                        .background((on ? Color.tDanger : Color.tPrimary).opacity(0.14))
+                        .clipShape(Capsule())
+                        .overlay(Capsule().stroke(on ? Color.tDanger : Color.tPrimary, lineWidth: 1))
                     }
-                    .foregroundColor(on ? .tDanger : .tPrimary)
-                    .padding(.horizontal, 14).padding(.vertical, 8)
-                    .background((on ? Color.tDanger : Color.tPrimary).opacity(0.14))
-                    .clipShape(Capsule())
-                    .overlay(Capsule().stroke(on ? Color.tDanger : Color.tPrimary, lineWidth: 1))
-                }
-                .buttonStyle(.plain)
-                .disabled(follow.busy)
-                .opacity(follow.busy ? 0.5 : 1)
-                .confirmationDialog(
-                    store.t("unfollow_confirm").replacingOccurrences(of: "{c}", with: channelName),
-                    isPresented: $confirmUnfollow, titleVisibility: .visible
-                ) {
-                    Button(store.t("unfollow"), role: .destructive) {
-                        Task { @MainActor in await follow.unfollow(token: store.twitchWebToken) }
+                    .buttonStyle(.plain)
+                    .disabled(follow.busy)
+                    .opacity(follow.busy ? 0.5 : 1)
+                    .confirmationDialog(
+                        store.t("unfollow_confirm").replacingOccurrences(of: "{c}", with: channelName),
+                        isPresented: $confirmUnfollow, titleVisibility: .visible
+                    ) {
+                        Button(store.t("unfollow"), role: .destructive) {
+                            Task { @MainActor in await follow.unfollow(token: store.twitchWebToken) }
+                        }
+                        Button(store.t("cancel"), role: .cancel) {}
                     }
-                    Button(store.t("cancel"), role: .cancel) {}
+                    // Cloche : notifications de live de cette chaîne seulement
+                    // (affichée si elles sont activées et la chaîne suivie).
+                    NotifBellButton(login: channelName, followed: channelFollowed(following: on))
                 }
                 .padding(.horizontal, TSpace.lg)
 

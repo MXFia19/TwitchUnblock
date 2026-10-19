@@ -33,6 +33,14 @@ struct PlayerMenuSheet: View {
     var onMultiLive: (() -> Void)? = nil
     var multiLiveOn = false
     var multiLiveFull = false
+    /// Partager ce qui se lit : la VOD (ou le rembobinage) à la position en
+    /// cours, la chaîne d'un direct, le lien d'un clip. nil : rien à partager
+    /// (VOD retrouvée, téléchargement).
+    var shareURL: URL? = nil
+    /// Position partagée d'une VOD (« 1:02:03 »), à droite de la ligne.
+    var shareDetail: String? = nil
+    /// Direct (pas son rembobinage) : en créer un clip.
+    var onCreateClip: (() -> Void)? = nil
 
     @EnvironmentObject private var store: AppStore
     @Environment(\.dismiss) private var dismiss
@@ -174,6 +182,21 @@ struct PlayerMenuSheet: View {
                         divider
                     }
 
+                    // Feuille de partage d'iOS, par-dessus ce menu.
+                    if let shareURL {
+                        ShareLink(item: shareURL) {
+                            rowLabel(icon: "square.and.arrow.up", title: store.t("share"),
+                                     detail: shareDetail, tint: .tPrimary, chevron: true)
+                        }
+                        .buttonStyle(.plain)
+                        divider
+                    }
+
+                    if let onCreateClip {
+                        row(icon: "scissors", title: store.t("clip_create"), action: onCreateClip)
+                        divider
+                    }
+
                     row(icon: "moon.zzz.fill", title: store.t("sleep_timer"),
                         action: onSleepTimer)
                     divider
@@ -198,7 +221,19 @@ struct PlayerMenuSheet: View {
     @ViewBuilder
     private func row(icon: String, title: String, detail: String? = nil,
                      tint: Color = .tPrimary, action: (() -> Void)? = nil) -> some View {
-        let content = HStack(spacing: TSpace.md) {
+        let content = rowLabel(icon: icon, title: title, detail: detail, tint: tint,
+                               chevron: action != nil)
+        if let action {
+            Button(action: action) { content }.buttonStyle(.plain)
+        } else {
+            content
+        }
+    }
+
+    /// Contenu d'une ligne (aussi celui du lien de partage).
+    private func rowLabel(icon: String, title: String, detail: String?,
+                          tint: Color, chevron: Bool) -> some View {
+        HStack(spacing: TSpace.md) {
             Image(systemName: icon)
                 .font(.system(size: 15)).foregroundColor(tint).frame(width: 24)
             Text(title).font(.tCardTitle).foregroundColor(.tText)
@@ -206,7 +241,7 @@ struct PlayerMenuSheet: View {
             if let detail {
                 Text(detail).font(.tMeta).foregroundColor(.tMuted)
             }
-            if action != nil {
+            if chevron {
                 Image(systemName: "chevron.right")
                     .font(.system(size: 12, weight: .semibold)).foregroundColor(.tMuted)
             }
@@ -214,11 +249,5 @@ struct PlayerMenuSheet: View {
         .padding(.horizontal, TSpace.lg)
         .padding(.vertical, TSpace.md)
         .contentShape(Rectangle())
-
-        if let action {
-            Button(action: action) { content }.buttonStyle(.plain)
-        } else {
-            content
-        }
     }
 }

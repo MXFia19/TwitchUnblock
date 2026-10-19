@@ -77,6 +77,8 @@ struct MainTabView: View {
     @State private var showSleepSheet  = false
     @State private var showSettings    = false
     @State private var showPlayerMenu  = false
+    /// « Créer un clip » (menu du lecteur) : création, puis lien du clip.
+    @State private var showClipSheet   = false
     /// Formulaire de retour, et ce qui se lisait quand on l'a ouvert depuis
     /// le lecteur (joint au message).
     @State private var showFeedback    = false
@@ -460,10 +462,20 @@ struct MainTabView: View {
                 onDownload: downloadAction,
                 onMultiLive: multiLiveAction,
                 multiLiveOn: menuMultiLiveOn,
-                multiLiveFull: multi.isFull
+                multiLiveFull: multi.isFull,
+                shareURL: shareURL,
+                shareDetail: shareDetail,
+                onCreateClip: createClipAction
             )
             .presentationDetents([.medium])
             .inAppNoticeHost()
+        }
+        // Clip du direct en cours (menu ⋯ du lecteur).
+        .sheet(isPresented: $showClipSheet) {
+            ClipSheet()
+                .environmentObject(store)
+                .presentationDetents([.medium, .large])
+                .inAppNoticeHost()
         }
         // Multi-live : jusqu'à quatre vidéos côte à côte, directs et VODs.
         .fullScreenCover(isPresented: $showMultiLive) {
@@ -753,7 +765,7 @@ struct MainTabView: View {
     /// Découvrir n'y joue pas d'aperçu : il continuait sous « Signaler un
     /// problème » ou le minuteur, avec le son s'il avait été rallumé.
     private var presentationOpen: Bool {
-        showSettings || showFeedback || showMyFeedback || showPlayerMenu
+        showSettings || showFeedback || showMyFeedback || showPlayerMenu || showClipSheet
             || showDownloadSheet || showSleepSheet || channelSheet != nil || showMultiLive
     }
 
@@ -776,6 +788,7 @@ struct MainTabView: View {
         showFeedback = false
         showMyFeedback = false
         showPlayerMenu = false
+        showClipSheet = false
         showDownloadSheet = false
         showSleepSheet = false
         channelSheet = nil
@@ -1405,6 +1418,53 @@ struct MainTabView: View {
         return {
             showPlayerMenu = false
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { showDownloadSheet = true }
+        }
+    }
+
+    /// Position de la VOD en cours, en secondes entières (0 si illisible).
+    private var vodShareSeconds: Int {
+        vodPlaybackTime.isFinite ? max(0, Int(vodPlaybackTime)) : 0
+    }
+
+    /// Lien partagé depuis le menu du lecteur : la VOD (ou le rembobinage
+    /// d'un direct) à la position en cours, la chaîne d'un direct, le clip.
+    /// Rien pour une VOD retrouvée ou téléchargée : pas de page Twitch.
+    private var shareURL: URL? {
+        switch playerMode {
+        case .live(let channel)?:
+            return URL(string: "https://www.twitch.tv/\(channel.lowercased())")
+        case .vod(let id, _, _, _)?:
+            let t = vodShareSeconds
+            return URL(string: "https://www.twitch.tv/videos/\(id)?t=\(t / 3600)h\((t % 3600) / 60)m\(t % 60)s")
+        case .clip(let slug, _)?:
+            return URL(string: "https://clips.twitch.tv/\(slug)")
+        default:
+            return nil
+        }
+    }
+
+    /// Position partagée d'une VOD, affichée à côté de « Partager ».
+    private var shareDetail: String? {
+        guard case .vod? = playerMode else { return nil }
+        let t = vodShareSeconds
+        return t >= 3600 ? String(format: "%d:%02d:%02d", t / 3600, (t % 3600) / 60, t % 60)
+                         : String(format: "%d:%02d", t / 60, t % 60)
+    }
+
+    /// Direct en cours (pas son rembobinage) : en créer un clip, à l'image
+    /// affichée — maintenant moins la latence mesurée du direct (inconnue :
+    /// 5 s, celle d'un direct ordinaire).
+    private var createClipAction: (() -> Void)? {
+        guard case .live(let channel)? = playerMode, qualityLinks != nil, !loading,
+              errorMsg == nil else { return nil }
+        return {
+            showPlayerMenu = false
+            let moment = Date().addingTimeInterval(-(liveLatency > 0 ? liveLatency : 5))
+            ClipCreator.shared.start(login: channel, moment: moment, store: store)
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 400_000_000)
+                showClipSheet = true
+            }
         }
     }
 

@@ -457,5 +457,22 @@
  "Réseau revenu : relance de la lecture": ["Network back: restarting playback", "Red recuperada: se relanza la reproducción", "Сеть восстановлена: воспроизведение перезапускается"],
  "Réseau revenu : relance des tuiles en échec": ["Network back: restarting failed tiles", "Red recuperada: se relanzan los mosaicos fallidos", "Сеть восстановлена: перезапуск неудавшихся плиток"],
  "En attente du Wi-Fi (Wi-Fi seulement)": ["Waiting for Wi-Fi (Wi-Fi only)", "Esperando el Wi-Fi (solo con Wi-Fi)", "Ожидание Wi-Fi (только по Wi-Fi)"],
- "Reprise du téléchargement qui attendait le Wi-Fi": ["Resuming the download that was waiting for Wi-Fi", "Se reanuda la descarga que esperaba el Wi-Fi", "Возобновление загрузки, ожидавшей Wi-Fi"]
+ "Reprise du téléchargement qui attendait le Wi-Fi": ["Resuming the download that was waiting for Wi-Fi", "Se reanuda la descarga que esperaba el Wi-Fi", "Возобновление загрузки, ожидавшей Wi-Fi"],
+ "Chaîne hors ligne : pas de clip": ["Channel offline: no clip", "Canal sin conexión: sin clip", "Канал не в эфире: клипа не будет"],
+ "Chaîne retirée des notifications": ["Channel removed from notifications", "Canal retirado de las notificaciones", "Канал убран из уведомлений"],
+ "Clip créé ✓": ["Clip created ✓", "Clip creado ✓", "Клип создан ✓"],
+ "Clip refusé": ["Clip refused", "Clip rechazado", "Клип отклонён"],
+ "Cloche : notifications activées": ["Bell: notifications on", "Campana: notificaciones activadas", "Колокольчик: уведомления включены"],
+ "Cloche : notifications coupées": ["Bell: notifications off", "Campana: notificaciones desactivadas", "Колокольчик: уведомления выключены"],
+ "Création d'un clip…": ["Creating a clip…", "Creando un clip…", "Создание клипа…"],
+ "Début du direct inconnu : pas de clip": ["Stream start unknown: no clip", "Inicio del directo desconocido: sin clip", "Начало трансляции неизвестно: клипа не будет"],
+ "Direct illisible : pas de clip": ["Stream unreadable: no clip", "Directo ilegible: sin clip", "Трансляция не читается: клипа не будет"],
+ "forme réduite non reconnue": ["reduced form not recognized", "forma reducida no reconocida", "сокращённая форма не распознана"],
+ "Pas de réponse de Twitch": ["No answer from Twitch", "Sin respuesta de Twitch", "Нет ответа от Twitch"],
+ "Requête de clip non reconnue : forme réduite": ["Clip request not recognized: reduced form", "Solicitud de clip no reconocida: forma reducida", "Запрос клипа не распознан: сокращённая форма"],
+ "Requête de clip refusée par Twitch": ["Clip request refused by Twitch", "Solicitud de clip rechazada por Twitch", "Запрос клипа отклонён Twitch"],
+ "Session web absente : connexion proposée": ["No web session: offering to connect it", "Sin sesión web: se propone conectarla", "Нет веб-сессии: предложено подключить"],
+ "Vignette du live indisponible": ["Live thumbnail unavailable", "Miniatura del directo no disponible", "Превью трансляции недоступно"],
+ "Vignette non jointe": ["Thumbnail not attached", "Miniatura no adjuntada", "Превью не прикреплено"],
+ "réseau ou jeton d'intégrité": ["network or integrity token", "red o token de integridad", "сеть или токен integrity"]
 }

@@ -22,12 +22,47 @@ enum LiveNotifier {
 
     static var isEnabled: Bool { UserDefaults.standard.bool(forKey: enabledKey) }
 
+    /// Catégorie des notifications de live et ses actions (AppDelegate).
+    static let categoryId  = "LIVE_CHANNEL"
+    static let watchAction = "LIVE_WATCH"
+    static let muteAction  = "LIVE_MUTE"
+
     /// À appeler au lancement, avant la fin de didFinishLaunching.
     static func register() {
         BGTaskScheduler.shared.register(forTaskWithIdentifier: taskId, using: nil) { task in
             guard let task = task as? BGAppRefreshTask else { task.setTaskCompleted(success: false); return }
             handle(task)
         }
+        registerCategory()
+    }
+
+    /// Actions « Regarder » et « Ne plus notifier cette chaîne », dans la
+    /// langue de l'app : au lancement, puis avant chaque envoi (la langue a pu
+    /// changer entre-temps).
+    static func registerCategory(lang: Lang? = nil) {
+        let lang = lang ?? Lang(rawValue: UserDefaults.standard.string(forKey: "lang") ?? "en") ?? .en
+        let watch = UNNotificationAction(identifier: watchAction,
+                                         title: translate("notif_action_watch", lang),
+                                         options: [.foreground],
+                                         icon: UNNotificationActionIcon(systemImageName: "play.fill"))
+        let mute = UNNotificationAction(identifier: muteAction,
+                                        title: translate("notif_action_mute", lang),
+                                        options: [.destructive],
+                                        icon: UNNotificationActionIcon(systemImageName: "bell.slash"))
+        let category = UNNotificationCategory(identifier: categoryId, actions: [watch, mute],
+                                              intentIdentifiers: [], options: [])
+        UNUserNotificationCenter.current().setNotificationCategories([category])
+    }
+
+    /// « Ne plus notifier cette chaîne » (action d'une notification) : la
+    /// chaîne passe dans les coupées de « Chaînes notifiées », et ntfy suit.
+    static func mute(_ login: String) {
+        let l = login.lowercased()
+        guard !l.isEmpty else { return }
+        NotifChannels.setNotify(l, false)
+        logger.info("NOTIF", "Chaîne retirée des notifications", "@\(l)")
+        let lang = Lang(rawValue: UserDefaults.standard.string(forKey: "lang") ?? "en") ?? .en
+        Task { await NtfyNotifier.sync(lang: lang) }
     }
 
     /// Programme le prochain réveil : pour les lives suivis (option), ou pour
@@ -143,20 +178,66 @@ enum LiveNotifier {
             // Chaînes coupées dans « Chaînes notifiées » : connues quand même,
             // pour ne pas notifier un live en cours le jour où on les rallume.
             let muted = NotifChannels.muted
-            for s in streams where !known.contains(s.userLogin.lowercased())
-                                && !muted.contains(s.userLogin.lowercased()) {
-                let content = UNMutableNotificationContent()
-                content.title = translate("notif_live_title", lang).replacingOccurrences(of: "{u}", with: s.userName)
-                content.body = s.title.isEmpty ? s.gameName : "\(s.title)\(s.gameName.isEmpty ? "" : " · \(s.gameName)")"
-                content.sound = .default
-                content.userInfo = ["login": s.userLogin.lowercased()]
-                let req = UNNotificationRequest(identifier: "live-\(s.userLogin.lowercased())",
-                                                content: content, trigger: nil)
-                try? await UNUserNotificationCenter.current().add(req)
+            let fresh = streams.filter { !known.contains($0.userLogin.lowercased())
+                                         && !muted.contains($0.userLogin.lowercased()) }
+            if !fresh.isEmpty {
+                registerCategory(lang: lang)
+                // En parallèle : la vignette lente d'une chaîne ne retarde pas
+                // les autres notifications.
+                await withTaskGroup(of: Void.self) { group in
+                    for s in fresh {
+                        group.addTask { await LiveNotifier.post(s, lang: lang) }
+                    }
+                }
             }
         }
         ud.set(Array(partial ? known.union(now) : now), forKey: knownKey)
         return true
+    }
+
+    /// Une notification de live : vignette jointe si elle arrive à temps, un
+    /// fil par chaîne, actions « Regarder » et « Ne plus notifier ».
+    private static func post(_ s: TwitchStream, lang: Lang) async {
+        let login = s.userLogin.lowercased()
+        let content = UNMutableNotificationContent()
+        content.title = translate("notif_live_title", lang).replacingOccurrences(of: "{u}", with: s.userName)
+        content.body = s.title.isEmpty ? s.gameName : "\(s.title)\(s.gameName.isEmpty ? "" : " · \(s.gameName)")"
+        content.sound = .default
+        content.userInfo = ["login": login]
+        content.threadIdentifier = "live-\(login)"
+        content.categoryIdentifier = categoryId
+        if let thumb = await thumbnail(of: s) { content.attachments = [thumb] }
+        let req = UNNotificationRequest(identifier: "live-\(login)", content: content, trigger: nil)
+        try? await UNUserNotificationCenter.current().add(req)
+    }
+
+    /// Vignette du live, téléchargée dans un fichier temporaire (iOS le range
+    /// avec la notification). 6 s au plus : sans elle, la notification part
+    /// quand même.
+    private static func thumbnail(of s: TwitchStream) async -> UNNotificationAttachment? {
+        let login = s.userLogin.lowercased()
+        let template = s.thumbnailURL.isEmpty
+            ? "https://static-cdn.jtvnw.net/previews-ttv/live_user_\(login)-{width}x{height}.jpg"
+            : s.thumbnailURL
+        let address = template.replacingOccurrences(of: "{width}", with: "640")
+                              .replacingOccurrences(of: "{height}", with: "360")
+        guard let url = URL(string: address) else { return nil }
+        let req = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 6)
+        guard let (data, resp) = try? await URLSession.shared.data(for: req),
+              (resp as? HTTPURLResponse)?.statusCode == 200, !data.isEmpty else {
+            logger.debug("NOTIF", "Vignette du live indisponible", "@\(login)")
+            return nil
+        }
+        let file = FileManager.default.temporaryDirectory
+            .appendingPathComponent("live-\(login)-\(UUID().uuidString).jpg")
+        do {
+            try data.write(to: file)
+            return try UNNotificationAttachment(identifier: "thumbnail", url: file, options: nil)
+        } catch {
+            try? FileManager.default.removeItem(at: file)
+            logger.debug("NOTIF", "Vignette non jointe", error.localizedDescription)
+            return nil
+        }
     }
 }
 

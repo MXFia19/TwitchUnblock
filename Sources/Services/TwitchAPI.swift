@@ -1123,6 +1123,46 @@ func getUserAvatarGQL(login: String) async -> String? {
     return img
 }
 
+/// Fiche d'une personne du chat : date de création de son compte (API
+/// publique). nil : compte introuvable, ou Twitch n'a pas répondu.
+func getUserCreatedAt(login: String) async -> Date? {
+    let q = "query($l: String!) { user(login: $l) { createdAt } }"
+    guard let d = await gqlRequest(q, ["l": login.lowercased()]),
+          let user = d["user"] as? [String: Any] else { return nil }
+    return parseTwitchDate(user["createdAt"] as? String)
+}
+
+/// Depuis quand `login` suit la chaîne `channel` (API publique). Requête à
+/// part de getUserCreatedAt : si Twitch refuse ce champ, la date de création
+/// du compte reste affichée. nil : ne la suit pas, ou Twitch ne le dit pas.
+func getFollowedAt(login: String, channel: String) async -> Date? {
+    let q = "query($l: String!, $c: String!) { user(login: $l) { follow(targetLogin: $c) { followedAt } } }"
+    guard !channel.isEmpty,
+          let d = await gqlRequest(q, ["l": login.lowercased(), "c": channel.lowercased()]),
+          let user = d["user"] as? [String: Any],
+          let follow = user["follow"] as? [String: Any] else { return nil }
+    return parseTwitchDate(follow["followedAt"] as? String)
+}
+
+/// Diffusion en cours d'une chaîne, pour en créer un clip : id de la chaîne,
+/// id de la diffusion et heure de début (nils hors ligne).
+struct LiveBroadcast {
+    let channelId: String
+    let broadcastId: String?
+    let startedAt: Date?
+}
+
+/// nil : pas de réponse de Twitch (ou chaîne introuvable).
+func getLiveBroadcast(login: String) async -> LiveBroadcast? {
+    let q = "query($l: String!) { user(login: $l) { id stream { id createdAt } } }"
+    guard let d = await gqlRequest(q, ["l": login.lowercased()]),
+          let user = d["user"] as? [String: Any],
+          let id = user["id"] as? String, !id.isEmpty else { return nil }
+    let stream = user["stream"] as? [String: Any]
+    return LiveBroadcast(channelId: id, broadcastId: stream?["id"] as? String,
+                         startedAt: parseTwitchDate(stream?["createdAt"] as? String))
+}
+
 /// Lives suivis par le compte : 100 par page (le plafond de Helix), puis les
 /// pages suivantes jusqu'à 300. Avant, les 50 premiers seulement : au-delà,
 /// des chaînes manquaient à l'accueil, et les notifications revenaient pour

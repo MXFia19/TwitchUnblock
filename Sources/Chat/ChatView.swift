@@ -79,6 +79,30 @@ struct ChatView: View {
         messageText.count <= 500
     }
 
+    /// « Sa chaîne » dans la fiche d'une personne : la feuille se ferme
+    /// d'abord (une seule à la fois), puis la page s'ouvre (le lecteur se
+    /// réduit). Pas en multi-live : la mosaïque plein écran la cacherait.
+    private var openChannelFromThread: ((String) -> Void)? {
+        guard opensChannelPages else { return nil }
+        return { login in
+            threadRoot = nil
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 400_000_000)
+                store.openChannelPage(login)
+            }
+        }
+    }
+
+    /// Chaîne suivie (compte ou appareil), pour la cloche des notifications.
+    /// Le statut lu sur Twitch (session web) fait foi quand il est connu ;
+    /// sinon, la liste des suivis du compte lue au lancement.
+    private var channelFollowed: Bool {
+        let l = channelName.lowercased()
+        if store.isLocallyFollowed(l) { return true }
+        if follow.localStore == nil, let on = follow.isFollowing { return on }
+        return store.accountFollowLogins.contains(l)
+    }
+
     /// Barre de statut au-dessus des messages : connexion, synchro, suivre,
     /// épingle réduite. En paysage la colonne est étroite et elle lui
     /// mangeait la hauteur utile — d'où `ChatStyle.showsChrome`. Les bandeaux
@@ -190,6 +214,9 @@ struct ChatView: View {
                         Text(store.t("follow_hide_hint"))
                     }
                 }
+                // Cloche : notifications de live de cette chaîne seulement
+                // (affichée si elles sont activées et la chaîne suivie).
+                NotifBellButton(login: channelName, followed: channelFollowed, compact: true)
                 // Épingle réduite : une pastille la rouvre.
                 if store.showPinnedMessages, let pin = pubsub.pinned, pin.id == dismissedPinId {
                     Button {
@@ -576,7 +603,8 @@ struct ChatView: View {
                              messageText += (messageText.isEmpty || messageText.hasSuffix(" ")
                                              ? "" : " ") + "@\(name) "
                              isInputFocused = true
-                         })
+                         },
+                         onOpenChannel: openChannelFromThread)
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
                 .inAppNoticeHost()

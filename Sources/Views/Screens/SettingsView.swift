@@ -1025,6 +1025,9 @@ struct SettingsView: View {
                 toggleRow(store.t("cfg_kbd_suggest"), store.t("cfg_kbd_suggest_sub"),
                           $store.chatKeyboardSuggestions, log: "Suggestions du clavier")
                 Divider().background(Color.tBorder)
+                toggleRow(store.t("cfg_return_sends"), store.t("cfg_return_sends_sub"),
+                          $store.chatReturnSends, log: "Entrée envoie le message")
+                Divider().background(Color.tBorder)
                 toggleRow(store.t("cfg_deleted"), store.t("cfg_deleted_sub"),
                           $store.chatShowDeleted, log: "Messages supprimés")
                 Divider().background(Color.tBorder)

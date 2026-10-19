@@ -199,7 +199,9 @@ struct MessageSheet: View {
                 .background(Color.tSurface).cornerRadius(TRadius.control)
                 .overlay(RoundedRectangle(cornerRadius: TRadius.control)
                     .stroke(focused ? Color.tPrimary : Color.tBorder, lineWidth: 1))
-                .submitLabel(.send).onSubmit(sendReply)
+                // Comme le chat : Entrée ferme le clavier, sauf réglage contraire.
+                .submitLabel(store.chatReturnSends ? .send : .done)
+                .onSubmit { if store.chatReturnSends { sendReply() } else { focused = false } }
 
             Button(action: sendReply) {
                 Image(systemName: "paperplane.fill")

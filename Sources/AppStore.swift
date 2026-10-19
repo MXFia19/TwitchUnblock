@@ -406,6 +406,11 @@ final class AppStore: ObservableObject {
     @Published var chatKeyboardSuggestions: Bool = true {
         didSet { UserDefaults.standard.set(chatKeyboardSuggestions, forKey: "cfg_chat_kbd_suggest") }
     }
+    /// Entrée envoie le message. Coupé (par défaut) : Entrée ferme le
+    /// clavier, le bouton ➤ envoie.
+    @Published var chatReturnSends: Bool = false {
+        didSet { UserDefaults.standard.set(chatReturnSends, forKey: "cfg_chat_return_sends") }
+    }
     /// Garder les messages supprimés, barrés, au lieu de les faire disparaître.
     @Published var chatShowDeleted: Bool = false {
         didSet { UserDefaults.standard.set(chatShowDeleted, forKey: "cfg_chat_deleted") }
@@ -738,6 +743,7 @@ final class AppStore: ObservableObject {
         chatLoadRecent     = ud.object(forKey: "cfg_chat_recent")       as? Bool ?? true
         chatAutocomplete   = ud.object(forKey: "cfg_chat_autocomplete") as? Bool ?? true
         chatKeyboardSuggestions = ud.object(forKey: "cfg_chat_kbd_suggest") as? Bool ?? true
+        chatReturnSends = ud.object(forKey: "cfg_chat_return_sends") as? Bool ?? false
         chatShowDeleted    = ud.object(forKey: "cfg_chat_deleted")      as? Bool ?? false
         shareUsage         = ud.object(forKey: "cfg_share_usage") as? Bool ?? true
         // « zh_hk » importé du site par une version d'avant : ramené à « zh-hk ».

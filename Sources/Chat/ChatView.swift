@@ -59,6 +59,10 @@ struct ChatView: View {
     /// actifs pour une vue déjà fermée.
     @State private var setupTask: Task<Void, Never>? = nil
     @FocusState private var isInputFocused: Bool
+    /// Clavier fermé par un toucher du chat : le même toucher n'ouvre ni le
+    /// fil d'un message ni la fiche d'une emote ou d'un badge (les gestes
+    /// arrivent dans un ordre variable, d'où ce délai).
+    @State private var keyboardClosedAt = Date.distantPast
 
     @State private var emoteMatches: [TwitchEmote] = []   // autocomplétion en cours
     @State private var sentinelVisible = true   // le bas de la liste est-il visible ?
@@ -411,7 +415,10 @@ struct ChatView: View {
                     .inAppNoticeHost()
             }
             // Toucher une emote ou un badge (messages, épinglé) : sa fiche.
-            .environment(\.chatInfoAction, { infoItem = $0 })
+            .environment(\.chatInfoAction, { item in
+                if closesKeyboard() { return }
+                infoItem = item
+            })
     }
 
     private var content: some View {
@@ -447,6 +454,8 @@ struct ChatView: View {
                                         .id(msg.id)
                                         .contentShape(Rectangle())
                                         .onTapGesture {
+                                            // Clavier ouvert : ce toucher le ferme, sans plus.
+                                            if closesKeyboard() { return }
                                             guard msg.userId != "system" else { return }
                                             threadRoot = msg
                                         }
@@ -488,7 +497,7 @@ struct ChatView: View {
                             // seul moyen, au risque d'envoyer un brouillon).
                             .scrollDismissesKeyboard(.interactively)
                             .simultaneousGesture(TapGesture().onEnded {
-                                if isInputFocused { isInputFocused = false }
+                                _ = closesKeyboard()
                             })
                             .onChange(of: chat.messages.first?.id) { _ in
                                 // Suit les nouveaux messages seulement si en bas et hors défilement
@@ -1004,8 +1013,12 @@ struct ChatView: View {
                     .autocorrectionDisabled(!store.chatKeyboardSuggestions)
                     .autocapitalization(.sentences)
                     .foregroundColor(.tText)
-                    .submitLabel(.send)
-                    .onSubmit { sendMessage() }
+                    // Entrée ferme le clavier, le bouton ➤ envoie (réglage
+                    // « Entrée envoie le message » pour l'inverse).
+                    .submitLabel(store.chatReturnSends ? .send : .done)
+                    .onSubmit {
+                        if store.chatReturnSends { sendMessage() } else { isInputFocused = false }
+                    }
                     .disabled(!chat.isConnected || !chat.isAuthenticated)
                     .onChange(of: isInputFocused) { focused in
                         if focused && showEmotePicker {
@@ -1146,6 +1159,17 @@ struct ChatView: View {
     }
 
     // MARK: – Actions
+    /// Ferme le clavier s'il était ouvert, ou s'il vient de l'être par ce
+    /// même toucher. Vrai : le toucher n'a rien d'autre à faire.
+    private func closesKeyboard() -> Bool {
+        if isInputFocused {
+            isInputFocused = false
+            keyboardClosedAt = Date()
+            return true
+        }
+        return Date().timeIntervalSince(keyboardClosedAt) < 0.35
+    }
+
     private func sendMessage() {
         let trimmed = messageText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, trimmed.count <= 500 else { return }

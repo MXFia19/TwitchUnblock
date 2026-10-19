@@ -85,6 +85,9 @@ struct MainTabView: View {
     @State private var immersiveQuality = ""
     /// « Connexion lente » annoncé dans le lecteur après une baisse de qualité.
     @State private var slowNetworkNotice: String? = nil
+    /// « Connexion lente » déjà annoncé pendant cette lecture : l'avis du
+    /// compte ne revient plus après lui (voir `accountNotice`).
+    @State private var slowNoticeShown = false
     /// Largeur du chat au début d'un glissement : la translation du geste est
     /// relative à son point de départ, que la vue ne connaît plus une fois
     /// qu'elle a commencé à rétrécir.
@@ -127,6 +130,11 @@ struct MainTabView: View {
     /// Vitesse du clip en cours : un clip part toujours à 1×, et celle qu'on
     /// y choisit n'est pas retenue pour les VODs.
     @State private var clipSpeed: Double = 1
+    /// Vitesse imposée par le lecteur immersif (bord d'un enregistrement en
+    /// cours rattrapé, récepteur AirPlay qui refuse) : pour cette lecture
+    /// seulement. Écrite dans la préférence, elle remettait toutes les VODs
+    /// suivantes à 1×. Un choix dans le menu l'efface.
+    @State private var forcedVodSpeed: Double? = nil
     /// Chapitres de la VOD en cours (changements de jeu).
     @State private var vodChapters: [VodChapter] = []
     /// Passages de la VOD dont Twitch a coupé le son (et que l'app n'a pas pu
@@ -696,6 +704,20 @@ struct MainTabView: View {
             UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder),
                                             to: nil, from: nil, for: nil)
         }
+        // Chat seul (empilé, sans image) après le bouton de rotation : retour
+        // au portrait aussi. Le lecteur ne le fait plus en disparaissant (il
+        // disparaît aussi à chaque relance).
+        .onChange(of: chatOnly) { only in
+            if only { PlayerOrientation.restorePortraitIfForced() }
+        }
+        // Liens arrivés sans qualité choisie : celle de départ du lecteur
+        // immersif est figée, comme le fait le lecteur natif. Recalculée à
+        // chaque rendu, elle suivait la connexion (Wi-Fi ↔ données mobiles)
+        // et rechargeait le flux à un moment quelconque, parfois plusieurs fois.
+        .onChange(of: qualityLinks) { links in
+            guard immersiveQuality.isEmpty, let links, !links.isEmpty else { return }
+            immersiveQuality = currentQuality(links)
+        }
     }
 
     private func updateHeaderSafeTop(_ top: CGFloat) {
@@ -1008,7 +1030,8 @@ struct MainTabView: View {
                 unmutedCount: vodUnmuted,
                 nowPlaying: nowPlayingMeta,
                 speed: playbackSpeed,
-                onSpeedChange: { setPlaybackSpeed($0) },
+                // Toujours une vitesse imposée par le lecteur (voir forcedVodSpeed).
+                onSpeedChange: { setForcedSpeed($0) },
                 notice: slowNetworkNotice ?? accountNotice,
                 onProgress: { time in
                     // Pendant une bascule, `playerMode` désigne déjà la
@@ -1202,6 +1225,7 @@ struct MainTabView: View {
         logger.warn("LECTEUR", "Calages répétés : qualité baissée", "\(current) → \(next)")
         immersiveQuality = next
         slowNetworkNotice = store.t("slow_network_quality")
+        slowNoticeShown = true
         DispatchQueue.main.asyncAfter(deadline: .now() + 4) { slowNetworkNotice = nil }
     }
 
@@ -1339,9 +1363,12 @@ struct MainTabView: View {
         }
     }
 
-    /// Direct servi par le compte (abonné sans pub) : annoncé au lancement.
+    /// Direct servi par le compte (abonné sans pub) : annoncé au lancement,
+    /// une fois. Revenu après « Connexion lente » (4 s plus tard), il était
+    /// réannoncé à chaque baisse de qualité.
     private var accountNotice: String? {
-        menuLiveSource == "account" ? store.t("src_account_toast") : nil
+        guard menuLiveSource == "account", !slowNoticeShown else { return nil }
+        return store.t("src_account_toast")
     }
 
     /// Source du direct pour le menu du lecteur : seulement pendant un direct
@@ -1416,16 +1443,31 @@ struct MainTabView: View {
     }
 
     /// Vitesse de ce qui se lit hors direct : celle des VODs (retenue d'une
-    /// VOD à l'autre, seule source de vérité), ou celle du clip en cours.
-    private var playbackSpeed: Double { isClipPlaying ? clipSpeed : store.vodSpeed }
+    /// VOD à l'autre, sauf vitesse imposée pour la lecture en cours), ou
+    /// celle du clip en cours.
+    private var playbackSpeed: Double { isClipPlaying ? clipSpeed : (forcedVodSpeed ?? store.vodSpeed) }
 
     private func setPlaybackSpeed(_ v: Double) {
         let speed = VodSpeed.nearest(v)
         if isClipPlaying {
             clipSpeed = speed
-        } else if speed != store.vodSpeed {
-            store.vodSpeed = speed
-            logger.settingChanged("Vitesse des VODs", value: String(format: "×%g", speed))
+        } else {
+            forcedVodSpeed = nil
+            if speed != store.vodSpeed {
+                store.vodSpeed = speed
+                logger.settingChanged("Vitesse des VODs", value: String(format: "×%g", speed))
+            }
+        }
+    }
+
+    /// Vitesse imposée par le lecteur immersif : retenue pour cette lecture
+    /// seulement (voir `forcedVodSpeed`) ; celle d'un clip, comme un choix.
+    private func setForcedSpeed(_ v: Double) {
+        let speed = VodSpeed.nearest(v)
+        if isClipPlaying {
+            clipSpeed = speed
+        } else {
+            forcedVodSpeed = speed == store.vodSpeed ? nil : speed
         }
     }
 
@@ -1620,6 +1662,7 @@ struct MainTabView: View {
         liveBehind      = 0
         pull.y          = 0
         loadingSource   = nil
+        slowNoticeShown = false
 
         if soft {
             switchingSource = true
@@ -1636,6 +1679,9 @@ struct MainTabView: View {
             liveAvatar       = nil
             liveGame         = ""
             immersiveQuality = ""
+            // Vitesse imposée à la lecture précédente : la préférence revient.
+            // Gardée en bascule (direct ↔ enregistrement, même chaîne).
+            forcedVodSpeed   = nil
             // Titre provisoire (mini-barre d'un chargement réduit) : le vrai
             // arrive avec les liens.
             switch mode {
@@ -1857,6 +1903,10 @@ struct MainTabView: View {
             // touchables dès son début) : c'est elle qui compte. Le ménage
             // effaçait son état, alors que son chargement se poursuivait.
             guard gen == loadGeneration else { return }
+            // Vraie fermeture : la Live Activity part. Le démontage du lecteur
+            // ne la termine qu'au premier plan (PlayerActivity.playerRemoved) :
+            // arrêté écran verrouillé (minuteur de veille), il la laissait.
+            PlayerActivity.end()
             chatOnly           = false
             currentChannelName = nil
             currentChannelId   = nil

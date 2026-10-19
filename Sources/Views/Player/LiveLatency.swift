@@ -92,9 +92,17 @@ struct LiveLatencyController {
     }
 
     /// Recul à garder sur le bord jouable : la cible du flux, ou plus pour
-    /// tenir le plancher du retard affiché.
+    /// tenir le plancher du retard affiché. Jamais plus que la fenêtre du
+    /// direct moins 8 s : avec l'avance des calages (16 s au plus) et celle
+    /// des données mobiles, il atteignait toute la fenêtre (~30 s) — « Direct »
+    /// posait la lecture à son tout début, et la sortie de fenêtre n'était
+    /// plus surveillée.
     func minBehind(for item: AVPlayerItem) -> Double {
-        max(Self.target(for: item), floorBehind) + stallMargin + Self.cellularMargin
+        let base = max(Self.target(for: item), floorBehind)
+        let wanted = base + stallMargin + Self.cellularMargin
+        guard let window = item.seekableTimeRanges.last?.timeRangeValue.duration.seconds,
+              window.isFinite, window - 8 > base else { return wanted }
+        return min(wanted, window - 8)
     }
 
     /// Après une coupure de `since` secondes (appel, Siri), le moment lu est-il

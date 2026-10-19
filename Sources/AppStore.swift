@@ -213,9 +213,10 @@ final class AppStore: ObservableObject {
     }
 
     /// Vitesse de lecture des VODs (pas des directs, ni des clips qui partent
-    /// à 1×), gardée d'une VOD à l'autre. Seule source de vérité : une vitesse
-    /// imposée par le lecteur (refus, AirPlay, bord du DVR rattrapé) y est
-    /// réécrite. Même nom que le site dans la sauvegarde (« vodSpeed »).
+    /// à 1×), gardée d'une VOD à l'autre. Une vitesse imposée par le lecteur
+    /// immersif (refus, AirPlay, bord du DVR rattrapé) ne vaut que pour la
+    /// lecture en cours (MainTabView.forcedVodSpeed). Même nom que le site
+    /// dans la sauvegarde (« vodSpeed »).
     @Published var vodSpeed: Double = 1 {
         didSet { UserDefaults.standard.set(vodSpeed, forKey: "cfg_vod_speed") }
     }

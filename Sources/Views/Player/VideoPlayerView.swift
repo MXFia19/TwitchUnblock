@@ -126,7 +126,9 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
         vc.player?.pause()
         coordinator.adBreaks?.detach()
         vc.player = nil
-        PlayerActivity.end()
+        // En arrière-plan (raid suivi, VOD suivante), l'activité reste pour
+        // le lecteur suivant (voir PlayerActivity.playerRemoved).
+        PlayerActivity.playerRemoved()
     }
 
     func makeCoordinator() -> Coordinator { Coordinator() }

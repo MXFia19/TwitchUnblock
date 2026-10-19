@@ -37,6 +37,21 @@ enum PlayerActivity {
         PlayerActivityController.shared.end()
     }
 
+    /// Lecteur démonté (vue retirée). Au premier plan, l'activité disparaît :
+    /// le lecteur suivant en démarre une. En arrière-plan — raid suivi, VOD
+    /// suivante de « Tout lire », écran verrouillé —, iOS refuse au suivant
+    /// d'en démarrer une autre, et elle disparaissait : elle reste, en pause
+    /// d'ici là, et il la reprend (voir `shownChannel`). La vraie fermeture
+    /// la termine (MainTabView.stopPlayer).
+    static func playerRemoved() {
+        guard #available(iOS 16.2, *) else { return }
+        if UIApplication.shared.applicationState == .active {
+            PlayerActivityController.shared.end()
+        } else {
+            PlayerActivityController.shared.pause()
+        }
+    }
+
     /// Activités restées d'une session précédente (app fermée en pleine
     /// lecture) : iOS les garderait affichées des heures. `wait` bloque un
     /// instant, à la fermeture de l'app, le temps qu'elles se terminent.
@@ -130,6 +145,15 @@ private final class PlayerActivityController {
         attributes = nil
         state = nil
         Task { await activity.end(nil, dismissalPolicy: .immediate) }
+    }
+
+    /// Plus rien ne joue, mais l'activité reste (voir PlayerActivity.playerRemoved).
+    func pause() {
+        guard let activity, var paused = state, paused.isPlaying else { return }
+        paused.isPlaying = false
+        state = paused
+        let content = ActivityContent(state: paused, staleDate: nil)
+        Task { await activity.update(content) }
     }
 
     /// Une VOD en lecture recalcule son départ à chaque appel (heure moins

@@ -55,11 +55,14 @@ struct MultiLiveView: View {
                 save: { [store] id, t in store.setVodProgress(id, time: t) },
                 onStarted: { [store] id, meta in Self.vodStarted(id, meta, store: store) })
             session.sync(multi.entries)
-            ScreenAwake.set("multi", true)
+            ScreenAwake.set("multi", session.keepsScreenOn)
         }
         .onChange(of: multi.entries) { list in
             if list.isEmpty { dismiss() } else { session.sync(list) }
         }
+        // Écran allumé seulement si une tuile joue (ou va jouer) : il l'était
+        // dès l'ouverture, même toutes en pause, hors ligne ou en échec.
+        .onChange(of: session.keepsScreenOn) { ScreenAwake.set("multi", $0) }
         .onChange(of: scenePhase) { session.sceneChanged($0) }
         // Minuteur de veille écoulé : la mosaïque s'arrête et se ferme, comme
         // le lecteur — sans réveiller la musique d'une autre app. Seul l'écran

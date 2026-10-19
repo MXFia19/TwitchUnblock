@@ -114,7 +114,8 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
     /// sur l'enregistrement.
     @Published private(set) var speed: Double = 1
     /// Vitesse imposée par le lecteur (refus, AirPlay, bord du DVR rattrapé) :
-    /// la vue la réécrit dans la préférence et annonce `notice`.
+    /// la vue la retient pour la lecture en cours (pas dans la préférence) et
+    /// annonce `notice`.
     struct SpeedChange: Equatable {
         let value: Double
         let notice: String
@@ -255,8 +256,8 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
             forName: AVPlayer.rateDidChangeNotification, object: player, queue: .main
         ) { [weak self] note in self?.rateChanged(note) }
         // AirPlay ne lit pas les playlists réécrites : retour à celle du CDN.
-        externalObs = player.observe(\.isExternalPlaybackActive, options: [.new]) { p, _ in
-            DispatchQueue.main.async { VodUnmuteLoader.fallBackForAirPlay(p) }
+        externalObs = player.observe(\.isExternalPlaybackActive, options: [.new]) { [weak self] _, _ in
+            DispatchQueue.main.async { self?.fallBackForAirPlay() }
         }
         // Son coupé par le bouton ou par la pause pub : l'icône suit.
         mutedObs = player.observe(\.isMuted, options: [.initial, .new]) { [weak self] p, _ in
@@ -287,8 +288,21 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
         // Départ encore en attente (reprise, recul d'un direct) : il suit le
         // nouvel élément, `position` vaut encore 0.
         load(url: asset.url, seek: isLive ? 0 : (pendingSeek ?? position),
-             resume: pendingSeek != nil && pendingIsResume, behind: pendingBehind ?? heldBehind)
+             resume: pendingSeek != nil && pendingIsResume, behind: pendingBehind ?? heldBehind,
+             exact: !isLive)
         if !wasPlaying { setPlaying(false) }
+    }
+
+    /// AirPlay ne lit pas les playlists réécrites : retour à celle du CDN
+    /// (VodUnmuteLoader). Un départ encore en attente (reprise d'une VOD) suit
+    /// le nouvel élément : effacé par `tick` (élément ≠ `loadedItem`), la VOD
+    /// repartait de 0:00, et ce 0:00 écrasait la progression enregistrée.
+    private func fallBackForAirPlay() {
+        guard !tornDown else { return }
+        let waiting = pendingSeek != nil
+        guard let item = VodUnmuteLoader.fallBackForAirPlay(player, keepPosition: !waiting) else { return }
+        loadedItem = item
+        observeStatus(item)
     }
 
     /// Retard sur le bord d'un direct reculé exprès (barre, −10 s) ; nil au
@@ -310,7 +324,8 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
         if isLive {
             load(url: url, behind: pendingBehind ?? heldBehind)
         } else {
-            load(url: url, seek: pendingSeek ?? position, resume: pendingSeek != nil && pendingIsResume)
+            load(url: url, seek: pendingSeek ?? position, resume: pendingSeek != nil && pendingIsResume,
+                 exact: true)
         }
     }
 
@@ -330,9 +345,11 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
 
     /// `resume` : `seek` vient de la progression enregistrée (une VOD finie
     /// repart alors du début). `behind` : direct seulement, retard sur le
-    /// bord à retrouver une fois l'élément prêt.
+    /// bord à retrouver une fois l'élément prêt. `exact` : hors direct, `seek`
+    /// est l'endroit voulu (instant visé, autre qualité, relance), appliqué
+    /// même sous 5 s — un enregistrement en cours partait sinon de son bord.
     func load(url: URL, seek: Double = 0, isLive: Bool? = nil,
-              resume: Bool = false, behind: Double? = nil) {
+              resume: Bool = false, behind: Double? = nil, exact: Bool = false) {
         if let isLive { self.isLive = isLive }
         stallTimes = []
         // Repart d'une fenêtre vierge : garder les bornes de la source
@@ -352,16 +369,14 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
         // Adresse `tuunmute://` : passages coupés rétablis (VodUnmuteLoader).
         let item = VodUnmuteLoader.playerItem(url: url)
         loadedItem = item
-        pendingSeek = seek > 5 ? seek : nil
+        if seek > 5 {
+            pendingSeek = seek
+        } else {
+            pendingSeek = exact && !self.isLive ? max(0, seek) : nil
+        }
         pendingIsResume = resume
         pendingBehind = self.isLive ? behind : nil
-        statusObs = item.observe(\.status, options: [.initial, .new]) { [weak self] item, _ in
-            switch item.status {
-            case .readyToPlay: DispatchQueue.main.async { self?.applyPendingSeek(on: item) }
-            case .failed:      DispatchQueue.main.async { self?.itemFailed(item, error: item.error) }
-            default:           break
-            }
-        }
+        observeStatus(item)
         // Coupé pour une VOD téléchargée en AirPlay (fallBackForAirPlay) :
         // rétabli pour la lecture suivante, sur le même lecteur.
         player.allowsExternalPlayback = true
@@ -371,10 +386,25 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
         // accéléré (retour au direct sur le même lecteur).
         player.defaultRate = self.isLive ? 1 : Float(speed)
         player.play()
+        // AirPlay déjà actif (autre qualité, relance, bascule direct ↔
+        // enregistrement) : l'état ne change pas, l'observateur ne voit rien,
+        // et le récepteur ne sait pas lire une adresse maison. Repli tout de suite.
+        if player.isExternalPlaybackActive { fallBackForAirPlay() }
         isPlaying = true
         lastCatchUp = Date()   // laisse le flux démarrer avant tout rattrapage
         refreshNowPlaying(force: true)
         updateActivity()
+    }
+
+    /// Prêt : le départ en attente s'applique ; en échec : la carte.
+    private func observeStatus(_ item: AVPlayerItem) {
+        statusObs = item.observe(\.status, options: [.initial, .new]) { [weak self] item, _ in
+            switch item.status {
+            case .readyToPlay: DispatchQueue.main.async { self?.applyPendingSeek(on: item) }
+            case .failed:      DispatchQueue.main.async { self?.itemFailed(item, error: item.error) }
+            default:           break
+            }
+        }
     }
 
     private func applyPendingSeek(on item: AVPlayerItem) {
@@ -449,11 +479,15 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
         if !isLive, let asset = item.asset as? AVURLAsset {
             let safe = VodUnmuteLoader.mutedSafe(asset.url)
             if safe != asset.url {
-                let at = position
+                // Arrêtée avant que la reprise ne s'applique : le départ en
+                // attente, pas `position` (encore 0) — la VOD repartait du
+                // début et écrasait la progression enregistrée.
+                let at = pendingSeek ?? position
+                let resume = pendingSeek != nil && pendingIsResume
                 logger.warn("LECTEUR", "VOD interrompue", "\(reason) · relance, passages coupés réécrits")
                 DispatchQueue.main.async { [weak self] in
                     guard let self, !self.tornDown, self.player.currentItem === item else { return }
-                    self.load(url: safe, seek: at)
+                    self.load(url: safe, seek: at, resume: resume, exact: true)
                 }
                 return
             }
@@ -567,6 +601,11 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
     func togglePlay() { setPlaying(!isPlaying) }
 
     func setPlaying(_ on: Bool) {
+        // En échec (carte « Réessayer ») : rien ne relance un élément mort —
+        // ni « lecture » de l'écran verrouillé ou des écouteurs, ni « Direct ».
+        // Le croire en lecture gardait l'écran allumé sans fin, et l'écran
+        // verrouillé affichait « en lecture ». « Réessayer » relit les liens.
+        if on, failed { return }
         if on { player.play() } else { player.pause() }
         // Pause voulue (bouton, écran verrouillé) : rien ne la relance seul,
         // ni la fin d'une interruption, ni la relance d'un direct en échec.
@@ -703,9 +742,9 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
         return endTime - position < 20
     }
 
-    /// Vitesse imposée : elle devient la vitesse retenue (la vue la réécrit
-    /// dans la préférence), sinon re-choisir la vitesse affichée dans le menu
-    /// ne ferait rien. `apply` faux quand la vitesse vient du lecteur : elle
+    /// Vitesse imposée : elle devient la vitesse retenue (la vue la garde
+    /// pour la lecture en cours), sinon re-choisir la vitesse affichée dans le
+    /// menu ne ferait rien. `apply` faux quand la vitesse vient du lecteur : elle
     /// est adoptée telle quelle, la reposer arrondie au cran relancerait
     /// rateDidChange sans fin s'il maintient la sienne.
     private func force(speed v: Double, notice: String, why: String, apply: Bool = true) {
@@ -918,7 +957,9 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
         guard Self.nowPlayingOwner == nil || Self.nowPlayingOwner === self else { return }
         Self.nowPlayingOwner = nil
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
-        PlayerActivity.end()
+        // En arrière-plan (raid suivi, VOD suivante), l'activité reste pour
+        // le lecteur suivant (voir PlayerActivity.playerRemoved).
+        PlayerActivity.playerRemoved()
     }
 }
 
@@ -1043,6 +1084,11 @@ struct ImmersivePlayer: View {
     @State private var flashTask: Task<Void, Never>? = nil
     /// Contenu chargé dans le modèle (voir `contentID`).
     @State private var shownContent = ""
+    /// Instant visé avant la fenêtre du direct (barre « toute la diffusion »),
+    /// appliqué tel quel à l'enregistrement quand il arrive. Passé par la
+    /// seule progression enregistrée, un instant proche du début était ignoré
+    /// (sous 5 s) : l'enregistrement en cours partait de son bord, le présent.
+    @State private var archiveTarget: Double? = nil
     /// Secondes cumulées des doubles-tapes rapprochés, pour afficher « +30 s »
     /// au troisième plutôt que trois fois « +10 s » sans savoir où l'on est.
     @State private var seekTotal: Double = 0
@@ -1196,6 +1242,7 @@ struct ImmersivePlayer: View {
         } else {
             logger.info("LECTEUR", "Rembobinage hors fenêtre DVR",
                         String(format: "→ %.0f s depuis le début", target))
+            archiveTarget = target
             onSeekToArchive(target)
         }
     }
@@ -1317,7 +1364,13 @@ struct ImmersivePlayer: View {
             }
             shownContent = contentID
             let wasLive = model.isLive
-            model.load(url: newURL, seek: savedTime, isLive: isLive, resume: true)
+            if wasLive, !isLive, let target = archiveTarget {
+                // Instant visé sur la barre : même au tout début.
+                model.load(url: newURL, seek: target, isLive: false, exact: true)
+            } else {
+                model.load(url: newURL, seek: savedTime, isLive: isLive, resume: true)
+            }
+            archiveTarget = nil
             // Bascule sur l'enregistrement : la vitesse retenue s'y applique.
             // Pas à un changement de qualité ou de source d'une VOD.
             if wasLive, !isLive, model.speed != 1 { flash(speedFlash) }
@@ -1365,8 +1418,11 @@ struct ImmersivePlayer: View {
         .onDisappear {
             hideTask?.cancel()
             flashTask?.cancel()
-            // Fermé en paysage forcé (rotation verrouillée) : retour au portrait.
-            PlayerOrientation.restorePortraitIfForced()
+            // Pas de retour au portrait ici : la vue disparaît aussi à chaque
+            // relance (⟳, « Réessayer », raid suivi, VOD suivante), et le
+            // lecteur suivant s'ouvrait en portrait malgré le paysage forcé.
+            // La fermeture, la réduction et le chat seul s'en chargent
+            // (MainTabView).
             // Toujours démonté, PiP compris : la vue ne disparaît que quand
             // on ferme le lecteur ou qu'on passe à autre chose (voir
             // ImmersivePlayerModel.teardown). Réduit ou en arrière-plan, elle

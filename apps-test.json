@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.5.6",
+          "buildVersion": "334",
+          "date": "2026-10-19",
+          "localizedDescription": "- Player: Share in the ⋯ menu sends a VOD (or a rewound live) at the current time, the channel during a live, or the clip's link\n- Player: Create a clip during a live from the ⋯ menu, with your Twitch web session (connect it from there if needed), then copy or share its link\n- Notifications: live notifications show the stream's thumbnail, are grouped per channel, and offer Watch and Stop notifying for this channel\n- Notifications: a bell on channel pages and next to Follow above the chat turns live notifications on or off for that channel\n- Chat: tapping a message opens the person's card (badges, account creation date, follow date when Twitch gives it, Mention, Hide and Channel buttons), then their recent messages and the reply thread",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-334/TwitchUnblock.ipa",
+          "size": 4075860,
+          "commit": "b9945305e9528b83a31363aecf8d82a24e19543a"
+        },
+        {
           "version": "1.5.5",
           "buildVersion": "333",
           "date": "2026-10-19",
@@ -280,25 +289,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-301/TwitchUnblock.ipa",
           "size": 3654675,
           "commit": "d1d20b0f53d1df1a1ad7dd863c8f42f05bc9a645"
-        },
-        {
-          "version": "1.4.3",
-          "buildVersion": "300",
-          "date": "2026-10-16",
-          "localizedDescription": "- Chat and log times show in 12-hour or 24-hour format like your device, or the way you pick in Settings → Chat → Time format",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-300/TwitchUnblock.ipa",
-          "size": 3618606,
-          "commit": "19b8f81311f8f2e73d1e205d7ce74e8845f5a8ee"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.5.5",
+      "version": "1.5.6",
       "versionDate": "2026-10-19",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-333/TwitchUnblock.ipa",
-      "size": 4000187
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-334/TwitchUnblock.ipa",
+      "size": 4075860
     }
   ],
   "news": []

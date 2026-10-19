@@ -985,6 +985,11 @@ extension EnvironmentValues {
 /// grandit et passe devant ses voisines, au lieu de glisser dessous.
 private struct TVCardFocus: ViewModifier {
     @FocusState private var focused: Bool
+    /// Focus signalé et pas encore rendu. Une carte retirée avec le focus
+    /// (live fini au rechargement) ne signalait jamais sa perte : le compte
+    /// de Suivies ne revenait plus à 0, et le rechargement au retour du focus
+    /// cessait de marcher.
+    @State private var reported = false
     @Environment(\.tvCardFocusReport) private var report
 
     func body(content: Content) -> some View {
@@ -992,7 +997,16 @@ private struct TVCardFocus: ViewModifier {
             .buttonStyle(.card)
             .focused($focused)
             .zIndex(focused ? 1 : 0)
-            .onChange(of: focused) { on in report?(on) }
+            .onChange(of: focused) { on in
+                guard on != reported else { return }
+                reported = on
+                report?(on)
+            }
+            .onDisappear {
+                guard reported else { return }
+                reported = false
+                report?(false)
+            }
     }
 }
 

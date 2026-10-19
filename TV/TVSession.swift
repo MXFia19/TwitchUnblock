@@ -159,8 +159,26 @@ final class TVSession: ObservableObject {
     }
 
     // MARK: Session
+    /// Vérification du lancement en cours : la vue racine et l'onglet Suivies
+    /// la demandent ensemble (jusqu'à 3 fois) ; une seule part, les autres
+    /// l'attendent.
+    private var restoring: Task<Void, Never>?
+    /// Renouvellement en cours, partagé de même. Chacun envoyait le même jeton
+    /// de renouvellement : si Twitch le refuse une fois utilisé, le suivant
+    /// recevait un refus, et la déconnexion effaçait le jeton tout juste
+    /// renouvelé (Apple TV déconnectée au lancement).
+    private var renewing: Task<Renewal, Never>?
+
     /// Au lancement : jeton vérifié, renouvelé s'il a expiré, compte chargé.
     func restore() async {
+        if let restoring { await restoring.value; return }
+        let task = Task { await self.performRestore() }
+        restoring = task
+        await task.value
+        restoring = nil
+    }
+
+    private func performRestore() async {
         guard let current = token else { return }
         if await Self.isValid(current) == false {
             switch await renew() {
@@ -180,6 +198,15 @@ final class TVSession: ObservableObject {
     /// expirent au bout de quelques heures). `refused` : Twitch n'en veut
     /// plus ; `unreachable` : pas de réponse (rien n'est effacé).
     func renew() async -> Renewal {
+        if let renewing { return await renewing.value }
+        let task = Task { await self.performRenew() }
+        renewing = task
+        let result = await task.value
+        renewing = nil
+        return result
+    }
+
+    private func performRenew() async -> Renewal {
         guard let refresh = Keychain.loadToken(Self.refreshKey) else { return .refused }
         guard let json = await Self.post("https://id.twitch.tv/oauth2/token", [
             "client_id": kHelixClientID,

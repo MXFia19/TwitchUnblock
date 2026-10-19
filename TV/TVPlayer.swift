@@ -85,6 +85,9 @@ final class TVPlayerModel: ObservableObject {
     /// Hauteur et cadence de chaque qualité (qualité préférée, ordre du menu).
     private(set) var variants: [String: VariantInfo] = [:]
     private(set) var isLive = false
+    /// Source qui sert le direct : getLive passe aux suivantes quand la
+    /// préférée ne répond pas. C'est elle que le menu Source coche.
+    private(set) var liveSource: String?
 
     private var current: TVPlayback?
     private var title = ""
@@ -137,6 +140,7 @@ final class TVPlayerModel: ObservableObject {
             TVUsage.count("live_\(data.source ?? "unknown")")
             logger.info("TV/LECTEUR", "Direct : \(login)", "source \(data.source ?? "?")")
             subtitle = data.title
+            liveSource = data.source
             // Playlists réécrites avec la vraie durée des segments (2 s) : le
             // lecteur tient le bord du direct au lieu de rester ~20 s derrière.
             links = LivePlaylistLoader.wrap(raw)
@@ -336,8 +340,14 @@ struct TVPlayerController: UIViewControllerRepresentable {
                    children: qualities)
         ]
         if model.isLive {
+            // Cochée : la source qui sert le direct — la préférée a pu ne pas
+            // répondre et une suivante la remplacer, la coche restait sur elle.
+            // « Automatique » tant que c'est le choix ; le Worker, absent du
+            // menu, laisse le choix coché.
+            let served = model.liveSource.flatMap { kLiveSourceChoices.contains($0) ? $0 : nil }
+            let checked = session.liveSource == "auto" ? "auto" : (served ?? session.liveSource)
             let sources: [UIMenuElement] = kLiveSourceChoices.map { id in
-                UIAction(title: session.t("src_\(id)"), state: id == session.liveSource ? .on : .off) { _ in
+                UIAction(title: session.t("src_\(id)"), state: id == checked ? .on : .off) { _ in
                     Task { @MainActor in
                         let before = session.liveSource
                         session.liveSource = id

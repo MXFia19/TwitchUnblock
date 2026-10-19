@@ -5,10 +5,13 @@ français ; l'écran du journal l'affiche dans la langue de l'app grâce à
 `Sources/Services/LogTranslations.swift`, **généré** par ces scripts — ne pas le
 modifier à la main.
 
-Après avoir ajouté ou changé des messages du journal :
+Après avoir ajouté ou changé des messages du journal (depuis la racine du
+dépôt : `.` couvre aussi l'Apple TV, dont des messages sont traduits — avec
+`Sources` seul, ils seraient signalés « absente du journal » et rien ne
+serait écrit) :
 
 ```bash
-node tools/log-translations/extract-log-fragments.mjs Sources tools/log-translations/fragments.json
+node tools/log-translations/extract-log-fragments.mjs . tools/log-translations/fragments.json
 node tools/log-translations/make-log-translations.mjs tools/log-translations/fragments.json tools/log-translations/translations.json Sources/Services/LogTranslations.swift
 ```
 

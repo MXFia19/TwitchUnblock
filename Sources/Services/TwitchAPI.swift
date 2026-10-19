@@ -1880,11 +1880,14 @@ private func streamFromGQL(user u: [String: Any], stream s: [String: Any]) -> Tw
 /// Lesquelles de ces chaînes sont en live (suivis sans compte). 100 max par requête.
 /// nil si Twitch n'a pas répondu (réseau, requête annulée) : à ne pas
 /// confondre avec « personne en live », sinon la liste se viderait.
+/// La catégorie vient avec son identifiant : sans lui, une catégorie masquée
+/// n'était pas écartée (onglet « Lives » de la recherche, quand il reprend
+/// les chaînes trouvées en live).
 func getLiveStreamsGQL(logins: [String]) async -> [TwitchStream]? {
     guard !logins.isEmpty else { return [] }
     let q = """
     query($l: [String!]) { users(logins: $l) { id login displayName
-      stream { title viewersCount previewImageURL(width: 440, height: 248) game { displayName } freeformTags { name } } } }
+      stream { title viewersCount previewImageURL(width: 440, height: 248) game { id displayName } freeformTags { name } } } }
     """
     var out: [TwitchStream] = []
     for start in stride(from: 0, to: logins.count, by: 100) {
@@ -2470,11 +2473,39 @@ private func icalSchedule(channelId: String) async -> ChannelSchedule? {
     guard let (data, resp) = try? await URLSession.shared.data(from: url) else { return nil }
     let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
     if status == 404 { return .empty }
-    guard status == 200, let text = String(data: data, encoding: .utf8) else {
+    guard status == 200 else {
         logger.warn("PLANNING", "Export iCalendar refusé", "HTTP \(status)")
         return nil
     }
-    return parseICalSchedule(text, now: Date())
+    return parseICalSchedule(icalUnfolded(data), now: Date())
+}
+
+/// Texte d'un export iCalendar, lignes repliées (RFC 5545, 3.1) recollées
+/// sur les octets, avant le décodage : un repli peut couper en deux un
+/// caractère UTF-8 (accent, émoji d'un titre), et le décodage strict
+/// rejetait alors tout le planning.
+private func icalUnfolded(_ data: Data) -> String {
+    let raw = [UInt8](data)
+    var bytes: [UInt8] = []
+    bytes.reserveCapacity(raw.count)
+    var i = 0
+    while i < raw.count {
+        // Fin de ligne (LF ou CRLF) suivie d'une espace ou d'une tabulation :
+        // la ligne continue, les trois (ou deux) octets disparaissent.
+        var eol = 0
+        if raw[i] == 10 {
+            eol = 1
+        } else if raw[i] == 13, i + 1 < raw.count, raw[i + 1] == 10 {
+            eol = 2
+        }
+        if eol > 0, i + eol < raw.count, raw[i + eol] == 32 || raw[i + eol] == 9 {
+            i += eol + 1
+            continue
+        }
+        bytes.append(raw[i])
+        i += 1
+    }
+    return String(decoding: bytes, as: UTF8.self)
 }
 
 /// Propriété d'un VEVENT : ses paramètres (TZID…) et sa valeur.
@@ -2496,16 +2527,14 @@ private func parseICalSchedule(_ text: String, now: Date) -> ChannelSchedule {
     }
     let windowStart = now.addingTimeInterval(-12 * 3600)
     let windowEnd = now.addingTimeInterval(28 * 86400)
-    var segments: [ScheduleSegment] = []
+    var events: [(props: [String: ICalProperty], exdates: [Date])] = []
     var event: [String: ICalProperty]? = nil
     var exdates: [Date] = []
     for line in lines {
         let upper = line.trimmingCharacters(in: .whitespaces).uppercased()
         if upper == "BEGIN:VEVENT" { event = [:]; exdates = []; continue }
         if upper == "END:VEVENT" {
-            if let e = event {
-                segments += icalOccurrences(e, exdates: exdates, from: windowStart, to: windowEnd)
-            }
+            if let e = event { events.append((props: e, exdates: exdates)) }
             event = nil
             continue
         }
@@ -2523,6 +2552,23 @@ private func parseICalSchedule(_ text: String, now: Date) -> ChannelSchedule {
         } else {
             event?[name] = (params: params, value: value)
         }
+    }
+    // Occurrence d'une série modifiée ou annulée à part (même UID, avec
+    // RECURRENCE-ID) : elle remplace celle que donnerait la répétition, qui
+    // sinon restait affichée en double (et maintenue, si l'autre est annulée).
+    var replaced: [String: [Date]] = [:]
+    for e in events {
+        guard let r = e.props["RECURRENCE-ID"], let uid = e.props["UID"]?.value,
+              let at = icalDate(r.value, tzid: r.params["TZID"]) else { continue }
+        replaced[uid, default: []].append(at)
+    }
+    var segments: [ScheduleSegment] = []
+    for e in events {
+        var excluded = e.exdates
+        if e.props["RECURRENCE-ID"] == nil, let uid = e.props["UID"]?.value {
+            excluded += replaced[uid] ?? []
+        }
+        segments += icalOccurrences(e.props, exdates: excluded, from: windowStart, to: windowEnd)
     }
     return ChannelSchedule(segments: segments.sorted { $0.start < $1.start })
 }
@@ -2560,7 +2606,8 @@ private func icalOccurrences(_ e: [String: ICalProperty], exdates: [Date],
     // à l'autre, passage à l'heure d'été compris.
     var cal = Calendar(identifier: .gregorian)
     cal.timeZone = icalTimeZone(startProp.params["TZID"], value: startProp.value)
-    let step = stepDays * max(1, Int(rule["INTERVAL"] ?? "") ?? 1)
+    // INTERVAL borné : une valeur démesurée faisait déborder le calcul (plantage).
+    let step = stepDays * min(max(1, Int(rule["INTERVAL"] ?? "") ?? 1), 1000)
     let count = rule["COUNT"].flatMap { Int($0) }
     let until = rule["UNTIL"].flatMap { icalDate($0, tzid: startProp.params["TZID"]) }
     // Droit vers la fenêtre, sans parcourir des années de répétitions.

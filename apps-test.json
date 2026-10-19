@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.5.5",
+          "buildVersion": "333",
+          "date": "2026-10-19",
+          "localizedDescription": "- Home: a new \"Continue watching\" row shows the VODs you started (up to 10, latest first) with their progress; a tap resumes where you stopped (hide it in Settings → General → Customize the app)\n- Player: when the connection comes back after a drop, a player stopped on Retry (or on a loading error) and failed multi-live tiles restart on their own, once\n- Downloads: the download sheet shows the estimated size and the free space, and refuses with a clear message when there isn't enough room\n- Downloads: new \"Download on Wi-Fi only\" option (Settings → Player, or in the download sheet; off by default): downloads wait for Wi-Fi, then resume on their own\n- Downloads: paused downloads now show a Resume button (▶), failed ones Retry (⟳)\n- Apple TV: a \"Continue watching\" row at the top of Following lists the VODs started on this Apple TV, with their progress\n- Apple TV: during a channel's ad break, a banner explains the purple screen with a countdown to the stream's return",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-333/TwitchUnblock.ipa",
+          "size": 4000187,
+          "commit": "b9586f3240a859942040ffb538776ed3e877ad4f"
+        },
+        {
           "version": "1.5.4",
           "buildVersion": "332",
           "date": "2026-10-19",
@@ -280,25 +289,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-300/TwitchUnblock.ipa",
           "size": 3618606,
           "commit": "19b8f81311f8f2e73d1e205d7ce74e8845f5a8ee"
-        },
-        {
-          "version": "1.4.2",
-          "buildVersion": "299",
-          "date": "2026-10-15",
-          "localizedDescription": "- A speaker button in the player mutes the stream, and on iPhone, leaving the player after rotating it with its button brings the app back to portrait\n- Chat: GIFs sent with Twitch's GIF keyboard now show in the chat, like in the Twitch app",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-299/TwitchUnblock.ipa",
-          "size": 3614249,
-          "commit": "25ca9d63ecb8d1b945ceaf581d7cd73a2a37625c"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.5.4",
+      "version": "1.5.5",
       "versionDate": "2026-10-19",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-332/TwitchUnblock.ipa",
-      "size": 3967181
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-333/TwitchUnblock.ipa",
+      "size": 4000187
     }
   ],
   "news": []

@@ -603,13 +603,10 @@ struct HomeView: View {
     /// (compte Twitch + appareil), en une requête GQL publique.
     @MainActor private func loadLocalFollows() async {
         defer { followsLoaded = true }
-        if let token = store.twitchToken, let uid = store.twitchUserId, !uid.isEmpty,
-           let logins = await getFollowedLogins(token: token, userId: uid) {
-            twitchFollowLogins = logins.map { $0.lowercased() }
-        } else if store.twitchToken == nil {
-            twitchFollowLogins = []
-        }
-        store.accountFollowLogins = twitchFollowLogins   // pour l'export
+        // Suivis du compte : lus par AppStore (aussi au lancement et à la
+        // connexion, pour les autres onglets et l'export).
+        await store.loadAccountFollowLogins()
+        twitchFollowLogins = store.accountFollowLogins
         var seen = Set<String>()
         let all = (twitchFollowLogins + store.localFollows).filter { seen.insert($0).inserted }
         // Échec réseau : on garde les listes affichées au lieu de les vider.
@@ -628,22 +625,37 @@ struct HomeView: View {
         topGen += 1
         let gen = topGen
         if topStreams.isEmpty && !isRefresh { loadingTop = true }
-        // Plus de « Charger plus » pendant le rechargement : l'ancienne suite
-        // n'est peut-être plus la bonne (autre langue), et la garde
-        // `topNext == after` de loadMoreTop écarte une page déjà en route.
-        topNext = nil
-        topRefused = false
+        // Sans compte, rafraîchissement automatique (même langue) : « Charger
+        // plus » reste affiché, et les pages qu'il a ajoutées restent aussi
+        // (voir plus bas). Tout disparaissait toutes les 3 min, la liste
+        // rétrécissant sous le doigt.
+        let silent = isRefresh && store.twitchToken == nil
+        if !silent {
+            // Plus de « Charger plus » pendant le rechargement : l'ancienne suite
+            // n'est peut-être plus la bonne (autre langue), et la garde
+            // `topNext == after` de loadMoreTop écarte une page déjà en route.
+            topNext = nil
+            topRefused = false
+        }
         guard let token = store.twitchToken else {
             // Sans compte : même top, par la requête publique, par pages de
             // 30 ; la suite passe par le Client-ID d'Android (loadMoreTop).
             // Chaque rechargement repart de la 1ʳᵉ page ; en cas d'échec, la
-            // liste est gardée, sans suite.
+            // liste est gardée (sans suite, sauf rafraîchissement automatique).
             let page = await getTopStreamsPageGQL(lang: lang, after: nil)
             // Un chargement plus récent est parti : c'est lui qui conclut.
             guard gen == topGen else { return }
             if let page, !page.streams.isEmpty {
-                topStreams = page.streams
-                topNext = page.next
+                if silent, topStreams.count > 30 {
+                    // Plus d'une page de 30 : seule la 1ʳᵉ est remplacée, la
+                    // suite reste (sans doublons), avec son curseur.
+                    let first = Set(page.streams.map { $0.userLogin.lowercased() })
+                    topStreams = page.streams + topStreams.dropFirst(page.streams.count)
+                        .filter { !first.contains($0.userLogin.lowercased()) }
+                } else {
+                    topStreams = page.streams
+                    topNext = page.next
+                }
             }
             loadingTop = false
             await refillTopIfNeeded()
@@ -698,7 +710,10 @@ struct HomeView: View {
             helix: { _, _ in nil })
         // Top rechargé entre-temps (tirage, langue) : il est reparti de la 1ʳᵉ page.
         guard l == topLang, topNext == after else { return }
-        topStreams += result.fresh
+        // 1ʳᵉ page relue pendant ce temps (rafraîchissement qui garde la
+        // suite) : sans les lives qu'elle a amenés.
+        let known = Set(topStreams.map { $0.userLogin.lowercased() })
+        topStreams += result.fresh.filter { !known.contains($0.userLogin.lowercased()) }
         if case .gql(let next)? = result.cursor { topNext = next } else { topNext = nil }
         topRefused = result.locked
     }
@@ -728,18 +743,9 @@ struct HomeView: View {
         async let top: Void = loadTopStreams(lang, isRefresh: isRefresh)
         await loadFollowedStreams()
         await loadLocalFollows()
-        await loadAccountFollowedCategories()
+        // Catégories suivies sur Twitch (session web) relues aussi : le top ne
+        // les masque pas et son menu ne propose pas de les masquer.
+        await store.loadAccountFollowedCategories()
         await top
-    }
-
-    /// Catégories suivies sur Twitch (session web), lues dès l'accueil : le
-    /// top ne les masque pas et son menu ne propose pas de les masquer, même
-    /// avant un passage par l'onglet Catégories. En cas d'échec, la liste
-    /// déjà connue est gardée.
-    @MainActor private func loadAccountFollowedCategories() async {
-        guard let web = store.twitchWebToken,
-              let list = await getFollowedCategoriesGQL(webToken: web),
-              store.twitchWebToken == web else { return }
-        store.accountFollowedCategoryIds = Set(list.map(\.id))
     }
 }

@@ -36,9 +36,13 @@ struct VodDownloadSheet: View {
 
     private var qualities: [String] { sortQualities(Array(context.links.keys), variants: context.variants) }
 
-    /// La qualité préférée (ou la plus proche en dessous), comme à la lecture.
+    /// La qualité préférée (ou la plus proche en dessous), comme à la
+    /// lecture, mais 720p au plus et jamais l'audio seul : « Source » (le
+    /// réglage par défaut) pèse 2 à 3 fois plus lourd, et un « Audio seul »
+    /// choisi une fois dans le lecteur téléchargeait la VOD sans image.
     private var defaultQuality: String {
-        preferredQualityKey(qualities, pref: store.preferredQuality, variants: context.variants)
+        let pref = String(min(Int(store.preferredQuality) ?? 720, 720))
+        return preferredQualityKey(qualities, pref: pref, variants: context.variants)
     }
 
     var body: some View {

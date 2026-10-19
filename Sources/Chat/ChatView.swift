@@ -675,8 +675,15 @@ struct ChatView: View {
             closedNotices.formIntersection(keys)
         }
         // Événements masqués ou réaffichés pendant le live : le relevé du
-        // hype train (toutes les 5 s pendant une approche) suit.
-        .onChange(of: store.showLiveEvents) { events.setHypeEnabled($0 && store.showHypeTrain) }
+        // hype train (toutes les 5 s pendant une approche) suit. Série et
+        // événements coupés tous deux à l'ouverture du chat : le service
+        // n'avait pas démarré, il démarre au premier réactivé.
+        .onChange(of: store.showLiveEvents) { on in
+            if on, !events.running { startEvents() } else { events.setHypeEnabled(on && store.showHypeTrain) }
+        }
+        .onChange(of: store.showWatchStreak) { on in
+            if on, !events.running { startEvents() }
+        }
         .onChange(of: store.showHypeTrain) { events.setHypeEnabled($0 && store.showLiveEvents) }
         // ── Compte changé → reconnecte uniquement l'IRC ───────────────
         // Jeton et login arrivent l'un après l'autre : on attend les deux
@@ -821,6 +828,16 @@ struct ChatView: View {
                 raidService.connect(channelId: cid, token: store.twitchWebToken ?? "")
             }
         }
+    }
+
+    /// Série de visionnage et événements du live (sondage, prédiction, hype
+    /// train), réactivés pendant le direct alors qu'ils étaient tous coupés.
+    private func startEvents() {
+        guard isSetup, let cid = channelId else { return }
+        events.start(login: channelName, channelId: cid,
+                     token: store.twitchWebToken,
+                     viewerId: store.twitchUserId ?? "",
+                     hype: store.showLiveEvents && store.showHypeTrain)
     }
 
     /// Statut de suivi : celui du compte avec la session web (champ
@@ -1182,8 +1199,7 @@ struct ChatView: View {
             showRules = true
             return
         }
-        messageText = ""; autoScroll = true
-        Task { await chat.sendMessage(trimmed) }
+        send(trimmed)
     }
 
     private func closeRules(accepted: Bool) {
@@ -1191,8 +1207,19 @@ struct ChatView: View {
         defer { pendingMessage = nil }
         guard accepted, let text = pendingMessage else { return }
         ChatRules.accept(chat.channelName, rules: chat.rules)
+        send(text)
+    }
+
+    /// Champ vidé, puis le message part. Pas parti (connexion tombée entre
+    /// la frappe et l'envoi) : il revient dans le champ, s'il est resté vide,
+    /// au lieu d'être perdu sans un mot ; l'état du chat (« Connexion… »)
+    /// dit pourquoi.
+    private func send(_ text: String) {
         messageText = ""; autoScroll = true
-        Task { await chat.sendMessage(text) }
+        Task {
+            let sent = await chat.sendMessage(text)
+            if !sent, messageText.isEmpty { messageText = text }
+        }
     }
 
     private func insertEmote(_ emote: TwitchEmote) {
@@ -1548,8 +1575,8 @@ struct ChatRulesSheet: View {
 }
 
 /// Attend `work` au plus `seconds` secondes ; au-delà, il continue sans nous.
-/// true s'il a fini à temps.
-private func finishes(_ work: Task<Void, Never>, within seconds: Double) async -> Bool {
+/// true s'il a fini à temps. Aussi pour le chat des VODs (VodChatService).
+func finishes(_ work: Task<Void, Never>, within seconds: Double) async -> Bool {
     await withCheckedContinuation { (cont: CheckedContinuation<Bool, Never>) in
         let gate = FirstResume(cont)
         Task { await work.value; gate.resume(true) }

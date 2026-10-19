@@ -120,7 +120,8 @@ final class LiveEventsService: ObservableObject {
 
     // Hype train : sa propre boucle (5 s pendant une approche, 15 s sinon),
     // une relecture à l'échéance et la fin du message court en cours.
-    private var running = false
+    /// Démarré (start) et pas encore arrêté.
+    private(set) var running = false
     private var hypeEnabled = false
     private var hypeLoop: Task<Void, Never>? = nil
     private var hypeDeadlineTask: Task<Void, Never>? = nil

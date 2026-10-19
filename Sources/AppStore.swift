@@ -122,6 +122,9 @@ final class AppStore: ObservableObject {
         // expirée, cookies effacés) au lieu de passer pour une reconnexion.
         // Pseudo absent du cookie : le compte est vérifié au passage.
         await validateWebSession()
+        // Catégories suivies du compte : jamais masquées, sans attendre un
+        // passage par l'accueil.
+        if twitchWebToken != nil { Task { [weak self] in await self?.loadAccountFollowedCategories() } }
         return twitchWebToken != nil
     }
 
@@ -473,13 +476,49 @@ final class AppStore: ObservableObject {
         }
     }
 
-    /// Chaînes suivies par le compte Twitch, telles que lues par l'accueil
-    /// (non enregistrées) : l'export les ajoute aux suivis de l'appareil.
+    /// Chaînes suivies par le compte Twitch, en minuscules (non enregistrées),
+    /// lues au lancement, à la connexion et par l'accueil : jamais masquées,
+    /// et l'export les ajoute aux suivis de l'appareil.
     var accountFollowLogins: [String] = []
-    /// Catégories suivies sur Twitch (session web), telles que lues par
-    /// l'accueil et l'onglet Catégories (non enregistrées) : jamais masquées.
-    /// Vidées quand la session web disparaît.
+    /// Catégories suivies sur Twitch (session web), lues au lancement, à la
+    /// connexion de la session, par l'accueil et l'onglet Catégories (non
+    /// enregistrées) : jamais masquées. Vidées quand la session web disparaît.
     var accountFollowedCategoryIds: Set<String> = []
+
+    /// Suivis du compte, chaînes et catégories, quel que soit l'onglet
+    /// affiché : seuls l'accueil et l'onglet Catégories les lisaient.
+    @MainActor
+    func loadAccountFollows() async {
+        await loadAccountFollowLogins()
+        await loadAccountFollowedCategories()
+    }
+
+    /// Chaînes suivies par le compte (Helix). En cas d'échec, la liste déjà
+    /// connue est gardée ; sans compte, elle est vidée.
+    @MainActor
+    func loadAccountFollowLogins() async {
+        guard let token = twitchToken else {
+            accountFollowLogins = []
+            return
+        }
+        // Connexion à l'instant : le compte n'est pas encore lu (l'accueil
+        // s'en charge), son identifiant est demandé ici sans être gardé.
+        var uid = twitchUserId ?? ""
+        if uid.isEmpty, let user = await getTwitchUser(token: token) { uid = user.id }
+        guard !uid.isEmpty, let logins = await getFollowedLogins(token: token, userId: uid),
+              twitchToken == token else { return }
+        accountFollowLogins = logins.map { $0.lowercased() }
+    }
+
+    /// Catégories suivies sur Twitch (session web). En cas d'échec, la liste
+    /// déjà connue est gardée.
+    @MainActor
+    func loadAccountFollowedCategories() async {
+        guard let web = twitchWebToken,
+              let list = await getFollowedCategoriesGQL(webToken: web),
+              twitchWebToken == web else { return }
+        accountFollowedCategoryIds = Set(list.map(\.id))
+    }
 
     /// Chaînes suivies sans compte Twitch (sur cet appareil), en minuscules.
     @Published var localFollows: [String] = [] {
@@ -906,6 +945,12 @@ final class AppStore: ObservableObject {
             let enabled = shareUsage
             Task { await UsageService.shared.ping(enabled: enabled, force: true) }
         }
+        // Suivis du compte relus quel que soit l'onglet affiché : ceux du
+        // compte d'avant ne protègent plus rien du masquage.
+        if isNew {
+            accountFollowLogins = []
+            Task { @MainActor [weak self] in await self?.loadAccountFollowLogins() }
+        }
     }
 
     /// L'historique d'ici reste celui du compte, et une copie en est prise
@@ -926,6 +971,7 @@ final class AppStore: ObservableObject {
         twitchUserId   = nil
         twitchLogin    = nil   // ← nettoyage complet
         twitchAvatar   = nil
+        accountFollowLogins = []
         // La prochaine connexion demandera le compte au lieu de reprendre
         // celui dont Safari se souvient (TwitchAuthManager).
         UserDefaults.standard.set(true, forKey: TwitchAuthManager.privateSessionKey)

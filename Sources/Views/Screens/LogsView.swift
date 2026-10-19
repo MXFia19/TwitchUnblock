@@ -20,22 +20,17 @@ struct LogsView: View {
         return appLogger.logs.filter { $0.level == f }
     }
 
-    // Texte exporté — calculé une seule fois au moment du partage. En tête :
-    // version, système, appareil et nombre de lignes par niveau, pour situer
-    // un rapport et repérer ses erreurs d'un coup d'œil.
-    private var exportText: String {
+    // Journal exporté : ici, son en-tête seulement (version, système,
+    // appareil et nombre de lignes par niveau, pour situer un rapport et
+    // repérer ses erreurs d'un coup d'œil) ; les lignes ne sont traduites
+    // qu'au moment du partage (LogsExport).
+    private var export: LogsExport {
         let info = Bundle.main.infoDictionary
         let version = "\(info?["CFBundleShortVersionString"] as? String ?? "?") (\(info?["CFBundleVersion"] as? String ?? "?"))"
         let counts = LogLevel.allCases.map { "\($0.rawValue) \(appLogger.count($0))" }.joined(separator: " · ")
         let header = "TwitchUnblock \(version) · \(UIDevice.current.systemName) \(UIDevice.current.systemVersion)"
             + " · \(Self.deviceModel) · \(lang.rawValue)\n\(counts)\n\n"
-        return header + appLogger.logs
-            .map { e in
-                let times = e.repeats > 1 ? " (×\(e.repeats))" : ""
-                return "[\(e.timestamp)] [\(e.level.rawValue.uppercased())] [\(e.category)] \(tr(e.message))\(times)"
-                    + (e.detail.map { "\n  → \(tr($0))" } ?? "")
-            }
-            .joined(separator: "\n")
+        return LogsExport(header: header, entries: appLogger.logs, lang: lang)
     }
 
     /// Modèle exact de l'appareil (« iPhone15,2 »).
@@ -82,17 +77,18 @@ struct LogsView: View {
 
             // ── Actions ─────────────────────────────────────────────
             HStack(spacing: 8) {
+                let export = self.export
 
                 // ✅ ShareLink iOS 16+ — remplace UIActivityViewController dans .sheet
                 // (UIActivityViewController présenté dans un .sheet est cassé sur iOS 16)
-                ShareLink(item: exportText) {
+                ShareLink(item: export, preview: SharePreview(t("logs_title"))) {
                     actionLabel(t("logs_share"))
                 }
                 .disabled(appLogger.logs.isEmpty)
 
                 // Fichier .txt : Enregistrer dans Fichiers, AirDrop, Mail…
                 // (écrit seulement quand on choisit où l'envoyer).
-                ShareLink(item: LogsFile(text: exportText, name: exportFileName),
+                ShareLink(item: LogsFile(export: export, name: exportFileName),
                           preview: SharePreview(exportFileName)) {
                     actionLabel(t("logs_file"))
                 }
@@ -240,16 +236,46 @@ struct LogsView: View {
     }
 }
 
+/// Journal à partager en texte. Ses lignes ne sont traduites et assemblées
+/// qu'au moment de l'envoi : calculé dans `body`, le texte refaisait ses
+/// 1 000 lignes deux fois à chaque rendu, et le journal se redessine à
+/// chaque nouvelle ligne (lecture en cours).
+struct LogsExport: Transferable {
+    let header: String
+    let entries: [LogEntry]
+    let lang: Lang
+
+    /// Sur le fil principal : LogTranslator garde ses traductions dans un
+    /// cache sans verrou, que l'écran du journal remplit au même moment.
+    @MainActor var text: String {
+        header + entries
+            .map { e in
+                let times = e.repeats > 1 ? " (×\(e.repeats))" : ""
+                return "[\(e.timestamp)] [\(e.level.rawValue.uppercased())] [\(e.category)] \(LogTranslator.translate(e.message, lang))\(times)"
+                    + (e.detail.map { "\n  → \(LogTranslator.translate($0, lang))" } ?? "")
+            }
+            .joined(separator: "\n")
+    }
+
+    static var transferRepresentation: some TransferRepresentation {
+        DataRepresentation(exportedContentType: .utf8PlainText) { item in
+            let text = await item.text
+            return Data(text.utf8)
+        }
+    }
+}
+
 /// Journal en fichier texte (.txt) : Enregistrer dans Fichiers, AirDrop,
 /// Mail… Le fichier n'est écrit qu'au moment de l'envoi.
 struct LogsFile: Transferable {
-    let text: String
+    let export: LogsExport
     let name: String
 
     static var transferRepresentation: some TransferRepresentation {
         FileRepresentation(exportedContentType: .plainText) { file in
+            let text = await file.export.text
             let url = FileManager.default.temporaryDirectory.appendingPathComponent(file.name)
-            try file.text.write(to: url, atomically: true, encoding: .utf8)
+            try text.write(to: url, atomically: true, encoding: .utf8)
             return SentTransferredFile(url)
         }
     }

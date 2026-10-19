@@ -85,6 +85,8 @@ struct MainTabView: View {
     @State private var immersiveQuality = ""
     /// « Connexion lente » annoncé dans le lecteur après une baisse de qualité.
     @State private var slowNetworkNotice: String? = nil
+    /// Effacement de cet avis, 4 s après le dernier.
+    @State private var slowNoticeTask: Task<Void, Never>? = nil
     /// « Connexion lente » déjà annoncé pendant cette lecture : l'avis du
     /// compte ne revient plus après lui (voir `accountNotice`).
     @State private var slowNoticeShown = false
@@ -331,9 +333,10 @@ struct MainTabView: View {
                     // comme valeur, donc `playLive` vaudrait ici
                     // `(String, Bool) -> Void` et ne collerait pas au callback.
                     case .home:    HomeView(onPlayStream: { playLive($0) })
-                    // Aperçus seulement sans lecteur ouvert (ni réduit, ni multi-live).
-                    case .discover: DiscoverView(active: playerMode == nil && !showMultiLive
-                                                     && channelSheet == nil && !showSettings,
+                    // Aperçus seulement sans lecteur ouvert (ni réduit, ni
+                    // multi-live) et sans feuille par-dessus.
+                    case .discover: DiscoverView(active: playerMode == nil && !presentationOpen,
+                                                 bottomInset: floatingBarsInset,
                                                  onPlayLive: { playLive($0) },
                                                  onPlayClip: { playClip($0, $1) })
                     case .search:  SearchView(onPlayVod: { playVod($0, $1, $2, $3) },
@@ -662,6 +665,10 @@ struct MainTabView: View {
         // Session web : vérifiée une fois au lancement. Sans ça on ne s'aperçoit
         // de son expiration que quand les points cessent de répondre.
         .task { await store.validateWebSession() }
+        // Suivis du compte (chaînes, catégories) lus au lancement, quel que
+        // soit l'onglet de départ : seul l'accueil les lisait, et Découvrir
+        // proposait de masquer une chaîne suivie.
+        .task { await store.loadAccountFollows() }
         // Session web changée (déconnexion, expiration, autre compte) pendant
         // un direct lu par le compte (abonné sans pub) : sa liste de lecture
         // est signée pour l'ancienne session, que Twitch continuerait de
@@ -725,15 +732,29 @@ struct MainTabView: View {
         if abs(value - headerSafeTop) > 0.5 { headerSafeTop = value }
     }
 
+    /// Une des feuilles (ou la mosaïque) attachées à cet écran est ouverte.
+    /// Découvrir n'y joue pas d'aperçu : il continuait sous « Signaler un
+    /// problème » ou le minuteur, avec le son s'il avait été rallumé.
+    private var presentationOpen: Bool {
+        showSettings || showFeedback || showMyFeedback || showPlayerMenu
+            || showDownloadSheet || showSleepSheet || channelSheet != nil || showMultiLive
+    }
+
+    /// Hauteur que la mini-barre et la barre du multi-live, posées par-dessus
+    /// le bas des onglets, cachent à Découvrir (voir DiscoverView.bottomInset).
+    private var floatingBarsInset: CGFloat {
+        guard !playerVisible, !closingPlayer else { return 0 }
+        let bars = (playerMode != nil ? 1 : 0) + (multi.entries.isEmpty ? 0 : 1)
+        return bars == 0 ? 0 : CGFloat(20 + 65 * bars)
+    }
+
     /// Feuilles et mosaïque attachées à cet écran : une notification touchée
     /// pendant que l'une d'elles est ouverte lançait le direct dessous (sous
     /// la mosaïque, caché, avec son son en plus des siens) ou rien du tout
     /// (SwiftUI refuse une seconde feuille, « Mes signalements » ne s'ouvrait
     /// pas). Tout se ferme, puis l'action part une fois la fermeture finie.
     private func afterClosingPresentations(_ action: @escaping () -> Void) {
-        let open = showSettings || showFeedback || showMyFeedback || showPlayerMenu
-            || showDownloadSheet || showSleepSheet || channelSheet != nil || showMultiLive
-        guard open else { action(); return }
+        guard presentationOpen else { action(); return }
         showSettings = false
         showFeedback = false
         showMyFeedback = false
@@ -1226,7 +1247,14 @@ struct MainTabView: View {
         immersiveQuality = next
         slowNetworkNotice = store.t("slow_network_quality")
         slowNoticeShown = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 4) { slowNetworkNotice = nil }
+        // Annulable : un second avis reste ses 4 s (l'effacement du premier,
+        // par asyncAfter, l'emportait au bout d'une seconde).
+        slowNoticeTask?.cancel()
+        slowNoticeTask = Task {
+            try? await Task.sleep(nanoseconds: 4_000_000_000)
+            guard !Task.isCancelled else { return }
+            slowNetworkNotice = nil
+        }
     }
 
     /// Qualité en cours pour le lecteur immersif : celle choisie, sinon la

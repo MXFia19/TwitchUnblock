@@ -95,10 +95,11 @@ struct PointsTrackerPanel: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// Par chaîne, la plus récemment regardée en haut.
+    /// Par chaîne, la plus récemment regardée en haut. Paresseuse : jusqu'à
+    /// 300 lignes, redessinées à chaque minute comptée et à chaque gain.
     private var channelsCard: some View {
         let list = tracker.channels.values.sorted { $0.last > $1.last }
-        return VStack(alignment: .leading, spacing: 0) {
+        return LazyVStack(alignment: .leading, spacing: 0) {
             Text(store.t("pt_channels")).font(.tCardTitle).foregroundColor(.tText)
                 .padding(.bottom, TSpace.xs)
             ForEach(Array(list.enumerated()), id: \.element.id) { i, c in
@@ -123,37 +124,61 @@ struct PointsTrackerPanel: View {
     }
 
     // MARK: Formats (langue de l'app)
-    private var locale: Locale { Locale(identifier: store.lang.rawValue) }
+    /// Formateurs gardés d'un rendu à l'autre, refaits quand la langue
+    /// change : chaque ligne en créait trois à chaque rendu.
+    @State private var formats = PointsFormats()
+    private var fmt: PointsFormats { formats.using(store.lang.rawValue) }
 
     /// 45 min, 3 h 20 min…
     private func duration(_ minutes: Int) -> String {
-        let f = DateComponentsFormatter()
-        f.allowedUnits = minutes >= 60 ? [.hour, .minute] : [.minute]
-        f.unitsStyle = .abbreviated
-        var cal = Calendar.current
-        cal.locale = locale
-        f.calendar = cal
-        return f.string(from: TimeInterval(minutes * 60)) ?? "\(minutes) min"
+        (minutes >= 60 ? fmt.hours : fmt.minutes).string(from: TimeInterval(minutes * 60)) ?? "\(minutes) min"
     }
 
     private func number(_ n: Int) -> String {
-        let f = NumberFormatter()
-        f.numberStyle = .decimal
-        f.locale = locale
-        return f.string(from: NSNumber(value: n)) ?? "\(n)"
+        fmt.number.string(from: NSNumber(value: n)) ?? "\(n)"
     }
 
     private func date(_ d: Date) -> String {
-        let f = DateFormatter()
-        f.locale = locale
-        f.dateStyle = .medium
-        return f.string(from: d)
+        fmt.date.string(from: d)
     }
 
     private func relative(_ d: Date) -> String {
-        let f = RelativeDateTimeFormatter()
-        f.locale = locale
-        f.unitsStyle = .short
-        return f.localizedString(for: d, relativeTo: Date())
+        fmt.relative.localizedString(for: d, relativeTo: Date())
+    }
+}
+
+/// Formateurs du panneau des points, réglés sur une langue. Gardés par la
+/// vue (@State) sans être observés : les régler ne redessine rien.
+private final class PointsFormats {
+    let minutes = DateComponentsFormatter()
+    let hours = DateComponentsFormatter()
+    let number = NumberFormatter()
+    let date = DateFormatter()
+    let relative = RelativeDateTimeFormatter()
+    private var lang = ""
+
+    init() {
+        minutes.allowedUnits = [.minute]
+        hours.allowedUnits = [.hour, .minute]
+        minutes.unitsStyle = .abbreviated
+        hours.unitsStyle = .abbreviated
+        number.numberStyle = .decimal
+        date.dateStyle = .medium
+        relative.unitsStyle = .short
+    }
+
+    /// Les mêmes formateurs, passés à la langue `lang` si elle a changé.
+    func using(_ lang: String) -> PointsFormats {
+        guard lang != self.lang else { return self }
+        self.lang = lang
+        let locale = Locale(identifier: lang)
+        var cal = Calendar.current
+        cal.locale = locale
+        minutes.calendar = cal
+        hours.calendar = cal
+        number.locale = locale
+        date.locale = locale
+        relative.locale = locale
+        return self
     }
 }

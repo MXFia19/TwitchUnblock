@@ -419,15 +419,26 @@ final class VodChatService: ObservableObject {
         channelLogin = owner["login"] as? String ?? ""
         logger.success("VODCHAT", "VOD de @\(channelLogin)", "canal \(channelId ?? "?")")
 
-        // Emotes + badges du canal, comme en live.
-        await EmoteService.shared.loadGlobals()
-        if let cid = channelId {
-            await EmoteService.shared.loadChannel(channelId: cid, channelName: channelLogin)
-            // Jeton dans le trousseau (il n'est plus dans UserDefaults) ; sans
-            // jeton, BadgeService passe par la requête GQL publique.
-            let tok = Keychain.loadToken("twitch_token")
-            await BadgeService.shared.loadGlobal(token: tok)
-            await BadgeService.shared.loadChannel(channelId: cid, token: tok)
+        // Emotes + badges du canal, comme en live : en parallèle, et 3,5 s au
+        // plus. L'un après l'autre et sans délai propre, un 7TV, BTTV ou FFZ
+        // qui ne répond pas laissait le chat vide 20 à 40 s ; le reste arrive
+        // derrière.
+        let cid = channelId, name = channelLogin
+        // Jeton dans le trousseau (il n'est plus dans UserDefaults) ; sans
+        // jeton, BadgeService passe par la requête GQL publique.
+        let tok = Keychain.loadToken("twitch_token")
+        let assets = Task {
+            await withTaskGroup(of: Void.self) { group in
+                group.addTask { await EmoteService.shared.loadGlobals() }
+                guard let cid else { return }
+                group.addTask { await EmoteService.shared.loadChannel(channelId: cid, channelName: name) }
+                group.addTask { await BadgeService.shared.loadGlobal(token: tok) }
+                group.addTask { await BadgeService.shared.loadChannel(channelId: cid, token: tok) }
+            }
+        }
+        if !(await finishes(assets, within: 3.5)) {
+            logger.warn("VODCHAT", "Emotes et badges encore en chargement après 3,5 s",
+                        "commentaires affichés sans les attendre")
         }
     }
 }

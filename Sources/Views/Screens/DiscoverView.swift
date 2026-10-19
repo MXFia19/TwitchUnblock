@@ -21,18 +21,32 @@ final class DiscoverGate: ObservableObject {
 }
 
 // MARK: – Données et aperçus
+/// Un seul fil pour toute l'app : l'onglet est recréé à chaque changement
+/// d'onglet (`switch` de MainTabView), et un fil à lui repartait du début,
+/// en Lives, son recoupé. Le top n'est relu qu'après 10 min.
 @MainActor
 final class DiscoverFeed: ObservableObject {
+    static let shared = DiscoverFeed()
+
     /// Lecteur ouvert : l'aperçu en cours s'arrête aussitôt.
     private var gateWatch: AnyCancellable?
 
-    init() {
+    private init() {
         gateWatch = DiscoverGate.shared.$blocked.sink { [weak self] blocked in
             if blocked { self?.stop() }
         }
     }
 
     enum Preview: Equatable { case loading, ready, failed }
+    enum Mode: Hashable { case live, clips }
+
+    /// Mode affiché, et page affichée dans chacun.
+    @Published var mode = Mode.live
+    @Published var liveIndex = 0
+    @Published var clipIndex = 0
+    /// Écrans du fil affichés (deux le temps d'un changement de thème) : à 0,
+    /// un chargement fini après la sortie de l'onglet ne relance aucun aperçu.
+    var screens = 0
 
     @Published private(set) var lives: [TwitchStream] = []
     @Published private(set) var clips: [FeedClip] = []
@@ -56,6 +70,8 @@ final class DiscoverFeed: ObservableObject {
     }()
 
     private var lang: String?
+    /// Dernier top chargé (relu après 10 min, au retour sur l'onglet).
+    private var loadedAt = Date.distantPast
     private var next: String?
     private var loadingMore = false
     /// Adresses déjà trouvées (5 min) : revenir sur une page ne relance pas
@@ -64,7 +80,7 @@ final class DiscoverFeed: ObservableObject {
     private var resolveTask: Task<Void, Never>?
     private var endObserver: NSObjectProtocol?
     /// Son des aperçus coupé (par défaut). Rallumé, il le reste d'une page à
-    /// l'autre jusqu'à la sortie de l'onglet.
+    /// l'autre, et au retour sur l'onglet.
     @Published private(set) var muted = true
     /// Son rallumé : les aperçus tiennent la session audio (« discover »).
     private var holdsSession = false
@@ -84,9 +100,33 @@ final class DiscoverFeed: ObservableObject {
         lives = unique(page.streams.filter(keep))
         next = page.refused ? nil : page.next
         livesLoaded = true
+        loadedAt = Date()
         // Les clips suivent les chaînes du moment : relus au besoin.
         clips = []
         clipsLoaded = false
+    }
+
+    /// Top chargé dans cette langue il y a moins de 10 min : gardé tel quel
+    /// au retour sur l'onglet (page, mode, son).
+    func isFresh(lang: String?) -> Bool {
+        !lives.isEmpty && self.lang == lang && Date().timeIntervalSince(loadedAt) < 600
+    }
+
+    /// Chaînes et catégories masquées après le chargement (menu ⋯ d'une
+    /// page, accueil…) : leurs lives et leurs clips sortent du fil, filtré
+    /// jusque-là au chargement seulement. La page affichée garde sa place, ou
+    /// la laisse à la suivante si c'est elle qui part.
+    func removeHidden(keep: (TwitchStream) -> Bool, keepChannel: (String) -> Bool) {
+        if lives.contains(where: { !keep($0) }) {
+            let before = lives.prefix(liveIndex).filter(keep).count
+            lives = lives.filter(keep)
+            liveIndex = min(before, max(lives.count - 1, 0))
+        }
+        if clips.contains(where: { !keepChannel($0.login) }) {
+            let before = clips.prefix(clipIndex).filter { keepChannel($0.login) }.count
+            clips = clips.filter { keepChannel($0.login) }
+            clipIndex = min(before, max(clips.count - 1, 0))
+        }
     }
 
     /// Près de la fin : la page suivante du top.
@@ -106,11 +146,21 @@ final class DiscoverFeed: ObservableObject {
     }
 
     // MARK: Clips du moment
-    /// Clips les plus vus des dernières 24 h des chaînes du top.
-    func loadClips() async {
-        guard !clipsLoaded else { return }
+    /// Clips les plus vus des dernières 24 h des chaînes du top. `force` :
+    /// relus même déjà chargés (Réessayer).
+    func loadClips(force: Bool = false) async {
+        guard force || !clipsLoaded else { return }
         let logins = lives.prefix(20).map { $0.userLogin }
-        guard !logins.isEmpty else { return }
+        guard !logins.isEmpty else {
+            // Top vide (réseau, suite refusée, tout masqué) : on le dit, avec
+            // Réessayer, au lieu de tourner sans fin. Top encore en
+            // chargement : les clips suivront (DiscoverView.loadTop).
+            if livesLoaded {
+                clipsFailed = livesFailed
+                clipsLoaded = true
+            }
+            return
+        }
         clipsFailed = false
         guard let list = await getTopClipsGQL(logins: Array(logins)) else {
             clipsFailed = true
@@ -243,19 +293,18 @@ final class DiscoverFeed: ObservableObject {
 
 // MARK: – Écran
 struct DiscoverView: View {
-    /// Onglet affiché et aucun lecteur ouvert : les aperçus peuvent jouer.
+    /// Onglet affiché, sans lecteur ni feuille ouverts : les aperçus peuvent jouer.
     let active: Bool
+    /// Hauteur cachée en bas par la mini-barre et la barre du multi-live,
+    /// qui flottent par-dessus : les pages ne défilent pas, le bas de la
+    /// fiche (jeu, tags, bouton ⋯) passait dessous.
+    let bottomInset: CGFloat
     let onPlayLive: (String) -> Void
     let onPlayClip: (String, String?) -> Void
     @EnvironmentObject private var store: AppStore
     @Environment(\.scenePhase) private var scenePhase
-    @StateObject private var feed = DiscoverFeed()
+    @ObservedObject private var feed = DiscoverFeed.shared
     @ObservedObject private var gate = DiscoverGate.shared
-    @State private var mode = Mode.live
-    @State private var liveIndex = 0
-    @State private var clipIndex = 0
-
-    enum Mode: Hashable { case live, clips }
 
     private var canPlay: Bool { active && scenePhase == .active && !gate.blocked }
     private var lang: String { TopLanguage.resolved(store.topLang) }
@@ -264,42 +313,71 @@ struct DiscoverView: View {
         ZStack(alignment: .top) {
             Color.black
             GeometryReader { geo in
-                if mode == .live { livePages(geo.size) } else { clipPages(geo.size) }
+                if feed.mode == .live { livePages(geo.size) } else { clipPages(geo.size) }
             }
             picker.padding(.top, 10)
         }
         .clipped()
         .task(id: lang) {
-            feed.stop()
-            await feed.loadLives(lang: lang, keep: store.showsStream)
-            liveIndex = 0
-            clipIndex = 0
-            if mode == .clips { await feed.loadClips() }
+            // Retour sur l'onglet : le fil reprend où on l'a laissé, moins ce
+            // qui a été masqué entre-temps. Relu au premier passage, quand la
+            // langue du top change, et après 10 min.
+            guard feed.isFresh(lang: lang) else {
+                await loadTop()
+                return
+            }
+            feed.removeHidden(keep: store.showsStream, keepChannel: store.showsChannel)
+            if feed.mode == .clips { await feed.loadClips() }
             refresh()
         }
-        .onChange(of: mode) { m in
+        .onChange(of: feed.mode) { m in
             Task {
                 if m == .clips { await feed.loadClips() }
                 refresh()
             }
         }
-        .onChange(of: liveIndex) { i in
+        .onChange(of: feed.liveIndex) { i in
             refresh()
             Task { await feed.loadMoreLives(after: i, keep: store.showsStream) }
         }
-        .onChange(of: clipIndex) { _ in refresh() }
+        .onChange(of: feed.clipIndex) { _ in refresh() }
         .onChange(of: canPlay) { _ in refresh() }
-        .onDisappear { feed.stop() }
+        // Chaîne ou catégorie masquée (menu ⋯ d'une page) : elle quitte le
+        // fil tout de suite, la page suivante prend sa place.
+        .onChange(of: store.hidden) { _ in
+            feed.removeHidden(keep: store.showsStream, keepChannel: store.showsChannel)
+            refresh()
+            Task { await feed.loadMoreLives(after: feed.liveIndex, keep: store.showsStream) }
+        }
+        .onAppear {
+            feed.screens += 1
+            refresh()
+        }
+        .onDisappear {
+            feed.screens = max(0, feed.screens - 1)
+            feed.stop()
+        }
     }
 
-    /// L'aperçu de la page affichée, ou rien si le fil n'est pas à l'écran.
+    /// Top relu depuis sa première page, puis les clips si c'est leur mode.
+    private func loadTop() async {
+        feed.stop()
+        await feed.loadLives(lang: lang, keep: store.showsStream)
+        feed.liveIndex = 0
+        feed.clipIndex = 0
+        if feed.mode == .clips { await feed.loadClips(force: true) }
+        refresh()
+    }
+
+    /// L'aperçu de la page affichée, ou rien si le fil n'est pas à l'écran
+    /// (onglet quitté pendant un chargement compris : le fil lui survit).
     private func refresh() {
-        guard canPlay else { feed.stop(); return }
-        switch mode {
+        guard canPlay, feed.screens > 0 else { feed.stop(); return }
+        switch feed.mode {
         case .live:
-            if feed.lives.indices.contains(liveIndex) { feed.show(live: feed.lives[liveIndex]) } else { feed.stop() }
+            if feed.lives.indices.contains(feed.liveIndex) { feed.show(live: feed.lives[feed.liveIndex]) } else { feed.stop() }
         case .clips:
-            if feed.clips.indices.contains(clipIndex) { feed.show(clip: feed.clips[clipIndex]) } else { feed.stop() }
+            if feed.clips.indices.contains(feed.clipIndex) { feed.show(clip: feed.clips[feed.clipIndex]) } else { feed.stop() }
         }
     }
 
@@ -308,14 +386,12 @@ struct DiscoverView: View {
     private func livePages(_ size: CGSize) -> some View {
         if feed.lives.isEmpty {
             status(loaded: feed.livesLoaded, failed: feed.livesFailed) {
-                Task {
-                    await feed.loadLives(lang: lang, keep: store.showsStream)
-                    refresh()
-                }
+                Task { await loadTop() }
             }
         } else {
-            VerticalPager(count: feed.lives.count, index: $liveIndex, size: size) { i in
-                DiscoverLivePage(stream: feed.lives[i], isCurrent: i == liveIndex, feed: feed, onOpen: {
+            VerticalPager(count: feed.lives.count, index: $feed.liveIndex, size: size) { i in
+                DiscoverLivePage(stream: feed.lives[i], isCurrent: i == feed.liveIndex, bottomInset: bottomInset,
+                                 feed: feed, onOpen: {
                     let login = feed.lives[i].userLogin
                     feed.stop()
                     onPlayLive(login)
@@ -329,13 +405,20 @@ struct DiscoverView: View {
         if feed.clips.isEmpty {
             status(loaded: feed.clipsLoaded, failed: feed.clipsFailed) {
                 Task {
-                    await feed.loadClips()
-                    refresh()
+                    // Top vide (réseau, tout masqué) : relu d'abord, les clips
+                    // viennent de ses chaînes (loadTop les charge ensuite).
+                    if feed.lives.isEmpty {
+                        await loadTop()
+                    } else {
+                        await feed.loadClips(force: true)
+                        refresh()
+                    }
                 }
             }
         } else {
-            VerticalPager(count: feed.clips.count, index: $clipIndex, size: size) { i in
-                DiscoverClipPage(clip: feed.clips[i], isCurrent: i == clipIndex, feed: feed, onOpen: {
+            VerticalPager(count: feed.clips.count, index: $feed.clipIndex, size: size) { i in
+                DiscoverClipPage(clip: feed.clips[i], isCurrent: i == feed.clipIndex, bottomInset: bottomInset,
+                                 feed: feed, onOpen: {
                     let c = feed.clips[i]
                     feed.stop()
                     onPlayClip(c.id, c.title)
@@ -378,17 +461,17 @@ struct DiscoverView: View {
         .clipShape(Capsule())
     }
 
-    private func pickerButton(_ m: Mode, _ title: String) -> some View {
+    private func pickerButton(_ m: DiscoverFeed.Mode, _ title: String) -> some View {
         Button {
-            guard mode != m else { return }
+            guard feed.mode != m else { return }
             feed.stop()
-            mode = m
+            feed.mode = m
         } label: {
             Text(title)
                 .font(.system(size: 14, weight: .bold))
-                .foregroundColor(mode == m ? .black : .white)
+                .foregroundColor(feed.mode == m ? .black : .white)
                 .padding(.horizontal, 16).padding(.vertical, 6)
-                .background(mode == m ? Color.white : Color.clear)
+                .background(feed.mode == m ? Color.white : Color.clear)
                 .clipShape(Capsule())
         }
         .buttonStyle(.plain)
@@ -427,6 +510,8 @@ private struct VerticalPager<Page: View>: View {
 private struct DiscoverLivePage: View {
     let stream: TwitchStream
     let isCurrent: Bool
+    /// Marge des barres flottantes (voir DiscoverView.bottomInset).
+    let bottomInset: CGFloat
     @ObservedObject var feed: DiscoverFeed
     let onOpen: () -> Void
     /// Page de la chaîne (nom ou photo touchés).
@@ -459,7 +544,7 @@ private struct DiscoverLivePage: View {
                                 link: "https://www.twitch.tv/\(login)", onChannel: onChannel)
             }
             .padding(.horizontal, 16)
-            .padding(.bottom, 18)
+            .padding(.bottom, 18 + bottomInset)
         }
     }
 
@@ -479,7 +564,7 @@ private struct DiscoverLivePage: View {
                         .font(.system(size: 19, weight: .bold)).foregroundColor(.white).lineLimit(1)
                 }
                 .buttonStyle(.plain)
-                DiscoverFollowButton(login: login, channelId: stream.id)
+                DiscoverFollowButton(login: login, name: stream.userName, channelId: stream.id)
             }
             if !stream.title.isEmpty {
                 Text(stream.title)
@@ -510,6 +595,8 @@ private struct DiscoverLivePage: View {
 private struct DiscoverClipPage: View {
     let clip: FeedClip
     let isCurrent: Bool
+    /// Marge des barres flottantes (voir DiscoverView.bottomInset).
+    let bottomInset: CGFloat
     @ObservedObject var feed: DiscoverFeed
     let onOpen: () -> Void
     /// Page de la chaîne (nom ou photo touchés).
@@ -517,6 +604,12 @@ private struct DiscoverClipPage: View {
     @EnvironmentObject private var store: AppStore
 
     private var key: String { "clip:" + clip.id }
+    /// « 0:27 » : un clip dure moins d'une minute, compté en minutes il
+    /// affichait presque toujours « 0min » (comme ClipCardView).
+    private var durationText: String {
+        let s = max(0, clip.durationSeconds)
+        return "\(s / 60):" + String(format: "%02d", s % 60)
+    }
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -530,7 +623,7 @@ private struct DiscoverClipPage: View {
             }
             HStack(alignment: .bottom, spacing: 12) {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("▶ " + formatViewers(clip.viewCount) + " · " + formatDuration(clip.durationSeconds))
+                    Text("▶ " + formatViewers(clip.viewCount) + " · " + durationText)
                         .font(.system(size: 12, weight: .semibold)).foregroundColor(.white.opacity(0.85))
                     HStack(spacing: 10) {
                         Button(action: onChannel) {
@@ -538,7 +631,8 @@ private struct DiscoverClipPage: View {
                                 .font(.system(size: 19, weight: .bold)).foregroundColor(.white).lineLimit(1)
                         }
                         .buttonStyle(.plain)
-                        DiscoverFollowButton(login: clip.login.lowercased(), channelId: clip.channelId)
+                        DiscoverFollowButton(login: clip.login.lowercased(), name: clip.channelName,
+                                             channelId: clip.channelId)
                     }
                     if !clip.title.isEmpty {
                         Text(clip.title)
@@ -556,7 +650,7 @@ private struct DiscoverClipPage: View {
                                 link: "https://clips.twitch.tv/\(clip.id)", onChannel: onChannel)
             }
             .padding(.horizontal, 16)
-            .padding(.bottom, 18)
+            .padding(.bottom, 18 + bottomInset)
         }
     }
 }
@@ -686,24 +780,33 @@ private struct DiscoverSideBar: View {
                         .frame(width: 44, height: 44)
                 }
             }
-            Menu {
-                Button(role: .destructive) {
-                    store.hideChannel(login: login, name: name)
-                } label: {
-                    Label(store.t("hide_channel"), systemImage: "eye.slash")
-                }
-                if !gameId.isEmpty, !gameName.isEmpty {
-                    Button(role: .destructive) {
-                        store.hideCategory(id: gameId, name: gameName, box: "")
-                    } label: {
-                        Label(store.t("hide_category").replacingOccurrences(of: "{c}", with: gameName),
-                              systemImage: "eye.slash")
+            // Rien pour une chaîne suivie ou épinglée, ni pour une catégorie
+            // suivie (comme HideMenuButtons) : jamais masquées, AppStore
+            // refusait sans un mot ce que le menu proposait.
+            let channelHideable = !store.isFollowedOrPinned(login)
+            let categoryHideable = !gameId.isEmpty && !gameName.isEmpty && !store.followsCategory(gameId)
+            if channelHideable || categoryHideable {
+                Menu {
+                    if channelHideable {
+                        Button(role: .destructive) {
+                            store.hideChannel(login: login, name: name)
+                        } label: {
+                            Label(store.t("hide_channel"), systemImage: "eye.slash")
+                        }
                     }
+                    if categoryHideable {
+                        Button(role: .destructive) {
+                            store.hideCategory(id: gameId, name: gameName, box: "")
+                        } label: {
+                            Label(store.t("hide_category").replacingOccurrences(of: "{c}", with: gameName),
+                                  systemImage: "eye.slash")
+                        }
+                    }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 20, weight: .bold)).foregroundColor(.white)
+                        .frame(width: 44, height: 44)
                 }
-            } label: {
-                Image(systemName: "ellipsis")
-                    .font(.system(size: 20, weight: .bold)).foregroundColor(.white)
-                    .frame(width: 44, height: 44)
             }
         }
     }
@@ -713,6 +816,8 @@ private struct DiscoverSideBar: View {
 /// (comme la page de chaîne). Ne plus suivre se confirme.
 private struct DiscoverFollowButton: View {
     let login: String
+    /// Nom affiché (titre de la confirmation), le pseudo à défaut.
+    let name: String
     let channelId: String
     @EnvironmentObject private var store: AppStore
     @StateObject private var follow = FollowService()
@@ -745,7 +850,7 @@ private struct DiscoverFollowButton: View {
                 .buttonStyle(.plain)
                 .disabled(follow.busy)
                 .confirmationDialog(
-                    store.t("unfollow_confirm").replacingOccurrences(of: "{c}", with: login),
+                    store.t("unfollow_confirm").replacingOccurrences(of: "{c}", with: name.isEmpty ? login : name),
                     isPresented: $confirm, titleVisibility: .visible
                 ) {
                     Button(store.t("unfollow"), role: .destructive) {

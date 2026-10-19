@@ -140,6 +140,7 @@ enum LogTranslator {
         "Clips refusés": ["Clips refused", "Clips rechazados", "Клипы: отказ"],
         "code:": ["code:", "código:", "код:"],
         "Commande envoyée": ["Command sent", "Comando enviado", "Команда отправлена"],
+        "commentaires affichés sans les attendre": ["comments shown without waiting for them", "comentarios mostrados sin esperarlos", "комментарии показаны без ожидания"],
         "communityPoints null — premier visionnage ou token incompatible": ["communityPoints null — first watch or incompatible token", "communityPoints null — primera visualización o token incompatible", "communityPoints null — первый просмотр или несовместимый токен"],
         "Compte changé": ["Account changed", "Cuenta cambiada", "Аккаунт изменён"],
         "Compte déconnecté → chat en anonyme": ["Account logged out → anonymous chat", "Cuenta desconectada → chat anónimo", "Выход из аккаунта → анонимный чат"],

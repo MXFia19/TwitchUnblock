@@ -56,13 +56,18 @@ enum LiveNotifier {
 
     /// « Ne plus notifier cette chaîne » (action d'une notification) : la
     /// chaîne passe dans les coupées de « Chaînes notifiées », et ntfy suit.
-    static func mute(_ login: String) {
+    /// Attendu jusqu'au bout par AppDelegate : l'app, réveillée en arrière-plan
+    /// pour l'action, peut être suspendue dès qu'elle rend la main, et l'envoi
+    /// à ntfy partait dans une tâche à part, sans garantie d'aboutir. Fil
+    /// principal : les cloches affichées suivent .notifChannelsChanged.
+    @MainActor
+    static func mute(_ login: String) async {
         let l = login.lowercased()
         guard !l.isEmpty else { return }
         NotifChannels.setNotify(l, false)
         logger.info("NOTIF", "Chaîne retirée des notifications", "@\(l)")
         let lang = Lang(rawValue: UserDefaults.standard.string(forKey: "lang") ?? "en") ?? .en
-        Task { await NtfyNotifier.sync(lang: lang) }
+        await NtfyNotifier.sync(lang: lang)
     }
 
     /// Programme le prochain réveil : pour les lives suivis (option), ou pour
@@ -206,9 +211,21 @@ enum LiveNotifier {
         content.userInfo = ["login": login]
         content.threadIdentifier = "live-\(login)"
         content.categoryIdentifier = categoryId
-        if let thumb = await thumbnail(of: s) { content.attachments = [thumb] }
-        let req = UNNotificationRequest(identifier: "live-\(login)", content: content, trigger: nil)
-        try? await UNUserNotificationCenter.current().add(req)
+        let thumb = await thumbnail(of: s)
+        if let thumb { content.attachments = [thumb] }
+        let center = UNUserNotificationCenter.current()
+        do {
+            try await center.add(UNNotificationRequest(identifier: "live-\(login)", content: content, trigger: nil))
+        } catch {
+            // Refusée : iOS ne déplace la vignette qu'avec une notification
+            // acceptée (le fichier temporaire restait), et une vignette qu'il
+            // juge invalide empêchait toute la notification. Renvoyée sans.
+            guard let thumb else { return }
+            try? FileManager.default.removeItem(at: thumb.url)
+            logger.debug("NOTIF", "Notification refusée avec sa vignette : renvoyée sans", error.localizedDescription)
+            content.attachments = []
+            try? await center.add(UNNotificationRequest(identifier: "live-\(login)", content: content, trigger: nil))
+        }
     }
 
     /// Vignette du live, téléchargée dans un fichier temporaire (iOS le range
@@ -224,7 +241,10 @@ enum LiveNotifier {
         guard let url = URL(string: address) else { return nil }
         let req = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 6)
         guard let (data, resp) = try? await URLSession.shared.data(for: req),
-              (resp as? HTTPURLResponse)?.statusCode == 200, !data.isEmpty else {
+              (resp as? HTTPURLResponse)?.statusCode == 200, !data.isEmpty,
+              // Aperçu pas encore prêt (live tout juste lancé) : Twitch renvoie
+              // vers son image « 404 », pas vers une vignette du live.
+              resp.url?.absoluteString.contains("404_preview") != true else {
             logger.debug("NOTIF", "Vignette du live indisponible", "@\(login)")
             return nil
         }

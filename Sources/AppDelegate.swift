@@ -51,12 +51,17 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
                                 withCompletionHandler completionHandler: @escaping () -> Void) {
         if let login = response.notification.request.content.userInfo["login"] as? String {
             if response.actionIdentifier == LiveNotifier.muteAction {
-                // « Ne plus notifier cette chaîne » : sans ouvrir l'app.
-                Task { @MainActor in LiveNotifier.mute(login) }
-            } else {
-                DispatchQueue.main.async {
-                    NotificationCenter.default.post(name: .openLiveChannel, object: nil, userInfo: ["login": login])
+                // « Ne plus notifier cette chaîne » : sans ouvrir l'app. iOS
+                // peut la suspendre dès completionHandler : appelé une fois la
+                // chaîne coupée et ntfy prévenu.
+                Task { @MainActor in
+                    await LiveNotifier.mute(login)
+                    completionHandler()
                 }
+                return
+            }
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(name: .openLiveChannel, object: nil, userInfo: ["login": login])
             }
         } else if response.notification.request.content.userInfo["feedback"] != nil {
             // Réponse à un retour : « Mes signalements ».

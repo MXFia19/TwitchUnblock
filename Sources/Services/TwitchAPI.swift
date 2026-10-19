@@ -1124,24 +1124,84 @@ func getUserAvatarGQL(login: String) async -> String? {
 }
 
 /// Fiche d'une personne du chat : date de création de son compte (API
-/// publique). nil : compte introuvable, ou Twitch n'a pas répondu.
+/// publique). nil : compte introuvable, ou Twitch n'a pas répondu. Gardée
+/// pour la session (UserCardCache) : rouvrir la fiche ne redemande rien.
 func getUserCreatedAt(login: String) async -> Date? {
-    let q = "query($l: String!) { user(login: $l) { createdAt } }"
-    guard let d = await gqlRequest(q, ["l": login.lowercased()]),
-          let user = d["user"] as? [String: Any] else { return nil }
-    return parseTwitchDate(user["createdAt"] as? String)
+    await UserCardCache.shared.createdAt(login: login.lowercased())
 }
 
 /// Depuis quand `login` suit la chaîne `channel` (API publique). Requête à
 /// part de getUserCreatedAt : si Twitch refuse ce champ, la date de création
 /// du compte reste affichée. nil : ne la suit pas, ou Twitch ne le dit pas.
 func getFollowedAt(login: String, channel: String) async -> Date? {
+    guard !channel.isEmpty else { return nil }
+    return await UserCardCache.shared.followedAt(login: login.lowercased(), channel: channel.lowercased())
+}
+
+/// Fiche d'une personne du chat (MessageSheet) : dates gardées pour la
+/// session — chaque ouverture refaisait les deux requêtes. Sans réponse
+/// (réseau) : redemandées à la fiche suivante.
+actor UserCardCache {
+    static let shared = UserCardCache()
+    private var created: [String: Date] = [:]
+    /// Par personne et chaîne : la date, ou nil (ne la suit pas).
+    private var followed: [String: Date?] = [:]
+    /// Date de suivi refusée par Twitch (champ réservé ou retiré) : plus
+    /// demandée de la session, et notée une fois au journal — avant, un
+    /// « Requête refusée » à chaque fiche ouverte.
+    private var followRefused = false
+
+    func createdAt(login: String) async -> Date? {
+        guard !login.isEmpty else { return nil }
+        if let hit = created[login] { return hit }
+        guard let date = await fetchUserCreatedAt(login) else { return nil }
+        created[login] = date
+        return date
+    }
+
+    func followedAt(login: String, channel: String) async -> Date? {
+        guard !followRefused, !login.isEmpty else { return nil }
+        let key = login + "|" + channel
+        if let hit = followed[key] { return hit }
+        switch await fetchFollowedAt(login, channel) {
+        case .date(let date):
+            followed.updateValue(date, forKey: key)
+            return date
+        case .refused(let why):
+            // Deux fiches ouvertes coup sur coup : une seule ligne au journal.
+            if !followRefused {
+                followRefused = true
+                logger.warn("GQL", "Date de suivi refusée par Twitch : plus demandée de la session", why)
+            }
+            return nil
+        case .unreachable:
+            return nil
+        }
+    }
+}
+
+private func fetchUserCreatedAt(_ login: String) async -> Date? {
+    let q = "query($l: String!) { user(login: $l) { createdAt } }"
+    guard let d = await gqlRequest(q, ["l": login]),
+          let user = d["user"] as? [String: Any] else { return nil }
+    return parseTwitchDate(user["createdAt"] as? String)
+}
+
+/// Réponse de Twitch à la date de suivi : la date (nil : ne suit pas), un
+/// refus (ses messages), ou rien (réseau).
+private enum FollowLookup {
+    case date(Date?)
+    case refused(String)
+    case unreachable
+}
+
+private func fetchFollowedAt(_ login: String, _ channel: String) async -> FollowLookup {
     let q = "query($l: String!, $c: String!) { user(login: $l) { follow(targetLogin: $c) { followedAt } } }"
-    guard !channel.isEmpty,
-          let d = await gqlRequest(q, ["l": login.lowercased(), "c": channel.lowercased()]),
-          let user = d["user"] as? [String: Any],
-          let follow = user["follow"] as? [String: Any] else { return nil }
-    return parseTwitchDate(follow["followedAt"] as? String)
+    guard let json = await gqlResponse(q, ["l": login, "c": channel]) else { return .unreachable }
+    if json["errors"] != nil { return .refused(gqlErrorSummary(json)) }
+    let user = (json["data"] as? [String: Any])?["user"] as? [String: Any]
+    let follow = user?["follow"] as? [String: Any]
+    return .date(parseTwitchDate(follow?["followedAt"] as? String))
 }
 
 /// Diffusion en cours d'une chaîne, pour en créer un clip : id de la chaîne,
@@ -1774,6 +1834,14 @@ func gqlStr(_ s: String) -> String {
 // MARK: – Clips
 /// Requête GQL avec variables (les valeurs ne sont jamais collées dans le texte).
 private func gqlRequest(_ query: String, _ variables: [String: Any]) async -> [String: Any]? {
+    guard let json = await gqlResponse(query, variables) else { return nil }
+    if json["errors"] != nil { logger.warn("GQL", "Requête refusée", gqlErrorSummary(json)) }
+    return json["data"] as? [String: Any]
+}
+
+/// Réponse entière (données et erreurs), sans noter les refus : l'appelant
+/// en juge (date de suivi de la fiche d'une personne, notée une fois).
+private func gqlResponse(_ query: String, _ variables: [String: Any]) async -> [String: Any]? {
     guard let url = URL(string: "https://gql.twitch.tv/gql"),
           let body = try? JSONSerialization.data(withJSONObject: ["query": query, "variables": variables]) else { return nil }
     var req = URLRequest(url: url)
@@ -1786,8 +1854,7 @@ private func gqlRequest(_ query: String, _ variables: [String: Any]) async -> [S
         logger.warn("GQL", "Requête sans réponse (réseau)", String(query.prefix(60)))
         return nil
     }
-    if json["errors"] != nil { logger.warn("GQL", "Requête refusée", gqlErrorSummary(json)) }
-    return json["data"] as? [String: Any]
+    return json
 }
 
 /// Messages d'erreur d'une réponse GQL (codes compris), pour le journal.

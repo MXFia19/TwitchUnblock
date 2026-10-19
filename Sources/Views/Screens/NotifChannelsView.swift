@@ -145,6 +145,12 @@ struct NotifChannelsView: View {
             }
         }
         .task { await load() }
+        // Coupée ailleurs pendant que la liste est ouverte (« Ne plus notifier »
+        // d'une notification) : sans relecture, l'interrupteur suivant
+        // réécrivait l'ancienne liste et la rallumait.
+        .onReceive(NotificationCenter.default.publisher(for: .notifChannelsChanged)) { _ in
+            muted = NotifChannels.muted
+        }
         // ntfy : la liste filtrée part au Worker (rien si elle n'a pas changé).
         .onDisappear {
             let lang = store.lang

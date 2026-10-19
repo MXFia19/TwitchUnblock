@@ -53,6 +53,10 @@ final class ClipCreator: ObservableObject {
     /// Nouveau clip du direct de `login`. `moment` : date de l'image affichée
     /// (horloge de l'appareil moins la latence du direct).
     func start(login: String, moment: Date, store: AppStore) {
+        // Clip en cours (double appui pendant que le menu se ferme) : un seul.
+        // Le second annulait le premier, peut-être déjà parti chez Twitch :
+        // deux clips au lieu d'un.
+        guard state != .working else { return }
         self.login = login.lowercased()
         self.moment = moment
         run(store: store)
@@ -60,7 +64,7 @@ final class ClipCreator: ObservableObject {
 
     /// Même chaîne, même instant : après une erreur, ou la session connectée.
     func retry(store: AppStore) {
-        guard !login.isEmpty else { return }
+        guard !login.isEmpty, state != .working else { return }
         run(store: store)
     }
 

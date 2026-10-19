@@ -176,6 +176,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.5.8",
+          "buildVersion": "336",
+          "date": "2026-10-19",
+          "localizedDescription": "- Settings: signed in, your settings now follow your Twitch account on the website and your other devices: chat settings, top streams language, VOD speed, pinned and hidden channels, and the app's customization (Settings → Twitch Account → Sync my settings, on by default)\n- Settings: language, quality, mobile data, notifications, downloads and appearance stay specific to each device; the latest change wins, and pinned or hidden lists changed on two devices are merged",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-336/TwitchUnblock.ipa",
+          "size": 4222082,
+          "commit": "d83ce6240c749741663778400094090973873b50"
+        },
+        {
           "version": "1.5.7",
           "buildVersion": "335",
           "date": "2026-10-19",
@@ -255,25 +264,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-326/TwitchUnblock.ipa",
           "size": 3896302,
           "commit": "5a70b5b10bcf1f8cfa37876b559e07ad26ebd104"
-        },
-        {
-          "version": "1.4.25",
-          "buildVersion": "325",
-          "date": "2026-10-19",
-          "localizedDescription": "- Discover: the speaker button turns the preview's sound on and off (lives and clips)\n- Discover: tap a channel's name or picture to open its page\n- A live opened from Discover now always has sound\n- On iPhone the app stays in portrait, except in the player and multi-live where landscape still works",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-325/TwitchUnblock.ipa",
-          "size": 3895957,
-          "commit": "b8870431fc74f6dd2a0a37039efcbf74bcc629fd"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.5.7",
+      "version": "1.5.8",
       "versionDate": "2026-10-19",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-335/TwitchUnblock.ipa",
-      "size": 4183176
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-336/TwitchUnblock.ipa",
+      "size": 4222082
     }
   ],
   "news": []

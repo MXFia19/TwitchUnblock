@@ -1599,7 +1599,7 @@ struct SettingsView: View {
                     statBox(value: vodCount, label: store.t("vods"), icon: "film")
                     statBox(value: channelCount, label: store.t("channels"), icon: "person.fill")
                 }
-                if vodCount > 0 || channelCount > 0 {
+                if vodCount > 0 || channelCount > 0 || !store.searchHistory.isEmpty {
                     TSecondaryButton(title: store.t("btn_clear"), icon: "trash",
                                      tint: .tDanger, fullWidth: true) {
                         showClearAlert = true

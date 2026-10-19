@@ -373,8 +373,9 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   category → **Hide this channel** or **Hide the "…" category** (or
   long-press a category card). They leave Top, the category grid and category
   pages; Top tops itself up so it doesn't get shorter. What you follow or pin
-  is never hidden, search still finds everything (with **Hidden · Show
-  again**), and Settings → General lists them to show them again. Kept on the
+  is never hidden, search still finds the channels and categories themselves
+  (with **Hidden · Show again**) but leaves out their live streams and VODs,
+  and Settings → General lists them to show them again. Kept on the
   device and in the backup file (same format as the website).
 * 🎮 **Categories** — browse by game, then the live channels in it, filtered
   by language if you like (all, or a single one — kept for every category).
@@ -384,10 +385,26 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   Errors and empty lists have **Retry** / pull to refresh.
 * 🏷 **Stream tags** — language, DropsEnabled… under each live stream, like on
   Twitch.
-* 🔍 **Search** — by streamer name, channel link, VOD link or ID (a `?t=`
-  link starts at that time) or clip link (played right away). On a channel,
-  the VOD keyword filter can also look through older VODs (**Search older
-  VODs**).
+* 🔍 **Search** — type anything and the results come in tabs, like Twitch's
+  results page: **Channels** (live ones first, with viewers or followers),
+  **Categories**, **Live** (streams whose title, tags, category or name
+  match) and **VODs** (with their channel), each tab with its count. Live
+  streams and VODs from hidden channels or categories are left out (unless
+  you follow them); channels and categories you searched for still show,
+  marked hidden. A category opens its live channels, and **‹ Results for
+  "…"** brings you back from a channel without searching again. A channel
+  link (or `@name`), a VOD link or ID (a `?t=` link starts at that time) or
+  a clip link still opens directly. The last 10 searches are kept on the
+  device under the field, each removable, or **Clear** them all (also
+  cleared with the history in Settings). On a channel, the VOD keyword
+  filter can also look through older VODs (**Search older VODs**).
+* 🗓 **Schedule** — a channel with a streaming schedule gets a **Schedule**
+  tab: its next streams in your device's day and time, with length, title,
+  category, **Every week** for recurring ones and **Canceled** ones struck
+  through, plus its vacation if it announced one. When it's offline, its page
+  says **Next stream: Tuesday · 8:00 PM** (or "On vacation until …") right
+  under its name. Read with your Twitch account if you're signed in, or
+  publicly without one; a channel without a schedule shows nothing more.
 * ℹ️ **About** — a channel's description, followers, social links and panels.
 * 🕒 **History** — recently watched VODs and channels, each removable.
 * 🔄 **Cloud sync** — watch progress and history follow your Twitch account, so

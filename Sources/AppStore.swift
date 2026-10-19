@@ -612,6 +612,21 @@ final class AppStore: ObservableObject {
     @Published var showRecentChannels: Bool = true {
         didSet { UserDefaults.standard.set(showRecentChannels, forKey: "cfg_recent") }
     }
+    /// Recherche : les 10 derniers textes cherchés (résultats en onglets), sur
+    /// cet appareil. Effaçables d'un geste, ou avec l'historique (Réglages).
+    @Published var searchHistory: [String] = [] {
+        didSet { UserDefaults.standard.set(searchHistory, forKey: "search_history") }
+    }
+    func saveSearch(_ text: String) {
+        let t = String(text.trimmingCharacters(in: .whitespacesAndNewlines).prefix(100))
+        guard !t.isEmpty else { return }
+        // La même recherche remonte en tête au lieu de se répéter.
+        var list = searchHistory.filter { $0.lowercased() != t.lowercased() }
+        list.insert(t, at: 0)
+        searchHistory = Array(list.prefix(10))
+    }
+    func removeSearch(_ text: String) { searchHistory.removeAll { $0 == text } }
+    func clearSearchHistory() { searchHistory = [] }
     /// Onglets, accueil et boutons du lecteur choisis dans Réglages →
     /// Personnaliser (voir Customization.swift), gardés en JSON.
     @Published var customization = UICustomization() {
@@ -847,6 +862,7 @@ final class AppStore: ObservableObject {
         }
         homeListLayout     = ud.bool(forKey: "cfg_home_list")
         showRecentChannels = ud.object(forKey: "cfg_recent") as? Bool ?? true
+        searchHistory      = Array((ud.stringArray(forKey: "search_history") ?? []).prefix(10))
         if let saved = UICustomization.saved(ud) {
             customization = saved
         } else if ud.object(forKey: "cfg_discover_tab") as? Bool == false {
@@ -1007,9 +1023,11 @@ final class AppStore: ObservableObject {
         sendDeletion()
     }
 
-    /// Réglages → Effacer l'historique : chaînes, VODs et positions de reprise.
+    /// Réglages → Effacer l'historique : chaînes, VODs, positions de reprise
+    /// et recherches récentes.
     func clearHistory() {
         history = []
+        searchHistory = []
         vodProgress = [:]
         progressChanged()
         sendDeletion()

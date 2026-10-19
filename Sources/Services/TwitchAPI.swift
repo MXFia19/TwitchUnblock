@@ -1390,11 +1390,18 @@ private func streamFromDict(_ d: [String: Any]) -> TwitchStream {
 }
 
 // MARK: – Autocomplete GQL
+/// Suggestions pendant la frappe : les 5 premières chaînes trouvées.
 func searchUsersGQL(_ query: String) async -> [AutocompleteSuggestion] {
+    await searchChannelsGQL(query, first: 5) ?? []
+}
+
+/// Chaînes dont le nom correspond (GQL public) : suggestions de la frappe et
+/// onglet « Chaînes » des résultats. nil si Twitch n'a pas répondu.
+func searchChannelsGQL(_ query: String, first: Int = 30) async -> [AutocompleteSuggestion]? {
     // `stream` : présent seulement si la chaîne est en live (pastille dans la liste).
-    let q = "query($q: String!) { searchUsers(userQuery: $q, first: 5) { edges { node { login displayName profileImageURL(width: 70) stream { viewersCount game { displayName } } } } } }"
+    let q = "query($q: String!) { searchUsers(userQuery: $q, first: \(min(max(first, 1), 50))) { edges { node { login displayName profileImageURL(width: 70) followers { totalCount } stream { viewersCount game { displayName } } } } } }"
     guard let data = await gqlRequest(q, ["q": query]),
-          let edges = (data["searchUsers"] as? [String: Any])?["edges"] as? [[String: Any]] else { return [] }
+          let edges = (data["searchUsers"] as? [String: Any])?["edges"] as? [[String: Any]] else { return nil }
     let list: [AutocompleteSuggestion] = edges.compactMap { e in
         guard let node  = e["node"] as? [String: Any],
               let login = node["login"] as? String else { return nil }
@@ -1403,7 +1410,8 @@ func searchUsersGQL(_ query: String) async -> [AutocompleteSuggestion] {
                                       name: node["displayName"] as? String ?? login,
                                       avatar: node["profileImageURL"] as? String,
                                       viewers: stream.map { $0["viewersCount"] as? Int ?? 0 },
-                                      game: (stream?["game"] as? [String: Any])?["displayName"] as? String)
+                                      game: (stream?["game"] as? [String: Any])?["displayName"] as? String,
+                                      followers: (node["followers"] as? [String: Any])?["totalCount"] as? Int)
     }
     // Les chaînes en live d'abord, sans changer l'ordre de Twitch entre elles.
     return list.filter(\.isLive) + list.filter { !$0.isLive }
@@ -2056,6 +2064,57 @@ func searchCategoriesGQL(query: String) async -> [TwitchCategory]? {
     return edges.compactMap { ($0["node"] as? [String: Any]).flatMap(categoryFromGQL) }
 }
 
+/// Lives trouvés par la recherche de Twitch (titre, tags, catégorie, nom de
+/// la chaîne), GQL public : onglet « Lives » des résultats. nil si Twitch
+/// n'a pas répondu ou refuse la requête.
+func searchStreamsGQL(query: String) async -> [TwitchStream]? {
+    let q = """
+    query($q: String!) { searchStreams(userQuery: $q, first: 30) {
+      edges { node { title viewersCount previewImageURL(width: 440, height: 248) game { id displayName } freeformTags { name }
+        broadcaster { id login displayName } } }
+    } }
+    """
+    guard let d = await gqlRequest(q, ["q": query]),
+          let edges = (d["searchStreams"] as? [String: Any])?["edges"] as? [[String: Any]] else { return nil }
+    return streamsFromGQL(edges)
+}
+
+/// VODs trouvées par la recherche de Twitch (GQL public, celle de sa page de
+/// résultats) : onglet « VODs » des résultats. D'abord l'index des VODs seul
+/// (30 au plus), puis, si Twitch refuse ce ciblage, l'aperçu de la page de
+/// résultats (quelques VODs). nil si Twitch n'a pas répondu ou refuse.
+func searchVideosGQL(query: String) async -> [SearchVod]? {
+    let fields = """
+    videos { edges { item { ... on Video { id title lengthSeconds publishedAt
+      previewThumbnailURL(width: 320, height: 180) owner { login displayName } game { id } } } } }
+    """
+    let requests = [
+        "query($q: String!) { searchFor(userQuery: $q, platform: \"web\", target: { index: VOD, limit: 30 }) { \(fields) } }",
+        "query($q: String!) { searchFor(userQuery: $q, platform: \"web\") { \(fields) } }",
+    ]
+    for q in requests {
+        guard let d = await gqlRequest(q, ["q": query]),
+              let found = d["searchFor"] as? [String: Any] else { continue }
+        // `videos` nul : aucune VOD trouvée.
+        let edges = (found["videos"] as? [String: Any])?["edges"] as? [[String: Any]] ?? []
+        let list: [SearchVod] = edges.compactMap { e in
+            guard let v = e["item"] as? [String: Any], let id = v["id"] as? String else { return nil }
+            let owner = v["owner"] as? [String: Any]
+            let login = owner?["login"] as? String ?? ""
+            let vod = VodData(id: id,
+                              title: v["title"] as? String ?? "",
+                              previewThumbnailURL: v["previewThumbnailURL"] as? String ?? "",
+                              publishedAt: v["publishedAt"] as? String ?? "",
+                              lengthSeconds: v["lengthSeconds"] as? Int ?? 0)
+            return SearchVod(vod: vod, login: login,
+                             name: owner?["displayName"] as? String ?? login,
+                             gameId: (v["game"] as? [String: Any])?["id"] as? String ?? "")
+        }
+        return list
+    }
+    return nil
+}
+
 /// Les 100 lives les plus regardés d'une catégorie, d'une langue si `lang`
 /// (format Helix). nil si Twitch n'a pas répondu.
 func getStreamsByCategoryGQL(gameId: String, lang: String? = nil) async -> [TwitchStream]? {
@@ -2274,6 +2333,290 @@ func getChannelAbout(login: String) async -> ChannelAbout? {
     return ChannelAbout(description: u["description"] as? String ?? "",
                         followers: (u["followers"] as? [String: Any])?["totalCount"] as? Int,
                         socials: socials, panels: panels)
+}
+
+// MARK: – Planning d'une chaîne
+/// Planning d'une chaîne : ses créneaux à venir et ses vacances. Avec le
+/// jeton du compte, Helix `schedule` (documenté : il dit aussi les créneaux
+/// répétés, annulés et les vacances). Sans compte, ou si Helix échoue, GQL
+/// public ; s'il refuse la requête ou ne donne rien, l'export iCalendar de
+/// Helix, public lui aussi (sans jeton). Chaîne sans planning : planning
+/// vide. nil si rien n'a répondu.
+func getChannelSchedule(login: String, channelId: String?, token: String?) async -> ChannelSchedule? {
+    let l = login.lowercased()
+    var id = channelId ?? ""
+    if let token, !id.isEmpty, let s = await helixSchedule(channelId: id, token: token) {
+        logSchedule(l, s, source: "Helix")
+        return s
+    }
+    let fromGQL = await gqlSchedule(login: l)
+    if let s = fromGQL, !s.isEmpty() {
+        logSchedule(l, s, source: "GQL")
+        return s
+    }
+    // GQL refuse la requête, ou ne donne rien (peut-être faute d'en lire la
+    // réponse comme il faut) : l'export iCalendar tranche.
+    if id.isEmpty { id = await getUserIdGQL(login: l) ?? "" }
+    if !id.isEmpty, let s = await icalSchedule(channelId: id) {
+        logSchedule(l, s, source: "iCalendar")
+        return s
+    }
+    if fromGQL == nil { logger.warn("PLANNING", "Planning de \"\(l)\" indisponible") }
+    return fromGQL
+}
+
+/// Journal : seulement un planning qui a quelque chose à montrer (la plupart
+/// des chaînes n'en ont pas).
+private func logSchedule(_ login: String, _ s: ChannelSchedule, source: String) {
+    guard !s.isEmpty() else { return }
+    logger.info("PLANNING", "Planning de \"\(login)\" : \(s.upcoming().count) créneaux à venir", source)
+}
+
+/// Planning par Helix, avec le jeton du compte. 404 : la chaîne n'a pas de
+/// planning. nil si Twitch n'a pas répondu ou refuse (jeton expiré…).
+private func helixSchedule(channelId: String, token: String) async -> ChannelSchedule? {
+    guard !channelId.isEmpty, channelId.allSatisfy(\.isNumber),
+          let url = URL(string: "https://api.twitch.tv/helix/schedule?broadcaster_id=\(channelId)&first=25")
+    else { return nil }
+    var req = URLRequest(url: url)
+    req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+    req.setValue(kHelixClientID, forHTTPHeaderField: "Client-Id")
+    guard let (data, resp) = try? await URLSession.shared.data(for: req) else { return nil }
+    let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
+    if status == 404 { return .empty }
+    guard status == 200, let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+          let d = json["data"] as? [String: Any] else {
+        logger.warn("PLANNING", "Planning refusé par Helix", "HTTP \(status)")
+        return nil
+    }
+    var segments: [ScheduleSegment] = []
+    for s in d["segments"] as? [[String: Any]] ?? [] {
+        guard let start = parseTwitchDate(s["start_time"] as? String) else { continue }
+        segments.append(ScheduleSegment(
+            id: "\(s["id"] as? String ?? "")-\(Int(start.timeIntervalSince1970))",
+            start: start,
+            end: parseTwitchDate(s["end_time"] as? String),
+            title: s["title"] as? String ?? "",
+            category: (s["category"] as? [String: Any])?["name"] as? String ?? "",
+            recurring: s["is_recurring"] as? Bool ?? false,
+            // Annulé par le streamer, ou pendant ses vacances.
+            canceled: (s["canceled_until"] as? String) != nil))
+    }
+    var vacation: ScheduleVacation? = nil
+    if let v = d["vacation"] as? [String: Any],
+       let start = parseTwitchDate(v["start_time"] as? String),
+       let end = parseTwitchDate(v["end_time"] as? String) {
+        vacation = ScheduleVacation(start: start, end: end)
+    }
+    return ChannelSchedule(segments: segments.sorted { $0.start < $1.start }, vacation: vacation)
+}
+
+/// Planning par GQL public : les créneaux des quatre prochaines semaines.
+/// nil si Twitch n'a pas répondu ou refuse la requête ; chaîne introuvable
+/// ou sans planning : vide.
+private func gqlSchedule(login: String) async -> ChannelSchedule? {
+    let iso = ISO8601DateFormatter()
+    let now = Date()
+    let from = iso.string(from: now.addingTimeInterval(-12 * 3600))
+    let to = iso.string(from: now.addingTimeInterval(28 * 86400))
+    let q = """
+    query($l: String!) { user(login: $l) { channel { schedule {
+      segments(startAt: "\(from)", endAt: "\(to)") { id startAt endAt title categories { displayName } }
+    } } } }
+    """
+    guard let d = await gqlRequest(q, ["l": login]) else { return nil }
+    guard let schedule = ((d["user"] as? [String: Any])?["channel"] as? [String: Any])?["schedule"] as? [String: Any]
+    else { return .empty }
+    var segments: [ScheduleSegment] = []
+    for s in schedule["segments"] as? [[String: Any]] ?? [] {
+        guard let start = parseTwitchDate(s["startAt"] as? String) else { continue }
+        let category = (s["categories"] as? [[String: Any]])?.first?["displayName"] as? String ?? ""
+        segments.append(ScheduleSegment(
+            id: "\(s["id"] as? String ?? "")-\(Int(start.timeIntervalSince1970))",
+            start: start,
+            end: parseTwitchDate(s["endAt"] as? String),
+            title: s["title"] as? String ?? "",
+            category: category,
+            recurring: false))
+    }
+    return ChannelSchedule(segments: markWeekly(segments.sorted { $0.start < $1.start }))
+}
+
+/// GQL ne dit pas qu'un créneau se répète : un même jour, à la même heure
+/// et sous le même titre d'une semaine à l'autre, il est signalé comme tel.
+private func markWeekly(_ list: [ScheduleSegment]) -> [ScheduleSegment] {
+    let cal = Calendar.current
+    func key(_ s: ScheduleSegment) -> String {
+        let c = cal.dateComponents([.weekday, .hour, .minute], from: s.start)
+        return "\(c.weekday ?? 0)-\(c.hour ?? 0)-\(c.minute ?? 0)-\(s.title)"
+    }
+    var counts: [String: Int] = [:]
+    for s in list { counts[key(s), default: 0] += 1 }
+    var out: [ScheduleSegment] = []
+    for var s in list {
+        if (counts[key(s)] ?? 0) > 1 { s.recurring = true }
+        out.append(s)
+    }
+    return out
+}
+
+/// Planning par l'export iCalendar de Helix, public (sans jeton) : créneaux
+/// répétés compris (RRULE). Les vacances n'y sont qu'un texte : ignorées.
+/// 404 : pas de planning. nil si Twitch n'a pas répondu.
+private func icalSchedule(channelId: String) async -> ChannelSchedule? {
+    guard !channelId.isEmpty, channelId.allSatisfy(\.isNumber),
+          let url = URL(string: "https://api.twitch.tv/helix/schedule/icalendar?broadcaster_id=\(channelId)")
+    else { return nil }
+    guard let (data, resp) = try? await URLSession.shared.data(from: url) else { return nil }
+    let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
+    if status == 404 { return .empty }
+    guard status == 200, let text = String(data: data, encoding: .utf8) else {
+        logger.warn("PLANNING", "Export iCalendar refusé", "HTTP \(status)")
+        return nil
+    }
+    return parseICalSchedule(text, now: Date())
+}
+
+/// Propriété d'un VEVENT : ses paramètres (TZID…) et sa valeur.
+private typealias ICalProperty = (params: [String: String], value: String)
+
+/// Créneaux d'un calendrier iCalendar (RFC 5545) des quatre prochaines
+/// semaines : chaque VEVENT, et ses répétitions.
+private func parseICalSchedule(_ text: String, now: Date) -> ChannelSchedule {
+    // Lignes repliées (RFC 5545, 3.1) : une ligne qui commence par une
+    // espace ou une tabulation prolonge la précédente.
+    var lines: [String] = []
+    let normalized = text.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: "\r", with: "\n")
+    for line in normalized.components(separatedBy: "\n") {
+        if line.hasPrefix(" ") || line.hasPrefix("\t"), !lines.isEmpty {
+            lines[lines.count - 1] += String(line.dropFirst())
+        } else if !line.isEmpty {
+            lines.append(line)
+        }
+    }
+    let windowStart = now.addingTimeInterval(-12 * 3600)
+    let windowEnd = now.addingTimeInterval(28 * 86400)
+    var segments: [ScheduleSegment] = []
+    var event: [String: ICalProperty]? = nil
+    var exdates: [Date] = []
+    for line in lines {
+        let upper = line.trimmingCharacters(in: .whitespaces).uppercased()
+        if upper == "BEGIN:VEVENT" { event = [:]; exdates = []; continue }
+        if upper == "END:VEVENT" {
+            if let e = event {
+                segments += icalOccurrences(e, exdates: exdates, from: windowStart, to: windowEnd)
+            }
+            event = nil
+            continue
+        }
+        guard event != nil, let colon = line.firstIndex(of: ":") else { continue }
+        var parts = line[..<colon].components(separatedBy: ";")
+        let name = parts.removeFirst().uppercased()
+        var params: [String: String] = [:]
+        for p in parts {
+            let kv = p.components(separatedBy: "=")
+            if kv.count == 2 { params[kv[0].uppercased()] = kv[1].replacingOccurrences(of: "\"", with: "") }
+        }
+        let value = String(line[line.index(after: colon)...])
+        if name == "EXDATE" {
+            exdates += value.components(separatedBy: ",").compactMap { icalDate($0, tzid: params["TZID"]) }
+        } else {
+            event?[name] = (params: params, value: value)
+        }
+    }
+    return ChannelSchedule(segments: segments.sorted { $0.start < $1.start })
+}
+
+/// Occurrences d'un VEVENT dans la fenêtre : lui seul, ou ses répétitions
+/// (RRULE quotidienne ou hebdomadaire ; dates exclues par EXDATE).
+private func icalOccurrences(_ e: [String: ICalProperty], exdates: [Date],
+                             from windowStart: Date, to windowEnd: Date) -> [ScheduleSegment] {
+    guard let startProp = e["DTSTART"],
+          let start = icalDate(startProp.value, tzid: startProp.params["TZID"]) else { return [] }
+    let end = e["DTEND"].flatMap { icalDate($0.value, tzid: $0.params["TZID"]) }
+    let duration = end.map { $0.timeIntervalSince(start) }
+    let uid = e["UID"]?.value ?? ""
+    let title = icalText(e["SUMMARY"]?.value ?? "")
+    let category = icalText(e["CATEGORIES"]?.value ?? "")
+    let canceled = e["STATUS"]?.value.uppercased() == "CANCELLED"
+    func segment(_ at: Date, recurring: Bool) -> ScheduleSegment {
+        ScheduleSegment(id: "\(uid)-\(Int(at.timeIntervalSince1970))", start: at,
+                        end: duration.map { at.addingTimeInterval($0) },
+                        title: title, category: category, recurring: recurring, canceled: canceled)
+    }
+    // Règle de répétition : FREQ, INTERVAL, COUNT, UNTIL.
+    var rule: [String: String] = [:]
+    for part in (e["RRULE"]?.value ?? "").components(separatedBy: ";") {
+        let kv = part.components(separatedBy: "=")
+        if kv.count == 2 { rule[kv[0].uppercased()] = kv[1] }
+    }
+    let freq = rule["FREQ"]?.uppercased() ?? ""
+    let stepDays = freq == "DAILY" ? 1 : freq == "WEEKLY" ? 7 : 0
+    guard stepDays > 0 else {
+        let last = end ?? start.addingTimeInterval(3600)
+        return last > windowStart && start < windowEnd ? [segment(start, recurring: false)] : []
+    }
+    // Calendrier du fuseau du créneau : l'heure reste la même d'une semaine
+    // à l'autre, passage à l'heure d'été compris.
+    var cal = Calendar(identifier: .gregorian)
+    cal.timeZone = icalTimeZone(startProp.params["TZID"], value: startProp.value)
+    let step = stepDays * max(1, Int(rule["INTERVAL"] ?? "") ?? 1)
+    let count = rule["COUNT"].flatMap { Int($0) }
+    let until = rule["UNTIL"].flatMap { icalDate($0, tzid: startProp.params["TZID"]) }
+    // Droit vers la fenêtre, sans parcourir des années de répétitions.
+    var k = max(0, Int(windowStart.timeIntervalSince(start) / (Double(step) * 86400)) - 1)
+    var out: [ScheduleSegment] = []
+    while out.count < 60 {
+        if let count, k >= count { break }
+        guard let at = cal.date(byAdding: .day, value: k * step, to: start), at < windowEnd else { break }
+        if let until, at > until { break }
+        let last = duration.map { at.addingTimeInterval($0) } ?? at.addingTimeInterval(3600)
+        if last > windowStart, !exdates.contains(where: { abs($0.timeIntervalSince(at)) < 60 }) {
+            out.append(segment(at, recurring: true))
+        }
+        k += 1
+    }
+    return out
+}
+
+/// Date iCalendar : « 20261020T200000Z » (UTC), « 20261020T200000 » dans le
+/// fuseau du TZID, ou « 20261020 ».
+private func icalDate(_ raw: String, tzid: String?) -> Date? {
+    let v = raw.trimmingCharacters(in: .whitespaces)
+    let df = DateFormatter()
+    df.locale = Locale(identifier: "en_US_POSIX")
+    df.calendar = Calendar(identifier: .gregorian)
+    df.timeZone = icalTimeZone(tzid, value: v)
+    df.dateFormat = v.hasSuffix("Z") ? "yyyyMMdd'T'HHmmss'Z'" : v.count == 8 ? "yyyyMMdd" : "yyyyMMdd'T'HHmmss"
+    return df.date(from: v)
+}
+
+/// Fuseau d'une date iCalendar : UTC pour « …Z », sinon celui du TZID
+/// (« /America/New_York » chez Twitch, barre de tête comprise), UTC à défaut.
+private func icalTimeZone(_ tzid: String?, value: String) -> TimeZone {
+    let utc = TimeZone(secondsFromGMT: 0) ?? TimeZone.current
+    guard !value.hasSuffix("Z"), var id = tzid, !id.isEmpty else { return utc }
+    if id.hasPrefix("/") { id.removeFirst() }
+    if let tz = TimeZone(identifier: id) { return tz }
+    // Préfixe d'éditeur (« /mozilla.org/…/Europe/Paris ») : les deux derniers éléments.
+    return TimeZone(identifier: id.split(separator: "/").suffix(2).joined(separator: "/")) ?? utc
+}
+
+/// Texte iCalendar : « \, », « \; » et « \\ » rendus, retours à la ligne en espaces.
+private func icalText(_ raw: String) -> String {
+    var out = ""
+    var escaped = false
+    for ch in raw {
+        if escaped {
+            out.append(ch == "n" || ch == "N" ? " " : ch)
+            escaped = false
+        } else if ch == "\\" {
+            escaped = true
+        } else {
+            out.append(ch)
+        }
+    }
+    return out.trimmingCharacters(in: .whitespaces)
 }
 
 /// Highlights d'une chaîne (les 50 plus récents).

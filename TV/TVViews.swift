@@ -157,6 +157,8 @@ struct TVFollowingTab: View {
     /// Ce que Twitch dit de chacune (titre, chaîne, image, durée), demandé
     /// une fois par VOD.
     @State private var resumeMetas: [String: VodMeta] = [:]
+    /// Dernière demande à Twitch d'une VOD pas encore connue (loadResume).
+    @State private var resumeAsked: [String: Date] = [:]
     private let offlineColumns = Array(repeating: GridItem(.flexible(), spacing: 40), count: 6)
 
     var body: some View {
@@ -329,8 +331,15 @@ struct TVFollowingTab: View {
     /// finie d'après sa durée, n'apparaît pas.
     private func loadResume() async {
         let recent = TVProgress.recent()
-        let missing = recent.map { $0.id }.filter { resumeMetas[$0] == nil }
+        // Pas celles déjà demandées il y a moins de 10 min : en cours (deux
+        // chargements se suivent à l'ouverture de l'onglet), ou introuvables
+        // (supprimées) — redemandées sinon à chaque chargement.
+        let now = Date()
+        let missing = recent.map { $0.id }.filter {
+            resumeMetas[$0] == nil && now.timeIntervalSince(resumeAsked[$0] ?? .distantPast) > 600
+        }
         if !missing.isEmpty {
+            for id in missing { resumeAsked[id] = now }
             let fetched = await withTaskGroup(of: (String, VodMeta?).self,
                                               returning: [String: VodMeta].self) { group in
                 for id in missing {
@@ -346,6 +355,9 @@ struct TVFollowingTab: View {
                 return out
             }
             resumeMetas.merge(fetched) { _, new in new }
+            // Rien de connu : réseau absent peut-être (Apple TV sortie de
+            // veille avant le Wi-Fi), elles sont redemandées au prochain chargement.
+            if resumeMetas.isEmpty { for id in missing { resumeAsked[id] = nil } }
         }
         resume = recent.compactMap { entry -> TVResumeItem? in
             guard let meta = resumeMetas[entry.id] else { return nil }

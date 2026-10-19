@@ -424,6 +424,21 @@ final class VodDownloads: ObservableObject {
             if let plan = Self.loadPlan(d.id) { handOff(d.id, plan) }
         }
         // Préparation en cours : elle passera la main elle-même.
+        // « Wi-Fi seulement » : ce qui attendait le Wi-Fi passe aussi à iOS,
+        // qui l'attend de lui-même (rien par les données mobiles). Resté en
+        // pause, il ne repartait qu'au retour dans l'app. Revenue sans Wi-Fi,
+        // l'app le remet en attente (proceed).
+        var handed = false
+        for d in items where d.state == .paused && d.reason == VodDownloadFailure.wifi {
+            guard let plan = Self.loadPlan(d.id) else { continue }
+            update(d.id) {
+                $0.state = .downloading
+                $0.reason = nil
+            }
+            handOff(d.id, plan)
+            handed = true
+        }
+        if handed { save() }
     }
 
     /// Lecture hors ligne : la playlist locale, servie par OfflineServer.

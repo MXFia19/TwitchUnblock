@@ -326,21 +326,26 @@ extension AppStore {
         }
     }
 
-    /// Le compte va perdre son jeton (déconnexion, autre jeton) : ce qui
-    /// attendait part maintenant, avec ce jeton-là, sans relecture ; le Worker
-    /// ne garde de toute façon une section que si elle est plus récente que
-    /// la sienne.
+    /// Le compte va perdre son jeton (déconnexion, autre jeton) : les
+    /// réglages qui attendaient partent maintenant, avec ce jeton-là, sans
+    /// relecture ; le Worker ne garde une section que si elle est plus
+    /// récente que la sienne, la règle d'un échange. Pas les épinglées ni
+    /// les masquées : elles se fusionnent avec celles du serveur, et envoyées
+    /// telles quelles, elles effaçaient ce qu'un autre appareil y avait
+    /// changé depuis le dernier échange. Elles partent au prochain échange
+    /// de ce compte, après une relecture.
     func finalSettingsFlush() {
         noteSettingsChanges()
         guard let target = settingsTarget, prefsSync.saved.owner == target.userId, settingsDirty else { return }
         var send: [String: [String: Any]] = [:]
         var sentFrom: [String: Int64] = [:]
-        for name in SettingsSync.sections {
+        for name in SettingsSync.sections where name == "common" || name == "ios" {
             let s = prefsSync.saved.sections[name] ?? SettingsSync.Section()
             guard s.at > s.srv else { continue }
             send[name] = ["at": NSNumber(value: s.at), "data": settingsSectionData(name)]
             sentFrom[name] = s.at
         }
+        guard !send.isEmpty else { return }
         let payload = SettingsSync.fit(send, userId: target.userId)
         Task { @MainActor [weak self] in
             guard let res = await SettingsSync.push(target, payload) else { return }
@@ -461,19 +466,21 @@ extension AppStore {
         return dated
     }
 
-    /// Dates gardées pour un autre compte : elles ne valent rien pour
-    /// celui-ci, qui repart de ce qu'il a sur le serveur.
+    /// Dates gardées pour un autre compte, ou d'avant toute connexion : elles
+    /// ne valent rien pour celui-ci, qui repart de ce qu'il a sur le serveur
+    /// (première rencontre). Gardées pour la première connexion, un réglage
+    /// changé avant elle faisait passer la section d'ici, presque toute aux
+    /// valeurs par défaut, devant celle du compte (mots et personnes masqués
+    /// du chat, personnalisation… effacés partout).
     private func adoptSettingsOwner(_ userId: String) {
         guard prefsSync.saved.owner != userId else { return }
-        if prefsSync.saved.owner != nil {
-            for name in SettingsSync.sections {
-                var s = prefsSync.saved.sections[name] ?? SettingsSync.Section()
-                s.at = 0
-                s.srv = 0
-                s.basePinned = nil
-                s.baseHidden = nil
-                prefsSync.saved.sections[name] = s
-            }
+        for name in SettingsSync.sections {
+            var s = prefsSync.saved.sections[name] ?? SettingsSync.Section()
+            s.at = 0
+            s.srv = 0
+            s.basePinned = nil
+            s.baseHidden = nil
+            prefsSync.saved.sections[name] = s
         }
         prefsSync.saved.owner = userId
         prefsSync.saved.save()

@@ -734,17 +734,18 @@ struct LiveEventsBanner: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if let poll = events.poll, !closed.contains(poll.noticeKey) {
+            // Chacun masquable à part (Réglages → Personnaliser).
+            if store.showPolls, let poll = events.poll, !closed.contains(poll.noticeKey) {
                 banner(icon: "chart.bar.fill", tint: .tPrimary, onClose: { onClose(poll.noticeKey) }) {
                     PollCard(poll: poll, events: events)
                 }
             }
-            if let pred = events.prediction, !closed.contains(pred.noticeKey) {
+            if store.showPredictions, let pred = events.prediction, !closed.contains(pred.noticeKey) {
                 banner(icon: "sparkles", tint: .tPurple, onClose: { onClose(pred.noticeKey) }) {
                     PredictionCard(pred: pred, events: events, points: points)
                 }
             }
-            if let hype = events.hype, !closed.contains(hype.noticeKey) {
+            if store.showHypeTrain, let hype = events.hype, !closed.contains(hype.noticeKey) {
                 banner(icon: "tram.fill", tint: .tLive, onClose: { onClose(hype.noticeKey) }) {
                     HypeTrainCard(hype: hype)
                 }

@@ -75,10 +75,14 @@ struct HomeView: View {
         // Avec ou sans compte : sans, lives et catégories passent par des
         // requêtes publiques, et l'accueil invite à se connecter.
         VStack(spacing: 0) {
-            TSegmented(items: HomeSection.allCases,
-                       selection: $section) { $0.label(store) }
+            // Vue Catégories masquée (Réglages → Personnaliser) : les lives
+            // seuls, sans sélecteur.
+            if showsCard("categories") {
+                TSegmented(items: HomeSection.allCases,
+                           selection: $section) { $0.label(store) }
+            }
 
-            if section == .live {
+            if section == .live || !showsCard("categories") {
                 liveSection
             } else {
                 CategoriesView(onPlayStream: onPlayStream)
@@ -294,27 +298,28 @@ struct HomeView: View {
             LazyVStack(alignment: .leading, spacing: TSpace.lg) {
 
                 // ── Annonce du développeur (si une est en cours) ────
-                if let a = announcements.current {
+                if showsCard("announcement"), let a = announcements.current {
                     AnnouncementBanner(announcement: a) { announcements.dismiss(a) }
                         .padding(.horizontal, TSpace.lg)
                         .padding(.top, TSpace.md)
                 }
                 // ── Sondage du développeur (si un est en cours) ─────
-                if let p = polls.poll {
+                if showsCard("poll"), let p = polls.poll {
                     DevPollCard(poll: p)
                         .padding(.horizontal, TSpace.lg)
-                        .padding(.top, announcements.current == nil ? TSpace.md : 0)
+                        .padding(.top, announcements.current == nil || !showsCard("announcement") ? TSpace.md : 0)
                 }
 
                 // ── Pas de compte : invitation compacte ──────────────
-                if store.twitchToken == nil {
+                if store.twitchToken == nil && showsCard("login") {
                     loginCard
                         .padding(.horizontal, TSpace.lg)
                         .padding(.top, TSpace.md)
                 }
 
                 // ── Session web absente : points, coffres, prédictions ──
-                if store.twitchToken != nil && store.twitchWebToken == nil && Date().timeIntervalSince1970 > webBannerHiddenUntil {
+                if showsCard("web") && store.twitchToken != nil && store.twitchWebToken == nil
+                    && Date().timeIntervalSince1970 > webBannerHiddenUntil {
                     webSessionBanner
                         .padding(.horizontal, TSpace.lg)
                         .padding(.top, TSpace.md)
@@ -326,10 +331,11 @@ struct HomeView: View {
                 HStack(spacing: TSpace.sm) {
                     // Défile si les trois ne tiennent pas (langue, grand texte).
                     ScrollView(.horizontal, showsIndicators: false) {
+                        // Dans l'ordre choisi (Réglages → Personnaliser).
                         HStack(spacing: TSpace.sm) {
-                            TChip(title: store.t("home_followed"), isOn: liveTab == 0) { liveTab = 0 }
-                            TChip(title: store.t("top_streams"), isOn: liveTab == 1) { liveTab = 1 }
-                            TChip(title: store.t("offline_channels"), icon: "moon.fill", isOn: liveTab == 2) { liveTab = 2 }
+                            ForEach(store.customization.visibleHomeChips, id: \.self) { key in
+                                homeChip(key)
+                            }
                         }
                     }
                     .tourAnchor(.homeTabs)
@@ -348,7 +354,7 @@ struct HomeView: View {
                 .padding(.horizontal, TSpace.lg)
                 .padding(.top, TSpace.md)
 
-                switch liveTab {
+                switch shownTab {
                 case 1:  topTab
                 case 2:  offlineTab
                 default: followedTab
@@ -360,6 +366,35 @@ struct HomeView: View {
         // Tâche détachée : tirer pour rafraîchir annule sa propre tâche dès que
         // la vue se redessine, et la requête annulée vidait les suivis locaux.
         .refreshable { await Task { await loadAll(isRefresh: true) }.value }
+    }
+
+    // MARK: – Personnalisation (Réglages → Personnaliser)
+    private func showsCard(_ key: String) -> Bool { store.customization.shows(home: key) }
+
+    /// Onglets des lives : 0 = suivies en live, 1 = top, 2 = hors ligne.
+    private static func chipTab(_ key: String) -> Int {
+        switch key {
+        case "top":     return 1
+        case "offline": return 2
+        default:        return 0
+        }
+    }
+
+    /// Onglet des lives affiché : le dernier choisi s'il est encore là, sinon
+    /// le premier de ceux qui restent.
+    private var shownTab: Int {
+        let tabs = store.customization.visibleHomeChips.map(Self.chipTab)
+        return tabs.contains(liveTab) ? liveTab : (tabs.first ?? 0)
+    }
+
+    @ViewBuilder
+    private func homeChip(_ key: String) -> some View {
+        let tab = Self.chipTab(key)
+        switch tab {
+        case 1:  TChip(title: store.t("top_streams"), isOn: shownTab == 1) { liveTab = 1 }
+        case 2:  TChip(title: store.t("offline_channels"), icon: "moon.fill", isOn: shownTab == 2) { liveTab = 2 }
+        default: TChip(title: store.t("home_followed"), isOn: shownTab == 0) { liveTab = 0 }
+        }
     }
 
     // MARK: – Onglet « Suivies » (en direct seulement)
@@ -388,7 +423,8 @@ struct HomeView: View {
             TEmptyState(icon: "moon.zzz",
                         title: store.t("no_followed_live"),
                         message: store.t("no_followed_live_msg"),
-                        actionTitle: "\(store.t("see_offline")) · \(offlineChannels.count)") { liveTab = 2 }
+                        actionTitle: store.customization.visibleHomeChips.contains("offline")
+                            ? "\(store.t("see_offline")) · \(offlineChannels.count)" : nil) { liveTab = 2 }
         } else {
             TEmptyState(icon: "moon.zzz",
                         title: store.t("no_followed_live"),

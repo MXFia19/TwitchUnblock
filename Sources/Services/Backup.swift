@@ -44,6 +44,9 @@ enum Backup {
     }
 
     static func export(store: AppStore) -> Data {
+        // Réglages → Personnaliser : l'objet tel quel, relu par UICustomization.
+        let customization: Any = (try? JSONEncoder().encode(store.customization))
+            .flatMap { try? JSONSerialization.jsonObject(with: $0) } ?? NSNull()
         let settings: [String: Any] = [
             // Communs avec le site (mêmes noms)
             "lang": store.lang.rawValue,
@@ -51,6 +54,7 @@ enum Backup {
             "homeList": store.homeListLayout,
             "showRecent": store.showRecentChannels,
             "ios_showDiscoverTab": store.showDiscoverTab,
+            "ios_customization": customization,
             "timestamps": store.chatTimestamps,
             "keepDeleted": store.chatShowDeleted,
             "loadHistory": store.chatLoadRecent,
@@ -69,6 +73,9 @@ enum Backup {
             "ios_showFollowButton": store.showFollowButton,
             "ios_showWatchStreak": store.showWatchStreak,
             "ios_showLiveEvents": store.showLiveEvents,
+            "ios_showPolls": store.showPolls,
+            "ios_showPredictions": store.showPredictions,
+            "ios_showHypeTrain": store.showHypeTrain,
             "ios_enableRaids": store.enableRaids,
             "ios_landNoticesHidden": store.landscapeNoticesHidden,
             "ios_autoPurgeCache": store.autoPurgeImageCache,
@@ -167,6 +174,12 @@ enum Backup {
         bool("homeList") { store.homeListLayout = $0 }
         bool("showRecent") { store.showRecentChannels = $0 }
         bool("ios_showDiscoverTab") { store.showDiscoverTab = $0 }
+        // Après l'ancien réglage de Découvrir, qu'elle contient aussi.
+        if let o = s["ios_customization"] as? [String: Any],
+           let data = try? JSONSerialization.data(withJSONObject: o),
+           let c = try? JSONDecoder().decode(UICustomization.self, from: data) {
+            store.customization = c
+        }
         bool("timestamps") { store.chatTimestamps = $0 }
         bool("keepDeleted") { store.chatShowDeleted = $0 }
         bool("loadHistory") { store.chatLoadRecent = $0 }
@@ -184,6 +197,9 @@ enum Backup {
         bool("ios_showFollowButton") { store.showFollowButton = $0 }
         bool("ios_showWatchStreak") { store.showWatchStreak = $0 }
         bool("ios_showLiveEvents") { store.showLiveEvents = $0 }
+        bool("ios_showPolls") { store.showPolls = $0 }
+        bool("ios_showPredictions") { store.showPredictions = $0 }
+        bool("ios_showHypeTrain") { store.showHypeTrain = $0 }
         bool("ios_enableRaids") { store.enableRaids = $0 }
         bool("ios_landNoticesHidden") { store.landscapeNoticesHidden = $0 }
         bool("ios_autoPurgeCache") { store.autoPurgeImageCache = $0 }

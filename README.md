@@ -335,7 +335,7 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   channel or its category; tap the video for the full player (sound, chat), or
   the name or picture for the channel's page. Previews stop as soon as a player
   or multi-live opens, and come back when it closes. Settings → General →
-  **Discover tab** hides it.
+  **Customize the app** hides it.
 * 🏠 **Home** — your followed channels that are live (up to 300 at once), top
   streams (France or worldwide; without an account, **Load more** adds 30 at a
   time).
@@ -401,6 +401,15 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
 
 ### Look & feel
 
+* 🧩 **Customize the app** (Settings → General) — show, hide and reorder the
+  tabs (and pick the one the app opens on), Home's live tabs and cards
+  (Followed / Top / Offline, announcements, sign-in and web session cards,
+  the Categories view), the player's bottom bar buttons (mute, PiP, reload,
+  chat layout, rotation, and optionally sleep timer, multi-live and rewind;
+  AirPlay too) and the chat banners (pinned message, drops, polls,
+  predictions, hype train, raids, watch streak, Follow button). Drag ≡ to
+  reorder; **Restore the default layout** puts everything back. Kept in the
+  backup file.
 * 🎨 **Themes** — 7 accent colours and 3 backgrounds (dark, OLED black, slate),
   in Settings → General → Appearance.
 * 🖼️ **App icons** — six to pick from in Settings → General → Appearance

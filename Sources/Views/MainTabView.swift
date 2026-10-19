@@ -3,7 +3,9 @@ import AVFoundation
 
 struct MainTabView: View {
     @EnvironmentObject private var store: AppStore
-    @State private var activeTab: TabName = .home
+    /// Onglet choisi pour le lancement (Réglages → Personnaliser), lu une fois.
+    private static let launchTab = TabName(rawValue: UICustomization.saved()?.startTab ?? "home") ?? .home
+    @State private var activeTab: TabName = MainTabView.launchTab
     @State private var headerSafeTop = HeaderView.windowSafeTop
 
     // ── Player state ─────────────────────────────────────────────────────
@@ -242,14 +244,22 @@ struct MainTabView: View {
         (playerMode != nil && playerVisible && !closingPlayer) || showMultiLive
     }
 
+    /// L'onglet affiché doit être dans la barre ; sinon, le premier qui y est.
+    /// Pas pendant la visite guidée, qui passe par tous les onglets.
+    private func keepVisibleTab() {
+        guard onboardingDone else { return }
+        let visible = TabName.visible(store)
+        if !visible.contains(activeTab), let first = visible.first { activeTab = first }
+    }
+
     private var chatTarget: String? {
         if let ch = currentChannelName { return ch }
         return currentVodId
     }
 
     /// « Streamer » et « Lien / ID » ont fusionné dans Recherche, et les
-    /// Réglages sont passés derrière l'avatar de l'en-tête. Découvrir (fil de
-    /// lives et de clips) se masque dans les Réglages.
+    /// Réglages sont passés derrière l'avatar de l'en-tête. Chaque onglet se
+    /// masque ou se déplace dans Réglages → Personnaliser.
     enum TabName: String, CaseIterable {
         case home, discover, search, library
 
@@ -286,9 +296,12 @@ struct MainTabView: View {
             }
         }
 
-        /// Onglets de la barre : Découvrir seulement s'il n'est pas masqué.
-        static func visible(_ store: AppStore) -> [TabName] {
-            allCases.filter { $0 != .discover || store.showDiscoverTab }
+        /// Onglets de la barre, dans l'ordre choisi (Réglages → Personnaliser).
+        /// `all` : les masqués aussi — la visite guidée fait toucher Recherche
+        /// et Bibliothèque.
+        static func visible(_ store: AppStore, all: Bool = false) -> [TabName] {
+            let c = store.customization
+            return (all ? c.tabs : c.visibleTabs).compactMap(TabName.init(rawValue:))
         }
     }
 
@@ -342,10 +355,11 @@ struct MainTabView: View {
             // pour qu'aucune vue ne garde les anciennes couleurs. Le lecteur et
             // la feuille des réglages, hors de ce bloc, restent en place.
             .id(store.themeID)
-            // Découvrir masqué pendant qu'il est affiché : retour à l'accueil.
-            .onChange(of: store.showDiscoverTab) { on in
-                if !on, activeTab == .discover { activeTab = .home }
-            }
+            // Onglet masqué pendant qu'il est affiché (Réglages →
+            // Personnaliser), ou fin de la visite guidée qui les montrait
+            // tous : le premier de la barre.
+            .onChange(of: store.customization.visibleTabs) { _ in keepVisibleTab() }
+            .onChange(of: onboardingDone) { _ in keepVisibleTab() }
             // Multi-live ouvert ou fermé : aperçus de Découvrir bloqués ou permis.
             .onChange(of: showMultiLive) { on in DiscoverGate.shared.blocked = on || playerMode != nil }
             // iPhone : portrait, sauf lecteur ouvert en grand ou multi-live.
@@ -1028,7 +1042,12 @@ struct MainTabView: View {
                     store.setVodProgress(dvr, time: offset)
                     pendingDvrChannel = ch
                     playVod(dvr, statusTitle, nil, ch, soft: true)
-                }
+                },
+                // Boutons de la barre, s'ils y sont mis (Réglages → Personnaliser).
+                onMultiLive: multiLiveAction,
+                multiLiveOn: menuMultiLiveOn,
+                multiLiveFull: multi.isFull,
+                onRewind: dvrSourceChannel == nil ? rewindAction : nil
             )
         } else {
             VideoPlayerView(
@@ -1947,6 +1966,8 @@ struct CustomTabBar: View {
     /// Verre liquide : capsule flottante au-dessus du contenu.
     var floating = false
     @EnvironmentObject private var store: AppStore
+    /// Visite guidée en cours : tous les onglets, même masqués.
+    @AppStorage("onboarding_done") private var onboardingDone = false
 
     private var bottomInset: CGFloat {
         UIApplication.shared.connectedScenes
@@ -1974,7 +1995,7 @@ struct CustomTabBar: View {
 
     private var tabs: some View {
         HStack(spacing: 0) {
-            ForEach(MainTabView.TabName.visible(store), id: \.self) { tab in
+            ForEach(MainTabView.TabName.visible(store, all: !onboardingDone), id: \.self) { tab in
                 let isActive = activeTab == tab
                 Button {
                     withAnimation(.easeOut(duration: 0.15)) { activeTab = tab }

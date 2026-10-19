@@ -297,9 +297,9 @@ struct ChatView: View {
         if store.showPinnedMessages, pubsub.pinned != nil { kinds.append(.pinned) }
         if store.showDropsNotice, dropsNotice.campaign != nil { kinds.append(.drops) }
         if store.showLiveEvents {
-            if events.poll != nil { kinds.append(.poll) }
-            if events.prediction != nil { kinds.append(.prediction) }
-            if events.hype != nil { kinds.append(.hype) }
+            if store.showPolls, events.poll != nil { kinds.append(.poll) }
+            if store.showPredictions, events.prediction != nil { kinds.append(.prediction) }
+            if store.showHypeTrain, events.hype != nil { kinds.append(.hype) }
         }
         if store.enableRaids, raidService.raid != nil { kinds.append(.raid) }
         return kinds
@@ -309,9 +309,9 @@ struct ChatView: View {
     private var closedKinds: [ChatNoticeKind] {
         guard store.showLiveEvents, !closedNotices.isEmpty else { return [] }
         var kinds: [ChatNoticeKind] = []
-        if let p = events.poll, closedNotices.contains(p.noticeKey) { kinds.append(.poll) }
-        if let p = events.prediction, closedNotices.contains(p.noticeKey) { kinds.append(.prediction) }
-        if let h = events.hype, closedNotices.contains(h.noticeKey) { kinds.append(.hype) }
+        if store.showPolls, let p = events.poll, closedNotices.contains(p.noticeKey) { kinds.append(.poll) }
+        if store.showPredictions, let p = events.prediction, closedNotices.contains(p.noticeKey) { kinds.append(.prediction) }
+        if store.showHypeTrain, let h = events.hype, closedNotices.contains(h.noticeKey) { kinds.append(.hype) }
         return kinds
     }
 
@@ -660,7 +660,7 @@ struct ChatView: View {
             // démarrage : parier répondait « connecte ta session ».
             if store.showWatchStreak || store.showLiveEvents {
                 events.start(login: channelName, channelId: cid, token: newWebToken,
-                             viewerId: store.twitchUserId ?? "", hype: store.showLiveEvents)
+                             viewerId: store.twitchUserId ?? "", hype: store.showLiveEvents && store.showHypeTrain)
             }
             if store.enableRaids { raidService.connect(channelId: cid, token: newWebToken ?? "") }
         }
@@ -676,7 +676,8 @@ struct ChatView: View {
         }
         // Événements masqués ou réaffichés pendant le live : le relevé du
         // hype train (toutes les 5 s pendant une approche) suit.
-        .onChange(of: store.showLiveEvents) { events.setHypeEnabled($0) }
+        .onChange(of: store.showLiveEvents) { events.setHypeEnabled($0 && store.showHypeTrain) }
+        .onChange(of: store.showHypeTrain) { events.setHypeEnabled($0 && store.showLiveEvents) }
         // ── Compte changé → reconnecte uniquement l'IRC ───────────────
         // Jeton et login arrivent l'un après l'autre : on attend les deux
         // (la reconnexion partait sans login, en anonyme, champ grisé). À la
@@ -813,7 +814,7 @@ struct ChatView: View {
                 events.start(login: channelName, channelId: cid,
                              token: store.twitchWebToken,
                              viewerId: store.twitchUserId ?? "",
-                             hype: store.showLiveEvents)
+                             hype: store.showLiveEvents && store.showHypeTrain)
             }
             // Raid sortant (auto-bascule vers la chaîne raidée)
             if store.enableRaids {

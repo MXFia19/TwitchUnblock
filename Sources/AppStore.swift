@@ -184,6 +184,17 @@ final class AppStore: ObservableObject {
     @Published var enableRaids: Bool = true {
         didSet { UserDefaults.standard.set(enableRaids, forKey: "cfg_raids") }
     }
+    /// Sous « Événements live », chaque bandeau à part (Réglages →
+    /// Personnaliser). Hype train coupé : il n'est plus relevé.
+    @Published var showPolls: Bool = true {
+        didSet { UserDefaults.standard.set(showPolls, forKey: "cfg_show_polls") }
+    }
+    @Published var showPredictions: Bool = true {
+        didSet { UserDefaults.standard.set(showPredictions, forKey: "cfg_show_predictions") }
+    }
+    @Published var showHypeTrain: Bool = true {
+        didSet { UserDefaults.standard.set(showHypeTrain, forKey: "cfg_show_hype") }
+    }
     /// En paysage, bandeaux du chat (épinglé, drops, sondages, prédictions,
     /// raid) repliés en une ligne d'icônes au-dessus des messages.
     @Published var landscapeNoticesHidden: Bool = false {
@@ -561,9 +572,28 @@ final class AppStore: ObservableObject {
     @Published var showRecentChannels: Bool = true {
         didSet { UserDefaults.standard.set(showRecentChannels, forKey: "cfg_recent") }
     }
-    /// Onglet Découvrir (fil de lives et de clips) dans la barre d'onglets.
-    @Published var showDiscoverTab: Bool = true {
-        didSet { UserDefaults.standard.set(showDiscoverTab, forKey: "cfg_discover_tab") }
+    /// Onglets, accueil et boutons du lecteur choisis dans Réglages →
+    /// Personnaliser (voir Customization.swift), gardés en JSON.
+    @Published var customization = UICustomization() {
+        didSet {
+            guard customization != oldValue,
+                  let data = try? JSONEncoder().encode(customization) else { return }
+            UserDefaults.standard.set(data, forKey: "cfg_customization")
+        }
+    }
+    /// Onglet Découvrir dans la barre : l'ancien réglage, lu et écrit dans la
+    /// personnalisation (sauvegardes d'avant elle).
+    var showDiscoverTab: Bool {
+        get { !customization.hiddenTabs.contains("discover") }
+        set { customization.set("discover", hidden: !newValue, in: \.hiddenTabs) }
+    }
+    /// Réglages → Personnaliser → Rétablir : disposition et bandeaux du chat
+    /// comme au premier lancement.
+    func resetCustomization() {
+        customization = UICustomization()
+        showPinnedMessages = true; showDropsNotice = true
+        showLiveEvents = true; showPolls = true; showPredictions = true; showHypeTrain = true
+        enableRaids = true; showWatchStreak = true; showFollowButton = true
     }
 
     /// Langue du top des lives ; nil = celle de l'appareil.
@@ -709,6 +739,9 @@ final class AppStore: ObservableObject {
         showWatchStreak    = ud.object(forKey: "cfg_streak") as? Bool ?? true
         showLiveEvents     = ud.object(forKey: "cfg_events") as? Bool ?? true
         enableRaids        = ud.object(forKey: "cfg_raids")  as? Bool ?? true
+        showPolls          = ud.object(forKey: "cfg_show_polls") as? Bool ?? true
+        showPredictions    = ud.object(forKey: "cfg_show_predictions") as? Bool ?? true
+        showHypeTrain      = ud.object(forKey: "cfg_show_hype") as? Bool ?? true
         landscapeNoticesHidden = ud.bool(forKey: "cfg_land_notices_hidden")
         autoPurgeImageCache = ud.object(forKey: "cfg_purge_cache") as? Bool ?? true
         // Actif par défaut depuis la 1.2.21 (direct à quelques secondes au lieu
@@ -764,7 +797,12 @@ final class AppStore: ObservableObject {
         }
         homeListLayout     = ud.bool(forKey: "cfg_home_list")
         showRecentChannels = ud.object(forKey: "cfg_recent") as? Bool ?? true
-        showDiscoverTab = ud.object(forKey: "cfg_discover_tab") as? Bool ?? true
+        if let saved = UICustomization.saved(ud) {
+            customization = saved
+        } else if ud.object(forKey: "cfg_discover_tab") as? Bool == false {
+            // Avant Personnaliser : Découvrir masqué par son propre réglage.
+            customization.hiddenTabs = ["discover"]
+        }
         // Qualité préférée ; avant elle, seul l'audio seul était retenu.
         if let pref = ud.string(forKey: "cfg_quality_pref"), kQualityPrefs.contains(pref) {
             preferredQuality = pref

@@ -6,7 +6,7 @@ import Combine
 //  Onglet Découvrir : un live (ou un clip) par écran, qu'on fait défiler
 //  vers le haut, comme le fil de l'app Twitch. La page affichée joue un
 //  aperçu muet en petite qualité ; un toucher ouvre le lecteur complet
-//  (son, chat). Masquable dans les Réglages (AppStore.showDiscoverTab).
+//  (son, chat). Masquable dans Réglages → Personnaliser.
 // ═══════════════════════════════════════════════════════════════════════════
 
 // MARK: – Verrou des aperçus

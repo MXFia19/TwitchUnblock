@@ -980,6 +980,12 @@ struct ImmersivePlayer: View {
     /// Rembobinage au-delà de la fenêtre DVR : le direct ne sait pas y aller,
     /// on bascule sur l'enregistrement à ce nombre de secondes du début.
     var onSeekToArchive: (Double) -> Void = { _ in }
+    /// Multi-live et rembobinage, quand c'est possible : boutons de la barre
+    /// du bas s'ils y sont mis (Réglages → Personnaliser).
+    var onMultiLive: (() -> Void)? = nil
+    var multiLiveOn = false
+    var multiLiveFull = false
+    var onRewind: (() -> Void)? = nil
     /// Titre, chaîne et image affichés sur l'écran verrouillé.
     var nowPlaying = NowPlayingMeta()
     /// Vitesse voulue hors direct : celle des VODs, retenue (store.vodSpeed),
@@ -1104,7 +1110,11 @@ struct ImmersivePlayer: View {
          onToggleChatVisibility: @escaping () -> LandscapeChat = { .hidden },
          onSleep:    @escaping () -> Void = {},
          onBackToLive: @escaping () -> Void = {},
-         onSeekToArchive: @escaping (Double) -> Void = { _ in }) {
+         onSeekToArchive: @escaping (Double) -> Void = { _ in },
+         onMultiLive: (() -> Void)? = nil,
+         multiLiveOn: Bool = false,
+         multiLiveFull: Bool = false,
+         onRewind: (() -> Void)? = nil) {
         self.url = url; self.isLive = isLive; self.dvrEnabled = dvrEnabled
         self.savedTime = savedTime; self.contentID = contentID
         self.info = info; self.onChannel = onChannel
@@ -1123,6 +1133,8 @@ struct ImmersivePlayer: View {
         self.onToggleChat = onToggleChat; self.onSleep = onSleep
         self.onToggleChatVisibility = onToggleChatVisibility
         self.onBackToLive = onBackToLive; self.onSeekToArchive = onSeekToArchive
+        self.onMultiLive = onMultiLive; self.multiLiveOn = multiLiveOn
+        self.multiLiveFull = multiLiveFull; self.onRewind = onRewind
         _model = StateObject(wrappedValue: ImmersivePlayerModel(
             url: url, isLive: isLive, savedTime: savedTime,
             onProgress: onProgress, onLatency: onLatency, onBehind: onBehind))
@@ -1582,10 +1594,13 @@ struct ImmersivePlayer: View {
                     }
                 }
 
-                // AirPlay : envoyer la vidéo vers une Apple TV ou une TV compatible.
-                AirPlayButton()
-                    .frame(width: 32, height: 32)
-                    .tGlass(in: Circle(), fallback: Color.black.opacity(0.4), clear: true)
+                // AirPlay : envoyer la vidéo vers une Apple TV ou une TV
+                // compatible. Masquable (Réglages → Personnaliser).
+                if store.customization.shows(player: "airplay") {
+                    AirPlayButton()
+                        .frame(width: 32, height: 32)
+                        .tGlass(in: Circle(), fallback: Color.black.opacity(0.4), clear: true)
+                }
                 overlayButton(icon: "ellipsis", action: onMenu)
                 overlayButton(icon: "xmark", action: onClose)
             }
@@ -1859,33 +1874,10 @@ struct ImmersivePlayer: View {
                     .buttonStyle(.plain)
                 }
 
-                // Couper / remettre le son, sans toucher au volume du téléphone.
-                overlayButton(icon: model.muted ? "speaker.slash.fill" : "speaker.wave.2.fill") {
-                    model.toggleMute()
-                    flash(store.t(model.player.isMuted ? "player_muted" : "player_unmuted"))
-                    scheduleAutoHide()
-                }
-                if model.pipPossible {
-                    overlayButton(icon: "pip.enter") { model.togglePiP(); scheduleAutoHide() }
-                }
-                overlayButton(icon: "arrow.clockwise") { onRefresh() }
-
-                // En paysage seulement : colonne → superposé → replié, en boucle.
-                // Un libellé apparaît brièvement, sinon trois icônes muettes ne
-                // disent pas dans quel état on vient d'entrer.
-                if isLandscape {
-                    overlayButton(icon: chatMode.icon) {
-                        onToggleChat()
-                        flash(store.t(chatMode.next.labelKey))
-                        scheduleAutoHide()
-                    }
-                }
-
-                // Bascule portrait / paysage. Le même bouton fait l'aller ET le
-                // retour : sans ça, un téléphone dont la rotation est verrouillée
-                // reste coincé en paysage.
-                overlayButton(icon: isLandscape ? "rectangle.portrait.rotate" : "rectangle.landscape.rotate") {
-                    toggleOrientation(); scheduleAutoHide()
+                // Son, PiP, recharger, chat, rotation… dans l'ordre choisi
+                // (Réglages → Personnaliser), chacun seulement quand il sert.
+                ForEach(barButtons, id: \.self) { key in
+                    barButton(key)
                 }
             }
         }
@@ -2021,6 +2013,71 @@ struct ImmersivePlayer: View {
     private func toggleChatVisibility() {
         let mode = onToggleChatVisibility()
         flash(store.t(mode.labelKey))
+    }
+
+    /// Boutons affichés de la barre du bas, dans l'ordre choisi.
+    private var barButtons: [String] {
+        let c = store.customization
+        return c.playerButtons.filter { c.shows(player: $0) }
+    }
+
+    /// Un bouton de la barre du bas (clés de UICustomization.defaultPlayer) ;
+    /// rien quand il ne sert pas ici.
+    @ViewBuilder
+    private func barButton(_ key: String) -> some View {
+        switch key {
+        case "mute":
+            // Couper / remettre le son, sans toucher au volume du téléphone.
+            overlayButton(icon: model.muted ? "speaker.slash.fill" : "speaker.wave.2.fill") {
+                model.toggleMute()
+                flash(store.t(model.player.isMuted ? "player_muted" : "player_unmuted"))
+                scheduleAutoHide()
+            }
+        case "pip":
+            if model.pipPossible {
+                overlayButton(icon: "pip.enter") { model.togglePiP(); scheduleAutoHide() }
+            }
+        case "refresh":
+            overlayButton(icon: "arrow.clockwise") { onRefresh() }
+        case "chat":
+            // En paysage seulement : colonne → superposé → replié, en boucle.
+            // Un libellé apparaît brièvement, sinon trois icônes muettes ne
+            // disent pas dans quel état on vient d'entrer.
+            if isLandscape {
+                overlayButton(icon: chatMode.icon) {
+                    onToggleChat()
+                    flash(store.t(chatMode.next.labelKey))
+                    scheduleAutoHide()
+                }
+            }
+        case "rotate":
+            // Bascule portrait / paysage. Le même bouton fait l'aller ET le
+            // retour : sans ça, un téléphone dont la rotation est verrouillée
+            // reste coincé en paysage.
+            overlayButton(icon: isLandscape ? "rectangle.portrait.rotate" : "rectangle.landscape.rotate") {
+                toggleOrientation(); scheduleAutoHide()
+            }
+        case "sleep":
+            // Minuteur en cours : sa pastille, plus à gauche, en tient lieu.
+            if sleepLabel == nil {
+                overlayButton(icon: "moon.zzz") { onSleep(); scheduleAutoHide() }
+            }
+        case "multi":
+            if let onMultiLive {
+                overlayButton(icon: multiLiveOn ? "minus.square" : "square.grid.2x2") {
+                    let done = multiLiveOn ? "multi_removed" : (multiLiveFull ? "multi_full" : "multi_added")
+                    onMultiLive()
+                    flash(store.t(done))
+                    scheduleAutoHide()
+                }
+            }
+        case "rewind":
+            if let onRewind {
+                overlayButton(icon: "gobackward") { onRewind(); scheduleAutoHide() }
+            }
+        default:
+            EmptyView()
+        }
     }
 
     private func overlayButton(icon: String, action: @escaping () -> Void) -> some View {

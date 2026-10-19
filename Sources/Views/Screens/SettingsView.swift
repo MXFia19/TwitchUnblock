@@ -48,6 +48,7 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var showSleepSheet  = false
     @State private var showHidden      = false   // chaînes et catégories masquées
+    @State private var showCustomize   = false   // onglets, accueil, lecteur, chat
     // Sauvegarde (export / import)
     @State private var exportDoc: BackupDocument? = nil
     @State private var showExporter    = false
@@ -156,6 +157,11 @@ struct SettingsView: View {
         // ── Chaînes et catégories masquées ───────────────────────────
         .sheet(isPresented: $showHidden) {
             HiddenContentSheet().environmentObject(store)
+                .inAppNoticeHost()
+        }
+        // ── Personnaliser : onglets, accueil, lecteur, chat ──────────
+        .sheet(isPresented: $showCustomize) {
+            CustomizeView().environmentObject(store)
                 .inAppNoticeHost()
         }
         // ── Logs sheet ───────────────────────────────────────────────
@@ -498,6 +504,7 @@ struct SettingsView: View {
                     usageCard
                 case .general:
                     langueCard
+                    customizeCard
                     hiddenCard
                     apparenceCard
                     autoclaimCard
@@ -697,15 +704,41 @@ struct SettingsView: View {
                 Divider().background(Color.tBorder)
                 toggleRow(store.t("show_recent"), store.t("show_recent_sub"),
                           $store.showRecentChannels, log: "Streamers récents")
-                Divider().background(Color.tBorder)
-                toggleRow(store.t("discover_tab"), store.t("discover_tab_sub"),
-                          $store.showDiscoverTab, log: "Onglet Découvrir")
             }
         }
     }
 
     /// Chaînes et catégories masquées du top et des catégories : combien, et
     /// la feuille pour les réafficher.
+    /// Réglages → Personnaliser : onglets, accueil, boutons du lecteur et
+    /// bandeaux du chat (CustomizeView).
+    @ViewBuilder private var customizeCard: some View {
+        settingCard {
+            VStack(alignment: .leading, spacing: 12) {
+                label("square.grid.3x2.fill", store.t("cust_title"))
+                Text(store.t("cust_sub"))
+                    .font(.tMeta).foregroundColor(.tMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button { showCustomize = true } label: {
+                    HStack(spacing: 8) {
+                        Text(store.t("cust_open"))
+                            .font(.tCardTitle).foregroundColor(.tText)
+                            .lineLimit(1)
+                        Spacer(minLength: 0)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(.tMuted)
+                    }
+                    .padding(12)
+                    .background(Color.tSurface)
+                    .cornerRadius(10)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
     @ViewBuilder private var hiddenCard: some View {
         settingCard {
             VStack(alignment: .leading, spacing: 12) {

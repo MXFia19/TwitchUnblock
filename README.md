@@ -520,11 +520,19 @@ unsigned `tv-test-N` pre-release:
 Installing it needs a tool that can sideload on tvOS, or a Mac with Xcode and
 the Apple TV paired with it (AltStore, SideStore and Feather don't handle
 tvOS). **ATVLoadly** (or any tool that reads AltStore sources) can update it
-on its own from this source, rewritten by each build with its release notes
-(`Changelog: Apple TV: …` lines of the commits that touch the TV):
+on its own from a source rewritten by each build with its release notes
+(`Changelog: Apple TV: …` lines of the commits that touch the TV). Test
+builds, from the test branch:
 
 ```
 https://raw.githubusercontent.com/MXFia19/TwitchUnblock/test-17d298/apps-tv.json
+```
+
+Releases built with the iPhone app (`master`, `tv-N`), from the next release
+on:
+
+```
+https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps-tv-stable.json
 ```
 
 Its GitHub releases can't be used for that: they also hold the iPhone IPAs.

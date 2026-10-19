@@ -10,10 +10,17 @@ name: Build tvOS (test)
 # AltStore : ATVLoadly (ou un autre outil) y trouve la dernière version et
 # se met à jour seul — l'URL GitHub ne convient pas, les IPA de l'iPhone et
 # de la TV étant dans les mêmes releases.
+#
+# Sur master (« push sur main ») : version stable « tv-N », release normale
+# jamais marquée « Latest » (le lien « latest » de l'IPA iPhone doit rester
+# le sien), et sa propre source, apps-tv-stable.json sur master — un autre
+# fichier que celui des tests, pour que les fusions de la branche de test
+# n'entrent jamais en conflit avec les mises à jour de la source stable.
 on:
   push:
     branches:
       - test-17d298
+      - master
     paths:
       - 'TV/**'
       - 'project.yml'
@@ -35,6 +42,19 @@ jobs:
         with:
           # Historique complet : notes depuis le build précédent.
           fetch-depth: 0
+
+      - name: Channel
+        id: vars
+        run: |
+          if [ "${{ github.ref_name }}" = "master" ]; then
+            echo "channel=stable" >> $GITHUB_OUTPUT
+            echo "tag=tv-${{ github.run_number }}" >> $GITHUB_OUTPUT
+            echo "source=apps-tv-stable.json" >> $GITHUB_OUTPUT
+          else
+            echo "channel=test" >> $GITHUB_OUTPUT
+            echo "tag=tv-test-${{ github.run_number }}" >> $GITHUB_OUTPUT
+            echo "source=apps-tv.json" >> $GITHUB_OUTPUT
+          fi
 
       - name: Generate Xcode Project
         run: |
@@ -86,16 +106,19 @@ jobs:
           path: TwitchUnblockTV.ipa
 
       - name: Changelog since previous TV build
+        env:
+          SOURCE: ${{ steps.vars.outputs.source }}
         run: |
-          # Commits qui touchent la TV depuis le build précédent (commit gardé
-          # dans apps-tv.json) : leurs lignes « Changelog: Apple TV: … », en
-          # anglais ; un commit sans elles compte dans « Other improvements
-          # and fixes ». Les commits automatiques « [skip ci] » sont ignorés.
+          # Commits qui touchent la TV depuis le build précédent du même canal
+          # (commit gardé dans sa source) : leurs lignes « Changelog: Apple
+          # TV: … », en anglais ; un commit sans elles compte dans « Other
+          # improvements and fixes ». Les commits automatiques « [skip ci] »
+          # sont ignorés.
           python3 - <<'PY'
-          import json, subprocess
+          import json, os, subprocess
           prev = None
           try:
-              prev = json.load(open('apps-tv.json', encoding='utf-8'))['apps'][0]['versions'][0].get('commit')
+              prev = json.load(open(os.environ['SOURCE'], encoding='utf-8'))['apps'][0]['versions'][0].get('commit')
           except Exception:
               pass
           def is_ancestor(c):
@@ -129,45 +152,66 @@ jobs:
           print(notes)
           PY
 
-      - name: Create pre-release
+      - name: Create release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          STABLE=$([ "${{ steps.vars.outputs.channel }}" = "stable" ] && echo 1 || echo 0)
           {
             cat tv-changelog.md
             echo
-            echo 'Apple TV test build (unsigned), built from the `test-17d298` branch.'
-            echo
-            echo '**Automatic updates**: add this source in ATVLoadly (or another tool that reads AltStore sources):'
-            echo 'https://raw.githubusercontent.com/MXFia19/TwitchUnblock/test-17d298/apps-tv.json'
+            if [ "$STABLE" = 1 ]; then
+              echo 'Apple TV build (unsigned), built from the `master` branch.'
+              echo
+              echo '**Automatic updates**: add this source in ATVLoadly (or another tool that reads AltStore sources):'
+              echo 'https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps-tv-stable.json'
+            else
+              echo 'Apple TV test build (unsigned), built from the `test-17d298` branch.'
+              echo
+              echo '**Automatic updates**: add this source in ATVLoadly (or another tool that reads AltStore sources):'
+              echo 'https://raw.githubusercontent.com/MXFia19/TwitchUnblock/test-17d298/apps-tv.json'
+            fi
             echo
             echo '**With Xcode**: pair the Apple TV with a Mac (Xcode → Window → Devices and Simulators), run'
             echo '`brew install xcodegen` then `xcodegen generate` in the repository, open `TwitchUnblock.xcodeproj`,'
             echo 'pick the **TwitchUnblockTV** target and your team in Signing & Capabilities, then Run on the Apple TV.'
             echo 'With a free Apple account, the app expires after 7 days.'
           } > notes.md
-          gh release create "tv-test-${{ github.run_number }}" TwitchUnblockTV.ipa --prerelease \
-            --target "${{ github.sha }}" \
-            --title "TwitchUnblock TV 0.1.${{ github.run_number }} (test)" \
-            --notes-file notes.md
+          if [ "$STABLE" = 1 ]; then
+            # Jamais « Latest » : releases/latest doit rester l'IPA de l'iPhone.
+            gh release create "${{ steps.vars.outputs.tag }}" TwitchUnblockTV.ipa --latest=false \
+              --target "${{ github.sha }}" \
+              --title "TwitchUnblock TV 0.1.${{ github.run_number }}" \
+              --notes-file notes.md
+          else
+            gh release create "${{ steps.vars.outputs.tag }}" TwitchUnblockTV.ipa --prerelease \
+              --target "${{ github.sha }}" \
+              --title "TwitchUnblock TV 0.1.${{ github.run_number }} (test)" \
+              --notes-file notes.md
+          fi
 
-      - name: Update TV source (apps-tv.json)
+      - name: Update TV source (apps-tv.json / apps-tv-stable.json)
         env:
           VERSION: 0.1.${{ github.run_number }}
           BUILD: ${{ github.run_number }}
-          URL: https://github.com/MXFia19/TwitchUnblock/releases/download/tv-test-${{ github.run_number }}/TwitchUnblockTV.ipa
+          URL: https://github.com/MXFia19/TwitchUnblock/releases/download/${{ steps.vars.outputs.tag }}/TwitchUnblockTV.ipa
+          SOURCE: ${{ steps.vars.outputs.source }}
+          CHANNEL: ${{ steps.vars.outputs.channel }}
         run: |
           DATE=$(date -u +%Y-%m-%d) IPA_SIZE=$(stat -f%z TwitchUnblockTV.ipa) python3 - <<'PY'
           import json, os, subprocess
-          src = 'apps-tv.json'
+          src = os.environ['SOURCE']
+          stable = os.environ['CHANNEL'] == 'stable'
           icon = 'https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/assets/icon.png'
           try:
               d = json.load(open(src, encoding='utf-8'))
           except Exception:
               d = {
                   'name': 'TwitchUnblock TV',
-                  'subtitle': 'Apple TV test builds of TwitchUnblock',
-                  'description': 'Unsigned test builds of the TwitchUnblock Apple TV app, from the test-17d298 branch. Add this source in ATVLoadly (or any tool that reads AltStore sources) to get updates automatically.',
+                  'subtitle': 'Apple TV builds of TwitchUnblock' if stable else 'Apple TV test builds of TwitchUnblock',
+                  'description': ('Unsigned builds of the TwitchUnblock Apple TV app, released with the iPhone app. ' if stable
+                                  else 'Unsigned test builds of the TwitchUnblock Apple TV app, from the test-17d298 branch. ')
+                                 + 'Add this source in ATVLoadly (or any tool that reads AltStore sources) to get updates automatically.',
                   'iconURL': icon,
                   'website': 'https://github.com/MXFia19/TwitchUnblock',
                   'tintColor': '#9146ff',
@@ -176,7 +220,7 @@ jobs:
                       'name': 'TwitchUnblock TV',
                       'bundleIdentifier': 'com.mxfia19.TwitchUnblockTV',
                       'developerName': 'MXFia19',
-                      'subtitle': 'Twitch lives and VODs on Apple TV (test)',
+                      'subtitle': 'Twitch lives and VODs on Apple TV' + ('' if stable else ' (test)'),
                       'localizedDescription': 'Followed channels, top streams, categories and search, lives and VODs with the chat on the picture.',
                       'iconURL': icon,
                       'tintColor': '#9146ff',
@@ -199,16 +243,17 @@ jobs:
           open(src, 'a', encoding='utf-8').write('\n')
           PY
 
-          # Seule la branche de test publie la source ; un build lancé à la
+          # Seules la branche de test (apps-tv.json) et master
+          # (apps-tv-stable.json) publient leur source ; un build lancé à la
           # main ailleurs s'arrête là.
           BRANCH="${{ github.ref_name }}"
-          if [ "$BRANCH" != "test-17d298" ]; then
+          if [ "$BRANCH" != "test-17d298" ] && [ "$BRANCH" != "master" ]; then
             echo "Branche $BRANCH : source TV laissée telle quelle."
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add apps-tv.json
+          git add "$SOURCE"
           if ! git diff --cached --quiet; then
             git commit -m "chore: TV source $VERSION [skip ci]"
             # Branche bougée pendant le build (version de l'iPhone…) : on

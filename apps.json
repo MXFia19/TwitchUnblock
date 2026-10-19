@@ -176,6 +176,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.5.13",
+          "buildVersion": "338",
+          "date": "2026-10-19",
+          "localizedDescription": "- Channel schedule now loads without an account (Twitch's public schedule query)\n- Other improvements and fixes",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-338/TwitchUnblock.ipa",
+          "size": 4236402,
+          "commit": "ff7053ac8f7eb1af374a4128e71740033ab32795"
+        },
+        {
           "version": "1.5.11",
           "buildVersion": "337",
           "date": "2026-10-19",
@@ -255,25 +264,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-329/TwitchUnblock.ipa",
           "size": 3898972,
           "commit": "ec357e5b1bf0464cc186d94f066ea834541518ed"
-        },
-        {
-          "version": "1.5.0",
-          "buildVersion": "328",
-          "date": "2026-10-19",
-          "localizedDescription": "- Improvements and fixes",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-328/TwitchUnblock.ipa",
-          "size": 3896306,
-          "commit": "490136b5df2cb138e958a6b9737f6cce14586d11"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.5.11",
+      "version": "1.5.13",
       "versionDate": "2026-10-19",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-337/TwitchUnblock.ipa",
-      "size": 4231305
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-338/TwitchUnblock.ipa",
+      "size": 4236402
     }
   ],
   "news": []

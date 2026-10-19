@@ -25,6 +25,15 @@
       },
       "versions": [
         {
+          "version": "0.1.22",
+          "buildVersion": "22",
+          "date": "2026-10-19",
+          "localizedDescription": "- The app no longer signs you out at launch after your session expired\n- The Source menu now checks the source actually playing the stream when the chosen one doesn't respond\n- Followed refreshes again when coming back from the tab bar after a live ended",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-test-22/TwitchUnblockTV.ipa",
+          "size": 2455768,
+          "commit": "10b243664cb859edb184a98e692e3879d51888f5"
+        },
+        {
           "version": "0.1.21",
           "buildVersion": "21",
           "date": "2026-10-19",
@@ -124,10 +133,10 @@
           "commit": "f190db7aacfac668c8d385753e5d5a90e8fc05db"
         }
       ],
-      "version": "0.1.21",
+      "version": "0.1.22",
       "versionDate": "2026-10-19",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-test-21/TwitchUnblockTV.ipa",
-      "size": 2449223
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-test-22/TwitchUnblockTV.ipa",
+      "size": 2455768
     }
   ]
 }

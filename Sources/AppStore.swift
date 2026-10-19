@@ -450,6 +450,21 @@ final class AppStore: ObservableObject {
         didSet { UserDefaults.standard.set(shareUsage, forKey: "cfg_share_usage") }
     }
 
+    // MARK: – Synchro des réglages
+    /// Synchroniser mes réglages avec le compte connecté (site, autres
+    /// appareils) : voir SettingsSync.swift. Activé par défaut ; propre à cet
+    /// appareil, jamais synchronisé lui-même. Coupé, rien ne part ni n'arrive ;
+    /// réactivé, les réglages du compte sont relus tout de suite.
+    @Published var syncSettings: Bool = true {
+        didSet {
+            UserDefaults.standard.set(syncSettings, forKey: "cfg_sync_settings")
+            guard syncSettings != oldValue else { return }
+            Task { @MainActor [weak self] in self?.settingsSyncToggled() }
+        }
+    }
+    /// Dates, empreintes et file d'échanges de cette synchro.
+    let prefsSync = SettingsSyncState()
+
     /// Chaîne à ouvrir dans l'onglet Recherche (depuis le lecteur, l'accueil…).
     /// L'onglet la consomme puis la remet à nil.
     @Published var pendingChannel: String? = nil
@@ -844,6 +859,7 @@ final class AppStore: ObservableObject {
         chatReturnSends = ud.object(forKey: "cfg_chat_return_sends") as? Bool ?? false
         chatShowDeleted    = ud.object(forKey: "cfg_chat_deleted")      as? Bool ?? false
         shareUsage         = ud.object(forKey: "cfg_share_usage") as? Bool ?? true
+        syncSettings       = ud.object(forKey: "cfg_sync_settings") as? Bool ?? true
         // « zh_hk » importé du site par une version d'avant : ramené à « zh-hk ».
         topLang            = ud.string(forKey: "cfg_top_lang")
             .map { $0.replacingOccurrences(of: "_", with: "-") }
@@ -934,6 +950,8 @@ final class AppStore: ObservableObject {
         syncTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.flushToCloud() }
         }
+        // Réglages du compte : changements suivis (SettingsSync.swift).
+        startSettingsSync()
     }
 
     // MARK: – Translation
@@ -953,8 +971,9 @@ final class AppStore: ObservableObject {
         let isNew = token != twitchToken
         if isNew {
             // Ce qui restait à envoyer part sur le compte d'avant, avec son
-            // jeton, avant que son identité ne soit oubliée.
+            // jeton, avant que son identité ne soit oubliée (réglages compris).
             finalCloudFlush()
+            finalSettingsFlush()
             // Vu d'ici à ce que le compte de ce jeton soit connu : à lui, pas
             // au compte d'avant (adoptSyncOwner).
             markSyncDetached()
@@ -987,6 +1006,7 @@ final class AppStore: ObservableObject {
     /// retiré.
     func logout() {
         finalCloudFlush()
+        finalSettingsFlush()
         markSyncDetached()
         twitchToken    = nil
         twitchWebToken = nil
@@ -1280,9 +1300,11 @@ final class AppStore: ObservableObject {
     ///   avec celui-ci) n'est pas à lui : ça reste ici et part sur le nouveau.
     /// - Aucun compte avant : tout le rejoint, comme avant.
     private func adoptSyncOwner(_ id: String) {
-        // Nouvelle connexion : relue tout de suite, pas 10 minutes plus tard.
+        // Nouvelle connexion : relue tout de suite, pas 10 minutes plus tard
+        // (réglages compris).
         lastPullAt = .distantPast
         lastSyncAt = .distantPast
+        settingsAccountChanged()
         let detached = syncDetached
         syncDetached = nil
         if syncOwner == id {
@@ -1395,9 +1417,11 @@ final class AppStore: ObservableObject {
     }
 
     /// Relit la sauvegarde si la dernière relecture réussie date de plus de
-    /// 10 minutes. Une lecture ne coûte presque rien.
+    /// 10 minutes. Une lecture ne coûte presque rien. Les réglages du compte
+    /// suivent le même rythme, à part (SettingsSync.swift).
     @MainActor
     func refreshFromCloudIfStale(userId: String? = nil) async {
+        refreshSettingsIfStale()
         guard let target = syncTarget, userId == nil || userId == target.userId,
               Date().timeIntervalSince(lastPullAt) > pullEvery else { return }
         await requestSync(push: false).value

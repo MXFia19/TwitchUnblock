@@ -425,6 +425,28 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   included) and come back when it signs in again (up to 5 accounts, more
   while one still has unsent changes), and what you watch while signed out
   goes to the next account that signs in.
+* ⚙️ **Synced settings** — signed in, your settings follow your Twitch account
+  on the website and your other devices (Settings → Twitch Account → **Sync my
+  settings**, on by default): the chat settings shared with the website
+  (timestamps, 12/24 h, deleted messages, bots, commands, hidden words and
+  people, highlighted words), the top streams language, the VOD speed, pinned
+  channels, hidden channels and categories, and the app's own customization
+  (tabs, home, player buttons, chat banners, channel points chests, raids,
+  ad-free with your sub, chat autocomplete and keyboard suggestions). Not
+  synced, because they depend on the device: the app language, quality and
+  mobile data, notifications and the Live Activity, downloads, the chat's
+  sizes and landscape layout, fill screen, low latency, the player type, the
+  image cache and the home list layout. One document per account on the
+  Worker (`/api/sync/prefs`), apart from the history backup — the 1.5.0 app
+  and the Android app never touch it — in four parts, each with its own
+  date: the latest change wins part by part, and pinned or hidden lists
+  changed on both sides are merged (something removed on one side stays
+  removed). Changes leave a few seconds after the last one, or when the app
+  goes to the background; the account's settings are read at the history's
+  pace (at most every 10 minutes). A device that never changed anything for
+  the account first takes what the account has, adding its own lists
+  (pinned, hidden, hidden chat words and people); one still on default
+  values never sends them. Off, nothing is sent or applied on this device.
 * ⬆️ **Update check** — the app tells you when a new version is out on the
   source, with a shortcut to Feather / SideStore / AltStore.
 * 🔔 **Live notifications** — be told when a followed channel goes live

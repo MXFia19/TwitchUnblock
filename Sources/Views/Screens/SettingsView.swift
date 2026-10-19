@@ -1565,6 +1565,11 @@ struct SettingsView: View {
                     }
                     .buttonStyle(.plain)
                     .disabled(apiLoggingIn)
+
+                    // Réglages du compte, les mêmes sur le site et les autres
+                    // appareils (SettingsSync.swift).
+                    toggleRow(store.t("cfg_sync_settings"), store.t("cfg_sync_settings_sub"),
+                              $store.syncSettings, log: "Synchronisation des réglages")
                 }
 
                 Divider().background(Color.tBorder)

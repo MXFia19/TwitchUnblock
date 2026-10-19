@@ -7,7 +7,8 @@ import UniformTypeIdentifiers
 //  Même format que le site : les chaînes et catégories suivies passent d'un
 //  appareil à l'autre. Les réglages communs aux deux (langue, filtres du
 //  chat…) portent le nom du site ; ceux propres à l'app sont préfixés
-//  « ios_ » et ignorés par le site.
+//  « ios_ » et ignorés par le site. La synchro des réglages entre appareils
+//  (SettingsSync.swift) en reprend une partie, sous les mêmes noms.
 // ═══════════════════════════════════════════════════════════════════════════
 
 /// Fichier JSON pour `fileExporter`.
@@ -43,11 +44,14 @@ enum Backup {
         code.replacingOccurrences(of: "-", with: "_")
     }
 
-    static func export(store: AppStore) -> Data {
+    /// Réglages de la sauvegarde (`settings`) : ceux communs avec le site
+    /// sous le nom du site, ceux propres à l'app préfixés « ios_ ». La synchro
+    /// des réglages (SettingsSync) en tire ses sections.
+    static func settingsJSON(_ store: AppStore) -> [String: Any] {
         // Réglages → Personnaliser : l'objet tel quel, relu par UICustomization.
         let customization: Any = (try? JSONEncoder().encode(store.customization))
             .flatMap { try? JSONSerialization.jsonObject(with: $0) } ?? NSNull()
-        let settings: [String: Any] = [
+        return [
             // Communs avec le site (mêmes noms)
             "lang": store.lang.rawValue,
             "topLang": store.topLang.map { siteTopLang($0) as Any } ?? NSNull(),
@@ -56,6 +60,7 @@ enum Backup {
             "ios_showDiscoverTab": store.showDiscoverTab,
             "ios_customization": customization,
             "timestamps": store.chatTimestamps,
+            "timeFormat": store.timeFormat,
             "keepDeleted": store.chatShowDeleted,
             "loadHistory": store.chatLoadRecent,
             "hideBots": store.chatHideBots,
@@ -95,9 +100,13 @@ enum Backup {
             "ios_chatKeyboardSuggestions": store.chatKeyboardSuggestions,
             "ios_chatReturnSends": store.chatReturnSends,
             "ios_downloadWifiOnly": store.downloadWifiOnly,
+            "ios_syncSettings": store.syncSettings,
             // Pour les versions d'avant « qualityPref » (audio seul retenu).
             "ios_preferAudioOnly": store.preferAudioOnly,
         ]
+    }
+
+    static func export(store: AppStore) -> Data {
         let root: [String: Any] = [
             "format": format,
             "version": 1,
@@ -109,7 +118,7 @@ enum Backup {
             // Chaînes et catégories masquées, même format que le site (`at`
             // en millisecondes). Clé ignorée par les versions d'avant.
             "hidden": store.hidden.backupJSON(),
-            "settings": settings,
+            "settings": settingsJSON(store),
         ]
         return (try? JSONSerialization.data(withJSONObject: root, options: [.prettyPrinted, .sortedKeys])) ?? Data()
     }
@@ -151,7 +160,14 @@ enum Backup {
         hidden.merge(backup: root["hidden"])
         store.hidden = hidden
 
-        guard let s = root["settings"] as? [String: Any] else { return (added, skipped) }
+        if let s = root["settings"] as? [String: Any] { applySettings(s, to: store) }
+        return (added, skipped)
+    }
+
+    /// Réglages d'une sauvegarde — ou d'une section reçue par la synchro des
+    /// réglages — repris : chaque valeur validée ; une clé absente, inconnue
+    /// ou invalide ne change rien.
+    static func applySettings(_ s: [String: Any], to store: AppStore) {
         func bool(_ k: String, _ apply: (Bool) -> Void) { if let v = s[k] as? Bool { apply(v) } }
         func num(_ k: String, _ range: ClosedRange<Double>, _ apply: (Double) -> Void) {
             if let v = s[k] as? Double, range.contains(v) { apply(v) }
@@ -182,6 +198,7 @@ enum Backup {
             store.customization = c
         }
         bool("timestamps") { store.chatTimestamps = $0 }
+        if let v = s["timeFormat"] as? String, ["auto", "12", "24"].contains(v) { store.timeFormat = v }
         bool("keepDeleted") { store.chatShowDeleted = $0 }
         bool("loadHistory") { store.chatLoadRecent = $0 }
         bool("hideBots") { store.chatHideBots = $0 }
@@ -220,6 +237,7 @@ enum Backup {
         bool("ios_chatKeyboardSuggestions") { store.chatKeyboardSuggestions = $0 }
         bool("ios_chatReturnSends") { store.chatReturnSends = $0 }
         bool("ios_downloadWifiOnly") { store.downloadWifiOnly = $0 }
+        bool("ios_syncSettings") { store.syncSettings = $0 }
         // Qualité préférée (nom du site). « auto » du site devient « source »
         // tant que l'app n'a pas d'Auto ; une hauteur hors paliers retenue
         // par le lecteur du site (« 1440 », « 936 ») prend le palier le plus
@@ -236,6 +254,5 @@ enum Backup {
             if audio { store.preferredQuality = "audio" }
             else if store.preferAudioOnly { store.preferredQuality = "source" }
         }
-        return (added, skipped)
     }
 }

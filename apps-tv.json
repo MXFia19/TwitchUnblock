@@ -25,6 +25,15 @@
       },
       "versions": [
         {
+          "version": "0.1.28",
+          "buildVersion": "28",
+          "date": "2026-10-19",
+          "localizedDescription": "- Improvements and fixes",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-test-28/TwitchUnblockTV.ipa",
+          "size": 2520114,
+          "commit": "ff7053ac8f7eb1af374a4128e71740033ab32795"
+        },
+        {
           "version": "0.1.27",
           "buildVersion": "27",
           "date": "2026-10-19",
@@ -169,10 +178,10 @@
           "commit": "f190db7aacfac668c8d385753e5d5a90e8fc05db"
         }
       ],
-      "version": "0.1.27",
+      "version": "0.1.28",
       "versionDate": "2026-10-19",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-test-27/TwitchUnblockTV.ipa",
-      "size": 2520113
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-test-28/TwitchUnblockTV.ipa",
+      "size": 2520114
     }
   ]
 }

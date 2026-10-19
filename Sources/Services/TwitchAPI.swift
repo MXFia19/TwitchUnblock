@@ -2481,53 +2481,96 @@ private func helixSchedule(channelId: String, token: String) async -> ChannelSch
     return ChannelSchedule(segments: segments.sorted { $0.start < $1.start }, vacation: vacation)
 }
 
-/// Planning par GQL public : les créneaux des quatre prochaines semaines.
-/// nil si Twitch n'a pas répondu ou refuse la requête ; chaîne introuvable
-/// ou sans planning : vide.
+/// Planning par GQL public : `segments(relativeDate:)` rend la semaine qui
+/// contient la date (Twitch refuse `startAt`/`endAt`). Il n'en sert qu'une
+/// par requête et par chaîne (plusieurs semaines dans une même requête
+/// reviennent vides ou mêlées) : une requête par semaine, celle en cours,
+/// puis les trois suivantes en parallèle. Pas de « répété » dans GQL, mais
+/// `repeatEndsAfterCount` vaut 1 pour un créneau unique (0 : répété sans
+/// fin). Les vacances sont son « interruption ». nil si Twitch n'a pas
+/// répondu ou refuse une des requêtes ; chaîne introuvable ou sans
+/// planning : vide.
 private func gqlSchedule(login: String) async -> ChannelSchedule? {
-    let iso = ISO8601DateFormatter()
     let now = Date()
-    let from = iso.string(from: now.addingTimeInterval(-12 * 3600))
-    let to = iso.string(from: now.addingTimeInterval(28 * 86400))
-    let q = """
-    query($l: String!) { user(login: $l) { channel { schedule {
-      segments(startAt: "\(from)", endAt: "\(to)") { id startAt endAt title categories { displayName } }
-    } } } }
-    """
-    guard let d = await gqlRequest(q, ["l": login]) else { return nil }
-    guard let schedule = ((d["user"] as? [String: Any])?["channel"] as? [String: Any])?["schedule"] as? [String: Any]
-    else { return .empty }
-    var segments: [ScheduleSegment] = []
-    for s in schedule["segments"] as? [[String: Any]] ?? [] {
-        guard let start = parseTwitchDate(s["startAt"] as? String) else { continue }
-        let category = (s["categories"] as? [[String: Any]])?.first?["displayName"] as? String ?? ""
-        segments.append(ScheduleSegment(
-            id: "\(s["id"] as? String ?? "")-\(Int(start.timeIntervalSince1970))",
-            start: start,
-            end: parseTwitchDate(s["endAt"] as? String),
-            title: s["title"] as? String ?? "",
-            category: category,
-            recurring: false))
+    let week: TimeInterval = 7 * 86400
+    func scheduleOf(_ d: [String: Any]) -> [String: Any]? {
+        ((d["user"] as? [String: Any])?["channel"] as? [String: Any])?["schedule"] as? [String: Any]
     }
-    return ChannelSchedule(segments: markWeekly(segments.sorted { $0.start < $1.start }))
+    guard let first = await gqlScheduleWeek(login: login, at: now,
+                                            extra: "nextSegment { id } interruption { startAt endAt }")
+    else { return nil }
+    guard let schedule = scheduleOf(first) else { return .empty }
+    var weeks = [schedule]
+    // Ni prochain live ni vacances (la plupart des chaînes) : les semaines
+    // suivantes n'ont rien à dire.
+    if schedule["nextSegment"] is [String: Any] || schedule["interruption"] is [String: Any] {
+        async let second = gqlScheduleWeek(login: login, at: now.addingTimeInterval(week))
+        async let third = gqlScheduleWeek(login: login, at: now.addingTimeInterval(2 * week))
+        async let fourth = gqlScheduleWeek(login: login, at: now.addingTimeInterval(3 * week))
+        let rest = await [second, third, fourth]
+        for result in rest {
+            guard let data = result else { return nil }
+            weeks.append(scheduleOf(data) ?? [:])
+        }
+    }
+    // Fenêtre : douze heures en arrière (un créneau en cours), quatre
+    // semaines devant, comme l'export iCalendar ; la semaine en cours
+    // commence avant aujourd'hui.
+    let windowStart = now.addingTimeInterval(-12 * 3600)
+    let windowEnd = now.addingTimeInterval(28 * 86400)
+    var segments: [ScheduleSegment] = []
+    var seen = Set<String>()
+    for w in weeks {
+        for s in w["segments"] as? [[String: Any]] ?? [] {
+            guard let start = parseTwitchDate(s["startAt"] as? String) else { continue }
+            let end = parseTwitchDate(s["endAt"] as? String)
+            guard (end ?? start.addingTimeInterval(3600)) > windowStart, start < windowEnd else { continue }
+            // Un créneau répété garde son id d'une semaine à l'autre : l'heure
+            // le distingue. Rendu deux fois : gardé une fois.
+            let id = "\(s["id"] as? String ?? "")-\(Int(start.timeIntervalSince1970))"
+            guard seen.insert(id).inserted else { continue }
+            let repeats = s["repeatEndsAfterCount"] as? Int
+            segments.append(ScheduleSegment(
+                id: id,
+                start: start,
+                end: end,
+                title: s["title"] as? String ?? "",
+                category: (s["categories"] as? [[String: Any]])?.first?["displayName"] as? String ?? "",
+                recurring: repeats != nil && repeats != 1,
+                canceled: s["isCancelled"] as? Bool ?? false))
+        }
+    }
+    var vacation: ScheduleVacation? = nil
+    if let v = schedule["interruption"] as? [String: Any],
+       let start = parseTwitchDate(v["startAt"] as? String),
+       let end = parseTwitchDate(v["endAt"] as? String) {
+        vacation = ScheduleVacation(start: start, end: end)
+    }
+    return ChannelSchedule(segments: segments.sorted { $0.start < $1.start }, vacation: vacation)
 }
 
-/// GQL ne dit pas qu'un créneau se répète : un même jour, à la même heure
-/// et sous le même titre d'une semaine à l'autre, il est signalé comme tel.
-private func markWeekly(_ list: [ScheduleSegment]) -> [ScheduleSegment] {
-    let cal = Calendar.current
-    func key(_ s: ScheduleSegment) -> String {
-        let c = cal.dateComponents([.weekday, .hour, .minute], from: s.start)
-        return "\(c.weekday ?? 0)-\(c.hour ?? 0)-\(c.minute ?? 0)-\(s.title)"
+/// Une semaine du planning par GQL public : celle qui contient `date`, avec
+/// `extra` (champs du planning demandés en plus). Ses données ; nil si
+/// Twitch n'a pas répondu ou refuse la requête, même en partie.
+private func gqlScheduleWeek(login: String, at date: Date, extra: String = "") async -> [String: Any]? {
+    let iso = ISO8601DateFormatter()
+    iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    // Date calculée ici, jamais saisie : écrite dans la requête, son type GQL
+    // n'a pas à être nommé.
+    let q = """
+    query($l: String!) { user(login: $l) { channel { schedule {
+      \(extra)
+      segments(relativeDate: "\(iso.string(from: date))") {
+        id startAt endAt title isCancelled repeatEndsAfterCount categories { displayName }
+      }
+    } } } }
+    """
+    guard let json = await gqlResponse(q, ["l": login]) else { return nil }
+    if let errors = json["errors"] as? [Any], !errors.isEmpty {
+        logger.warn("GQL", "Requête refusée", gqlErrorSummary(json))
+        return nil
     }
-    var counts: [String: Int] = [:]
-    for s in list { counts[key(s), default: 0] += 1 }
-    var out: [ScheduleSegment] = []
-    for var s in list {
-        if (counts[key(s)] ?? 0) > 1 { s.recurring = true }
-        out.append(s)
-    }
-    return out
+    return json["data"] as? [String: Any] ?? [:]
 }
 
 /// Planning par l'export iCalendar de Helix, public (sans jeton) : créneaux

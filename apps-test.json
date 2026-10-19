@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.5.1",
+          "buildVersion": "329",
+          "date": "2026-10-19",
+          "localizedDescription": "- Chat: the Return key now hides the keyboard instead of sending (the send button is right next to it); Settings → Chat → \"Return sends the message\" brings the old behavior back\n- Chat: tapping the chat while the keyboard is open only hides the keyboard, without opening the message or emote card",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-329/TwitchUnblock.ipa",
+          "size": 3898972,
+          "commit": "ec357e5b1bf0464cc186d94f066ea834541518ed"
+        },
+        {
           "version": "1.5.0",
           "buildVersion": "328",
           "date": "2026-10-19",
@@ -280,25 +289,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-291/TwitchUnblock.ipa",
           "size": 3522836,
           "commit": "3943049b19d76f2fd0bc399e95ff3ba98f223adf"
-        },
-        {
-          "version": "1.3.36",
-          "buildVersion": "290",
-          "date": "2026-10-15",
-          "localizedDescription": "- Multi-live now mixes lives and VODs (up to 4 videos): add a VOD from the player's ⋯ menu, by long-pressing a VOD card or My VODs, or by pasting its link or ID in the mosaic\n- VOD tiles resume where you left off, with play/pause, ±10 s, a seek bar and “Watch again”; their progress is saved and synced\n- The multi-live side chat replays the chat of the VOD you hear\n- The multi-live “+” accepts a channel link or @name\n- Chat: the Hype Train now shows up as soon as it is incoming, with its checkmarks, how many more supports it needs and a countdown, like on Twitch\n- Chat: see the Hype Train leave the station, the time left on each level, and a short message when a level or the whole train completes\n- Chat: the Hype Train banner no longer freezes when the Twitch web session has expired\n- Chat: the folded event icons show the time left on the Hype Train\n- Chat: if Twitch bans your account from a channel's chat, the chat now keeps going in read-only mode (without your account) with a clear banner and a \"Retry with my account\" button, instead of going silent with the message box still active.\n- Chat: when you're timed out in a chat, a line now says for how long.\n- Chat: the app's own lines in the chat are now labelled \"System\" in your language.\n- Subscribed to a channel (or Turbo)? With the web session connected, its lives now play through your Twitch account, without ad breaks (Settings → Player → Watch ad-free with my sub).\n- During a channel's ad break, the player now explains the purple “Commercial break in progress” screen, shows when the stream comes back and mutes the sound meanwhile.\n- Live source descriptions no longer claim the proxies are ad-free: they still get the channel's ad breaks.\n- The chat no longer stays stuck on “Connecting…” when an emote service is slow or blocked, and says so after three failed attempts.\n- Reopening a VOD in the same session no longer shows its restored muted parts in orange on the progress bar.\n- Muted parts of recent VODs in the MP4 format keep their sound again when Twitch still serves it, instead of being swapped for the silent version.\n- Emote cards also open from a message thread, with sharp FrankerFaceZ emotes and badges.\n- Emote cards now show the scope and author of BetterTTV, FFZ and 7TV emotes, the 7TV original name, zero-width and modifier emotes, and a link to the emote's page.\n- Twitch emote cards show the emote type (global, sub tier, channel points), the channel it belongs to (live or not, with See channel) and its other sub emotes of the same tier.",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-290/TwitchUnblock.ipa",
-          "size": 3390174,
-          "commit": "aa3112c4efc3bb11acb67eb72a02fd95fbe7b726"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.5.0",
+      "version": "1.5.1",
       "versionDate": "2026-10-19",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-328/TwitchUnblock.ipa",
-      "size": 3896306
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-329/TwitchUnblock.ipa",
+      "size": 3898972
     }
   ],
   "news": []

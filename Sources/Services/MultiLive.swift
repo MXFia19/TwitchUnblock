@@ -628,6 +628,8 @@ final class MultiLiveSession: ObservableObject {
     /// elles repartent à la fin (PlaybackInterruptions) — les VODs à
     /// l'endroit, les directs relus au bord.
     private var interruptions: PlaybackInterruptions?
+    /// Relance prévue au retour du réseau (une seule à la fois).
+    private var networkRetry: Task<Void, Never>?
 
     func configure(resume: @escaping (String) -> Double,
                    save: @escaping (String, Double) -> Void,
@@ -668,6 +670,8 @@ final class MultiLiveSession: ObservableObject {
     /// Fermeture : chaque VOD enregistre sa position avant de s'arrêter.
     func stopAll() {
         interruptions = nil
+        networkRetry?.cancel()
+        networkRetry = nil
         tiles.values.forEach { $0.stop() }
         tiles = [:]
         refreshScreen()
@@ -685,6 +689,22 @@ final class MultiLiveSession: ObservableObject {
     func resumeStopped() {
         interruptions?.settle()
         tiles.values.forEach { $0.resumeIfStopped() }
+    }
+
+    /// Réseau revenu après une coupure : 2 s plus tard (le temps que la
+    /// connexion s'établisse), les tuiles en échec repartent, une fois, comme
+    /// avec « Réessayer ». Rien si aucune n'était en échec.
+    func networkRestored() {
+        guard networkRetry == nil, tiles.values.contains(where: { $0.phase == .failed }) else { return }
+        networkRetry = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            guard let self, !Task.isCancelled else { return }
+            self.networkRetry = nil
+            let failed = self.tiles.values.filter { $0.phase == .failed }
+            guard !failed.isEmpty else { return }
+            logger.info("MULTI", "Réseau revenu : relance des tuiles en échec", "\(failed.count)")
+            failed.forEach { $0.retry() }
+        }
     }
 
     /// Avant l'arrière-plan, les positions (la sauvegarde part en

@@ -64,6 +64,10 @@ struct MultiLiveView: View {
         // dès l'ouverture, même toutes en pause, hors ligne ou en échec.
         .onChange(of: session.keepsScreenOn) { ScreenAwake.set("multi", $0) }
         .onChange(of: scenePhase) { session.sceneChanged($0) }
+        // Réseau revenu après une coupure : les tuiles en échec repartent.
+        .onReceive(NotificationCenter.default.publisher(for: .tuNetworkRestored)) { _ in
+            session.networkRestored()
+        }
         // Minuteur de veille écoulé : la mosaïque s'arrête et se ferme, comme
         // le lecteur — sans réveiller la musique d'une autre app. Seul l'écran
         // du lecteur l'écoutait, et il est fermé pendant le multi-live : les

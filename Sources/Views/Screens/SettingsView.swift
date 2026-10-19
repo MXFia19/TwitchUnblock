@@ -1223,6 +1223,9 @@ struct SettingsView: View {
                 toggleRow(store.t("restore_muted"), store.t("restore_muted_sub"),
                           $store.restoreMutedAudio, log: "Rétablir le son des passages coupés")
                 Divider().background(Color.tBorder)
+                toggleRow(store.t("dl_wifi_only"), store.t("dl_wifi_only_sub"),
+                          $store.downloadWifiOnly, log: "Téléchargements en Wi-Fi seulement")
+                Divider().background(Color.tBorder)
                 toggleRow(store.t("multi_chat"), store.t("multi_chat_sub"),
                           $store.multiLiveChat, log: "Chat dans le multi-live")
                 Divider().background(Color.tBorder)

@@ -685,6 +685,16 @@ final class AppStore: ObservableObject {
     @Published var restoreMutedAudio: Bool = true {
         didSet { UserDefaults.standard.set(restoreMutedAudio, forKey: "cfg_restore_muted") }
     }
+    /// Téléchargements de VODs en Wi-Fi seulement (VodDownloads le lit dans
+    /// UserDefaults) : désactivé par défaut. Changé, ce qui attendait le
+    /// Wi-Fi repart, ou ce qui passe par les données mobiles s'arrête.
+    @Published var downloadWifiOnly: Bool = false {
+        didSet {
+            UserDefaults.standard.set(downloadWifiOnly, forKey: "cfg_dl_wifi_only")
+            guard downloadWifiOnly != oldValue else { return }
+            Task { @MainActor in VodDownloads.shared.networkChanged() }
+        }
+    }
     /// Retouche de la synchro auto, en secondes (+ = chat plus tard). Le bon
     /// décalage dépend aussi du retard des autres spectateurs, qu'on ne peut
     /// qu'estimer : on laisse corriger d'une seconde ou deux.
@@ -857,6 +867,7 @@ final class AppStore: ObservableObject {
         autoChatDelay      = ud.object(forKey: "dbg_chat_delay") as? Bool ?? false
         chatSyncNudge      = ud.double(forKey: "chat_sync_nudge")
         restoreMutedAudio  = ud.object(forKey: "cfg_restore_muted") as? Bool ?? true
+        downloadWifiOnly   = ud.bool(forKey: "cfg_dl_wifi_only")
         // Lu élément par élément : un seul illisible ne vide plus toute la
         // liste. S'il en manque, la base de la synchro n'est plus fiable (un
         // élément perdu ici passerait pour supprimé) : elle est oubliée.

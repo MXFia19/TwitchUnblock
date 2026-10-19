@@ -20,6 +20,8 @@ struct MainTabView: View {
     @State private var playerVisible = false
     @State private var loading = false
     @State private var errorMsg: String? = nil
+    /// Relance prévue au retour du réseau, lecteur resté sur son erreur.
+    @State private var networkRetry: Task<Void, Never>? = nil
     @State private var statusTitle = ""
     /// Source du direct en cours d'essai (écran de chargement) : elles sont
     /// essayées l'une après l'autre, l'attente peut durer.
@@ -332,7 +334,8 @@ struct MainTabView: View {
                     // valeurs par défaut (`soft:`) quand une méthode est passée
                     // comme valeur, donc `playLive` vaudrait ici
                     // `(String, Bool) -> Void` et ne collerait pas au callback.
-                    case .home:    HomeView(onPlayStream: { playLive($0) })
+                    case .home:    HomeView(onPlayStream: { playLive($0) },
+                                            onPlayVod: { playVod($0, $1, $2, $3) })
                     // Aperçus seulement sans lecteur ouvert (ni réduit, ni
                     // multi-live) et sans feuille par-dessus.
                     case .discover: DiscoverView(active: playerMode == nil && !presentationOpen,
@@ -645,6 +648,20 @@ struct MainTabView: View {
         .onReceive(NotificationCenter.default.publisher(for: .tuPlaybackStalling)) { note in
             guard note.object as? String == "immersive" else { return }
             lowerQualityAfterStalls()
+        }
+        // Réseau revenu après une coupure : un lecteur resté sur son erreur
+        // (« Réessayer ») relit le flux seul, une fois, 2 s plus tard. Celui
+        // dont la lecture s'est arrêtée en route se relance de lui-même
+        // (ImmersivePlayer).
+        .onReceive(NotificationCenter.default.publisher(for: .tuNetworkRestored)) { _ in
+            guard playerMode != nil, errorMsg != nil, !loading, networkRetry == nil else { return }
+            networkRetry = Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                networkRetry = nil
+                guard !Task.isCancelled, playerMode != nil, errorMsg != nil, !loading else { return }
+                logger.info("LECTEUR", "Réseau revenu : relance de la lecture", nil)
+                reloadCurrent()
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: .openMyFeedback)) { _ in
             guard !showMyFeedback else { return }

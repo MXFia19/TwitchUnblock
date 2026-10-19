@@ -63,7 +63,9 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   keeps your place, in Apple's player too (a live you rewound keeps its delay);
   a VOD you had finished starts over from the beginning; when the stream drops for good, the
   player says so with **Retry** instead of freezing (a live first reloads
-  itself twice, unless you had paused it).
+  itself twice, unless you had paused it). When the connection comes back
+  after a drop, a player stopped on **Retry** (or on a loading error) and
+  failed multi-live tiles start again on their own, once, two seconds later.
 * 🐢 **Playback speed** — 0.25× to 2× on VODs and clips, from the ⋯ menu (or
   Apple's own speed menu in the native player and on Apple TV). The VOD speed
   is remembered from one VOD to the next, shown next to the timer, and synced
@@ -138,8 +140,9 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   when a stream opens), Twitch replaces the stream with its purple
   “Commercial break in progress” screen or a real ad. The player now says so,
   with a countdown to the stream's return, and mutes the sound meanwhile
-  (restored at the end). Works in the app's player, Apple's player and each
-  multi-live tile.
+  (restored at the end). Works in the app's player, Apple's player, each
+  multi-live tile and on Apple TV (banner and countdown only: tvOS's player
+  has no button to turn the sound back on).
 * ⏪ **Rewind a live stream (DVR)** — when the channel archives its broadcasts,
   the progress bar covers the *whole* stream, not just the rewindable window.
   Scrub past that window and the recording takes over at that exact moment.
@@ -192,7 +195,12 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   Twitch still has it (a day or two after the stream; on VODs in the MP4
   format, whenever Twitch serves them with their sound). The chat can be kept
   too and is replayed offline, emotes included. Export a download as a single
-  file (Files, AirDrop, VLC). Pause, resume and delete from the list.
+  file (Files, AirDrop, VLC). Before it starts, the sheet shows the estimated
+  size (the quality's bitrate × the length) and the free space, and refuses
+  with a clear message when there isn't enough room. **Download on Wi-Fi
+  only** (Settings → Player, or right in the sheet; off by default) keeps
+  downloads off cellular data: they wait for Wi-Fi, then resume on their own.
+  Pause, resume (▶), retry (⟳) and delete from the list.
 * 🧩 **Multi-live** — up to four videos side by side, lives and VODs mixed,
   on iPad as on iPhone: long-press a live or VOD card (a channel's VODs and
   highlights, My VODs), or use the player's ⋯ menu, to add it — a “+” then
@@ -339,6 +347,10 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
 * 🏠 **Home** — your followed channels that are live (up to 300 at once), top
   streams (France or worldwide; without an account, **Load more** adds 30 at a
   time).
+* ▶️ **Continue watching** — at the top of Home, the VODs you started (more
+  than 30 s watched, not finished), latest first (up to 10), with their
+  progress; a tap resumes where you stopped, as from My VODs. Hide it in
+  Settings → General → Customize the app.
 * 📜 **Long lists without an account** — a channel's VODs and clips, the
   categories and the live channels in a category keep loading past the first
   100 without logging in (the next pages are asked the way Twitch's Android
@@ -404,7 +416,7 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
 * 🧩 **Customize the app** (Settings → General) — show, hide and reorder the
   tabs (and pick the one the app opens on), Home's live tabs and cards
   (Followed / Top / Offline, announcements, sign-in and web session cards,
-  the Categories view), the player's bottom bar buttons (mute, PiP, reload,
+  Continue watching, the Categories view), the player's bottom bar buttons (mute, PiP, reload,
   chat layout, rotation, and optionally sleep timer, multi-live and rewind;
   AirPlay too) and the chat banners (pinned message, drops, polls,
   predictions, hype train, raids, watch streak, Follow button). Drag ≡ to
@@ -496,6 +508,10 @@ unsigned `tv-test-N` pre-release:
   Following list refreshes on its own (back on the tab or in the app, every
   2 minutes while it's shown, and when you come back down from the tab bar),
   so ended lives don't linger.
+* **Continue watching** at the top of Following, with or without an
+  account: the VODs started on this Apple TV (more than 30 s, not finished),
+  last watched first (up to 10), with their progress; Select or Play resumes
+  where you stopped.
 * The remote's **Play** button starts the focused live or VOD, like Select; on
   an offline channel (Following, Search) it opens the channel and plays its
   latest broadcast (or its live, if it just started).
@@ -510,6 +526,8 @@ unsigned `tv-test-N` pre-release:
 * **View channel** in the player's bar opens the channel's page, with its
   past broadcasts; a video started there plays on top of it, and Menu goes
   back.
+* During a channel's ad break on a live, the same banner as on the iPhone
+  says what the purple screen is, with a countdown to the stream's return.
 * Usage count, like the iPhone (Account → Share my usage): a random install ID,
   or your Twitch account when signed in, the version, the language and how many
   lives and VODs started (which source, failures), at most once an hour; never

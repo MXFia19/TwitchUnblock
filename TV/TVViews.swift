@@ -151,11 +151,18 @@ struct TVFollowingTab: View {
     /// onglets, ou sur une page ouverte d'ici), et depuis quand aucune.
     @State private var focusedCards = 0
     @State private var unfocusedSince = Date.distantPast
+    /// VODs entamées sur cette Apple TV (TVProgress) : la rangée « Reprendre »,
+    /// en tête, avec ou sans compte.
+    @State private var resume: [TVResumeItem] = []
+    /// Ce que Twitch dit de chacune (titre, chaîne, image, durée), demandé
+    /// une fois par VOD.
+    @State private var resumeMetas: [String: VodMeta] = [:]
     private let offlineColumns = Array(repeating: GridItem(.flexible(), spacing: 40), count: 6)
 
     var body: some View {
         NavigationStack(path: $path) {
             ScrollView {
+                if !resume.isEmpty { resumeSection }
                 if session.token == nil {
                     TVMessage(text: session.t("tv_need_login"))
                 } else {
@@ -192,6 +199,34 @@ struct TVFollowingTab: View {
                 if visible, scenePhase == .active { await load() }
             }
         }
+    }
+
+    /// « Reprendre » : les VODs entamées, la dernière regardée d'abord ;
+    /// Sélection ou Play la reprend où elle en était (TVProgress).
+    private var resumeSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(session.t("tv_resume")).font(.title3.bold())
+                .padding(.horizontal, 64)
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(alignment: .top, spacing: 48) {
+                    ForEach(resume) { r in
+                        Button {
+                            play(r.playback)
+                        } label: {
+                            TVResumeCard(item: r)
+                        }
+                        .tvCard()
+                        .onPlayPauseCommand { play(r.playback) }
+                    }
+                }
+                // Place pour la carte qui grandit avec le focus.
+                .padding(.horizontal, 64)
+                .padding(.vertical, 32)
+            }
+            // Atteinte en montant depuis n'importe quelle carte du dessous.
+            .focusSection()
+        }
+        .padding(.top, 32)
     }
 
     private var offlineSection: some View {
@@ -246,6 +281,8 @@ struct TVFollowingTab: View {
     }
 
     private func load() async {
+        // VODs entamées : sans compte aussi, sans attendre les lives.
+        Task { await loadResume() }
         // Compte pas chargé au lancement (Apple TV sortie de veille avant le
         // Wi-Fi) : relu ici. Sinon « Aucun live » restait toute la séance ;
         // toujours absent, c'est une erreur (Réessayer en revenant), pas un vide.
@@ -285,6 +322,80 @@ struct TVFollowingTab: View {
         guard let infos = await getChannelsGQL(logins: rest) else { return }
         offline = infos.filter { $0.stream == nil }
             .sorted { ($0.lastEnd ?? .distantPast) > ($1.lastEnd ?? .distantPast) }
+    }
+
+    /// Positions relues (TVProgress), et ce que Twitch dit des VODs pas
+    /// encore connues, toutes à la fois. Une VOD introuvable (supprimée), ou
+    /// finie d'après sa durée, n'apparaît pas.
+    private func loadResume() async {
+        let recent = TVProgress.recent()
+        let missing = recent.map { $0.id }.filter { resumeMetas[$0] == nil }
+        if !missing.isEmpty {
+            let fetched = await withTaskGroup(of: (String, VodMeta?).self,
+                                              returning: [String: VodMeta].self) { group in
+                for id in missing {
+                    group.addTask {
+                        let meta = await getVodMetaGQL(id)
+                        return (id, meta)
+                    }
+                }
+                var out: [String: VodMeta] = [:]
+                for await result in group {
+                    if let meta = result.1 { out[result.0] = meta }
+                }
+                return out
+            }
+            resumeMetas.merge(fetched) { _, new in new }
+        }
+        resume = recent.compactMap { entry -> TVResumeItem? in
+            guard let meta = resumeMetas[entry.id] else { return nil }
+            if meta.lengthSeconds > 0, Double(meta.lengthSeconds) - entry.seconds < 120 { return nil }
+            return TVResumeItem(id: entry.id, seconds: entry.seconds, meta: meta)
+        }
+    }
+}
+
+/// VOD entamée sur cette Apple TV (TVProgress), avec ce qu'en dit Twitch.
+struct TVResumeItem: Identifiable {
+    let id: String
+    let seconds: Double
+    let meta: VodMeta
+
+    /// Avec sa chaîne (login) : le chat et « Voir la chaîne » en ont besoin.
+    var playback: TVPlayback { .vod(id: id, title: meta.title, channel: meta.login) }
+    /// Part déjà vue (0 si la durée est inconnue).
+    var progress: Double {
+        meta.lengthSeconds > 0 ? min(1, seconds / Double(meta.lengthSeconds)) : 0
+    }
+}
+
+/// Carte d'une VOD entamée (rangée « Reprendre ») : image avec la part déjà
+/// vue, titre et chaîne.
+struct TVResumeCard: View {
+    let item: TVResumeItem
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ZStack(alignment: .bottom) {
+                TVThumbnail(url: item.meta.thumb, ratio: 16 / 9)
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        Color.black.opacity(0.5)
+                        Color.tPrimary.frame(width: geo.size.width * item.progress)
+                    }
+                }
+                .frame(height: 6)
+            }
+            VStack(alignment: .leading, spacing: 4) {
+                Text(item.meta.title).font(.caption).lineLimit(2)
+                if !item.meta.streamer.isEmpty {
+                    Text(item.meta.streamer).font(.caption2).foregroundColor(Color.tPurple).lineLimit(1)
+                }
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .frame(width: 412)
     }
 }
 

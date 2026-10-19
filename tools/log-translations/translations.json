@@ -453,5 +453,9 @@
  "Session web refusée pour les événements : lecture sans elle": ["Web session refused for live events: reading without it", "Sesión web rechazada para los eventos: lectura sin ella", "Веб-сессия отклонена для событий: чтение без неё"],
  "Chat du téléchargement indisponible": ["Download chat unavailable", "Chat de la descarga no disponible", "Чат загрузки недоступен"],
  "Chaînes suivies du compte illisibles : dernière liste connue": ["Account follows unreadable: last known list used", "Canales seguidos de la cuenta ilegibles: última lista conocida", "Отслеживаемые каналы аккаунта не прочитаны: последний известный список"],
- "Plus de 500 chaînes suivies : les 500 premières seulement": ["More than 500 followed channels: only the first 500", "Más de 500 canales seguidos: solo los 500 primeros", "Более 500 отслеживаемых каналов: только первые 500"]
+ "Plus de 500 chaînes suivies : les 500 premières seulement": ["More than 500 followed channels: only the first 500", "Más de 500 canales seguidos: solo los 500 primeros", "Более 500 отслеживаемых каналов: только первые 500"],
+ "Réseau revenu : relance de la lecture": ["Network back: restarting playback", "Red recuperada: se relanza la reproducción", "Сеть восстановлена: воспроизведение перезапускается"],
+ "Réseau revenu : relance des tuiles en échec": ["Network back: restarting failed tiles", "Red recuperada: se relanzan los mosaicos fallidos", "Сеть восстановлена: перезапуск неудавшихся плиток"],
+ "En attente du Wi-Fi (Wi-Fi seulement)": ["Waiting for Wi-Fi (Wi-Fi only)", "Esperando el Wi-Fi (solo con Wi-Fi)", "Ожидание Wi-Fi (только по Wi-Fi)"],
+ "Reprise du téléchargement qui attendait le Wi-Fi": ["Resuming the download that was waiting for Wi-Fi", "Se reanuda la descarga que esperaba el Wi-Fi", "Возобновление загрузки, ожидавшей Wi-Fi"]
 }

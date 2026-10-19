@@ -29,6 +29,11 @@ import UserNotifications
 //
 //  Le chat du passage peut être gardé avec (VodChatArchive), pour être
 //  rejoué hors ligne ; un téléchargement fini s'exporte en un seul fichier.
+//
+//  « Wi-Fi seulement » (Réglages, désactivé par défaut) : aucun fichier ne
+//  passe par les données mobiles. App ouverte, le téléchargement attend le
+//  Wi-Fi (en pause, raison « wifi ») et repart seul à son retour ; app
+//  quittée, c'est iOS qui attend le Wi-Fi pour ses fichiers.
 // ═══════════════════════════════════════════════════════════════════════════
 
 struct VodDownload: Identifiable, Codable, Equatable {
@@ -173,6 +178,8 @@ enum VodDownloadFailure {
     static let network = "network"
     static let space = "space"
     static let playlist = "playlist"
+    /// En pause, pas en échec : « Wi-Fi seulement » en données mobiles.
+    static let wifi = "wifi"
 }
 
 // MARK: – Gestionnaire
@@ -218,6 +225,19 @@ final class VodDownloads: ObservableObject {
     nonisolated static var exportsDirectory: URL {
         FileManager.default.temporaryDirectory.appendingPathComponent("Exports", isDirectory: true)
     }
+
+    /// Réglage « Wi-Fi seulement » (AppStore.downloadWifiOnly).
+    nonisolated static var wifiOnly: Bool { UserDefaults.standard.bool(forKey: "cfg_dl_wifi_only") }
+    /// « Wi-Fi seulement » et en données mobiles : rien ne se télécharge.
+    nonisolated static var cellularBlocked: Bool { wifiOnly && NetworkStatus.shared.isCellular }
+
+    /// Espace libre pour l'app, en octets (ce qu'iOS libérerait au besoin
+    /// compris) ; nil si iOS ne le dit pas.
+    nonisolated static func freeSpace() -> Int64? {
+        let home = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
+        let values = try? home.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey])
+        return values?.volumeAvailableCapacityForImportantUsage
+    }
     private var indexURL: URL { Self.directory.appendingPathComponent("index.json") }
 
     private init() {
@@ -237,6 +257,10 @@ final class VodDownloads: ObservableObject {
         VodDownloader.shared.activate()
         // Et la reprise des téléchargements en cours avec lui.
         if foreground { Task { self.sceneActive() } }
+        // Wi-Fi ↔ données mobiles : « Wi-Fi seulement ».
+        _ = NotificationCenter.default.addObserver(forName: .tuNetworkChanged, object: nil, queue: .main) { _ in
+            Task { @MainActor in VodDownloads.shared.networkChanged() }
+        }
     }
 
     private func save() {
@@ -274,6 +298,12 @@ final class VodDownloads: ObservableObject {
         guard let current = item(id), current.state != .done else { return }
         // Demandé depuis l'app (bouton) : elle est à l'écran, c'est elle qui télécharge.
         if UIApplication.shared.applicationState == .active { foreground = true }
+        // « Wi-Fi seulement » en données mobiles : il attend le Wi-Fi. App
+        // quittée, iOS l'attend de lui-même (VodDownloader).
+        if foreground, Self.cellularBlocked {
+            waitForWifi(id)
+            return
+        }
         update(id) {
             $0.state = .downloading
             $0.reason = nil
@@ -286,8 +316,46 @@ final class VodDownloads: ObservableObject {
 
     func pause(_ id: String) {
         stopWork(id)
-        update(id) { $0.state = .paused }
+        update(id) {
+            $0.state = .paused
+            // Pause voulue : ne repart pas seule au retour du Wi-Fi.
+            $0.reason = nil
+        }
         save()
+    }
+
+    /// « Wi-Fi seulement » en données mobiles : arrêté, en pause jusqu'au
+    /// retour du Wi-Fi (networkChanged) ou jusqu'à « Reprendre ».
+    private func waitForWifi(_ id: String) {
+        stopWork(id)
+        update(id) {
+            $0.state = .paused
+            $0.reason = VodDownloadFailure.wifi
+        }
+        save()
+        logger.info("DOWNLOAD", "En attente du Wi-Fi (Wi-Fi seulement)", id)
+    }
+
+    /// Connexion changée, ou réglage « Wi-Fi seulement » : en données
+    /// mobiles, ce que l'app télécharge s'arrête et attend le Wi-Fi ; en
+    /// Wi-Fi (ou réglage coupé), ce qui l'attendait repart. Hors ligne, rien
+    /// ne bouge : il échouerait aussitôt.
+    func networkChanged() {
+        if Self.cellularBlocked {
+            // App quittée : iOS attend le Wi-Fi pour ses fichiers.
+            guard foreground else { return }
+            for d in items where d.state == .downloading { waitForWifi(d.id) }
+        } else if NetworkStatus.shared.isOnline {
+            resumeWaitingForWifi()
+        }
+    }
+
+    /// Ceux qui attendaient le Wi-Fi repartent.
+    private func resumeWaitingForWifi() {
+        for d in items where d.state == .paused && d.reason == VodDownloadFailure.wifi {
+            logger.info("DOWNLOAD", "Reprise du téléchargement qui attendait le Wi-Fi", d.id)
+            resume(d.id)
+        }
     }
 
     func delete(_ id: String) {
@@ -339,6 +407,8 @@ final class VodDownloads: ObservableObject {
         for d in items where d.state != .paused && d.withChat == true && d.chatCount == nil {
             startChat(d.id)
         }
+        // Ceux qui attendaient le Wi-Fi, s'il est là (ou le réglage coupé).
+        if !Self.cellularBlocked, NetworkStatus.shared.isOnline { resumeWaitingForWifi() }
     }
 
     /// L'app quitte l'écran : ce qui manque passe à iOS, qui continue sans
@@ -416,6 +486,8 @@ final class VodDownloads: ObservableObject {
         }
         if let d = item(id), d.withChat == true, d.chatCount == nil { startChat(id) }
         if names.count >= plan.fileCount { finalize(id, plan); return }
+        // Passé en données mobiles pendant la préparation (« Wi-Fi seulement »).
+        if foreground, Self.cellularBlocked { waitForWifi(id); return }
         if foreground { runInApp(id, plan) } else { handOff(id, plan) }
     }
 
@@ -500,6 +572,9 @@ final class VodDownloads: ObservableObject {
             $0.bytes = bytes
         }
         if names.count >= plan.fileCount { finalize(id, plan); return }
+        // Réseau « perdu » faute de Wi-Fi (données mobiles refusées) : il
+        // attend le Wi-Fi au lieu d'échouer.
+        if problem == VodDownloadFailure.network, Self.cellularBlocked { waitForWifi(id); return }
         fail(id, problem)
     }
 
@@ -818,7 +893,10 @@ enum VodFetcher {
                 if let size = fileSize(folder.appendingPathComponent(existing)) { return .saved(existing, size) }
             }
             do {
-                let (tmp, response) = try await session.download(for: URLRequest(url: url))
+                var request = URLRequest(url: url)
+                // « Wi-Fi seulement » : jamais par les données mobiles.
+                request.allowsCellularAccess = !VodDownloads.wifiOnly
+                let (tmp, response) = try await session.download(for: request)
                 let code = (response as? HTTPURLResponse)?.statusCode ?? 0
                 if code == 200 {
                     let dest = folder.appendingPathComponent(name)
@@ -949,7 +1027,10 @@ final class VodDownloader: NSObject, URLSessionDownloadDelegate {
     }
 
     private func start(_ job: Job, generation: Int) {
-        let task = session.downloadTask(with: job.url)
+        var request = URLRequest(url: job.url)
+        // « Wi-Fi seulement » : iOS attend le Wi-Fi pour ce fichier.
+        request.allowsCellularAccess = !VodDownloads.wifiOnly
+        let task = session.downloadTask(with: request)
         task.taskDescription = Self.describe(job, generation: generation)
         task.resume()
     }

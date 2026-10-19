@@ -60,6 +60,7 @@ private let tvStrings: [Lang: [String: String]] = [
         "tv_chat_forget": "Oublier les réglages propres aux chaînes",
         "tv_offline_channels": "Hors ligne",
         "tv_open_channel": "Voir la chaîne",
+        "tv_resume": "Reprendre",
     ],
     .en: [
         "tv_following": "Following",
@@ -118,6 +119,7 @@ private let tvStrings: [Lang: [String: String]] = [
         "tv_chat_forget": "Forget per-channel chat settings",
         "tv_offline_channels": "Offline",
         "tv_open_channel": "View channel",
+        "tv_resume": "Continue watching",
     ],
     .es: [
         "tv_following": "Seguidos",
@@ -176,6 +178,7 @@ private let tvStrings: [Lang: [String: String]] = [
         "tv_chat_forget": "Olvidar los ajustes de cada canal",
         "tv_offline_channels": "Desconectados",
         "tv_open_channel": "Ver canal",
+        "tv_resume": "Seguir viendo",
     ],
     .ru: [
         "tv_following": "Отслеживаемые",
@@ -234,6 +237,7 @@ private let tvStrings: [Lang: [String: String]] = [
         "tv_chat_forget": "Сбросить настройки чата для каналов",
         "tv_offline_channels": "Не в сети",
         "tv_open_channel": "Открыть канал",
+        "tv_resume": "Продолжить просмотр",
     ],
 ]
 

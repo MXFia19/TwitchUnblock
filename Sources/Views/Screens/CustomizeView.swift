@@ -200,6 +200,7 @@ struct CustomizeView: View {
         case "poll":         return (store.t("cust_dev_poll"), "checklist")
         case "login":        return (store.t("cust_login_card"), "person.crop.circle.badge.plus")
         case "web":          return (store.t("cust_web_banner"), "globe")
+        case "continue":     return (store.t("continue_watching"), "play.circle.fill")
         case "categories":   return (store.t("cust_categories"), "square.grid.2x2.fill")
         // Lecteur
         case "mute":         return (store.t("pb_mute"), "speaker.wave.2.fill")

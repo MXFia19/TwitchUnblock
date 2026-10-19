@@ -94,6 +94,7 @@ enum Backup {
             "ios_chatAutocomplete": store.chatAutocomplete,
             "ios_chatKeyboardSuggestions": store.chatKeyboardSuggestions,
             "ios_chatReturnSends": store.chatReturnSends,
+            "ios_downloadWifiOnly": store.downloadWifiOnly,
             // Pour les versions d'avant « qualityPref » (audio seul retenu).
             "ios_preferAudioOnly": store.preferAudioOnly,
         ]
@@ -218,6 +219,7 @@ enum Backup {
         bool("ios_chatAutocomplete") { store.chatAutocomplete = $0 }
         bool("ios_chatKeyboardSuggestions") { store.chatKeyboardSuggestions = $0 }
         bool("ios_chatReturnSends") { store.chatReturnSends = $0 }
+        bool("ios_downloadWifiOnly") { store.downloadWifiOnly = $0 }
         // Qualité préférée (nom du site). « auto » du site devient « source »
         // tant que l'app n'a pas d'Auto ; une hauteur hors paliers retenue
         // par le lecteur du site (« 1440 », « 936 ») prend le palier le plus

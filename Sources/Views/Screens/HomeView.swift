@@ -3,13 +3,19 @@ import SwiftUI
 // ═══════════════════════════════════════════════════════════════════════════
 //  Accueil : ce qui est en direct maintenant.
 //  Deux vues — les lives (suivies en direct, top, suivies hors ligne) et les
-//  catégories.
+//  catégories. Au-dessus des lives, « Continuer à regarder » : les VODs
+//  entamées de l'historique.
 // ═══════════════════════════════════════════════════════════════════════════
 
 struct HomeView: View {
     let onPlayStream: (String) -> Void
+    /// VOD reprise depuis « Continuer à regarder » (même chemin que « Mes VODs »).
+    var onPlayVod: (String, String?, String?, String?) -> Void = { _, _, _, _ in }
 
     @EnvironmentObject private var store: AppStore
+    /// Durées des VODs entamées : « Continuer à regarder » ne montre que
+    /// celles qui ne sont pas finies.
+    @ObservedObject private var metaStore = VodMetaStore.shared
 
     @State private var followedStreams: [TwitchStream] = []
     /// Lives des chaînes suivies sans compte (sur cet appareil).
@@ -325,6 +331,11 @@ struct HomeView: View {
                         .padding(.top, TSpace.md)
                 }
 
+                // ── Continuer à regarder : VODs entamées, pas finies ───
+                if showsCard("continue") && !continueItems.isEmpty {
+                    continueRow
+                }
+
                 // ── Suivies | Top | Hors ligne : des onglets plutôt qu'à la
                 // suite. Les chaînes hors ligne ont le leur : « Suivies » ne
                 // montre plus que ce qui est en direct. ──
@@ -366,6 +377,114 @@ struct HomeView: View {
         // Tâche détachée : tirer pour rafraîchir annule sa propre tâche dès que
         // la vue se redessine, et la requête annulée vidait les suivis locaux.
         .refreshable { await Task { await loadAll(isRefresh: true) }.value }
+        // Durées des VODs entamées (Continuer à regarder), relues quand
+        // l'historique change ; rien si la carte est masquée.
+        .task(id: continueWanted) { await loadContinueMetas(continueWanted) }
+    }
+
+    // MARK: – Continuer à regarder
+    /// VODs de l'historique (les plus récentes d'abord) vues plus de 30 s.
+    private var continueCandidates: [HistoryItem] {
+        store.history.filter { $0.type == .vod && store.getVodProgress($0.term) > 30 }
+    }
+
+    /// Celles dont il faut la durée ; aucune si la carte est masquée.
+    private var continueWanted: [String] {
+        showsCard("continue") ? continueCandidates.map(\.term) : []
+    }
+
+    /// Les 10 plus récentes qui ne sont pas finies. Durée pas (encore)
+    /// connue : la VOD attend, elle est peut-être finie, ou supprimée.
+    private var continueItems: [HistoryItem] {
+        Array(continueCandidates.filter { isUnfinished($0.term) }.prefix(10))
+    }
+
+    /// Il reste plus de 30 s (sinon la reprise repartirait du début, voir
+    /// ImmersivePlayerModel), et plus de 2 min d'une longue VOD : la fin
+    /// d'un live (écran de fin, raid) ne compte pas.
+    private func isUnfinished(_ vodId: String) -> Bool {
+        guard let total = metaStore.meta(vodId)?.lengthSeconds, total > 0 else { return false }
+        let length = Double(total)
+        let margin = max(30, min(120, length * 0.05))
+        return length - store.getVodProgress(vodId) > margin
+    }
+
+    /// Durées demandées dans l'ordre de l'historique, jusqu'à en avoir 10 à
+    /// montrer (une requête par VOD et par session : VodMetaStore).
+    private func loadContinueMetas(_ ids: [String]) async {
+        var shown = 0
+        for id in ids {
+            await metaStore.load(id)
+            guard !Task.isCancelled else { return }
+            if isUnfinished(id) { shown += 1 }
+            if shown >= 10 { return }
+        }
+    }
+
+    /// Rangée qui défile de côté, sous les cartes du haut.
+    @ViewBuilder private var continueRow: some View {
+        VStack(alignment: .leading, spacing: TSpace.sm) {
+            TSectionHeader(store.t("continue_watching"), icon: "play.circle.fill")
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(alignment: .top, spacing: TSpace.md) {
+                    ForEach(continueItems) { continueCard($0) }
+                }
+                .padding(.horizontal, TSpace.lg)
+            }
+        }
+        .padding(.top, TSpace.md)
+    }
+
+    /// Une VOD entamée : image et part déjà vue, titre, chaîne. Un toucher
+    /// la reprend à la position enregistrée, comme depuis « Mes VODs ».
+    private func continueCard(_ item: HistoryItem) -> some View {
+        let meta: VodMeta? = metaStore.meta(item.term)
+        let total = Double(meta?.lengthSeconds ?? 0)
+        let ratio: Double = total > 0 ? min(1, store.getVodProgress(item.term) / total) : 0
+        // Ce que l'historique n'a pas (VOD ouverte sans ses infos) : Twitch.
+        let title: String = item.display == "VOD \(item.term)" ? (meta?.title ?? item.display) : item.display
+        let savedThumb: String? = item.thumb.flatMap { $0.isEmpty ? nil : $0 }
+        let thumb: String = savedThumb ?? meta?.thumb ?? ""
+        let savedStreamer: String? = item.streamer.flatMap { $0.isEmpty ? nil : $0 }
+        let streamer: String? = savedStreamer ?? meta.flatMap { $0.streamer.isEmpty ? nil : $0.streamer }
+        return Button {
+            onPlayVod(item.term, title, thumb.isEmpty ? nil : thumb, streamer)
+        } label: {
+            VStack(alignment: .leading, spacing: TSpace.xs) {
+                // Taille portée par le ZStack (voir LibraryView).
+                ZStack(alignment: .bottom) {
+                    AsyncImage(url: URL(string: thumb)) { img in
+                        img.resizable().aspectRatio(16/9, contentMode: .fill)
+                    } placeholder: {
+                        Rectangle().fill(Color.tSurface)
+                            .overlay(Image(systemName: "film")
+                                .font(.system(size: 18)).foregroundColor(.tMuted))
+                    }
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            Color.black.opacity(0.5)
+                            Color.tPrimary.frame(width: geo.size.width * ratio)
+                        }
+                    }
+                    .frame(height: 3)
+                }
+                .frame(width: 176, height: 99)
+                .clipped()
+                .cornerRadius(TRadius.chip)
+
+                Text(title)
+                    .font(.tCardTitle).foregroundColor(.tText)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                if let streamer {
+                    Text(streamer)
+                        .font(.tMeta).foregroundColor(.tPurple).lineLimit(1)
+                }
+            }
+            .frame(width: 176, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: – Personnalisation (Réglages → Personnaliser)

@@ -19,8 +19,9 @@ struct UICustomization: Codable, Equatable {
     static let defaultTabs = ["home", "discover", "search", "library"]
     /// Onglets des lives de l'accueil (Suivies, Top, Hors ligne).
     static let defaultHome = ["followed", "top", "offline"]
-    /// Cartes du haut de l'accueil et onglet Catégories : masquables.
-    static let homeCards = ["announcement", "poll", "login", "web", "categories"]
+    /// Cartes du haut de l'accueil (« continue » : Continuer à regarder) et
+    /// onglet Catégories : masquables.
+    static let homeCards = ["announcement", "poll", "login", "web", "continue", "categories"]
     /// Boutons de la barre du bas du lecteur, dans l'ordre par défaut.
     /// AirPlay (« airplay », en haut) se masque seulement.
     static let defaultPlayer = ["mute", "pip", "refresh", "chat", "rotate", "sleep", "multi", "rewind"]

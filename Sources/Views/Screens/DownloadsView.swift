@@ -33,8 +33,28 @@ struct VodDownloadSheet: View {
     @State private var end: Double = 0
     @State private var restore = true
     @State private var withChat = true
+    /// Espace libre sur l'appareil (nil : inconnu), relu à chaque qualité.
+    @State private var freeBytes: Int64? = nil
+    /// En données mobiles (NetworkStatus), suivi tant que la feuille est ouverte.
+    @State private var onCellular = NetworkStatus.shared.isCellular
 
     private var qualities: [String] { sortQualities(Array(context.links.keys), variants: context.variants) }
+
+    /// Taille estimée du passage choisi (débit × durée), nil si le débit
+    /// est inconnu.
+    private var estimatedBytes: Int64? {
+        bytesPerSecond.map { Int64($0 * max(0, end - start)) }
+    }
+
+    /// Plus assez de place pour le passage choisi : le téléchargement est
+    /// refusé (rien n'est dit tant que la taille ou l'espace sont inconnus).
+    private var lacksSpace: Bool {
+        guard let need = estimatedBytes, let free = freeBytes else { return false }
+        return need > free
+    }
+
+    /// « Wi-Fi seulement » en données mobiles : refusé aussi.
+    private var waitsForWifi: Bool { store.downloadWifiOnly && onCellular }
 
     /// La qualité préférée (ou la plus proche en dessous), comme à la
     /// lecture, mais 720p au plus et jamais l'audio seul : « Source » (le
@@ -103,7 +123,26 @@ struct VodDownloadSheet: View {
                             .tint(.tPrimary)
                         }
 
+                        // Même réglage que Réglages → Lecteur.
+                        Toggle(isOn: wifiOnly) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(store.t("dl_wifi_only")).font(.tCardTitle).foregroundColor(.tText)
+                                Text(store.t("dl_wifi_only_sub"))
+                                    .font(.tMeta).foregroundColor(.tMuted)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                        .tint(.tPrimary)
+
+                        // Refus expliqué : pas assez de place, ou pas de Wi-Fi.
+                        if let refusal {
+                            Label(refusal, systemImage: "exclamationmark.triangle.fill")
+                                .font(.tMeta).foregroundColor(.tDanger)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+
                         TPrimaryButton(title: store.t("dl_download"), icon: "arrow.down.circle.fill", fullWidth: true) {
+                            guard refusal == nil else { return }
                             VodDownloads.shared.start(context, quality: quality, start: start.rounded(.down),
                                                       end: end.rounded(.up), restoreAudio: restore,
                                                       withChat: withChat)
@@ -111,6 +150,8 @@ struct VodDownloadSheet: View {
                             Task { _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) }
                             dismiss()
                         }
+                        .disabled(refusal != nil)
+                        .opacity(refusal == nil ? 1 : 0.4)
                     }
 
                     Text(store.t("dl_note").replacingOccurrences(of: "{tab}", with: store.t("tab_library")))
@@ -123,6 +164,29 @@ struct VodDownloadSheet: View {
         .background(Color.tDark)
         .onAppear { if quality.isEmpty { quality = defaultQuality } }
         .task(id: quality) { await loadInfo() }
+        .onReceive(NotificationCenter.default.publisher(for: .tuNetworkChanged)) { _ in
+            onCellular = NetworkStatus.shared.isCellular
+        }
+    }
+
+    /// « Wi-Fi seulement », noté dans le journal comme dans les Réglages.
+    private var wifiOnly: Binding<Bool> {
+        Binding(get: { store.downloadWifiOnly },
+                set: { on in
+                    logger.settingChanged("Téléchargements en Wi-Fi seulement", value: on ? "activé" : "désactivé")
+                    store.downloadWifiOnly = on
+                })
+    }
+
+    /// Pourquoi le téléchargement est refusé, nil s'il peut partir.
+    private var refusal: String? {
+        if waitsForWifi { return store.t("dl_wifi_needed") }
+        if lacksSpace, let need = estimatedBytes, let free = freeBytes {
+            return store.t("dl_no_space")
+                .replacingOccurrences(of: "{s}", with: dlBytes(need))
+                .replacingOccurrences(of: "{f}", with: dlBytes(free))
+        }
+        return nil
     }
 
     // MARK: Passage
@@ -167,23 +231,32 @@ struct VodDownloadSheet: View {
         }
     }
 
+    /// Durée et taille estimée du passage, puis l'espace libre.
     private var summary: some View {
         let length = max(0, end - start)
-        let size = bytesPerSecond.map { dlBytes(Int64($0 * length)) } ?? "?"
-        return Text(store.t("dl_summary")
-                        .replacingOccurrences(of: "{d}", with: dlClock(length))
-                        .replacingOccurrences(of: "{s}", with: size))
-            .font(.tCardTitle).foregroundColor(.tText)
+        let size = estimatedBytes.map { dlBytes($0) } ?? "?"
+        return VStack(alignment: .leading, spacing: 2) {
+            Text(store.t("dl_summary")
+                    .replacingOccurrences(of: "{d}", with: dlClock(length))
+                    .replacingOccurrences(of: "{s}", with: size))
+                .font(.tCardTitle).foregroundColor(.tText)
+            if let free = freeBytes {
+                Text(store.t("dl_free_space").replacingOccurrences(of: "{f}", with: dlBytes(free)))
+                    .font(.tMeta).foregroundColor(lacksSpace ? .tDanger : .tMuted)
+            }
+        }
     }
 
     private func label(_ q: String) -> String { qualityText(q, store.lang) }
 
-    /// Durée de la VOD (playlist de la qualité choisie) et débit estimé d'après
-    /// la taille du premier segment.
+    /// Durée de la VOD (playlist de la qualité choisie), débit de cette
+    /// qualité (annoncé par la playlist principale, sinon estimé d'après la
+    /// taille du premier segment) et espace libre.
     private func loadInfo() async {
         guard let link = context.links[quality], let url = URL(string: link) else { return }
         loading = true
         failed = false
+        freeBytes = VodDownloads.freeSpace()
         let text = await VodDownloadPlan.fetch(url)
         // Autre qualité choisie entre-temps : c'est sa propre lecture qui compte.
         guard !Task.isCancelled else { return }
@@ -201,7 +274,10 @@ struct VodDownloadSheet: View {
             end = min(max(end, start + 10), vodDuration)
         }
         bytesPerSecond = nil
-        if let first = plan.segments.first, first.duration > 0 {
+        if let bandwidth = context.variants[quality]?.bandwidth, bandwidth > 0 {
+            // BANDWIDTH : bits par seconde.
+            bytesPerSecond = Double(bandwidth) / 8
+        } else if let first = plan.segments.first, first.duration > 0 {
             var req = URLRequest(url: first.url, timeoutInterval: 8)
             req.httpMethod = "HEAD"
             if let (_, resp) = try? await URLSession.shared.data(for: req),
@@ -226,7 +302,9 @@ struct DownloadRow: View {
     private var detail: String {
         var parts = ["\(dlClock(item.start)) → \(dlClock(item.end))", dlBytes(item.bytes)]
         switch item.state {
-        case .paused: parts.append(store.t("dl_paused"))
+        case .paused:
+            // Arrêté par « Wi-Fi seulement » : il repartira seul en Wi-Fi.
+            parts.append(store.t(item.reason == VodDownloadFailure.wifi ? "dl_waiting_wifi" : "dl_paused"))
         case .failed: parts.append(failure)
         case .downloading:
             if item.total == 0 {
@@ -315,8 +393,13 @@ struct DownloadRow: View {
             switch item.state {
             case .downloading:
                 TIconButton(icon: "pause.fill") { downloads.pause(item.id) }
-            case .paused, .failed:
+            // En pause : « Reprendre » ; en échec : « Réessayer ».
+            case .paused:
+                TIconButton(icon: "play.fill") { downloads.resume(item.id) }
+                    .accessibilityLabel(store.t("dl_resume"))
+            case .failed:
                 TIconButton(icon: "arrow.clockwise") { downloads.resume(item.id) }
+                    .accessibilityLabel(store.t("retry"))
             case .done:
                 if exporting {
                     ProgressView().tint(.tPrimary).frame(width: 34, height: 34)

@@ -1122,6 +1122,8 @@ struct ImmersivePlayer: View {
     /// contrôle, appel) : remis à faux dans onEnded seulement, il bloquait
     /// ensuite le glissé vers le bas.
     @GestureState private var pinching = false
+    /// Relance prévue au retour du réseau (une seule à la fois).
+    @State private var networkRetry: Task<Void, Never>? = nil
 
     init(url: URL, isLive: Bool, dvrEnabled: Bool, savedTime: Double,
          contentID: String = "",
@@ -1415,9 +1417,23 @@ struct ImmersivePlayer: View {
         }
         .animation(.easeInOut(duration: 0.2), value: currentMuted)
         .onChange(of: store.lowLatency) { model.lowLatency = $0 }
+        // Réseau revenu après une coupure : une lecture arrêtée (carte
+        // « Réessayer ») repart seule, une fois, 2 s plus tard — le temps que
+        // la connexion s'établisse. Rien si elle n'était pas en échec.
+        .onReceive(NotificationCenter.default.publisher(for: .tuNetworkRestored)) { _ in
+            guard model.failed, networkRetry == nil else { return }
+            networkRetry = Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                networkRetry = nil
+                guard !Task.isCancelled, model.failed else { return }
+                logger.info("LECTEUR", "Réseau revenu : relance de la lecture", nil)
+                onRefresh()
+            }
+        }
         .onDisappear {
             hideTask?.cancel()
             flashTask?.cancel()
+            networkRetry?.cancel()
             // Pas de retour au portrait ici : la vue disparaît aussi à chaque
             // relance (⟳, « Réessayer », raid suivi, VOD suivante), et le
             // lecteur suivant s'ouvrait en portrait malgré le paysage forcé.

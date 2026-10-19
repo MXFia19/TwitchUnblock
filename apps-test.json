@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.5.13",
+          "buildVersion": "338",
+          "date": "2026-10-19",
+          "localizedDescription": "- Channel schedule now loads without an account (Twitch's public schedule query)\n- Other improvements and fixes",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-338/TwitchUnblock.ipa",
+          "size": 4236402,
+          "commit": "ff7053ac8f7eb1af374a4128e71740033ab32795"
+        },
+        {
           "version": "1.5.11",
           "buildVersion": "337",
           "date": "2026-10-19",
@@ -280,25 +289,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-307/TwitchUnblock.ipa",
           "size": 3705741,
           "commit": "efc13222b50c0d3d5cdf7a89c7945b8c28220251"
-        },
-        {
-          "version": "1.4.7",
-          "buildVersion": "305",
-          "date": "2026-10-17",
-          "localizedDescription": "- VODs no longer stop at a muted part when the server can't fix its playlist: the app fixes it on the device, a VOD that stops on one restarts at the same place on its own, and Skip works even after a stop\n- Chat: the iOS keyboard shows its predicted words again (Settings → Chat → Keyboard suggestions, to turn off if iOS corrects your emotes)\n- Chat: swipe the chat down or tap it to hide the keyboard without sending; reducing the player hides it too",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-305/TwitchUnblock.ipa",
-          "size": 3705760,
-          "commit": "72768902721d2757415c11d83e2398c4e0ae814e"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.5.11",
+      "version": "1.5.13",
       "versionDate": "2026-10-19",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-337/TwitchUnblock.ipa",
-      "size": 4231305
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-338/TwitchUnblock.ipa",
+      "size": 4236402
     }
   ],
   "news": []

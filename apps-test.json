@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.5.2",
+          "buildVersion": "330",
+          "date": "2026-10-19",
+          "localizedDescription": "- New Settings → General → Customize the app: show, hide and reorder the tabs, and pick the tab the app opens on\n- Customize the Home screen: reorder or hide the Followed / Top / Offline tabs, hide the announcement, poll, sign-in and web session cards or the Categories view\n- Customize the player's bottom bar: reorder or hide its buttons, add sleep timer, multi-live and rewind buttons, hide AirPlay\n- Chat banners: polls, predictions and the hype train can now be hidden one by one",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-330/TwitchUnblock.ipa",
+          "size": 3949248,
+          "commit": "52a894bf3f24af5fcee63bcf8adb01cd0dc1ec5a"
+        },
+        {
           "version": "1.5.1",
           "buildVersion": "329",
           "date": "2026-10-19",
@@ -280,25 +289,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-292/TwitchUnblock.ipa",
           "size": 3571863,
           "commit": "c6a87db981f2d11b1720fc7a9b7341b1819454c8"
-        },
-        {
-          "version": "1.3.60",
-          "buildVersion": "291",
-          "date": "2026-10-15",
-          "localizedDescription": "- While a live loads, the player says which source it's trying and can be minimized or closed; the screen now only stays awake while a video plays on screen (paused, minimized or audio only, it sleeps).\n- Apple's player (immersive player off) resumes VODs and clips where they were, even after a quality change, and its lock screen activity follows pause and progress; the sleep timer now also stops multi-live.\n- Closing the player or starting another video during Picture in Picture now ends it cleanly, changing quality keeps your place, and a stream that drops shows a Retry button instead of freezing.\n- When no source can play a live stream, or Twitch doesn't answer, the player now says so with a Retry button instead of calling the channel offline; lives also start when Twitch's own API is unreachable.\n- Cloud sync keeps each Twitch account's history apart, and a VOD or channel you delete in the app is removed from the backup right away.\n- A category you follow on Twitch now shows as followed on its page and can be unfollowed there; category lists get Retry and pull to refresh.\n- Search opens clip links and starts VOD links at their ?t= time; channel pages open faster, and the VOD filter can look through older VODs.\n- Restoring an expired Twitch web session now asks you to sign in again, and drops stop counting for an account you signed out of.\n- Playback resumes on its own after a call or another app's audio: VODs where they left off, live streams back at live.\n- Opening the app no longer stops music playing in another app: the sound only switches over when a video starts, and goes back to that app when you close the player.\n- Other improvements and fixes",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-291/TwitchUnblock.ipa",
-          "size": 3522836,
-          "commit": "3943049b19d76f2fd0bc399e95ff3ba98f223adf"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.5.1",
+      "version": "1.5.2",
       "versionDate": "2026-10-19",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-329/TwitchUnblock.ipa",
-      "size": 3898972
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-330/TwitchUnblock.ipa",
+      "size": 3949248
     }
   ],
   "news": []

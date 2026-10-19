@@ -25,6 +25,15 @@
       },
       "versions": [
         {
+          "version": "0.1.23",
+          "buildVersion": "23",
+          "date": "2026-10-19",
+          "localizedDescription": "- A \"Continue watching\" row at the top of Following lists the VODs started on this Apple TV, with their progress\n- During a channel's ad break, a banner explains the purple screen with a countdown to the stream's return",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-test-23/TwitchUnblockTV.ipa",
+          "size": 2509787,
+          "commit": "b9586f3240a859942040ffb538776ed3e877ad4f"
+        },
+        {
           "version": "0.1.22",
           "buildVersion": "22",
           "date": "2026-10-19",
@@ -133,10 +142,10 @@
           "commit": "f190db7aacfac668c8d385753e5d5a90e8fc05db"
         }
       ],
-      "version": "0.1.22",
+      "version": "0.1.23",
       "versionDate": "2026-10-19",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-test-22/TwitchUnblockTV.ipa",
-      "size": 2455768
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-test-23/TwitchUnblockTV.ipa",
+      "size": 2509787
     }
   ]
 }

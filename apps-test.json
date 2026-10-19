@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.5.7",
+          "buildVersion": "335",
+          "date": "2026-10-19",
+          "localizedDescription": "- Search: typing text now shows results in tabs (Channels, Categories, Live by title or tags, VODs); live streams and VODs from hidden channels or categories are left out, and links or IDs still open directly\n- Search: your last 10 searches are listed under the search field, each removable, or clear them all\n- Channels: a Schedule tab lists a channel's upcoming streams in your local day and time, with length, title, category, weekly ones and vacation\n- Channels: an offline channel's page shows its next scheduled stream (or its vacation) right under its name",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-335/TwitchUnblock.ipa",
+          "size": 4183176,
+          "commit": "9e0a7847913c19a9432d20730dba2c5c9c963f27"
+        },
+        {
           "version": "1.5.6",
           "buildVersion": "334",
           "date": "2026-10-19",
@@ -280,25 +289,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-302/TwitchUnblock.ipa",
           "size": 3654884,
           "commit": "3f7cb7ea286c5bcd4f12cd90f9716063fe0de367"
-        },
-        {
-          "version": "1.4.4",
-          "buildVersion": "301",
-          "date": "2026-10-16",
-          "localizedDescription": "- The log shows in your language, and can be exported as a .txt file (Files, AirDrop, Mail…)",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-301/TwitchUnblock.ipa",
-          "size": 3654675,
-          "commit": "d1d20b0f53d1df1a1ad7dd863c8f42f05bc9a645"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.5.6",
+      "version": "1.5.7",
       "versionDate": "2026-10-19",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-334/TwitchUnblock.ipa",
-      "size": 4075860
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-335/TwitchUnblock.ipa",
+      "size": 4183176
     }
   ],
   "news": []

@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.5.4",
+          "buildVersion": "332",
+          "date": "2026-10-19",
+          "localizedDescription": "- Discover: hiding a channel or a category now removes it from the feed right away, and the ⋯ menu no longer offers to hide channels or categories you follow\n- Discover: coming back to the tab keeps your place, mode and sound (the top is reloaded after 10 minutes)\n- Discover: the Clips tab no longer spins forever when the top is empty, and Retry reloads it\n- Discover: clip durations show as m:ss instead of \"0min\"\n- Discover: the unfollow confirmation shows the channel's display name\n- Discover: previews now pause under every sheet (feedback, reports, downloads, sleep timer)\n- Discover: with the mini player or the multi-live bar shown, the game, tags and ⋯ button stay above them\n- Home: without an account, the automatic refresh no longer drops the streams loaded with \"Load more\"\n- Your account's followed channels and categories are now loaded at launch whatever the start tab, so Discover never hides them and backups include them\n- Channel points: a balance that couldn't be read when the chat opened no longer shows up later as a huge gain\n- Chat: a message that couldn't be sent goes back into the input field instead of being lost\n- Chat: turning the watch streak or live events back on during a stream now works without reopening the chat\n- VOD chat: comments appear within 3.5 s even when 7TV, BTTV or FFZ don't answer\n- Logs: the log screen no longer slows down while something is playing\n- Downloads: the default quality follows your playback quality, capped at 720p and never audio only\n- Player: a second \"slow connection\" notice now stays its full 4 seconds\n- Settings → Channel points: the per-channel list stays smooth with many channels",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-332/TwitchUnblock.ipa",
+          "size": 3967181,
+          "commit": "9d6743b73522147ae6dc6b5b2c025191f829d9d0"
+        },
+        {
           "version": "1.5.3",
           "buildVersion": "331",
           "date": "2026-10-19",
@@ -280,25 +289,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-299/TwitchUnblock.ipa",
           "size": 3614249,
           "commit": "25ca9d63ecb8d1b945ceaf581d7cd73a2a37625c"
-        },
-        {
-          "version": "1.3.65",
-          "buildVersion": "294",
-          "date": "2026-10-15",
-          "localizedDescription": "- Polls: the developer can ask a question under the home announcement; vote without an account, change your mind until it ends, and see the results once you've voted\n- Other improvements and fixes",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-294/TwitchUnblock.ipa",
-          "size": 3607507,
-          "commit": "d0651bd7dc0fd1c985e6f2c583247a603e01e303"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.5.3",
+      "version": "1.5.4",
       "versionDate": "2026-10-19",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-331/TwitchUnblock.ipa",
-      "size": 3955460
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-332/TwitchUnblock.ipa",
+      "size": 3967181
     }
   ],
   "news": []

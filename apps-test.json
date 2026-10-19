@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.5.3",
+          "buildVersion": "331",
+          "date": "2026-10-19",
+          "localizedDescription": "- Player: the landscape view forced by the rotate button is kept when the stream reloads (refresh, Retry, followed raid, next VOD)\n- Player: the Live Activity no longer disappears when following a raid or moving to the next VOD with the screen locked\n- Player: a recent VOD opened while AirPlay is on resumes where you left off instead of restarting from 0:00\n- Player: dragging the full-broadcast bar to the very start now opens the recording at its beginning instead of the present\n- Player: after a playback error, Play from the lock screen or headphones no longer keeps the screen awake or shows the video as playing\n- Player: the \"live via your account\" notice no longer comes back after each \"slow connection\" quality drop\n- Player: a speed forced by the player (caught up with a live recording, AirPlay) no longer resets later VODs to 1x\n- Player: the starting quality no longer changes, reloading the stream, when switching between Wi-Fi and cellular\n- Player: changing quality during AirPlay no longer leaves the receiver unable to play\n- Player: after stalls on cellular, the Live button no longer jumps to the very start of the live window\n- Player: a VOD stopped by a muted segment before resuming now restarts at your saved position instead of 0:00\n- Multi-live: the screen can sleep again when no tile is playing (all paused, offline, failed or finished)\n- Multi-live: a tile cut off mid-playback now gets its 3 retries instead of 1 or 2\n- Multi-live: on cellular, tiles follow the cellular quality setting instead of starting in 1080p\n- Discover: music from another app resumes after closing the player, even when a preview starts right away",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-331/TwitchUnblock.ipa",
+          "size": 3955460,
+          "commit": "10b243664cb859edb184a98e692e3879d51888f5"
+        },
+        {
           "version": "1.5.2",
           "buildVersion": "330",
           "date": "2026-10-19",
@@ -280,25 +289,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-294/TwitchUnblock.ipa",
           "size": 3607507,
           "commit": "d0651bd7dc0fd1c985e6f2c583247a603e01e303"
-        },
-        {
-          "version": "1.3.63",
-          "buildVersion": "292",
-          "date": "2026-10-15",
-          "localizedDescription": "- Settings → Channel points tracks, like drops, the time you watched and the points you earned by watching: right now, in total and per channel\n- Predictions show, like the Twitch app, the points bet on each outcome, its return ratio, how many people bet and the biggest bet, plus what your bet would win\n- The Home live list refreshes on its own when you come back to the app and every 3 minutes while it's on screen",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-292/TwitchUnblock.ipa",
-          "size": 3571863,
-          "commit": "c6a87db981f2d11b1720fc7a9b7341b1819454c8"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.5.2",
+      "version": "1.5.3",
       "versionDate": "2026-10-19",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-330/TwitchUnblock.ipa",
-      "size": 3949248
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-331/TwitchUnblock.ipa",
+      "size": 3955460
     }
   ],
   "news": []

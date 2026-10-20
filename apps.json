@@ -176,6 +176,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.5.25",
+          "buildVersion": "345",
+          "date": "2026-10-20",
+          "localizedDescription": "- Player: the zoom level no longer shows up under the pause button\n- Other improvements and fixes",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-345/TwitchUnblock.ipa",
+          "size": 4280124,
+          "commit": "14c0754c3f4ac46c356f1eb57e26bf6600ac03aa"
+        },
+        {
           "version": "1.5.22",
           "buildVersion": "342",
           "date": "2026-10-20",
@@ -255,25 +264,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-334/TwitchUnblock.ipa",
           "size": 4075860,
           "commit": "b9945305e9528b83a31363aecf8d82a24e19543a"
-        },
-        {
-          "version": "1.5.5",
-          "buildVersion": "333",
-          "date": "2026-10-19",
-          "localizedDescription": "- Home: a new \"Continue watching\" row shows the VODs you started (up to 10, latest first) with their progress; a tap resumes where you stopped (hide it in Settings → General → Customize the app)\n- Player: when the connection comes back after a drop, a player stopped on Retry (or on a loading error) and failed multi-live tiles restart on their own, once\n- Downloads: the download sheet shows the estimated size and the free space, and refuses with a clear message when there isn't enough room\n- Downloads: new \"Download on Wi-Fi only\" option (Settings → Player, or in the download sheet; off by default): downloads wait for Wi-Fi, then resume on their own\n- Downloads: paused downloads now show a Resume button (▶), failed ones Retry (⟳)\n- Apple TV: a \"Continue watching\" row at the top of Following lists the VODs started on this Apple TV, with their progress\n- Apple TV: during a channel's ad break, a banner explains the purple screen with a countdown to the stream's return",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-333/TwitchUnblock.ipa",
-          "size": 4000187,
-          "commit": "b9586f3240a859942040ffb538776ed3e877ad4f"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.5.22",
+      "version": "1.5.25",
       "versionDate": "2026-10-20",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-342/TwitchUnblock.ipa",
-      "size": 4274993
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-345/TwitchUnblock.ipa",
+      "size": 4280124
     }
   ],
   "news": []

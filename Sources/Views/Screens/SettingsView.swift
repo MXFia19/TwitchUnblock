@@ -43,7 +43,7 @@ struct SettingsView: View {
     @State private var apiLoggingIn    = false
     @State private var cacheBytes: Int64 = 0
     @State private var cacheFiles      = 0
-    @ObservedObject private var sleepTimer = SleepTimerService.shared
+    // Minuteur de veille : suivi par sa seule ligne (SleepTimerSettingRow).
     @ObservedObject private var usage      = UsageService.shared
     @Environment(\.dismiss) private var dismiss
     @State private var showSleepSheet  = false
@@ -903,9 +903,6 @@ struct SettingsView: View {
     /// Langue des streamers dans « Top des lives » (appareil par défaut).
     @ViewBuilder private var topLangRow: some View {
         let device = TopLanguage.name(TopLanguage.device, in: store.lang)
-        let options = TopLanguage.codes
-            .map { ($0, TopLanguage.name($0, in: store.lang)) }
-            .sorted { $0.1.localizedCompare($1.1) == .orderedAscending }
         HStack(alignment: .center, spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(store.t("top_lang"))
@@ -917,28 +914,37 @@ struct SettingsView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 8)
-            Menu {
-                Button { store.topLang = nil } label: {
-                    if store.topLang == nil { Label("\(store.t("lang_auto")) · \(device)", systemImage: "checkmark") }
-                    else { Text("\(store.t("lang_auto")) · \(device)") }
-                }
-                Divider()
-                ForEach(options, id: \.0) { code, name in
-                    Button { store.topLang = code } label: {
-                        if store.topLang == code { Label(name, systemImage: "checkmark") } else { Text(name) }
+            // Menu refait seulement quand le choix ou la langue de l'interface
+            // change (KeyedView) : pendant une lecture, les Réglages se
+            // redessinent sans cesse et la liste ouverte remontait en haut.
+            KeyedView(key: "\(store.topLang ?? "")|\(store.lang.rawValue)") {
+                let options = TopLanguage.codes
+                    .map { ($0, TopLanguage.name($0, in: store.lang)) }
+                    .sorted { $0.1.localizedCompare($1.1) == .orderedAscending }
+                Menu {
+                    Button { store.topLang = nil } label: {
+                        if store.topLang == nil { Label("\(store.t("lang_auto")) · \(device)", systemImage: "checkmark") }
+                        else { Text("\(store.t("lang_auto")) · \(device)") }
                     }
+                    Divider()
+                    ForEach(options, id: \.0) { code, name in
+                        Button { store.topLang = code } label: {
+                            if store.topLang == code { Label(name, systemImage: "checkmark") } else { Text(name) }
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Text(store.topLang.map { TopLanguage.name($0, in: store.lang) } ?? store.t("lang_auto"))
+                            .font(.tCardTitle)
+                        Image(systemName: "chevron.up.chevron.down").font(.system(size: 11, weight: .semibold))
+                    }
+                    .foregroundColor(.tPrimary)
+                    .padding(.horizontal, 12).padding(.vertical, 8)
+                    .background(Color.tPrimary.opacity(0.12))
+                    .cornerRadius(10)
                 }
-            } label: {
-                HStack(spacing: 4) {
-                    Text(store.topLang.map { TopLanguage.name($0, in: store.lang) } ?? store.t("lang_auto"))
-                        .font(.tCardTitle)
-                    Image(systemName: "chevron.up.chevron.down").font(.system(size: 11, weight: .semibold))
-                }
-                .foregroundColor(.tPrimary)
-                .padding(.horizontal, 12).padding(.vertical, 8)
-                .background(Color.tPrimary.opacity(0.12))
-                .cornerRadius(10)
             }
+            .equatable()
         }
         .padding(.top, 6)
     }
@@ -1255,16 +1261,20 @@ struct SettingsView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 8)
-            Picker("", selection: $store.preferredQuality) {
-                ForEach(kQualityPrefs, id: \.self) { pref in
-                    Text(pref == "source" ? store.t("q_source")
-                         : pref == "audio" ? store.t("q_audio") : "\(pref)p")
-                        .tag(pref)
+            // Comme la langue du top : menu refait seulement si son contenu change.
+            KeyedView(key: "\(store.preferredQuality)|\(store.lang.rawValue)") {
+                Picker("", selection: $store.preferredQuality) {
+                    ForEach(kQualityPrefs, id: \.self) { pref in
+                        Text(pref == "source" ? store.t("q_source")
+                             : pref == "audio" ? store.t("q_audio") : "\(pref)p")
+                            .tag(pref)
+                    }
                 }
+                .pickerStyle(.menu)
+                .labelsHidden()
+                .tint(.tPrimary)
             }
-            .pickerStyle(.menu)
-            .labelsHidden()
-            .tint(.tPrimary)
+            .equatable()
             .onChange(of: store.preferredQuality) { value in
                 logger.settingChanged("Qualité préférée", value: value)
             }
@@ -1282,16 +1292,19 @@ struct SettingsView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 8)
-            Picker("", selection: $store.cellularQuality) {
-                ForEach(kCellularQualityPrefs, id: \.self) { pref in
-                    Text(pref == "auto" ? store.t("q_auto") : pref == "same" ? store.t("q_same_wifi")
-                         : pref == "audio" ? store.t("q_audio") : "\(pref)p")
-                        .tag(pref)
+            KeyedView(key: "\(store.cellularQuality)|\(store.lang.rawValue)") {
+                Picker("", selection: $store.cellularQuality) {
+                    ForEach(kCellularQualityPrefs, id: \.self) { pref in
+                        Text(pref == "auto" ? store.t("q_auto") : pref == "same" ? store.t("q_same_wifi")
+                             : pref == "audio" ? store.t("q_audio") : "\(pref)p")
+                            .tag(pref)
+                    }
                 }
+                .pickerStyle(.menu)
+                .labelsHidden()
+                .tint(.tPrimary)
             }
-            .pickerStyle(.menu)
-            .labelsHidden()
-            .tint(.tPrimary)
+            .equatable()
             .onChange(of: store.cellularQuality) { value in
                 logger.settingChanged("Qualité en données mobiles", value: value)
             }
@@ -1337,6 +1350,14 @@ struct SettingsView: View {
                 }
                 .buttonStyle(.plain)
             }
+            // Qualités supérieures : Twitch ne les sert qu'au jeton du compte,
+            // donc seulement par ce direct sans pub (grisé tant qu'il est coupé).
+            Divider().background(Color.tBorder)
+            toggleRow(store.t("higher_qualities"),
+                      store.t("higher_qualities_sub").replacingOccurrences(of: "{c}", with: HigherQualities.label),
+                      $store.higherQualities, log: "Qualités supérieures")
+                .disabled(!store.subAdFree)
+                .opacity(store.subAdFree ? 1 : 0.5)
             Divider().background(Color.tBorder)
             VStack(alignment: .leading, spacing: 2) {
                 Text(store.t("live_source_order"))
@@ -1411,34 +1432,7 @@ struct SettingsView: View {
         settingCard {
             VStack(alignment: .leading, spacing: 12) {
                 label("moon.zzz.fill", store.t("sleep_timer"))
-                HStack(spacing: 12) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        if sleepTimer.isActive {
-                            Text(store.t("sleep_remaining"))
-                                .font(.tMeta).foregroundColor(.tMuted)
-                            Text(sleepTimer.label)
-                                .font(.system(size: 26, weight: .bold).monospacedDigit())
-                                .foregroundColor(.tPurple)
-                        } else {
-                            Text(store.t("sleep_timer_sub"))
-                                .font(.tMeta).foregroundColor(.tMuted)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
-                    Spacer(minLength: 8)
-                    Button { showSleepSheet = true } label: {
-                        Text(sleepTimer.isActive ? store.t("sleep_edit")
-                                                 : store.t("sleep_set"))
-                            .font(.tLabel)
-                            .foregroundColor(.tPrimary)
-                            .fixedSize()
-                            .padding(.horizontal, 14).padding(.vertical, 8)
-                            .background(Color.tPrimary.opacity(0.15))
-                            .cornerRadius(8)
-                            .overlay(RoundedRectangle(cornerRadius: 8)
-                                .stroke(Color.tPrimary, lineWidth: 1))
-                    }
-                }
+                SleepTimerSettingRow { showSleepSheet = true }
             }
         }
     }
@@ -2481,4 +2475,52 @@ struct Contributor: Identifiable, Sendable {
         Contributor(login: "kinboy56", contributionKey: "credits_contrib_ja"),
         Contributor(login: "dwojc6", contributionKey: "credits_contrib_swipe"),
     ]
+}
+
+// Réglages : rien ne vient du parent. MainTabView se redessine chaque seconde
+// pendant une lecture (durée du direct, position d'une VOD, latence) et
+// refaisait alors tout cet écran, menus ouverts compris. Ses propres états
+// et objets observés suffisent à le tenir à jour (`.equatable()` à l'appel).
+extension SettingsView: Equatable {
+    nonisolated static func == (lhs: SettingsView, rhs: SettingsView) -> Bool { true }
+}
+
+// MARK: – Minuteur de veille (ligne des Réglages)
+/// Seule vue des Réglages à suivre le décompte, qui publie chaque seconde
+/// quand il tourne : observé par tout l'écran, il le redessinait sans arrêt.
+private struct SleepTimerSettingRow: View {
+    @EnvironmentObject private var store: AppStore
+    @ObservedObject private var sleepTimer = SleepTimerService.shared
+    let onEdit: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                if sleepTimer.isActive {
+                    Text(store.t("sleep_remaining"))
+                        .font(.tMeta).foregroundColor(.tMuted)
+                    Text(sleepTimer.label)
+                        .font(.system(size: 26, weight: .bold).monospacedDigit())
+                        .foregroundColor(.tPurple)
+                } else {
+                    Text(store.t("sleep_timer_sub"))
+                        .font(.tMeta).foregroundColor(.tMuted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            Spacer(minLength: 8)
+            Button(action: onEdit) {
+                Text(sleepTimer.isActive ? store.t("sleep_edit")
+                                         : store.t("sleep_set"))
+                    .font(.tLabel)
+                    .foregroundColor(.tPrimary)
+                    .fixedSize()
+                    .padding(.horizontal, 14).padding(.vertical, 8)
+                    .background(Color.tPrimary.opacity(0.15))
+                    .cornerRadius(8)
+                    .overlay(RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.tPrimary, lineWidth: 1))
+            }
+        }
+    }
 }

@@ -1,4 +1,6 @@
 import Foundation
+import CoreMedia
+import VideoToolbox   // codecs décodés par l'appareil (HigherQualities)
 
 // MARK: – Helpers
 private let requestHeaders: [String: String] = [
@@ -220,9 +222,11 @@ func accountPlaybackToken(login: String, webToken: String,
     // jeton recevrait alors de vraies pubs.
     let adFree = hideAds == true || showAds == false
     func flag(_ b: Bool?) -> String { b.map { $0 ? "oui" : "non" } ?? "?" }
+    // Plus haute résolution permise (« QUAD_HD » : 1440p, voir HigherQualities).
+    let maxRes: String = (flags["maximum_resolution"] as? String).map { " · max \($0)" } ?? ""
     logger.info("TOKEN", "Jeton du compte pour \"\(login)\"",
                 "abonné \(flag(subscriber)) · turbo \(flag(turbo)) · hide_ads \(flag(hideAds)) · show_ads \(flag(showAds))"
-                + (forbidden ? " · lecture refusée" : ""))
+                + maxRes + (forbidden ? " · lecture refusée" : ""))
     return .token(AccountPlaybackToken(value: value, signature: signature, adFree: adFree,
                                        subscriber: subscriber, forbidden: forbidden))
 }
@@ -585,8 +589,9 @@ func getLive(channelName: String, webToken: String? = nil,
     case .token(let pat):
         subscriber = pat.subscriber
         if pat.adFree && !pat.forbidden {
+            // Jeton lié au compte : le seul que Twitch serve au-dessus de 1080p.
             found = await usherLiveLinks(login: login, token: (value: pat.value, signature: pat.signature),
-                                         lowLatency: lowLatency)
+                                         lowLatency: lowLatency, codecs: HigherQualities.requested)
             if !found.links.isEmpty {
                 usedSource = "account"
                 logger.success("LIVE", "✅ Direct par le compte (sans pub)", "\(found.links.count) qualités")
@@ -803,11 +808,44 @@ private func ttvlolLiveLinks(login: String, lowLatency: Bool) async -> MasterPla
     return ([:], [:])
 }
 
+// MARK: – Qualités supérieures (Enhanced Broadcasting)
+/// Réglage « Qualités supérieures » (iPhone, coupé par défaut) : la demande
+/// de playlist du direct par le compte annonce à Twitch les codecs que
+/// l'appareil décode (`supported_codecs`), et les chaînes en Enhanced
+/// Broadcasting y ajoutent leurs variantes 1440p et plus, parfois en HEVC ou
+/// AV1. Jamais pour un jeton anonyme (proxys, Worker, Twitch officiel sans
+/// compte) : Twitch le plafonne à 1080p (`maximum_resolution` FULL_HD,
+/// « AUTHZ_NOT_LOGGED_IN » au-delà) et ces demandes restent telles quelles.
+enum HigherQualities {
+    static let key = "cfg_higher_qualities"
+    static var enabled: Bool { UserDefaults.standard.bool(forKey: key) }
+
+    /// H.264 toujours ; HEVC et AV1 seulement si l'appareil les décode en
+    /// matériel (AV1 : puces A17 Pro, M3 et suivantes). Le plus efficace d'abord.
+    static let codecs: [String] = {
+        var list: [String] = []
+        // « av01 » écrit en clair : la constante manque aux SDK plus anciens.
+        if VTIsHardwareDecodeSupported(CMVideoCodecType(0x6176_3031)) { list.append("av1") }
+        if VTIsHardwareDecodeSupported(kCMVideoCodecType_HEVC) { list.append("h265") }
+        list.append("h264")
+        return list
+    }()
+
+    /// Valeur de `supported_codecs` si le réglage est actif, sinon nil.
+    static var requested: String? { enabled ? codecs.joined(separator: ",") : nil }
+
+    /// « H.264 · HEVC · AV1 » (Réglages).
+    static var label: String { codecs.reversed().map { names[$0] ?? $0 }.joined(separator: " · ") }
+    private static let names: [String: String] = ["h264": "H.264", "h265": "HEVC", "av1": "AV1"]
+}
+
 /// Flux officiel de Twitch (usher), avec ses pubs.
 /// `lowLatency` : Twitch sert alors la variante « low latency » (segments
-/// plus courts, playlist rafraîchie plus souvent).
+/// plus courts, playlist rafraîchie plus souvent). `codecs` :
+/// `supported_codecs`, pour le jeton du compte seulement (HigherQualities) ;
+/// nil, la demande ne change pas.
 private func usherLiveLinks(login: String, token: (value: String, signature: String),
-                            lowLatency wantsLowLatency: Bool) async -> MasterPlaylist {
+                            lowLatency wantsLowLatency: Bool, codecs: String? = nil) async -> MasterPlaylist {
     guard login.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "_" }), !login.isEmpty,
           var comps = URLComponents(string: "https://usher.ttvnw.net/api/channel/hls/\(login).m3u8")
     else { return ([:], [:]) }
@@ -824,6 +862,10 @@ private func usherLiveLinks(login: String, token: (value: String, signature: Str
         .init(name: "sig",                        value: token.signature),
         .init(name: "token",                      value: token.value),
     ]
+    if let codecs {
+        comps.queryItems?.append(.init(name: "supported_codecs", value: codecs))
+        logger.info("LIVE", "Qualités supérieures demandées à Twitch", codecs)
+    }
     if wantsLowLatency { logger.info("LIVE", "Mode faible latence demandé à Twitch") }
     // 8 s au plus (au lieu des 60 s par défaut) : réseau filtré, la source
     // suivante doit prendre le relais sans faire attendre.

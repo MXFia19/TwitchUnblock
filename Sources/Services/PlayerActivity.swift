@@ -76,6 +76,11 @@ private final class PlayerActivityController {
     private var activity: Activity<PlayerActivityAttributes>?
     private var attributes: PlayerActivityAttributes?
     private var state: PlayerActivityAttributes.ContentState?
+    /// iOS a refusé l'activité faute de la clé NSSupportsLiveActivities
+    /// (app réinstallée par un outil qui réécrit l'Info.plist) : plus d'essai
+    /// avant le prochain lancement. Chaque lecture en redemandait une, et
+    /// chaque refus ajoutait une ligne au journal.
+    private var unsupported = false
 
     var currentID: String? { activity?.id }
 
@@ -124,7 +129,7 @@ private final class PlayerActivityController {
 
         // Sinon, nouvelle activité : l'ancienne (autre chaîne) disparaît.
         end()
-        guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
+        guard !unsupported, ActivityAuthorizationInfo().areActivitiesEnabled else { return }
         let attrs = PlayerActivityAttributes(channel: channel, isLive: isLive,
                                              liveLabel: meta.liveLabel)
         do {
@@ -135,8 +140,21 @@ private final class PlayerActivityController {
             state = newState
             logger.info("ACTIVITY", "Live Activity démarrée", channel)
         } catch {
-            logger.warn("ACTIVITY", "Live Activity refusée", error.localizedDescription)
+            if Self.isMissingPlistKey(error) {
+                unsupported = true
+                logger.warn("ACTIVITY", "Live Activity impossible avec cette installation",
+                            "clé NSSupportsLiveActivities absente : plus d'essai avant le prochain lancement")
+            } else {
+                logger.warn("ACTIVITY", "Live Activity refusée", error.localizedDescription)
+            }
         }
+    }
+
+    /// Refus « Target does not include NSSupportsLiveActivities plist key »
+    /// (ActivityAuthorizationError.unsupportedTarget), reconnu à son texte.
+    private static func isMissingPlistKey(_ error: Error) -> Bool {
+        let text = "\(error) \(error.localizedDescription)"
+        return text.contains("NSSupportsLiveActivities") || text.contains("unsupportedTarget")
     }
 
     func end() {

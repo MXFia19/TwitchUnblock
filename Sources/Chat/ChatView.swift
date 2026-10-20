@@ -770,6 +770,12 @@ struct ChatView: View {
                 }
             }
         }
+        // Emotes Twitch de la chaîne, pour le sélecteur (avec un compte
+        // seulement : sans, on ne peut pas écrire). À part : le chat ne les
+        // attend pas pour se connecter.
+        if let cid, tok != nil {
+            Task { await EmoteService.shared.loadTwitchChannel(channelId: cid) }
+        }
         let ready = await finishes(assets, within: 3.5)
         if !ready { logger.warn("CHAT", "Emotes et badges encore en chargement après 3,5 s", "connexion sans les attendre") }
         // Chat refermé pendant l'attente : pas de connexion orpheline (de même

@@ -35,6 +35,24 @@ actor EmoteService {
     private var personalBTTV: [String: [String: TwitchEmote]] = [:]
     private var personalOrder: [String] = []
 
+    /// Emote Twitch d'une chaîne pour le sélecteur, avec son jeu d'emotes
+    /// (nil pour une emote de follower : jamais grisée).
+    private struct ChannelTwitchEmote {
+        let emote: TwitchEmote
+        let setId: String?
+    }
+    /// Emotes Twitch des chaînes (followers, puis abonnés par niveau), dans
+    /// l'ordre de Twitch. Jamais dans resolve() : dans un message, une emote
+    /// Twitch n'en est une que si le tag IRC le dit.
+    private var channelTwitch: [String: [ChannelTwitchEmote]] = [:]
+    /// Chargements en cours, et essais par chaîne : deux au plus par séance
+    /// (une coupure se rattrape, une panne ne fait pas de boucle).
+    private var twitchLoading: Set<String> = []
+    private var twitchAttempts: [String: Int] = [:]
+    /// Jeux d'emotes du compte connecté au chat (tag IRC `emote-sets`) : ceux
+    /// d'un autre compte ne comptent pas.
+    private var userEmoteSets: (login: String, sets: Set<String>)? = nil
+
     // MARK: – Load globals once
     /// Emotes globales : une fois par séance et par service (reset() les
     /// oublie). Un service encore vide (délai dépassé, réseau) est retenté au
@@ -102,6 +120,7 @@ actor EmoteService {
         globalBTTV.removeAll(); globalFFZ.removeAll(); global7TV.removeAll()
         channelBTTV.removeAll(); channelFFZ.removeAll(); channel7TV.removeAll()
         loadedChannels.removeAll(); channelDisplayNames.removeAll()
+        channelTwitch.removeAll(); twitchAttempts.removeAll()
         // twitchById est alimenté au fil des messages reçus : on le garde,
         // sinon les emotes Twitch des messages déjà affichés disparaîtraient.
     }
@@ -142,7 +161,10 @@ actor EmoteService {
     }
 
     // MARK: – Grouped emotes for the picker
-    func groupedEmotes(channelId: String?) -> [(label: String, emotes: [TwitchEmote])] {
+    /// `login` : compte du sélecteur. Ses jeux d'emotes (tag IRC) grisent les
+    /// emotes d'abonné de la chaîne qu'il n'a pas ; inconnus (pas encore de
+    /// USERSTATE, autre compte), aucune n'est grisée.
+    func groupedEmotes(channelId: String?, login: String? = nil) -> [(label: String, emotes: [TwitchEmote])] {
         var groups: [(label: String, emotes: [TwitchEmote])] = []
 
         // ── Emotes du canal (toutes sources) ────────────────────────
@@ -152,6 +174,22 @@ actor EmoteService {
             canal += Array((channelBTTV[cid] ?? [:]).values)
             canal += Array((channelFFZ[cid]  ?? [:]).values)   // fix : clé = channelId
             canal.sort { $0.name.lowercased() < $1.name.lowercased() }
+            // Emotes Twitch de la chaîne (une chaîne sans 7TV, BTTV ni FFZ
+            // n'avait pas d'onglet) : celles du compte d'abord, puis les
+            // tierces, puis les emotes d'abonné hors de ses jeux, grisées.
+            var sets: Set<String>? = nil
+            if let known = userEmoteSets, known.login == login?.lowercased() { sets = known.sets }
+            var usable: [TwitchEmote] = [], locked: [TwitchEmote] = []
+            for item in channelTwitch[cid] ?? [] {
+                if let sets, let setId = item.setId, !sets.contains(setId) {
+                    var e = item.emote
+                    e.locked = true
+                    locked.append(e)
+                } else {
+                    usable.append(item.emote)
+                }
+            }
+            canal = usable + canal + locked
             if !canal.isEmpty {
                 // Clé de traduction : le sélecteur l'affiche dans la langue de
                 // l'app (les autres onglets sont des noms de marque).
@@ -169,6 +207,76 @@ actor EmoteService {
         if !gFfz.isEmpty  { groups.append(("FFZ",  gFfz))  }
 
         return groups
+    }
+
+    // MARK: – Emotes Twitch de la chaîne (sélecteur)
+    /// Jeux d'emotes du compte, lus dans GLOBALUSERSTATE et USERSTATE.
+    func setUserEmoteSets(_ sets: Set<String>, login: String) {
+        userEmoteSets = (login: login, sets: sets)
+    }
+
+    /// Emotes Twitch de la chaîne (followers, abonnés par niveau) : une
+    /// requête GQL publique par chaîne et par séance, gardée même vide. Sans
+    /// réponse, un second essai au prochain appel, pas plus.
+    func loadTwitchChannel(channelId: String) async {
+        guard !channelId.isEmpty, channelTwitch[channelId] == nil, !twitchLoading.contains(channelId),
+              twitchAttempts[channelId, default: 0] < 2 else { return }
+        twitchLoading.insert(channelId)
+        twitchAttempts[channelId, default: 0] += 1
+        let list = await fetchTwitchChannel(channelId)
+        twitchLoading.remove(channelId)
+        guard let list else {
+            logger.debug("EMOTES", "Emotes Twitch de la chaîne indisponibles", channelId)
+            return
+        }
+        channelTwitch[channelId] = list
+        logger.success("EMOTES", "Emotes Twitch de la chaîne chargées", "\(list.count)")
+    }
+
+    private static let twitchChannelQuery = """
+    query($id: ID!) { user(id: $id) { subscriptionProducts { tier emotes { id token setID } } } \
+    channel(id: $id) { localEmoteSets { emotes { id token setID } } } }
+    """
+
+    /// nil : pas de réponse lisible de Twitch (réseau, GQL en panne).
+    private func fetchTwitchChannel(_ channelId: String) async -> [ChannelTwitchEmote]? {
+        // Les valeurs passent en variables, jamais collées dans le texte.
+        guard let url = URL(string: "https://gql.twitch.tv/gql"),
+              let body = try? JSONSerialization.data(withJSONObject: ["query": Self.twitchChannelQuery,
+                                                                      "variables": ["id": channelId]]) else { return nil }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue(kGQLClientID, forHTTPHeaderField: "Client-ID")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = body
+        guard let (data, resp) = try? await chatAssetSession.data(for: req),
+              (resp as? HTTPURLResponse)?.statusCode == 200,
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let d = json["data"] as? [String: Any] else { return nil }
+        var out: [ChannelTwitchEmote] = []
+        var seen = Set<String>()
+        func add(_ list: Any?, follower: Bool) {
+            for e in list as? [[String: Any]] ?? [] {
+                guard let id = e["id"] as? String, !id.isEmpty,
+                      let token = e["token"] as? String, !token.isEmpty,
+                      seen.insert(id).inserted else { continue }
+                let emote = TwitchEmote(id: id, name: token,
+                                        url: "https://static-cdn.jtvnw.net/emoticons/v2/\(id)/default/dark/2.0",
+                                        source: .twitch, scope: .channel)
+                out.append(ChannelTwitchEmote(emote: emote, setId: follower ? nil : (e["setID"] as? String)))
+            }
+        }
+        // Followers d'abord, puis les niveaux d'abonnement dans l'ordre
+        // (« 1000 », « 2000 », « 3000 »).
+        let local = (d["channel"] as? [String: Any])?["localEmoteSets"] as? [[String: Any]] ?? []
+        for group in local { add(group["emotes"], follower: true) }
+        let products = (d["user"] as? [String: Any])?["subscriptionProducts"] as? [[String: Any]] ?? []
+        let tier = { (p: [String: Any]) -> Int in Int(p["tier"] as? String ?? "") ?? Int.max }
+        for p in products.sorted(by: { tier($0) < tier($1) }) { add(p["emotes"], follower: false) }
+        // Erreur partielle sans rien d'utilisable (« service timeout »…) : pas
+        // gardée, l'essai suivant redemandera.
+        if out.isEmpty, (json["errors"] as? [Any])?.isEmpty == false { return nil }
+        return out
     }
 
     // MARK: – Autocomplétion

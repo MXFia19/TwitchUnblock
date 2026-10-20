@@ -202,6 +202,28 @@ struct TChip: View {
     }
 }
 
+// MARK: – Contenu refait seulement quand sa clé change
+/// À poser avec `.equatable()` : `content` n'est reconstruit que si `key`
+/// change. iOS refait un menu ouvert (`Menu`, `Picker` en menu) à chaque
+/// rendu de la vue qui le contient ; pendant une lecture, les écrans se
+/// redessinent sans arrêt (position d'une VOD, durée du direct…), et une
+/// longue liste comme les 34 langues du top remontait en haut à chaque fois :
+/// impossible de la faire défiler. `key` réunit tout ce que le contenu
+/// affiche (choix en cours, langue de l'interface).
+struct KeyedView<Content: View>: View, Equatable {
+    let key: String
+    let content: () -> Content
+
+    init(key: String, @ViewBuilder content: @escaping () -> Content) {
+        self.key = key
+        self.content = content
+    }
+
+    var body: some View { content() }
+
+    nonisolated static func == (lhs: KeyedView, rhs: KeyedView) -> Bool { lhs.key == rhs.key }
+}
+
 // MARK: – Sous-onglets (Streams / Catégories…)
 struct TSegmented<Item: Hashable>: View {
     let items: [Item]

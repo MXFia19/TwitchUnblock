@@ -54,6 +54,7 @@ enum SettingsSync {
     /// l'appareil. Ne sont PAS synchronisés, parce qu'ils dépendent de
     /// l'appareil :
     ///  - ios_cellularQuality, ios_preferAudioOnly : qualité, données mobiles ;
+    ///  - ios_higherQualities : codecs que décode l'appareil ;
     ///  - ios_downloadWifiOnly : téléchargements ;
     ///  - ios_liveActivity : écran verrouillé et Dynamic Island ;
     ///  - ios_fillScreen, ios_landscapeChat, ios_landNoticesHidden et les

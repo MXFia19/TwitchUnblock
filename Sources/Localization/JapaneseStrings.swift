@@ -348,6 +348,7 @@ let kJapaneseStrings: [String: String] = [
     "emote_src_bttv_personal": "BetterTTV · 個人用エモート (Pro)",
     "emote_scope_global": "グローバルエモート",
     "emote_scope_channel": "チャンネルエモート",
+    "emote_locked": "サブスク限定",
     "emote_by": "提供: {u}",
     "emote_original": "元の名前: {n}",
     "emote_zero_width": "直前のエモートに重ねて表示",
@@ -1015,4 +1016,6 @@ let kJapaneseStrings: [String: String] = [
     "sched_vacation_range": "{a} から {b} まで休暇",
     "sched_none": "現在、予定されている配信はありません",
     "sched_local_hint": "日時は端末のタイムゾーンで表示しています。",
+    "higher_qualities": "より高い画質（チャンネルが提供している場合）",
+    "higher_qualities_sub": "Enhanced Broadcasting を使うチャンネルの 1440p 以上（HEVC や AV1 の場合あり）。Twitch はログイン中のアカウントにしか提供しないため、上の広告なし視聴でのみ使えます。この端末で再生できる形式：{c}。次に開く配信から適用されます。",
 ]

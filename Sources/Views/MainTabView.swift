@@ -488,9 +488,12 @@ struct MainTabView: View {
                     .presentationDetents([.large])
             }
         }
-        // Réglages : ouverts depuis l'avatar de l'en-tête.
+        // Réglages : ouverts depuis l'avatar de l'en-tête. `.equatable()` :
+        // cette vue se redessine chaque seconde pendant une lecture, les
+        // Réglages n'ont pas à suivre (voir SettingsView: Equatable).
         .sheet(isPresented: $showSettings) {
             SettingsView()
+                .equatable()
                 .inAppNoticeHost()
         }
         // Signaler un bug ou proposer une idée (en-tête, menu du lecteur).

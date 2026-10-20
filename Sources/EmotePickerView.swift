@@ -152,6 +152,11 @@ struct EmotePickerView: View {
         }
         .background(Color.tCard)
         .task {
+            // Emotes Twitch de la chaîne : chargées avec le chat, sinon (échec,
+            // « Recharger ») demandées ici, sans retenir l'affichage.
+            if let channelId { Task { await EmoteService.shared.loadTwitchChannel(channelId: channelId) } }
+            // Le compte : ses jeux d'emotes grisent les emotes d'abonné qu'il n'a pas.
+            let login = store.twitchLogin
             // Chargements encore en cours à l'ouverture (direct tout juste
             // ouvert, « Recharger ») : relu à 2, 5 et 10 s tant que la liste
             // grandit — elle restait vide, ou sans l'onglet de la chaîne.
@@ -159,7 +164,7 @@ struct EmotePickerView: View {
             for delay in [0, 2, 5, 10] as [UInt64] {
                 if delay > 0 { try? await Task.sleep(nanoseconds: delay * 1_000_000_000) }
                 if Task.isCancelled { return }
-                let loaded = await EmoteService.shared.groupedEmotes(channelId: channelId)
+                let loaded = await EmoteService.shared.groupedEmotes(channelId: channelId, login: login)
                 let count = loaded.reduce(0) { $0 + $1.emotes.count }
                 if count == lastCount { continue }
                 lastCount = count
@@ -190,7 +195,11 @@ private struct EmoteCell: View {
     @EnvironmentObject private var store: AppStore
 
     var body: some View {
-        Button(action: onTap) {
+        Button {
+            // Emote d'abonné que le compte n'a pas : jamais insérée ; sa fiche
+            // (si on peut l'ouvrir) dit à quel niveau elle se débloque.
+            if emote.locked { onInfo?() } else { onTap() }
+        } label: {
             VStack(spacing: 3) {
                 // animated: false — des centaines d'emotes animées en même temps
                 // saturent le processeur et rendent la grille inutilisable.
@@ -200,6 +209,16 @@ private struct EmoteCell: View {
                                  height: 34, animated: false, maxWidth: 46)
                     .frame(width: 46, height: 34)
                     .clipped()
+                    // Verrouillée : grisée, cadenas dans le coin.
+                    .saturation(emote.locked ? 0 : 1)
+                    .opacity(emote.locked ? 0.35 : 1)
+                    .overlay(alignment: .bottomTrailing) {
+                        if emote.locked {
+                            Image(systemName: "lock.fill")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundColor(.tText)
+                        }
+                    }
 
                 Text(emote.name)
                     .font(.system(size: 8))
@@ -207,13 +226,14 @@ private struct EmoteCell: View {
                     .lineLimit(1)
                     .truncationMode(.middle)
                     .frame(maxWidth: 52)
+                    .opacity(emote.locked ? 0.6 : 1)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 6)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(Text(emote.name))
+        .accessibilityLabel(Text(emote.locked ? "\(emote.name), \(store.t("emote_locked"))" : emote.name))
         .contextMenu {
             if let onInfo {
                 Button(action: onInfo) {

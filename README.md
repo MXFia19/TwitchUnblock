@@ -86,7 +86,10 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   lock screen activity.
 * 🔒 **Lock Screen and Dynamic Island** — the live or VOD you're watching
   (channel, title, playback) as a Live Activity; turn it off in Settings →
-  Player → Live Activity if you don't need it.
+  Player → Live Activity if you don't need it. When iOS refuses it because the
+  installer rewrote the app's Info.plist (missing `NSSupportsLiveActivities`),
+  the app stops asking until its next launch: one line in the log instead of
+  one per video.
 * 🏷️ **Full title** — tap the title at the top of the player (often cut off)
   to read it in full, with the category, viewers, uptime and a shortcut to the
   channel.
@@ -136,6 +139,15 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   would get ads; if your account's stream doesn't answer, the usual sources
   take over. Picking a source in the ⋯ menu skips your account for that
   channel until the app restarts.
+* 💎 **Higher qualities (if the channel offers them)** — off by default
+  (Settings → Player, under Watch ad-free with my sub). Channels on Enhanced
+  Broadcasting can send 1440p and above, sometimes in HEVC or AV1; the app
+  then tells Twitch which codecs the device decodes (`supported_codecs`: H.264
+  always, HEVC and AV1 only when decoded in hardware) and the extra qualities
+  show up in the quality picker. Twitch only serves them to a signed-in
+  account (an anonymous playback token stops at 1080p), so this applies to the
+  ad-free stream through your account only; the mirrors, official Twitch
+  without an account and the TwitchUnblock server stay as they are.
 * 📢 **Channel ad breaks explained** — during an ad break (or the pre-roll
   when a stream opens), Twitch replaces the stream with its purple
   “Commercial break in progress” screen or a real ad. The player now says so,
@@ -244,7 +256,11 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   adds the personal emotes of BTTV Pro users (once BTTV announces them, i.e.
   when they open the chat) and the emotes added to the channel during the
   stream. The emote picker is translated; long-press an emote there to open
-  its card or copy its name.
+  its card or copy its name. Its channel tab also lists the channel's own
+  Twitch emotes (follower, then sub tiers; one public Twitch request per
+  channel and session), so channels with only Twitch sub emotes get a tab too.
+  Sub emotes your account doesn't have (from the chat's `emote-sets`) are
+  greyed out with a lock: tapping one opens its card instead of adding it.
 * 🔎 **Tap an emote or a badge** — a card with the image in large, its exact
   name and source (Twitch, BTTV, FFZ, 7TV, personal), copy it or add it to your
   message. BetterTTV, FFZ and 7TV emotes show their scope (global or channel),

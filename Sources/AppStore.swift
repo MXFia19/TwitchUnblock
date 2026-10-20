@@ -237,6 +237,11 @@ final class AppStore: ObservableObject {
     @Published var cellularQuality: String = "auto" {
         didSet { UserDefaults.standard.set(cellularQuality, forKey: "cfg_quality_cellular") }
     }
+    /// Qualités supérieures (1440p et plus, HEVC ou AV1) demandées au direct
+    /// par le compte, coupé par défaut ; lu par getLive (HigherQualities).
+    @Published var higherQualities: Bool = false {
+        didSet { UserDefaults.standard.set(higherQualities, forKey: HigherQualities.key) }
+    }
     /// Audio seul préféré : ce que retenaient les versions d'avant (gardé
     /// dans la sauvegarde pour elles).
     var preferAudioOnly: Bool { preferredQuality == "audio" }
@@ -897,6 +902,7 @@ final class AppStore: ObservableObject {
         if let cell = ud.string(forKey: "cfg_quality_cellular"), kCellularQualityPrefs.contains(cell) {
             cellularQuality = cell
         }
+        higherQualities    = ud.bool(forKey: HigherQualities.key)
         showLatency        = ud.object(forKey: "dbg_latency")    as? Bool ?? false
         chatSync           = ud.object(forKey: "cfg_chat_sync")  as? Bool ?? true
         chatSyncNudge      = ud.double(forKey: "chat_sync_nudge")

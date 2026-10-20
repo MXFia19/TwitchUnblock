@@ -1932,6 +1932,9 @@ struct SettingsView: View {
                 .background(Color.tSurface)
                 .cornerRadius(TRadius.control)
             }
+            // VoiceOver : le pseudo et son apport, sans le nom des icônes
+            // (« person crop circle », « arrow up right »).
+            .accessibilityLabel(contributor.login + ", " + store.t(contributor.contributionKey))
         }
     }
 

@@ -671,7 +671,7 @@ let kJapaneseStrings: [String: String] = [
     "history_vods_empty_msg": "再生した VOD がここに表示され、続きから再生できます。",
     "chat_sync_hint": "チャットが映像より先に進んでいますか、それとも遅れていますか？",
     "chat_sync_later": "チャットを遅らせる (+1 秒)",
-    "chat_sync_earlier": "チャットを早める (-1 秒)",
+    "chat_sync_earlier": "チャットを早める (−1 秒)",
     "chat_sync_reset": "自動同期のみに戻す",
     "chat_sync_adjust": "同期の調整",
     "chat_sync_adjust_sub": "チャットが映像より先に進んでいますか？ 数秒を加えてください。遅れていますか？ 数秒を引いてください。チャットの上にある ⏱ バッジを長押ししても調整できます。",

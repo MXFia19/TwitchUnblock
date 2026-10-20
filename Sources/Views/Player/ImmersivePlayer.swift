@@ -1303,6 +1303,10 @@ struct ImmersivePlayer: View {
                     .padding(.horizontal, 18).padding(.vertical, 10)
                     .background(Color.black.opacity(0.6))
                     .clipShape(Capsule())
+                    // Centré sur la partie visible de l'image, comme ▶ dont il
+                    // prend la place (chat superposé) ; un long message se
+                    // replie dans cette largeur au lieu de passer sous le chat.
+                    .padding(.trailing, controlsInset)
                     .transition(.opacity)
             }
 
@@ -1583,7 +1587,14 @@ struct ImmersivePlayer: View {
             // pas sur l'écran entier : le chat superposé en masque la droite.
             // En échec, la carte « Réessayer » prend sa place. Comme tous les
             // boutons du lecteur, rien pendant un glissé (PlayerPull.guarded).
-            if !model.failed {
+            //
+            // Le bandeau fugace (zoom, ±10 s, son coupé…) la prend aussi, le
+            // temps de s'afficher. Posé au même endroit, il passait sous le
+            // bouton, qui en cachait le milieu : du « 2.0× » du zoom, il ne
+            // restait que les bords. Pas de place au-dessus ni au-dessous : en
+            // portrait, la boîte 16:9 ne laisse qu'une vingtaine de points entre
+            // la barre du haut et le bouton, et quelques-uns sous lui.
+            if !model.failed, seekFlash == nil {
                 Button {
                     PlayerPull.guarded { model.togglePlay(); scheduleAutoHide() }
                 } label: {
@@ -2360,7 +2371,8 @@ struct ImmersivePlayer: View {
                                                     : VodSpeed.label(model.speed, store.lang))
     }
 
-    /// Bandeau fugace au centre de l'image (±10 s, changement de mode du chat).
+    /// Bandeau fugace au centre de l'image (±10 s, changement de mode du chat),
+    /// à la place du bouton lecture / pause quand les commandes sont affichées.
     /// Un seul effacement en attente : celui d'un bandeau précédent effaçait
     /// aussi le suivant, trop tôt (deux doubles-tapes à 0,5 s d'écart :
     /// « +20 s » disparaissait au bout de 0,4 s).

@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.5.17",
+          "buildVersion": "341",
+          "date": "2026-10-20",
+          "localizedDescription": "- Other improvements and fixes",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-341/TwitchUnblock.ipa",
+          "size": 4252146,
+          "commit": "5ff465d6696e0a634fe3051d25e6e6239b52569b"
+        },
+        {
           "version": "1.5.16",
           "buildVersion": "340",
           "date": "2026-10-20",
@@ -280,25 +289,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-310/TwitchUnblock.ipa",
           "size": 3720130,
           "commit": "403237071463849aa0b49b6fa3ea3638f26adf63"
-        },
-        {
-          "version": "1.4.10",
-          "buildVersion": "309",
-          "date": "2026-10-18",
-          "localizedDescription": "- Chat: a network drop of a few seconds no longer signs your account out of the chat, and when Twitch really refuses it the read-only notice shows right away in your language\n- Chat: with delay sync on, messages deleted or users banned by moderators no longer show up a few seconds later\n- Chat: channel emotes and badges that fail to load are retried instead of missing until the app restarts; a mention followed by punctuation (@you,) is highlighted\n- Chat: connecting the web session during a live now also updates predictions, polls and raids; closing the chat while it loads no longer leaves connections running\n- Channel points: a chest that fails to claim stays claimable and is retried, and a failed balance refresh no longer shows 0 then a fake gain\n- Channel points, follows, bets and drops no longer fail when several of them need Twitch's integrity token at the same time\n- Animated emotes no longer pile up hundreds of MB of memory\n- Downloaded VODs keep playing after the app was suspended (lock screen, Picture in Picture)\n- Drops: turning on drop progress or connecting the web session during a live starts it right away, and a refused integrity token no longer blocks progress for hours\n- My reports: the \"fix is out\" message now reaches finished reports (they're checked once a day for 30 days)",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-309/TwitchUnblock.ipa",
-          "size": 3716551,
-          "commit": "fd5015e425cac43a5f78e783b3dfefdbf4da2d1f"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.5.16",
+      "version": "1.5.17",
       "versionDate": "2026-10-20",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-340/TwitchUnblock.ipa",
-      "size": 4251784
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-341/TwitchUnblock.ipa",
+      "size": 4252146
     }
   ],
   "news": []

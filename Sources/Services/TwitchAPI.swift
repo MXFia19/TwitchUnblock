@@ -499,13 +499,16 @@ func apiErrorKey(_ code: String) -> String {
 /// pub sur cette chaîne (abonné, Turbo accepté), le direct passe par lui avant
 /// les proxys — qui reçoivent, eux aussi, les pauses pub de la chaîne. Jamais
 /// pour un compte qui aurait des pubs : il en recevrait de vraies, ciblées sur
-/// son adresse réelle — sauf qualités supérieures (higherQualitiesMaster) :
-/// sa liste maîtresse au-dessus de 1080p, à côté de la source habituelle qui
-/// sert ses pauses pub. `integrity` : voir accountPlaybackToken. `onSource` :
-/// appelé avec chaque source avant de l'essayer (« as », « al », « eu »,
-/// « twitch », « worker »), pour l'écran de chargement ; hors du fil principal.
+/// son adresse réelle — sauf qualités supérieures (higherQualitiesMaster),
+/// seulement si `hqAccount` (lecteur principal, qui bascule pendant ses
+/// pauses pub ; pas le multi-live) : sa liste maîtresse au-dessus de 1080p,
+/// à côté de la source habituelle qui sert ses pauses pub. `integrity` : voir
+/// accountPlaybackToken. `onSource` : appelé avec chaque source avant de
+/// l'essayer (« as », « al », « eu », « twitch », « worker »), pour l'écran
+/// de chargement ; hors du fil principal.
 func getLive(channelName: String, webToken: String? = nil,
              integrity: (() async -> (token: String, deviceId: String)?)? = nil,
+             hqAccount: Bool = false,
              onSource: ((String) -> Void)? = nil) async -> LiveData {
     let login = channelName.trimmingCharacters(in: .whitespaces).lowercased()
     logger.info("LIVE", "Lancement stream \"\(login)\"")
@@ -602,7 +605,7 @@ func getLive(channelName: String, webToken: String? = nil,
             } else {
                 logger.warn("LIVE", "⚠️ Flux du compte indisponible", "sources habituelles…")
             }
-        } else if !pat.forbidden, HigherQualities.enabled {
+        } else if !pat.forbidden, hqAccount, HigherQualities.enabled {
             // Pas sans pub ici, mais seul ce jeton dépasse 1080p : sa liste
             // maîtresse est demandée en même temps que les sources habituelles,
             // qui restent celles du direct (voir hqAccountLinks).
@@ -690,7 +693,7 @@ func getLive(channelName: String, webToken: String? = nil,
 /// Liste maîtresse du compte avec les qualités supérieures (HigherQualities),
 /// pour un jeton à qui Twitch sert des pubs : seulement si elle dépasse
 /// 1080p — sinon la source habituelle suffit, aucune pub risquée pour rien.
-/// nil aussi sans jeton (réglage coupé, compte sans pub, Apple TV).
+/// nil aussi sans jeton (réglage coupé, compte sans pub, multi-live, Apple TV).
 private func higherQualitiesMaster(login: String, token: (value: String, signature: String)?,
                                    lowLatency: Bool) async -> MasterPlaylist? {
     guard let token, let codecs = HigherQualities.requested else { return nil }

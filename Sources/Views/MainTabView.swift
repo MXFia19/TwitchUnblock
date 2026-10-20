@@ -1937,9 +1937,11 @@ struct MainTabView: View {
                 // Abonné sans pub sur cette chaîne : le direct passe par son
                 // compte (session web), sinon jeton anonyme comme avant.
                 let web = store.accountPlaybackWebToken(for: channel)
-                // Source essayée : dite par l'écran de chargement.
+                // Source essayée : dite par l'écran de chargement. Qualités
+                // supérieures sans abonnement : ce lecteur seulement (HQLive).
                 let data = await getLive(channelName: channel, webToken: web,
                                          integrity: web.map { dropsIntegrity(for: $0) },
+                                         hqAccount: true,
                                          onSource: { source in
                                              DispatchQueue.main.async {
                                                  if gen == loadGeneration { loadingSource = source }

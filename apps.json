@@ -176,6 +176,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.5.31",
+          "buildVersion": "348",
+          "date": "2026-10-20",
+          "localizedDescription": "- Other improvements and fixes",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-348/TwitchUnblock.ipa",
+          "size": 4333665,
+          "commit": "9b33d689c78b0f0dd166f1fb1b9ee5da1b5fce02"
+        },
+        {
           "version": "1.5.30",
           "buildVersion": "347",
           "date": "2026-10-20",
@@ -255,25 +264,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-337/TwitchUnblock.ipa",
           "size": 4231305,
           "commit": "7510455c72b7845c006557bcec606033620890b5"
-        },
-        {
-          "version": "1.5.8",
-          "buildVersion": "336",
-          "date": "2026-10-19",
-          "localizedDescription": "- Settings: signed in, your settings now follow your Twitch account on the website and your other devices: chat settings, top streams language, VOD speed, pinned and hidden channels, and the app's customization (Settings → Twitch Account → Sync my settings, on by default)\n- Settings: language, quality, mobile data, notifications, downloads and appearance stay specific to each device; the latest change wins, and pinned or hidden lists changed on two devices are merged",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-336/TwitchUnblock.ipa",
-          "size": 4222082,
-          "commit": "d83ce6240c749741663778400094090973873b50"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.5.30",
+      "version": "1.5.31",
       "versionDate": "2026-10-20",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-347/TwitchUnblock.ipa",
-      "size": 4333018
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-348/TwitchUnblock.ipa",
+      "size": 4333665
     }
   ],
   "news": []

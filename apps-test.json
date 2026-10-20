@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.5.14",
+          "buildVersion": "339",
+          "date": "2026-10-20",
+          "localizedDescription": "- Customize: reorder and hide the tabs of a channel page (VODs, Highlights, Playlists, Clips, Schedule, About); the page opens on the first one shown\n- Tap the tab you're on again to scroll back to the top (Home, Search, My VODs) or to Discover's first page\n- Home: pinned channels' live streams stay on top of Following, now sorted by viewers among themselves (Settings → Customize → Pinned sorted by viewers)",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-339/TwitchUnblock.ipa",
+          "size": 4244347,
+          "commit": "b16092f406b07a660351a8de8f344f3cbba8956e"
+        },
+        {
           "version": "1.5.13",
           "buildVersion": "338",
           "date": "2026-10-19",
@@ -280,25 +289,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-308/TwitchUnblock.ipa",
           "size": 3705045,
           "commit": "6964fac2ba4aed71767d33d384238b95447a5070"
-        },
-        {
-          "version": "1.4.8",
-          "buildVersion": "307",
-          "date": "2026-10-18",
-          "localizedDescription": "- In landscape with the chat shown, the video no longer goes under the Dynamic Island or the notch",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-307/TwitchUnblock.ipa",
-          "size": 3705741,
-          "commit": "efc13222b50c0d3d5cdf7a89c7945b8c28220251"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.5.13",
-      "versionDate": "2026-10-19",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-338/TwitchUnblock.ipa",
-      "size": 4236402
+      "version": "1.5.14",
+      "versionDate": "2026-10-20",
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-339/TwitchUnblock.ipa",
+      "size": 4244347
     }
   ],
   "news": []

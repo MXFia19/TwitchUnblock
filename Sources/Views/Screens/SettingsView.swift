@@ -914,10 +914,11 @@ struct SettingsView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 8)
-            // Menu refait seulement quand le choix ou la langue de l'interface
-            // change (KeyedView) : pendant une lecture, les Réglages se
-            // redessinent sans cesse et la liste ouverte remontait en haut.
-            KeyedView(key: "\(store.topLang ?? "")|\(store.lang.rawValue)") {
+            // Menu refait seulement quand le choix, la langue de l'interface
+            // ou le thème change (KeyedView) : pendant une lecture, les
+            // Réglages se redessinent sans cesse et la liste ouverte remontait
+            // en haut. Thème compris : l'accent se choisit sur cette page.
+            KeyedView(key: "\(store.topLang ?? "")|\(store.lang.rawValue)|\(store.themeID)") {
                 let options = TopLanguage.codes
                     .map { ($0, TopLanguage.name($0, in: store.lang)) }
                     .sorted { $0.1.localizedCompare($1.1) == .orderedAscending }
@@ -1262,7 +1263,7 @@ struct SettingsView: View {
             }
             Spacer(minLength: 8)
             // Comme la langue du top : menu refait seulement si son contenu change.
-            KeyedView(key: "\(store.preferredQuality)|\(store.lang.rawValue)") {
+            KeyedView(key: "\(store.preferredQuality)|\(store.lang.rawValue)|\(store.themeID)") {
                 Picker("", selection: $store.preferredQuality) {
                     ForEach(kQualityPrefs, id: \.self) { pref in
                         Text(pref == "source" ? store.t("q_source")
@@ -1292,7 +1293,7 @@ struct SettingsView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 8)
-            KeyedView(key: "\(store.cellularQuality)|\(store.lang.rawValue)") {
+            KeyedView(key: "\(store.cellularQuality)|\(store.lang.rawValue)|\(store.themeID)") {
                 Picker("", selection: $store.cellularQuality) {
                     ForEach(kCellularQualityPrefs, id: \.self) { pref in
                         Text(pref == "auto" ? store.t("q_auto") : pref == "same" ? store.t("q_same_wifi")

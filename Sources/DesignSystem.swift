@@ -209,7 +209,8 @@ struct TChip: View {
 /// redessinent sans arrêt (position d'une VOD, durée du direct…), et une
 /// longue liste comme les 34 langues du top remontait en haut à chaque fois :
 /// impossible de la faire défiler. `key` réunit tout ce que le contenu
-/// affiche (choix en cours, langue de l'interface).
+/// affiche (choix en cours, langue de l'interface, thème : `store.themeID`,
+/// ses couleurs sont lues au rendu).
 struct KeyedView<Content: View>: View, Equatable {
     let key: String
     let content: () -> Content

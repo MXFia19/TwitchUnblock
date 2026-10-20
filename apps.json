@@ -176,6 +176,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.5.28",
+          "buildVersion": "346",
+          "date": "2026-10-20",
+          "localizedDescription": "- Settings → About now credits the people who contribute to the app\n- Japanese interface language (thanks to kinboy56)\n- Other improvements and fixes",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-346/TwitchUnblock.ipa",
+          "size": 4310080,
+          "commit": "5000d324dbf353e2830d60fbe10f56cbe7704c28"
+        },
+        {
           "version": "1.5.25",
           "buildVersion": "345",
           "date": "2026-10-20",
@@ -255,25 +264,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-335/TwitchUnblock.ipa",
           "size": 4183176,
           "commit": "9e0a7847913c19a9432d20730dba2c5c9c963f27"
-        },
-        {
-          "version": "1.5.6",
-          "buildVersion": "334",
-          "date": "2026-10-19",
-          "localizedDescription": "- Player: Share in the ⋯ menu sends a VOD (or a rewound live) at the current time, the channel during a live, or the clip's link\n- Player: Create a clip during a live from the ⋯ menu, with your Twitch web session (connect it from there if needed), then copy or share its link\n- Notifications: live notifications show the stream's thumbnail, are grouped per channel, and offer Watch and Stop notifying for this channel\n- Notifications: a bell on channel pages and next to Follow above the chat turns live notifications on or off for that channel\n- Chat: tapping a message opens the person's card (badges, account creation date, follow date when Twitch gives it, Mention, Hide and Channel buttons), then their recent messages and the reply thread",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-334/TwitchUnblock.ipa",
-          "size": 4075860,
-          "commit": "b9945305e9528b83a31363aecf8d82a24e19543a"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.5.25",
+      "version": "1.5.28",
       "versionDate": "2026-10-20",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-345/TwitchUnblock.ipa",
-      "size": 4280124
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-346/TwitchUnblock.ipa",
+      "size": 4310080
     }
   ],
   "news": []

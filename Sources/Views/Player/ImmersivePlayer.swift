@@ -158,8 +158,8 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
     /// Pause voulue (bouton, écran verrouillé, PiP) : un direct en échec
     /// n'est alors pas relancé seul, il serait reparti avec le son (jamais
     /// après une pause voulue, comme PlaybackAudio) ; la carte propose
-    /// « Réessayer ».
-    private var pausedByUser = false
+    /// « Réessayer ». Lue aussi par la vue (onFailed).
+    private(set) var pausedByUser = false
     /// Démonté (vue fermée) : plus rien ne relance ce lecteur ni ne publie
     /// pour lui.
     private var tornDown = false
@@ -1411,9 +1411,11 @@ struct ImmersivePlayer: View {
         }
         .onChange(of: model.isPlaying) { onPlaying($0) }
         // Qualités supérieures sans abonnement : le parent bascule de source
-        // pendant les pauses pub, ou si le flux du compte ne joue pas.
+        // pendant les pauses pub, ou si le flux du compte ne joue pas — pas
+        // après une pause voulue : la bascule relancerait la lecture, avec le
+        // son ; la carte « Réessayer » reste, comme sur les autres sources.
         .onReceive(model.adBreaks.$remaining) { onAdBreak($0) }
-        .onChange(of: model.failed) { if $0 { onFailed() } }
+        .onChange(of: model.failed) { if $0, !model.pausedByUser { onFailed() } }
         .onChange(of: notice) { n in
             if let n { flash(n, duration: 2_500_000_000) }
         }

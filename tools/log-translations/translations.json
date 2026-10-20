@@ -508,10 +508,15 @@
  "Pause pub Twitch : source sans pub": ["Twitch ad break: ad-free source", "Pausa publicitaria de Twitch: fuente sin anuncios", "Рекламная пауза Twitch: источник без рекламы"],
  "Pubs répétées sur le flux du compte": ["Repeated ads on the account stream", "Anuncios repetidos en el flujo de la cuenta", "Повторная реклама в потоке аккаунта"],
  "reste sur la source sans pub": ["staying on the ad-free source", "se queda en la fuente sin anuncios", "остаётся на источнике без рекламы"],
- "Pub sans fin sur le flux du compte": ["Endless ads on the account stream", "Anuncios sin fin en el flujo de la cuenta", "Бесконечная реклама в потоке аккаунта"],
+ "Retour au flux du compte impossible": ["Can't go back to the account stream", "Imposible volver al flujo de la cuenta", "Не удаётся вернуться к потоку аккаунта"],
  "Pub encore au bord du flux du compte": ["Ad still at the edge of the account stream", "Anuncio aún en el borde del flujo de la cuenta", "Реклама ещё на краю потока аккаунта"],
  "nouvel essai dans": ["retrying in", "nuevo intento en", "повтор через"],
  "Fin de la pause pub : retour au flux du compte": ["Ad break over: back to the account stream", "Fin de la pausa publicitaria: vuelta al flujo de la cuenta", "Рекламная пауза закончилась: возврат к потоку аккаунта"],
  "Source sans pub en échec": ["Ad-free source failed", "Fallo de la fuente sin anuncios", "Сбой источника без рекламы"],
- "retour au flux du compte, source relue": ["back to the account stream, source reloaded", "vuelta al flujo de la cuenta, fuente recargada", "возврат к потоку аккаунта, источник перезагружен"]
+ "retour au flux du compte, source relue": ["back to the account stream, source reloaded", "vuelta al flujo de la cuenta, fuente recargada", "возврат к потоку аккаунта, источник перезагружен"],
+ "Source habituelle avec pubs (Twitch officiel) : direct par le compte": ["Usual source with ads (official Twitch): live through the account", "Fuente habitual con anuncios (Twitch oficial): directo con la cuenta", "Обычный источник с рекламой (официальный Twitch): трансляция через аккаунт"],
+ "Source sans pub lue il y a plus de 10 min": ["Ad-free source read more than 10 min ago", "Fuente sin anuncios leída hace más de 10 min", "Источник без рекламы получен более 10 мин назад"],
+ "relue avant la bascule": ["reloaded before switching", "recargada antes del cambio", "перезагружается перед переключением"],
+ "Source sans pub injoignable": ["Ad-free source unreachable", "Fuente sin anuncios inaccesible", "Источник без рекламы недоступен"],
+ "reste sur le flux du compte": ["staying on the account stream", "se queda en el flujo de la cuenta", "остаётся на потоке аккаунта"]
 }

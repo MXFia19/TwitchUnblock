@@ -721,6 +721,12 @@ struct MainTabView: View {
                   !closingPlayer else { return }
             startDropsHeartbeat(channel: channel)
         }
+        // Qualités supérieures : lecture reprise sur la source sans pub, dont
+        // le retour au compte s'était arrêté avec la pause (scheduleHQReturn).
+        .onChange(of: playerPlaying) { playing in
+            guard playing, hqLive?.onAdFree == true, hqReturnTask == nil else { return }
+            scheduleHQReturn(after: 2)
+        }
         // Minuteur de veille écoulé → on coupe la lecture.
         .onChange(of: sleepTimer.fireCount) { _ in
             guard playerMode != nil else { return }
@@ -2110,7 +2116,8 @@ struct MainTabView: View {
     /// hqAccountLinks) : seulement si la qualité de départ y dépasse 1080p
     /// (sinon aucune pub risquée pour rien), et d'abord par la source sans pub
     /// quand une pub ouvre la playlist du compte (`wait` : ses secondes
-    /// restantes). nil : la source habituelle, comme avant.
+    /// restantes) ; sans bascule si la source habituelle a elle aussi des
+    /// pubs (Twitch officiel). nil : la source habituelle, comme avant.
     private func hqLaunch(_ data: LiveData) async -> (live: HQLive, wait: TimeInterval)? {
         let wrap = { (links: QualityLinks) -> QualityLinks in
             store.lowLatency ? LivePlaylistLoader.wrap(links) : links
@@ -2129,10 +2136,22 @@ struct MainTabView: View {
             logger.info("LECTEUR", "Qualité de départ en 1080p ou moins", "source habituelle, sans pub")
             return nil
         }
+        // 2 s au plus : avec la liste du compte (getLive, 2 s aussi), le
+        // lancement attend 4 s de plus au pire.
         guard let url = account[start].flatMap({ URL(string: $0) }),
-              let wait = await AdBreakMonitor.adWait(at: url, window: hqEdgeWindow) else {
+              let wait = await AdBreakMonitor.adWait(at: url, window: hqEdgeWindow, timeout: 2) else {
             logger.warn("LECTEUR", "Flux du compte injoignable", "source habituelle, sans pub")
             return nil
+        }
+        // Source habituelle = Twitch officiel sans compte : des pubs elle
+        // aussi, aucune bascule n'y gagnerait. Le compte seul, comme sans
+        // source habituelle : ses pubs coupées et annoncées, pré-roll compris.
+        guard data.source != "twitch" else {
+            logger.info("LECTEUR", "Source habituelle avec pubs (Twitch officiel) : direct par le compte",
+                        "pubs de Twitch comprises")
+            let live = HQLive(account: wrap(account), accountVariants: data.hqAccountVariants,
+                              accountQuality: start, adFree: [:], adFreeVariants: [:], adFreeSource: nil)
+            return (live, 0)
         }
         var live = HQLive(account: wrap(account), accountVariants: data.hqAccountVariants,
                           accountQuality: start, adFree: wrap(adFree), adFreeVariants: data.variants,
@@ -2169,7 +2188,18 @@ struct MainTabView: View {
     /// qualité — lecteur, chat et Live Activity restent. Retour prévu à la fin
     /// de la pause : `left` s et une marge (scheduleHQReturn).
     private func switchToAdFree(remaining left: Int) {
-        guard var live = hqLive, !live.onAdFree, !live.adFree.isEmpty else { return }
+        guard var live = hqLive, !live.onAdFree, !live.adFree.isEmpty, !live.refreshing else { return }
+        // Liens lus il y a plus de 10 min : leurs adresses de séance ont pu
+        // expirer, et le lecteur resterait figé dessus. Relus d'abord ; la
+        // bascule attend des liens frais (seconde suivante de la pause). Ratée,
+        // la pub reste sur le compte, coupée et annoncée comme ailleurs, et
+        // pas de nouvel essai avant une minute.
+        if live.adFreeStale {
+            if let failed = live.refreshFailed, Date().timeIntervalSince(failed) < 60 { return }
+            logger.info("PUB", "Source sans pub lue il y a plus de 10 min", "relue avant la bascule")
+            refreshAdFree()
+            return
+        }
         // Pub revenue moins de 30 s après un retour : la pause n'était pas
         // finie, ou Twitch en remet. Deux fois de suite : plus de retour.
         if let back = live.lastReturn, Date().timeIntervalSince(back) < 30 {
@@ -2198,25 +2228,38 @@ struct MainTabView: View {
     /// Retour au flux du compte, `delay` s plus tard. Pas tant que la source
     /// sans pub montre elle-même une pause (celle de la chaîne), ni que le bord
     /// de la playlist du compte est en pub (pub suivante, annoncée après
-    /// coup) : on attend encore, une vingtaine de vérifications (10 min) au
-    /// plus. Playlist du compte injoignable, ou pub sans fin : on reste sans
-    /// pub. Ni pendant une pause de la lecture : le retour la relancerait.
+    /// coup) : on attend encore, vingt vérifications au plus, puis on reste
+    /// sur la source sans pub, qui a l'image. Playlist du compte injoignable :
+    /// on y reste aussi. Lecture en pause : plus de vérification (le retour la
+    /// relancerait) ; elles reprennent avec la lecture (onChange playerPlaying).
     private func scheduleHQReturn(after delay: TimeInterval) {
         hqReturnTask?.cancel()
         let gen = loadGeneration
         hqReturnTask = Task { @MainActor in
             var wait = delay
-            var adChecks = 0
+            var checks = 0
             while true {
                 try? await Task.sleep(nanoseconds: UInt64(max(1, wait) * 1_000_000_000))
                 guard !Task.isCancelled, gen == loadGeneration, let live = hqLive, live.onAdFree else { return }
+                // En pause : la tâche s'arrête, la reprise la relance. Pas
+                // annulée, c'est bien elle que tient hqReturnTask.
+                guard playerPlaying else {
+                    hqReturnTask = nil
+                    return
+                }
+                checks += 1
+                guard checks <= 20 else {
+                    logger.warn("PUB", "Retour au flux du compte impossible", "reste sur la source sans pub")
+                    settleOnAdFree()
+                    return
+                }
                 // Pause de la chaîne sur la source sans pub : le compte a la sienne.
                 if let left = live.adFreeBreak {
                     wait = TimeInterval(left) + 2
                     continue
                 }
-                // Lecture en pause, bascule ou erreur en cours : un peu plus tard.
-                guard playerPlaying, linksAreLive, !switchingSource, errorMsg == nil,
+                // Bascule ou erreur en cours : un peu plus tard.
+                guard linksAreLive, !switchingSource, errorMsg == nil,
                       let link = live.account[currentQuality(live.account, variants: live.accountVariants)],
                       let url = URL(string: link).flatMap({ LivePlaylistLoader.unwrap($0) }) else {
                     wait = 5
@@ -2224,6 +2267,11 @@ struct MainTabView: View {
                 }
                 let pending = await AdBreakMonitor.adWait(at: url, window: hqEdgeWindow)
                 guard !Task.isCancelled, gen == loadGeneration, let after = hqLive, after.onAdFree else { return }
+                // Mise en pause pendant la vérification : comme plus haut.
+                guard playerPlaying else {
+                    hqReturnTask = nil
+                    return
+                }
                 // Pause de la chaîne commencée pendant la vérification.
                 if let left = after.adFreeBreak {
                     wait = TimeInterval(left) + 2
@@ -2235,12 +2283,6 @@ struct MainTabView: View {
                     return
                 }
                 if pending > 0 {
-                    adChecks += 1
-                    guard adChecks < 20 else {
-                        logger.warn("PUB", "Pub sans fin sur le flux du compte", "reste sur la source sans pub")
-                        settleOnAdFree()
-                        return
-                    }
                     wait = min(pending + 1, 30)
                     logger.debug("PUB", "Pub encore au bord du flux du compte", "nouvel essai dans \(Int(wait)) s")
                     continue
@@ -2268,17 +2310,17 @@ struct MainTabView: View {
     }
 
     /// Lecture arrêtée sur une erreur (après les relances du lecteur). Flux du
-    /// compte : la source sans pub, pour de bon. Source sans pub, pendant une
-    /// pause (liens gardés depuis le lancement, devenus trop anciens ?) :
-    /// retour au compte tout de suite — sa pub y est coupée et annoncée,
-    /// comme sur les autres sources — et la source habituelle est relue pour
-    /// les pauses suivantes ; rien où basculer d'ici là.
+    /// compte : la source sans pub, pour de bon (relue d'abord si ses liens
+    /// sont trop anciens). Source sans pub, pendant une pause : retour au
+    /// compte tout de suite — sa pub y est coupée et annoncée, comme sur les
+    /// autres sources — et la source habituelle est relue pour les pauses
+    /// suivantes ; rien où basculer d'ici là.
     private func hqStreamFailed() {
         guard var live = hqLive, !live.adFree.isEmpty, linksAreLive,
               dvrSourceChannel == nil, !switchingSource else { return }
         guard live.onAdFree else {
             logger.warn("LECTEUR", "Flux du compte en échec", "reste sur la source sans pub")
-            settleOnAdFree()
+            if live.adFreeStale { refreshAdFree { settleOnAdFree() } } else { settleOnAdFree() }
             return
         }
         logger.warn("LECTEUR", "Source sans pub en échec", "retour au flux du compte, source relue")
@@ -2286,21 +2328,42 @@ struct MainTabView: View {
         hqReturnTask = nil
         live.onAdFree = false
         live.adFreeBreak = nil
-        live.adFree = [:]
+        // Liens morts : plus de bascule dessus tant qu'ils ne sont pas relus.
+        live.adFreeAt = .distantPast
         hqLive = live
         qualityLinks = live.account
         qualityVariants = live.accountVariants
         liveSourceUsed = "account"
-        guard case .live(let channel)? = playerMode else { return }
+        refreshAdFree()
+    }
+
+    /// Source habituelle relue sans le compte, comme au lancement (getLive sans
+    /// hqAccount) : des liens frais pour les pauses pub. Twitch officiel sans
+    /// compte n'en est pas une (des pubs aussi). Ratée : les anciens liens ne
+    /// servent plus, nouvel essai une minute plus tard au plus tôt
+    /// (switchToAdFree). `done` : après une relecture réussie, même lecture.
+    private func refreshAdFree(then done: (() -> Void)? = nil) {
+        guard var live = hqLive, !live.refreshing, case .live(let channel)? = playerMode else { return }
+        live.refreshing = true
+        hqLive = live
         let gen = loadGeneration
         Task { @MainActor in
-            // Sans le compte : la source habituelle seule, comme au lancement.
             let data = await getLive(channelName: channel)
-            guard gen == loadGeneration, var now = hqLive, let links = data.links, !links.isEmpty else { return }
+            guard gen == loadGeneration, var now = hqLive else { return }
+            now.refreshing = false
+            guard let links = data.links, !links.isEmpty, data.source != "twitch" else {
+                now.refreshFailed = Date()
+                hqLive = now
+                logger.warn("PUB", "Source sans pub injoignable", "reste sur le flux du compte")
+                return
+            }
             now.adFree = store.lowLatency ? LivePlaylistLoader.wrap(links) : links
             now.adFreeVariants = data.variants
             now.adFreeSource = data.source
+            now.adFreeAt = Date()
+            now.refreshFailed = nil
             hqLive = now
+            done?()
         }
     }
 
@@ -2540,11 +2603,18 @@ private struct HQLive {
     let accountVariants: [String: VariantInfo]
     /// Qualité de départ sur le flux du compte (au-dessus de 1080p).
     let accountQuality: String
-    /// Source habituelle : vide si aucune n'a répondu (rien où basculer),
-    /// ou en attendant d'être relue après un échec (hqStreamFailed).
+    /// Source habituelle : vide si aucune n'a répondu, ou si c'est Twitch
+    /// officiel, avec ses pubs (rien où basculer).
     var adFree: QualityLinks
     var adFreeVariants: [String: VariantInfo]
     var adFreeSource: String?
+    /// Lecture de ces liens (lancement, ou relus) : adresses de séance, qui
+    /// peuvent expirer ; plus de 10 min, relus avant une bascule.
+    var adFreeAt = Date()
+    var adFreeStale: Bool { Date().timeIntervalSince(adFreeAt) > 600 }
+    /// Relecture en cours (refreshAdFree), et dernière ratée.
+    var refreshing = false
+    var refreshFailed: Date? = nil
     /// Sur la source sans pub en ce moment.
     var onAdFree = false
     /// Pause à l'écran sur la source sans pub (pause de la chaîne, écran

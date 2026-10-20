@@ -697,7 +697,11 @@ func getLive(channelName: String, webToken: String? = nil,
 private func higherQualitiesMaster(login: String, token: (value: String, signature: String)?,
                                    lowLatency: Bool) async -> MasterPlaylist? {
     guard let token, let codecs = HigherQualities.requested else { return nil }
-    let master = await usherLiveLinks(login: login, token: token, lowLatency: lowLatency, codecs: codecs)
+    // 2 s au plus : le direct l'attend, puis la playlist du compte
+    // (MainTabView.hqLaunch, 2 s aussi) — 4 s de plus au pire. Au-delà, la
+    // source habituelle, comme sans le réglage.
+    let master = await usherLiveLinks(login: login, token: token, lowLatency: lowLatency,
+                                      codecs: codecs, timeout: 2)
     let top = master.variants.values.map(\.height).max() ?? 0
     guard top > 1080 else {
         if !master.links.isEmpty {
@@ -896,9 +900,10 @@ enum HigherQualities {
 /// `lowLatency` : Twitch sert alors la variante « low latency » (segments
 /// plus courts, playlist rafraîchie plus souvent). `codecs` :
 /// `supported_codecs`, pour le jeton du compte seulement (HigherQualities) ;
-/// nil, la demande ne change pas.
+/// nil, la demande ne change pas. `timeout` : voir higherQualitiesMaster.
 private func usherLiveLinks(login: String, token: (value: String, signature: String),
-                            lowLatency wantsLowLatency: Bool, codecs: String? = nil) async -> MasterPlaylist {
+                            lowLatency wantsLowLatency: Bool, codecs: String? = nil,
+                            timeout: TimeInterval = 8) async -> MasterPlaylist {
     guard login.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "_" }), !login.isEmpty,
           var comps = URLComponents(string: "https://usher.ttvnw.net/api/channel/hls/\(login).m3u8")
     else { return ([:], [:]) }
@@ -920,10 +925,10 @@ private func usherLiveLinks(login: String, token: (value: String, signature: Str
         logger.info("LIVE", "Qualités supérieures demandées à Twitch", codecs)
     }
     if wantsLowLatency { logger.info("LIVE", "Mode faible latence demandé à Twitch") }
-    // 8 s au plus (au lieu des 60 s par défaut) : réseau filtré, la source
-    // suivante doit prendre le relais sans faire attendre.
+    // 8 s au plus par défaut (au lieu des 60 s d'URLSession) : réseau
+    // filtré, la source suivante doit prendre le relais sans faire attendre.
     guard let url = comps.url,
-          let (data, resp) = try? await URLSession.shared.data(for: URLRequest(url: url, timeoutInterval: 8)),
+          let (data, resp) = try? await URLSession.shared.data(for: URLRequest(url: url, timeoutInterval: timeout)),
           (resp as? HTTPURLResponse)?.statusCode == 200,
           let body = String(data: data, encoding: .utf8) else { return ([:], [:]) }
     let master = parseMaster(body, baseURL: url)

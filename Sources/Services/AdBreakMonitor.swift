@@ -112,9 +112,10 @@ extension AdBreakMonitor {
     /// avant le bord, où passerait encore une pub qui vient de finir. Pour les
     /// qualités supérieures sans abonnement (MainTabView) : Twitch coud ses
     /// pubs selon l'heure, pas selon ce qu'on a lu — la même adresse, relue
-    /// après la pause, est revenue au direct.
-    static func adWait(at url: URL, window: TimeInterval) async -> TimeInterval? {
-        let req = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 6)
+    /// après la pause, est revenue au direct. `timeout` : plus court au
+    /// lancement, qui l'attend.
+    static func adWait(at url: URL, window: TimeInterval, timeout: TimeInterval = 6) async -> TimeInterval? {
+        let req = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: timeout)
         guard let (data, resp) = try? await URLSession.shared.data(for: req),
               (resp as? HTTPURLResponse)?.statusCode == 200 else { return nil }
         let text = String(decoding: data, as: UTF8.self)

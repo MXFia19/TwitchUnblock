@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.5.34",
+          "buildVersion": "349",
+          "date": "2026-10-20",
+          "localizedDescription": "- Player: with Higher qualities on and no sub or Turbo, 1440p now plays through your account, switching by itself to the ad-free 1080p source during Twitch ad breaks and back afterwards\n- Other improvements and fixes",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-349/TwitchUnblock.ipa",
+          "size": 4373004,
+          "commit": "1763a9961f6c3362527a6b338cd56055b7fcb665"
+        },
+        {
           "version": "1.5.31",
           "buildVersion": "348",
           "date": "2026-10-20",
@@ -280,25 +289,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-317/TwitchUnblock.ipa",
           "size": 3769336,
           "commit": "501fd09de71dcdecbe1bd59c7a16629d6c83bb70"
-        },
-        {
-          "version": "1.4.16",
-          "buildVersion": "316",
-          "date": "2026-10-18",
-          "localizedDescription": "- Logs are kept between launches, so errors from a previous session or right before a crash can still be read and sent, and an abrupt stop of the app is flagged at the next launch\n- Logs screen: number of errors and warnings on each filter, repeated lines grouped (×N), a red error count in Settings, and exported logs start with the version, system and device\n- The player now logs why a stream breaks (segments or playlists refused with their HTTP code, stalls), and failures that used to be silent (account, followed channels and categories, clips) are logged\n- Apple TV: Account → Recent errors lists the latest warnings and errors, and failed lives or VODs are logged",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-316/TwitchUnblock.ipa",
-          "size": 3766749,
-          "commit": "0419353b6041cfa41e2fd49a71de5d7c176949d5"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.5.31",
+      "version": "1.5.34",
       "versionDate": "2026-10-20",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-348/TwitchUnblock.ipa",
-      "size": 4333665
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-349/TwitchUnblock.ipa",
+      "size": 4373004
     }
   ],
   "news": []

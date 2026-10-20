@@ -25,6 +25,15 @@
       },
       "versions": [
         {
+          "version": "0.1.32",
+          "buildVersion": "32",
+          "date": "2026-10-20",
+          "localizedDescription": "- Improvements and fixes",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-test-32/TwitchUnblockTV.ipa",
+          "size": 2587907,
+          "commit": "1763a9961f6c3362527a6b338cd56055b7fcb665"
+        },
+        {
           "version": "0.1.31",
           "buildVersion": "31",
           "date": "2026-10-20",
@@ -194,21 +203,12 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-test-12/TwitchUnblockTV.ipa",
           "size": 2320632,
           "commit": "bc92c3ea5705f0014ed44934588261c3d9c4d979"
-        },
-        {
-          "version": "0.1.10",
-          "buildVersion": "10",
-          "date": "2026-10-16",
-          "localizedDescription": "- The Following tab also lists the channels you follow that are offline (most recently live first); open one to see its videos\n- Move the chat left or right, full height or into a corner from the player's Chat menu, remembered per channel; the Account tab no longer traps the remote's focus\n- Other improvements and fixes",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-test-10/TwitchUnblockTV.ipa",
-          "size": 2309056,
-          "commit": "f190db7aacfac668c8d385753e5d5a90e8fc05db"
         }
       ],
-      "version": "0.1.31",
+      "version": "0.1.32",
       "versionDate": "2026-10-20",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-test-31/TwitchUnblockTV.ipa",
-      "size": 2575822
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-test-32/TwitchUnblockTV.ipa",
+      "size": 2587907
     }
   ]
 }

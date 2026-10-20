@@ -176,6 +176,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.5.34",
+          "buildVersion": "349",
+          "date": "2026-10-20",
+          "localizedDescription": "- Player: with Higher qualities on and no sub or Turbo, 1440p now plays through your account, switching by itself to the ad-free 1080p source during Twitch ad breaks and back afterwards\n- Other improvements and fixes",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-349/TwitchUnblock.ipa",
+          "size": 4373004,
+          "commit": "1763a9961f6c3362527a6b338cd56055b7fcb665"
+        },
+        {
           "version": "1.5.31",
           "buildVersion": "348",
           "date": "2026-10-20",
@@ -255,25 +264,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-338/TwitchUnblock.ipa",
           "size": 4236402,
           "commit": "ff7053ac8f7eb1af374a4128e71740033ab32795"
-        },
-        {
-          "version": "1.5.11",
-          "buildVersion": "337",
-          "date": "2026-10-19",
-          "localizedDescription": "- Other improvements and fixes",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-337/TwitchUnblock.ipa",
-          "size": 4231305,
-          "commit": "7510455c72b7845c006557bcec606033620890b5"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.5.31",
+      "version": "1.5.34",
       "versionDate": "2026-10-20",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-348/TwitchUnblock.ipa",
-      "size": 4333665
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-349/TwitchUnblock.ipa",
+      "size": 4373004
     }
   ],
   "news": []

@@ -319,6 +319,7 @@ let kJapaneseStrings: [String: String] = [
     "hype_treasure": "Treasure Train",
     "raid_to": "レイド先:",
     "join": "参加",
+    "raid_bonus": "レイドボーナス",
     "viewers": "視聴者",
     "logs_count_one": "{n} 件のログ",
     "dl_chat_count_one": "チャット: {n} 件のメッセージ",

@@ -273,6 +273,15 @@ struct ChatView: View {
                                 Text("\(r.viewers) \(store.tn("viewers", r.viewers))")
                                     .font(.system(size: 10)).foregroundColor(.tMuted)
                             }
+                            // Raid rejoint avec la session web (JoinRaid
+                            // accepté) : bonus de points, comme sur twitch.tv.
+                            if raidService.bonusRaidID == r.id {
+                                HStack(spacing: 3) {
+                                    Image(systemName: "checkmark.seal.fill").font(.system(size: 9, weight: .bold))
+                                    Text(store.t("raid_bonus")).font(.system(size: 10, weight: .semibold))
+                                }
+                                .foregroundColor(.tPrimary)
+                            }
                         }
                         Spacer(minLength: 0)
                         Text(store.t("join")).font(.system(size: 11, weight: .bold))
@@ -662,7 +671,9 @@ struct ChatView: View {
                 events.start(login: channelName, channelId: cid, token: newWebToken,
                              viewerId: store.twitchUserId ?? "", hype: store.showLiveEvents && store.showHypeTrain)
             }
-            if store.enableRaids { raidService.connect(channelId: cid, token: newWebToken ?? "") }
+            if store.enableRaids {
+                raidService.connect(channelId: cid, token: newWebToken ?? "", joinsRaids: onJoinChannel != nil)
+            }
         }
         // Bouton Suivre réactivé pendant le live : il revient tout de suite.
         .onChange(of: store.showFollowButton) { show in
@@ -832,9 +843,12 @@ struct ChatView: View {
                              viewerId: store.twitchUserId ?? "",
                              hype: store.showLiveEvents && store.showHypeTrain)
             }
-            // Raid sortant (auto-bascule vers la chaîne raidée)
+            // Raid sortant (auto-bascule vers la chaîne raidée). Lecteur
+            // principal (raid suivi, pas en multi-live) : le raid annoncé est
+            // aussi rejoint, pour son bonus de points.
             if store.enableRaids {
-                raidService.connect(channelId: cid, token: store.twitchWebToken ?? "")
+                raidService.connect(channelId: cid, token: store.twitchWebToken ?? "",
+                                    joinsRaids: onJoinChannel != nil)
             }
         }
     }

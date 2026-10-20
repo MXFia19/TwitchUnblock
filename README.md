@@ -345,6 +345,8 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   same dialog can hide the button (Settings → Chat → Customization → Follow
   button above the chat).
 * 🎁 **Channel points** — balance, rewards, and automatic bonus chest claiming.
+  Raids are joined with your Twitch web session, like on twitch.tv, so the raid
+  bonus is earned too (main player; the raid banner shows it).
   Settings → Channel points tracks, like drops, the time watched and the points
   earned by watching (passive points, streaks, chests; not prediction
   winnings): right now, in total and per channel, on this device.

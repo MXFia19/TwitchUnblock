@@ -318,6 +318,7 @@ let kItalianStrings: [String: String] = [
     "hype_treasure": "Treasure Train",
     "raid_to": "Raid verso",
     "join": "Partecipa",
+    "raid_bonus": "Bonus raid",
     "viewers": "spettatori",
     "logs_count_one": "{n} voce del registro",
     "dl_chat_count_one": "chat: {n} messaggio",

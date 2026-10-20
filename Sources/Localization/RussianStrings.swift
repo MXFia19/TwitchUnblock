@@ -276,6 +276,7 @@ let kRussianStrings: [String: String] = [
     "hype_treasure": "Кладовоз",
     "raid_to": "Рейд на",
     "join": "Перейти",
+    "raid_bonus": "Бонус за рейд",
     "viewers": "зрителей",
     "viewers_few": "зрителя",
     "followers_few": "фолловера",

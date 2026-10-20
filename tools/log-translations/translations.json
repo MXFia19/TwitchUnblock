@@ -518,5 +518,11 @@
  "Source sans pub lue il y a plus de 10 min": ["Ad-free source read more than 10 min ago", "Fuente sin anuncios leída hace más de 10 min", "Источник без рекламы получен более 10 мин назад"],
  "relue avant la bascule": ["reloaded before switching", "recargada antes del cambio", "перезагружается перед переключением"],
  "Source sans pub injoignable": ["Ad-free source unreachable", "Fuente sin anuncios inaccesible", "Источник без рекламы недоступен"],
- "reste sur le flux du compte": ["staying on the account stream", "se queda en el flujo de la cuenta", "остаётся на потоке аккаунта"]
+ "reste sur le flux du compte": ["staying on the account stream", "se queda en el flujo de la cuenta", "остаётся на потоке аккаунта"],
+ "🎁 Raid rejoint": ["🎁 Raid joined", "🎁 Unido al raid", "🎁 Присоединились к рейду"],
+ "Raid pas rejoint": ["Raid not joined", "No se unió al raid", "Не присоединились к рейду"],
+ "bonus de points →": ["points bonus →", "bonificación de puntos →", "бонус баллов →"],
+ "pas de session web, pas de bonus": ["no web session, no bonus", "sin sesión web, sin bonificación", "нет веб-сессии, нет бонуса"],
+ "JoinRaid inconnu de Twitch": ["JoinRaid unknown to Twitch", "JoinRaid desconocido para Twitch", "JoinRaid неизвестен Twitch"],
+ "nouvel essai en requête écrite": ["retrying with the written query", "nuevo intento con la consulta escrita", "повтор с обычным запросом"]
 }

@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.5.22",
+          "buildVersion": "342",
+          "date": "2026-10-20",
+          "localizedDescription": "- Smoother swipe-down to minimize the player (thanks to dwojc6)\n- Italian interface language (thanks to Domenico-lel)\n- Other improvements and fixes",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-342/TwitchUnblock.ipa",
+          "size": 4274993,
+          "commit": "d28a2794a10e917f6ebdbac57557581c5a762317"
+        },
+        {
           "version": "1.5.17",
           "buildVersion": "341",
           "date": "2026-10-20",
@@ -280,25 +289,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-312/TwitchUnblock.ipa",
           "size": 3720450,
           "commit": "0c74fa76664acb162651fc1132b60d259a667888"
-        },
-        {
-          "version": "1.4.11",
-          "buildVersion": "310",
-          "date": "2026-10-18",
-          "localizedDescription": "- Chat: no more duplicate messages with recent history and delay sync on, /me shows as an action, other slash commands no longer show up as messages, and the replied-to message shows its text correctly\n- Chat: mentions and autocomplete use the username when the display name is localized; the chat follows new messages again after tapping the arrow\n- Raids: turning off raids during a live is respected, and a raid banner that never goes away clears itself",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-310/TwitchUnblock.ipa",
-          "size": 3720130,
-          "commit": "403237071463849aa0b49b6fa3ea3638f26adf63"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.5.17",
+      "version": "1.5.22",
       "versionDate": "2026-10-20",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-341/TwitchUnblock.ipa",
-      "size": 4252146
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-342/TwitchUnblock.ipa",
+      "size": 4274993
     }
   ],
   "news": []

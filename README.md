@@ -713,6 +713,20 @@ deployment notes are in [`worker/`](worker/); change `kAPIURL` in
 
 ---
 
+## 🙌 Contributors
+
+Thanks to the people who improved the app (also credited in the app, under
+Settings → About):
+
+* [Domenico-lel](https://github.com/Domenico-lel) — Italian translation
+* [kinboy56](https://github.com/kinboy56) — Japanese translation
+* [dwojc6](https://github.com/dwojc6) — more responsive swipe-down on the player
+
+All contributors on GitHub:
+https://github.com/MXFia19/TwitchUnblock/graphs/contributors
+
+---
+
 ## ⚠️ Disclaimer
 
 Made for educational and personal use. **TwitchUnblock is not affiliated with,

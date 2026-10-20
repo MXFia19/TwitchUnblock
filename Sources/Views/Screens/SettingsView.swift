@@ -1905,6 +1905,36 @@ struct SettingsView: View {
         }
     }
 
+    /// Un contributeur : son pseudo GitHub (jamais traduit) et son apport ;
+    /// le toucher ouvre son profil.
+    @ViewBuilder
+    private func contributorLink(_ contributor: Contributor) -> some View {
+        if let url = contributor.profileURL {
+            Link(destination: url) {
+                HStack(spacing: TSpace.sm) {
+                    Image(systemName: "person.crop.circle")
+                        .font(.system(size: 13, weight: .semibold))
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(contributor.login)
+                            .font(.tLabel)
+                        Text(store.t(contributor.contributionKey))
+                            .font(.tMeta)
+                            .foregroundColor(.tMuted)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer()
+                    Image(systemName: "arrow.up.right").font(.system(size: 12, weight: .semibold))
+                }
+                .foregroundColor(.tText)
+                .padding(.horizontal, TSpace.md)
+                .padding(.vertical, 8)
+                .frame(minHeight: 44)
+                .background(Color.tSurface)
+                .cornerRadius(TRadius.control)
+            }
+        }
+    }
+
     @ViewBuilder private var aboutCard: some View {
         // ── À propos / Logs ─────────────────────────────────
         settingCard {
@@ -2003,6 +2033,16 @@ struct SettingsView: View {
                 creditLink(icon: "bubble.left.and.bubble.right.fill",
                            title: store.t("discord_join"),
                            url: kDiscordURL)
+
+                // ── Contributeurs (liste : Contributor.all, en bas du fichier) ──
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(store.t("credits_contributors"))
+                        .font(.tLabel)
+                        .foregroundColor(.tMuted)
+                    ForEach(Contributor.all) { contributor in
+                        contributorLink(contributor)
+                    }
+                }
 
                 Text(store.t("credits_thanks"))
                     .font(.tMeta)
@@ -2418,4 +2458,24 @@ struct SettingsView: View {
         .background(Color.tSurface)
         .cornerRadius(TRadius.control)
     }
+}
+
+// MARK: – Contributeurs
+/// Personnes qui ont contribué à l'app sur GitHub, dans Réglages → À propos.
+/// Pour en ajouter une : une ligne dans `all`, et la clé de son apport dans
+/// les six langues (Constants.swift et Localization/). Le pseudo GitHub ne se
+/// traduit pas ; il donne aussi l'adresse de son profil.
+struct Contributor: Identifiable, Sendable {
+    let login: String
+    /// Clé du texte de son apport (translate).
+    let contributionKey: String
+
+    var id: String { login }
+    var profileURL: URL? { URL(string: "https://github.com/\(login)") }
+
+    static let all: [Contributor] = [
+        Contributor(login: "Domenico-lel", contributionKey: "credits_contrib_it"),
+        Contributor(login: "kinboy56", contributionKey: "credits_contrib_ja"),
+        Contributor(login: "dwojc6", contributionKey: "credits_contrib_swipe"),
+    ]
 }

@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.5.30",
+          "buildVersion": "347",
+          "date": "2026-10-20",
+          "localizedDescription": "- Settings: the top streams language list (and the Categories language menu) scrolls again while a VOD or a live plays in the background\n- Chat: the emote picker's channel tab now lists the channel's own Twitch emotes, with the sub emotes you don't have greyed out behind a lock\n- Player: when the installer removed Live Activity support, the app stops asking for one until its next launch instead of filling the log\n- Player: new Higher qualities setting (off by default) asks Twitch for 1440p and above, in HEVC or AV1 when the device decodes them, on the ad-free stream through your account\n- Other improvements and fixes",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-347/TwitchUnblock.ipa",
+          "size": 4333018,
+          "commit": "c63216c5e776dbc20b01b9cf56ee69921c4a4d21"
+        },
+        {
           "version": "1.5.28",
           "buildVersion": "346",
           "date": "2026-10-20",
@@ -280,25 +289,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-315/TwitchUnblock.ipa",
           "size": 3751387,
           "commit": "aafe0294a6d8348b85e8c7261f6be84f42d3dc93"
-        },
-        {
-          "version": "1.4.14",
-          "buildVersion": "314",
-          "date": "2026-10-18",
-          "localizedDescription": "- Channel points: rewards with a multi-line description can be redeemed again, an unknown balance shows \"—\" instead of marking every reward \"Not enough\", and after switching accounts the first chest or redemption no longer fails\n- Follow, bets and votes retry once by themselves when Twitch refuses the security token, instead of failing the first time\n- VOD chat waits for the channel's emotes before showing the first messages, and its errors are shown in your language",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-314/TwitchUnblock.ipa",
-          "size": 3746012,
-          "commit": "6be15afd06dc58df7fa728e8cc59dbcf50aa1f6f"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.5.28",
+      "version": "1.5.30",
       "versionDate": "2026-10-20",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-346/TwitchUnblock.ipa",
-      "size": 4310080
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-347/TwitchUnblock.ipa",
+      "size": 4333018
     }
   ],
   "news": []

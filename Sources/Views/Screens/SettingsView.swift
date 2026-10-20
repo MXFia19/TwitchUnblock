@@ -1352,7 +1352,9 @@ struct SettingsView: View {
                 .buttonStyle(.plain)
             }
             // Qualités supérieures : Twitch ne les sert qu'au jeton du compte,
-            // donc seulement par ce direct sans pub (grisé tant qu'il est coupé).
+            // donc par la lecture du compte ci-dessus (grisé tant qu'elle est
+            // coupée) ; sans abonnement, les pauses pub passent par la source
+            // sans pub (MainTabView.adBreakChanged).
             Divider().background(Color.tBorder)
             toggleRow(store.t("higher_qualities"),
                       store.t("higher_qualities_sub").replacingOccurrences(of: "{c}", with: HigherQualities.label),

@@ -713,6 +713,10 @@ let kJapaneseStrings: [String: String] = [
     "chat_unreachable": "チャットが応答していません。接続 (VPN、フィルタリングされたネットワーク) を確認するか、チャットのメニューで「チャットを再接続」をタップしてください。",
     "src_account": "あなたのアカウント (広告なし)",
     "src_account_toast": "サブスクの特典で広告なし",
+    "src_account_hq": "あなたのアカウント (高画質)",
+    "src_account_hq_toast": "アカウント経由で高画質",
+    "hq_ad_fallback": "Twitch の広告中：広告なしの {q}",
+    "hq_ad_back": "広告終了：{q} に戻りました",
     "sub_adfree": "サブスクの特典で広告なしで視聴",
     "sub_adfree_sub": "チャンネルをサブスクライブしている場合 (または Turbo を利用している場合) は、配信を Twitch アカウント経由で視聴します。Twitch で見るのと同じく広告枠はありません。ただし Twitch からは、あなたのアカウントが視聴していると認識されます。Web セッションが必要です。",
     "sub_adfree_connect": "Web セッションを接続",
@@ -1017,5 +1021,5 @@ let kJapaneseStrings: [String: String] = [
     "sched_none": "現在、予定されている配信はありません",
     "sched_local_hint": "日時は端末のタイムゾーンで表示しています。",
     "higher_qualities": "より高い画質（チャンネルが提供している場合）",
-    "higher_qualities_sub": "Enhanced Broadcasting を使うチャンネルの 1440p 以上（HEVC や AV1 の場合あり）。Twitch はログイン中のアカウントにしか提供しないため、上の広告なし視聴でのみ使えます。この端末で再生できる形式：{c}。次に開く配信から適用されます。",
+    "higher_qualities_sub": "Enhanced Broadcasting を使うチャンネルの 1440p 以上（HEVC や AV1 の場合あり）。Twitch はログイン中のアカウントにしか提供しないため、1440p はあなたのアカウント（Web セッション、上の設定）経由で再生されます。サブスクや Turbo がない場合、Twitch の広告枠の間は広告なしの 1080p に切り替わり、終わると元に戻ります。この端末で再生できる形式：{c}。次に開く配信から適用されます。",
 ]

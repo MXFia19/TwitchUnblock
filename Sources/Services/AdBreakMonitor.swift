@@ -103,6 +103,70 @@ final class AdBreakMonitor: NSObject, AVPlayerItemMetadataCollectorPushDelegate 
     }
 }
 
+// MARK: – Bord d'une playlist de direct
+extension AdBreakMonitor {
+    /// Secondes à attendre pour que les `window` dernières secondes de la
+    /// playlist de direct `url` soient sans pub cousue (balises
+    /// twitch-stitched-ad passées ou annoncées) : 0 si c'est déjà le cas, nil
+    /// si elle ne répond pas. Un lecteur qui l'ouvre part de quelques secondes
+    /// avant le bord, où passerait encore une pub qui vient de finir. Pour les
+    /// qualités supérieures sans abonnement (MainTabView) : Twitch coud ses
+    /// pubs selon l'heure, pas selon ce qu'on a lu — la même adresse, relue
+    /// après la pause, est revenue au direct.
+    static func adWait(at url: URL, window: TimeInterval) async -> TimeInterval? {
+        let req = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 6)
+        guard let (data, resp) = try? await URLSession.shared.data(for: req),
+              (resp as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+        let text = String(decoding: data, as: UTF8.self)
+        guard text.hasPrefix("#EXTM3U") else { return nil }
+        return adWait(in: text, window: window)
+    }
+
+    /// Voir adWait(at:window:), d'après le texte de la playlist : fin de la
+    /// dernière pub annoncée, plus `window`, moins la fin du dernier segment.
+    static func adWait(in text: String, window: TimeInterval) -> TimeInterval {
+        let precise = ISO8601DateFormatter()
+        precise.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let plain = ISO8601DateFormatter()
+        func date(_ s: String) -> Date? { precise.date(from: s) ?? plain.date(from: s) }
+        var adEnd: Date? = nil
+        var edge: Date? = nil
+        var segmentStart: Date? = nil
+        for raw in text.split(whereSeparator: \.isNewline) {
+            let line = raw.trimmingCharacters(in: .whitespaces)
+            if line.hasPrefix("#EXT-X-PROGRAM-DATE-TIME:") {
+                segmentStart = date(String(line.dropFirst("#EXT-X-PROGRAM-DATE-TIME:".count)))
+            } else if line.hasPrefix("#EXTINF:") {
+                let length = Double(line.dropFirst("#EXTINF:".count).prefix { $0 != "," }) ?? 0
+                // Segment sans horodatage : à la suite du précédent.
+                if let start = segmentStart ?? edge { edge = start.addingTimeInterval(length) }
+                segmentStart = nil
+            } else if line.hasPrefix("#EXT-X-DATERANGE"), line.contains("CLASS=\"\(adClass)\""),
+                      let start = attribute(line, "START-DATE").flatMap(date) {
+                // Mêmes règles que le collecteur : 30 s sans durée, 200 s au plus.
+                let duration: TimeInterval? = attribute(line, "DURATION").flatMap { Double($0) }
+                let end: Date = attribute(line, "END-DATE").flatMap(date)
+                    ?? duration.map { start.addingTimeInterval($0) }
+                    ?? start.addingTimeInterval(30)
+                let capped = min(end, start.addingTimeInterval(maxLength))
+                adEnd = max(adEnd ?? capped, capped)
+            }
+        }
+        guard let adEnd, let edge else { return 0 }
+        return max(0, adEnd.addingTimeInterval(window).timeIntervalSince(edge))
+    }
+
+    /// Valeur d'un attribut de balise (`,NOM="valeur"` ou `,NOM=valeur`) :
+    /// précédé d'une virgule ou des deux-points, « DURATION » ne prend pas
+    /// « X-TV-TWITCH-AD-POD-FILLED-DURATION ».
+    private static func attribute(_ line: String, _ name: String) -> String? {
+        guard let r = line.range(of: #"[:,]\#(name)=("[^"]*"|[^,\s]*)"#, options: .regularExpression) else { return nil }
+        var value = line[r].drop { $0 != "=" }.dropFirst()
+        if value.hasPrefix("\"") { value = value.dropFirst().dropLast() }
+        return String(value)
+    }
+}
+
 /// Pause pub à l'écran sur un lecteur : secondes restantes (nil hors pause),
 /// et le son coupé le temps qu'elle dure — seulement s'il ne l'était pas
 /// déjà, rendu à la fin, au changement d'élément, au plus tard 5 s après la

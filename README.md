@@ -136,18 +136,42 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   your Twitch account and Twitch serves it without ad breaks, just like on
   Twitch (Settings → Player → Watch ad-free with my sub, on by default; Twitch
   then sees your account watching). Never used on a channel where your account
-  would get ads; if your account's stream doesn't answer, the usual sources
-  take over. Picking a source in the ⋯ menu skips your account for that
-  channel until the app restarts.
+  would get ads (except for Higher qualities, below, with the ad-free source
+  taking over during Twitch's ad breaks); if your account's stream doesn't
+  answer, the usual sources take over. Picking a source in the ⋯ menu skips
+  your account for that channel until the app restarts.
 * 💎 **Higher qualities (if the channel offers them)** — off by default
   (Settings → Player, under Watch ad-free with my sub). Channels on Enhanced
   Broadcasting can send 1440p and above, sometimes in HEVC or AV1; the app
   then tells Twitch which codecs the device decodes (`supported_codecs`: H.264
   always, HEVC and AV1 only when decoded in hardware) and the extra qualities
   show up in the quality picker. Twitch only serves them to a signed-in
-  account (an anonymous playback token stops at 1080p), so this applies to the
-  ad-free stream through your account only; the mirrors, official Twitch
-  without an account and the TwitchUnblock server stay as they are.
+  account (an anonymous playback token stops at 1080p), so 1440p goes through
+  your account (web session); the mirrors, official Twitch without an account
+  and the TwitchUnblock server stay as they are. With a sub or Turbo, nothing
+  else changes: the whole stream is ad-free through your account. Without
+  them, the app asks for your account's playlist alongside the usual ad-free
+  source and only plays through your account when it goes above 1080p and
+  your starting quality is above 1080p too (Source by default) — otherwise the
+  usual source plays, exactly as before. Twitch puts its ads in your account's
+  stream, so during each Twitch ad break (the `twitch-stitched-ad` tags the
+  player already reads) the player switches by itself to the usual source in
+  1080p without ads (“Twitch ad break: 1080p without ads”), the way it
+  switches qualities: no reload, chat and Live Activity stay. When the break
+  is over (its announced length plus a margin, and once your account's
+  playlist is back to the stream for the last few seconds, which also covers
+  an ad announced later), it goes back to your account in 1440p. A pre-roll at
+  the start of your account's stream is caught before playback: the stream
+  opens on the ad-free source and moves to your account when the ad ends.
+  A quality you picked yourself is kept (1080p during the break if yours is
+  higher). Ads again right after two returns, an account stream that stops
+  working or no longer answers: the app stays on the ad-free source and skips
+  your account on that channel until it restarts. If the ad-free source fails
+  during a break, the player goes back to your account at once (the ad muted
+  and explained, as on the other sources) and reloads the usual source for
+  the next break. The source shows as “Your account (higher quality)” in the
+  ⋯ menu; picking a source there leaves your account for that channel, as
+  with a sub.
 * 📢 **Channel ad breaks explained** — during an ad break (or the pre-roll
   when a stream opens), Twitch replaces the stream with its purple
   “Commercial break in progress” screen or a real ad. The player now says so,

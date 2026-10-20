@@ -48,6 +48,14 @@ struct MainTabView: View {
     @State private var liveGame: String = ""
     /// Source qui sert le direct en cours (menu du lecteur).
     @State private var liveSourceUsed: String? = nil
+    /// Qualités supérieures par le compte d'un non-abonné (voir HQLive) ;
+    /// nil hors de ce cas, et dès qu'on reste sur la source sans pub.
+    @State private var hqLive: HQLive? = nil
+    /// Retour prévu au flux du compte après une pause pub.
+    @State private var hqReturnTask: Task<Void, Never>? = nil
+    /// Bascule annoncée dans le lecteur (4 s), et son effacement.
+    @State private var hqNotice: String? = nil
+    @State private var hqNoticeTask: Task<Void, Never>? = nil
     /// Feuille « Télécharger » (VOD en cours).
     @State private var showDownloadSheet = false
     /// Multi-live : la sélection, et la mosaïque ouverte.
@@ -429,8 +437,11 @@ struct MainTabView: View {
                     // faisait rien). Lecture par le compte : un choix de source
                     // est respecté — le compte est mis de côté pour cette
                     // chaîne jusqu'au prochain lancement.
-                    let fromAccount = liveSourceUsed == "account"
-                    guard id != liveSourceUsed else { return }
+                    // Qualités supérieures (compte, ou source sans pub le
+                    // temps d'une pause) : toute source choisie, même celle en
+                    // cours, quitte le compte et ses retours.
+                    let fromAccount = liveSourceUsed == "account" || hqLive != nil
+                    guard id != liveSourceUsed || hqLive != nil else { return }
                     if fromAccount, case .live(let ch)? = playerMode {
                         store.accountPlaybackSkipped.insert(ch.lowercased())
                         logger.info("LECTEUR", "Compte mis de côté pour \(ch)", "source choisie : \(id)")
@@ -694,8 +705,10 @@ struct MainTabView: View {
             if case .live(let channel)? = playerMode, dvrSourceChannel == nil, !closingPlayer {
                 startDropsHeartbeat(channel: channel)
             }
+            // Qualités supérieures : les liens du compte, gardés pour le retour
+            // pendant une pause pub, sont signés pour l'ancienne session.
             guard case .live(let channel)? = playerMode, dvrSourceChannel == nil,
-                  liveSourceUsed == "account", !closingPlayer else { return }
+                  liveSourceUsed == "account" || hqLive != nil, !closingPlayer else { return }
             logger.info("LECTEUR", "Session web changée : direct relu", channel)
             let visible = playerVisible, onlyChat = chatOnly
             playLive(channel, soft: true)
@@ -1070,7 +1083,7 @@ struct MainTabView: View {
                 speed: playbackSpeed,
                 // Toujours une vitesse imposée par le lecteur (voir forcedVodSpeed).
                 onSpeedChange: { setForcedSpeed($0) },
-                notice: slowNetworkNotice ?? accountNotice,
+                notice: slowNetworkNotice ?? hqNotice ?? accountNotice,
                 onProgress: { time in
                     // Pendant une bascule, `playerMode` désigne déjà la
                     // nouvelle source alors que le lecteur en place joue encore
@@ -1108,7 +1121,11 @@ struct MainTabView: View {
                 onMultiLive: multiLiveAction,
                 multiLiveOn: menuMultiLiveOn,
                 multiLiveFull: multi.isFull,
-                onRewind: dvrSourceChannel == nil ? rewindAction : nil
+                onRewind: dvrSourceChannel == nil ? rewindAction : nil,
+                // Qualités supérieures sans abonnement : pauses pub et échec
+                // du flux du compte (voir adBreakChanged).
+                onAdBreak: { adBreakChanged($0) },
+                onFailed: { hqStreamFailed() }
             )
         } else {
             VideoPlayerView(
@@ -1128,12 +1145,16 @@ struct MainTabView: View {
                 onLatency: { updateLatency($0) },
                 onBehind: { updateBehind($0) },
                 onPlaying: { playerPlaying = $0 },
-                notice: slowNetworkNotice ?? accountNotice,
+                notice: slowNetworkNotice ?? hqNotice ?? accountNotice,
                 onPull: { pullPlayer($0) },
                 onPullEnd: { endPull($0, predicted: $1) },
                 onChat: nil,
                 onRewind: rewindAction,
-                onBackToLive: backToLiveAction
+                onBackToLive: backToLiveAction,
+                // Qualités supérieures sans abonnement : la qualité du compte au
+                // retour d'une pause pub, et les pauses elles-mêmes.
+                wantedQuality: hqLive?.accountQuality,
+                onAdBreak: { adBreakChanged($0) }
             )
         }
     }
@@ -1285,12 +1306,13 @@ struct MainTabView: View {
     }
 
     /// Qualité en cours pour le lecteur immersif : celle choisie, sinon la
-    /// qualité préférée (ou la plus proche en dessous).
-    private func currentQuality(_ links: QualityLinks) -> String {
+    /// qualité préférée (ou la plus proche en dessous). `variants` : celles de
+    /// `links` quand ce ne sont pas les liens en cours (qualités supérieures).
+    private func currentQuality(_ links: QualityLinks, variants: [String: VariantInfo]? = nil) -> String {
         if !immersiveQuality.isEmpty, links[immersiveQuality] != nil { return immersiveQuality }
         // En données mobiles : la qualité choisie pour elles (Auto par défaut).
         return launchQualityKey(Array(links.keys), pref: store.preferredQuality, cellularPref: store.cellularQuality,
-                                cellular: NetworkStatus.shared.isCellular, variants: qualityVariants)
+                                cellular: NetworkStatus.shared.isCellular, variants: variants ?? qualityVariants)
     }
 
     /// Arrondi à la seconde : sinon la vue se recalculerait à chaque tick.
@@ -1463,16 +1485,24 @@ struct MainTabView: View {
 
     /// Direct servi par le compte (abonné sans pub) : annoncé au lancement,
     /// une fois. Revenu après « Connexion lente » (4 s plus tard), il était
-    /// réannoncé à chaque baisse de qualité.
+    /// réannoncé à chaque baisse de qualité. Qualités supérieures sans
+    /// abonnement : pas « sans pub », et plus après une première bascule
+    /// (chacune a son avis, hqNotice).
     private var accountNotice: String? {
-        guard menuLiveSource == "account", !slowNoticeShown else { return nil }
-        return store.t("src_account_toast")
+        guard !slowNoticeShown else { return nil }
+        switch menuLiveSource {
+        case "account"?: return store.t("src_account_toast")
+        case "account_hq"? where (hqLive?.switches ?? 0) == 0: return store.t("src_account_hq_toast")
+        default: return nil
+        }
     }
 
     /// Source du direct pour le menu du lecteur : seulement pendant un direct
-    /// (pas pendant son rembobinage, qui lit la VOD en cours).
+    /// (pas pendant son rembobinage, qui lit la VOD en cours). Le compte d'un
+    /// non-abonné en qualité supérieure : « account_hq » (pas sans pub).
     private var menuLiveSource: String? {
         guard case .live? = playerMode, dvrSourceChannel == nil else { return nil }
+        if liveSourceUsed == "account", hqLive != nil { return "account_hq" }
         return liveSourceUsed
     }
 
@@ -1761,6 +1791,8 @@ struct MainTabView: View {
         pull.y          = 0
         loadingSource   = nil
         slowNoticeShown = false
+        // Qualités supérieures : décidées de nouveau par cette lecture.
+        resetHQLive()
 
         if soft {
             switchingSource = true
@@ -1937,12 +1969,24 @@ struct MainTabView: View {
                     // durée des segments (LivePlaylistLoader), relue toutes les
                     // 2 s au lieu de 6 — le lecteur peut tenir près du bord.
                     let playable = store.lowLatency ? LivePlaylistLoader.wrap(links) : links
+                    // Qualités supérieures par le compte d'un non-abonné.
+                    let hq = await hqLaunch(data)
                     await MainActor.run {
                         guard gen == loadGeneration else { return }
-                        qualityLinks      = playable
+                        if let live = hq?.live {
+                            hqLive            = live
+                            // Qualité du compte, retrouvée après chaque pause pub.
+                            immersiveQuality  = live.accountQuality
+                            qualityLinks      = live.onAdFree ? live.adFree : live.account
+                            qualityVariants   = live.onAdFree ? live.adFreeVariants : live.accountVariants
+                            liveSourceUsed    = live.onAdFree ? live.adFreeSource : "account"
+                        } else {
+                            qualityLinks      = playable
+                            qualityVariants   = data.variants
+                            liveSourceUsed    = data.source
+                        }
                         linksContentID    = playerContentID
                         linksAreLive      = true
-                        qualityVariants   = data.variants
                         statusTitle       = data.title.isEmpty ? channel : data.title
                         liveViewerCount   = data.viewerCount
                         liveStartedAt     = data.startedAt
@@ -1952,10 +1996,16 @@ struct MainTabView: View {
                         liveAvatar        = data.avatar
                         liveGame          = data.game
                         liveDvrVideoId    = data.dvrVideoId
-                        liveSourceUsed    = data.source
                         loading           = false
                         switchingSource   = false
                         startLiveTimers(channel: channel)
+                        // Pub au début du flux du compte : annoncée, et retour
+                        // prévu à sa fin.
+                        if let hq, hq.live.onAdFree {
+                            let q = hqQualityLabel(hq.live.adFree, hq.live.adFreeVariants)
+                            showHQNotice(store.t("hq_ad_fallback").replacingOccurrences(of: "{q}", with: q))
+                            scheduleHQReturn(after: hq.wait + 1)
+                        }
                     }
                     // GQL ne rend pas toujours `profileImageURL` : repli Helix,
                     // plutôt qu'un rond gris pour le reste de la session.
@@ -1984,6 +2034,7 @@ struct MainTabView: View {
         loadGeneration += 1   // un chargement encore en cours sera ignoré
         let gen = loadGeneration
         stopLiveTimers()
+        resetHQLive()
         // Fin de visionnage : la progression part maintenant, plutôt que
         // toutes les quelques secondes pendant la lecture.
         store.flushToCloud(force: true)
@@ -2047,6 +2098,259 @@ struct MainTabView: View {
         }
     }
 
+    // MARK: – Qualités supérieures sans abonnement
+    /// Dernières secondes de la playlist du compte qui doivent être sans pub
+    /// pour y revenir : le lecteur repart à quelques secondes du bord (6 s en
+    /// faible latence, trois segments sinon).
+    private var hqEdgeWindow: TimeInterval { store.lowLatency ? 10 : 20 }
+
+    /// Qualités supérieures par le compte d'un non-abonné (getLive :
+    /// hqAccountLinks) : seulement si la qualité de départ y dépasse 1080p
+    /// (sinon aucune pub risquée pour rien), et d'abord par la source sans pub
+    /// quand une pub ouvre la playlist du compte (`wait` : ses secondes
+    /// restantes). nil : la source habituelle, comme avant.
+    private func hqLaunch(_ data: LiveData) async -> (live: HQLive, wait: TimeInterval)? {
+        let wrap = { (links: QualityLinks) -> QualityLinks in
+            store.lowLatency ? LivePlaylistLoader.wrap(links) : links
+        }
+        // Aucune source habituelle n'a répondu : le compte, sans bascule possible.
+        if data.accountAds, let links = data.links {
+            let live = HQLive(account: wrap(links), accountVariants: data.variants,
+                              accountQuality: currentQuality(links, variants: data.variants),
+                              adFree: [:], adFreeVariants: [:], adFreeSource: nil)
+            return (live, 0)
+        }
+        guard let account = data.hqAccountLinks, !account.isEmpty,
+              let adFree = data.links, !adFree.isEmpty else { return nil }
+        let start = currentQuality(account, variants: data.hqAccountVariants)
+        guard qualityHeight(start, among: Array(account.keys), variants: data.hqAccountVariants) > 1080 else {
+            logger.info("LECTEUR", "Qualité de départ en 1080p ou moins", "source habituelle, sans pub")
+            return nil
+        }
+        guard let url = account[start].flatMap({ URL(string: $0) }),
+              let wait = await AdBreakMonitor.adWait(at: url, window: hqEdgeWindow) else {
+            logger.warn("LECTEUR", "Flux du compte injoignable", "source habituelle, sans pub")
+            return nil
+        }
+        var live = HQLive(account: wrap(account), accountVariants: data.hqAccountVariants,
+                          accountQuality: start, adFree: wrap(adFree), adFreeVariants: data.variants,
+                          adFreeSource: data.source)
+        if wait > 0 {
+            // Twitch coud souvent une pub au début de la séance : la source
+            // sans pub d'abord, le compte à sa fin.
+            live.onAdFree = true
+            live.switches = 1
+            logger.info("PUB", "Pub au début du flux du compte", "source sans pub d'abord")
+        }
+        return (live, wait)
+    }
+
+    /// Pause pub à l'écran d'après le lecteur (secondes restantes, nil hors
+    /// pause). Sur le flux du compte : la source sans pub — pas en pause (la
+    /// bascule relancerait la lecture ; le compte à rebours, qui reprend avec
+    /// elle, la refait). Sur la source sans pub : une pause de la chaîne
+    /// (écran violet), que le retour attend.
+    private func adBreakChanged(_ left: Int?) {
+        guard var live = hqLive, linksAreLive, dvrSourceChannel == nil,
+              !switchingSource, !closingPlayer else { return }
+        if live.onAdFree {
+            guard live.adFreeBreak != left else { return }
+            live.adFreeBreak = left
+            hqLive = live
+        } else if let left, playerPlaying {
+            switchToAdFree(remaining: left)
+        }
+    }
+
+    /// Pause pub de Twitch sur le flux du compte : la source sans pub (1080p
+    /// au plus ; la qualité choisie si elle y est), comme un changement de
+    /// qualité — lecteur, chat et Live Activity restent. Retour prévu à la fin
+    /// de la pause : `left` s et une marge (scheduleHQReturn).
+    private func switchToAdFree(remaining left: Int) {
+        guard var live = hqLive, !live.onAdFree, !live.adFree.isEmpty else { return }
+        // Pub revenue moins de 30 s après un retour : la pause n'était pas
+        // finie, ou Twitch en remet. Deux fois de suite : plus de retour.
+        if let back = live.lastReturn, Date().timeIntervalSince(back) < 30 {
+            live.quickAds += 1
+        } else {
+            live.quickAds = 0
+        }
+        live.onAdFree = true
+        live.adFreeBreak = nil
+        live.switches += 1
+        hqLive = live
+        qualityLinks = live.adFree
+        qualityVariants = live.adFreeVariants
+        liveSourceUsed = live.adFreeSource
+        let q = hqQualityLabel(live.adFree, live.adFreeVariants)
+        showHQNotice(store.t("hq_ad_fallback").replacingOccurrences(of: "{q}", with: q))
+        logger.info("PUB", "Pause pub Twitch : source sans pub", "\(q) · \(left) s")
+        if live.quickAds >= 2 {
+            logger.warn("PUB", "Pubs répétées sur le flux du compte", "reste sur la source sans pub")
+            settleOnAdFree()
+        } else {
+            scheduleHQReturn(after: TimeInterval(left) + 2)
+        }
+    }
+
+    /// Retour au flux du compte, `delay` s plus tard. Pas tant que la source
+    /// sans pub montre elle-même une pause (celle de la chaîne), ni que le bord
+    /// de la playlist du compte est en pub (pub suivante, annoncée après
+    /// coup) : on attend encore, une vingtaine de vérifications (10 min) au
+    /// plus. Playlist du compte injoignable, ou pub sans fin : on reste sans
+    /// pub. Ni pendant une pause de la lecture : le retour la relancerait.
+    private func scheduleHQReturn(after delay: TimeInterval) {
+        hqReturnTask?.cancel()
+        let gen = loadGeneration
+        hqReturnTask = Task { @MainActor in
+            var wait = delay
+            var adChecks = 0
+            while true {
+                try? await Task.sleep(nanoseconds: UInt64(max(1, wait) * 1_000_000_000))
+                guard !Task.isCancelled, gen == loadGeneration, let live = hqLive, live.onAdFree else { return }
+                // Pause de la chaîne sur la source sans pub : le compte a la sienne.
+                if let left = live.adFreeBreak {
+                    wait = TimeInterval(left) + 2
+                    continue
+                }
+                // Lecture en pause, bascule ou erreur en cours : un peu plus tard.
+                guard playerPlaying, linksAreLive, !switchingSource, errorMsg == nil,
+                      let link = live.account[currentQuality(live.account, variants: live.accountVariants)],
+                      let url = URL(string: link).flatMap({ LivePlaylistLoader.unwrap($0) }) else {
+                    wait = 5
+                    continue
+                }
+                let pending = await AdBreakMonitor.adWait(at: url, window: hqEdgeWindow)
+                guard !Task.isCancelled, gen == loadGeneration, let after = hqLive, after.onAdFree else { return }
+                // Pause de la chaîne commencée pendant la vérification.
+                if let left = after.adFreeBreak {
+                    wait = TimeInterval(left) + 2
+                    continue
+                }
+                guard let pending else {
+                    logger.warn("PUB", "Flux du compte injoignable", "reste sur la source sans pub")
+                    settleOnAdFree()
+                    return
+                }
+                if pending > 0 {
+                    adChecks += 1
+                    guard adChecks < 20 else {
+                        logger.warn("PUB", "Pub sans fin sur le flux du compte", "reste sur la source sans pub")
+                        settleOnAdFree()
+                        return
+                    }
+                    wait = min(pending + 1, 30)
+                    logger.debug("PUB", "Pub encore au bord du flux du compte", "nouvel essai dans \(Int(wait)) s")
+                    continue
+                }
+                returnToAccount()
+                return
+            }
+        }
+    }
+
+    /// Fin de la pause pub : retour au flux du compte, dans la qualité qu'il
+    /// avait (ou celle choisie entre-temps, si elle y est).
+    private func returnToAccount() {
+        guard var live = hqLive, live.onAdFree else { return }
+        live.onAdFree = false
+        live.adFreeBreak = nil
+        live.lastReturn = Date()
+        hqLive = live
+        qualityLinks = live.account
+        qualityVariants = live.accountVariants
+        liveSourceUsed = "account"
+        let q = hqQualityLabel(live.account, live.accountVariants)
+        showHQNotice(store.t("hq_ad_back").replacingOccurrences(of: "{q}", with: q))
+        logger.info("PUB", "Fin de la pause pub : retour au flux du compte", q)
+    }
+
+    /// Lecture arrêtée sur une erreur (après les relances du lecteur). Flux du
+    /// compte : la source sans pub, pour de bon. Source sans pub, pendant une
+    /// pause (liens gardés depuis le lancement, devenus trop anciens ?) :
+    /// retour au compte tout de suite — sa pub y est coupée et annoncée,
+    /// comme sur les autres sources — et la source habituelle est relue pour
+    /// les pauses suivantes ; rien où basculer d'ici là.
+    private func hqStreamFailed() {
+        guard var live = hqLive, !live.adFree.isEmpty, linksAreLive,
+              dvrSourceChannel == nil, !switchingSource else { return }
+        guard live.onAdFree else {
+            logger.warn("LECTEUR", "Flux du compte en échec", "reste sur la source sans pub")
+            settleOnAdFree()
+            return
+        }
+        logger.warn("LECTEUR", "Source sans pub en échec", "retour au flux du compte, source relue")
+        hqReturnTask?.cancel()
+        hqReturnTask = nil
+        live.onAdFree = false
+        live.adFreeBreak = nil
+        live.adFree = [:]
+        hqLive = live
+        qualityLinks = live.account
+        qualityVariants = live.accountVariants
+        liveSourceUsed = "account"
+        guard case .live(let channel)? = playerMode else { return }
+        let gen = loadGeneration
+        Task { @MainActor in
+            // Sans le compte : la source habituelle seule, comme au lancement.
+            let data = await getLive(channelName: channel)
+            guard gen == loadGeneration, var now = hqLive, let links = data.links, !links.isEmpty else { return }
+            now.adFree = store.lowLatency ? LivePlaylistLoader.wrap(links) : links
+            now.adFreeVariants = data.variants
+            now.adFreeSource = data.source
+            hqLive = now
+        }
+    }
+
+    /// Plus de retour au compte pour cette lecture (pubs répétées, flux du
+    /// compte injoignable ou en échec) : la source sans pub reste, comme un
+    /// direct ordinaire, et le compte n'est plus essayé sur cette chaîne
+    /// jusqu'au prochain lancement de l'app (relecture, « Réessayer »).
+    private func settleOnAdFree() {
+        hqReturnTask?.cancel()
+        hqReturnTask = nil
+        guard let live = hqLive, !live.adFree.isEmpty else { return }
+        if !live.onAdFree {
+            qualityLinks = live.adFree
+            qualityVariants = live.adFreeVariants
+            liveSourceUsed = live.adFreeSource
+        }
+        hqLive = nil
+        guard case .live(let channel)? = playerMode else { return }
+        store.accountPlaybackSkipped.insert(channel.lowercased())
+        // Le compte ne lit plus le flux : la pulsation des drops s'en charge.
+        startDropsHeartbeat(channel: channel)
+    }
+
+    /// Qualité lue sur ces liens, pour les avis : « Source » par sa hauteur
+    /// (« 1080p »), les autres par leur nom des menus.
+    private func hqQualityLabel(_ links: QualityLinks, _ variants: [String: VariantInfo]) -> String {
+        let key = currentQuality(links, variants: variants)
+        if isSourceQuality(key), let height = variants[key]?.height, height > 0 { return "\(height)p" }
+        return qualityText(key, store.lang)
+    }
+
+    /// Bascule annoncée dans le lecteur, 4 s.
+    private func showHQNotice(_ text: String) {
+        hqNotice = text
+        hqNoticeTask?.cancel()
+        hqNoticeTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 4_000_000_000)
+            guard !Task.isCancelled else { return }
+            hqNotice = nil
+        }
+    }
+
+    /// Autre lecture, ou fermeture : plus de bascule ni de retour prévu.
+    private func resetHQLive() {
+        hqReturnTask?.cancel()
+        hqReturnTask = nil
+        hqLive = nil
+        hqNoticeTask?.cancel()
+        hqNoticeTask = nil
+        hqNotice = nil
+    }
+
     // MARK: – Live timers
     private func startLiveTimers(channel: String) {
         stopLiveTimers()
@@ -2080,8 +2384,9 @@ struct MainTabView: View {
     /// progressait avant de rouvrir le live.
     private func startDropsHeartbeat(channel: String) {
         guard store.dropsProgress, let web = store.twitchWebToken, !web.isEmpty else { return }
+        // Qualités supérieures : le compte lit le flux, sauf le temps des pauses pub.
         DropsHeartbeat.shared.start(login: channel, token: web,
-                                    pollSegments: liveSourceUsed != "account")
+                                    pollSegments: liveSourceUsed != "account" && hqLive == nil)
     }
 
     private func stopLiveTimers() {
@@ -2221,4 +2526,32 @@ enum ScreenAwake {
         guard UIApplication.shared.isIdleTimerDisabled != wanted else { return }
         UIApplication.shared.isIdleTimerDisabled = wanted
     }
+}
+
+/// Direct en qualité supérieure par le compte d'un non-abonné
+/// (HigherQualities) : les liens du compte, que Twitch coupe de ses pubs, et
+/// ceux de la source habituelle sans pub, lue le temps de chaque pause pub
+/// (MainTabView.adBreakChanged).
+private struct HQLive {
+    /// Liens jouables (tulive:// en faible latence) et variantes du compte.
+    let account: QualityLinks
+    let accountVariants: [String: VariantInfo]
+    /// Qualité de départ sur le flux du compte (au-dessus de 1080p).
+    let accountQuality: String
+    /// Source habituelle : vide si aucune n'a répondu (rien où basculer),
+    /// ou en attendant d'être relue après un échec (hqStreamFailed).
+    var adFree: QualityLinks
+    var adFreeVariants: [String: VariantInfo]
+    var adFreeSource: String?
+    /// Sur la source sans pub en ce moment.
+    var onAdFree = false
+    /// Pause à l'écran sur la source sans pub (pause de la chaîne, écran
+    /// violet) : secondes restantes, que le retour attend.
+    var adFreeBreak: Int? = nil
+    /// Dernier retour au compte, et pubs revenues juste après (voir
+    /// switchToAdFree).
+    var lastReturn: Date? = nil
+    var quickAds = 0
+    /// Bascules faites : l'avis « par ton compte » n'est plus redit après.
+    var switches = 0
 }

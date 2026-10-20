@@ -26,6 +26,15 @@ struct LiveData {
     var webSessionExpired: Bool = false
     /// Abonné à la chaîne d'après le jeton du compte (nil : pas demandé).
     var subscriber: Bool? = nil
+    /// Qualités supérieures (HigherQualities) d'un compte que Twitch ne sert
+    /// pas sans pub : sa liste maîtresse quand elle dépasse 1080p, à côté de
+    /// la source habituelle (`links`), gardée pour ses pauses pub (iPhone,
+    /// MainTabView). nil sinon.
+    var hqAccountLinks: QualityLinks? = nil
+    var hqAccountVariants: [String: VariantInfo] = [:]
+    /// `links` vient du compte alors que Twitch lui sert des pubs (qualités
+    /// supérieures, aucune source habituelle n'a répondu).
+    var accountAds: Bool = false
 }
 
 /// Ce que la liste maîtresse dit d'une variante (RESOLUTION, FRAME-RATE,

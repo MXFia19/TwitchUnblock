@@ -499,7 +499,9 @@ func apiErrorKey(_ code: String) -> String {
 /// pub sur cette chaîne (abonné, Turbo accepté), le direct passe par lui avant
 /// les proxys — qui reçoivent, eux aussi, les pauses pub de la chaîne. Jamais
 /// pour un compte qui aurait des pubs : il en recevrait de vraies, ciblées sur
-/// son adresse réelle. `integrity` : voir accountPlaybackToken. `onSource` :
+/// son adresse réelle — sauf qualités supérieures (higherQualitiesMaster) :
+/// sa liste maîtresse au-dessus de 1080p, à côté de la source habituelle qui
+/// sert ses pauses pub. `integrity` : voir accountPlaybackToken. `onSource` :
 /// appelé avec chaque source avant de l'essayer (« as », « al », « eu »,
 /// « twitch », « worker »), pour l'écran de chargement ; hors du fil principal.
 func getLive(channelName: String, webToken: String? = nil,
@@ -582,6 +584,8 @@ func getLive(channelName: String, webToken: String? = nil,
     var usedSource: String? = nil
     var webSessionExpired = false
     var subscriber: Bool? = nil
+    // Qualités supérieures pour un compte qui aurait des pubs : son jeton.
+    var hqToken: (value: String, signature: String)? = nil
 
     // Compte sans pub sur cette chaîne : son flux officiel d'abord. S'il ne
     // répond pas (géoblocage, réseau filtré), l'ordre habituel reprend.
@@ -598,6 +602,13 @@ func getLive(channelName: String, webToken: String? = nil,
             } else {
                 logger.warn("LIVE", "⚠️ Flux du compte indisponible", "sources habituelles…")
             }
+        } else if !pat.forbidden, HigherQualities.enabled {
+            // Pas sans pub ici, mais seul ce jeton dépasse 1080p : sa liste
+            // maîtresse est demandée en même temps que les sources habituelles,
+            // qui restent celles du direct (voir hqAccountLinks).
+            hqToken = (value: pat.value, signature: pat.signature)
+            logger.info("LIVE", "Compte pas sans pub : qualités supérieures demandées en parallèle",
+                        "sources habituelles")
         } else {
             logger.info("LIVE", "Compte pas sans pub sur cette chaîne", "jeton anonyme, sources habituelles")
         }
@@ -607,6 +618,8 @@ func getLive(channelName: String, webToken: String? = nil,
     case .unavailable:
         break
     }
+    let hqTokenValue = hqToken
+    async let hqTask = higherQualitiesMaster(login: login, token: hqTokenValue, lowLatency: lowLatency)
 
     // Ordre des sources (Réglages → Lecteur, ou menu du lecteur) : essayées
     // l'une après l'autre, pour que le direct se lance quand même.
@@ -627,6 +640,19 @@ func getLive(channelName: String, webToken: String? = nil,
             workerInfo = worker.info
         }
         if !found.links.isEmpty { usedSource = src }
+    }
+
+    // Qualités supérieures par le compte : à côté de la source habituelle,
+    // que MainTabView garde pour les pauses pub. Aucune source habituelle :
+    // le flux du compte, pubs de Twitch comprises, plutôt que rien.
+    var hqMaster = await hqTask
+    var accountAds = false
+    if let master = hqMaster, found.links.isEmpty {
+        found = master
+        usedSource = "account"
+        accountAds = true
+        hqMaster = nil
+        logger.warn("LIVE", "Aucune source habituelle : direct par le compte", "pubs de Twitch comprises")
     }
 
     if let uid = userId {
@@ -657,7 +683,28 @@ func getLive(channelName: String, webToken: String? = nil,
                     userId: userId, links: found.links, viewerCount: viewerCount,
                     startedAt: startedAt, dvrVideoId: dvrVideoId, error: error, source: usedSource,
                     variants: found.variants, webSessionExpired: webSessionExpired,
-                    subscriber: subscriber)
+                    subscriber: subscriber, hqAccountLinks: hqMaster?.links,
+                    hqAccountVariants: hqMaster?.variants ?? [:], accountAds: accountAds)
+}
+
+/// Liste maîtresse du compte avec les qualités supérieures (HigherQualities),
+/// pour un jeton à qui Twitch sert des pubs : seulement si elle dépasse
+/// 1080p — sinon la source habituelle suffit, aucune pub risquée pour rien.
+/// nil aussi sans jeton (réglage coupé, compte sans pub, Apple TV).
+private func higherQualitiesMaster(login: String, token: (value: String, signature: String)?,
+                                   lowLatency: Bool) async -> MasterPlaylist? {
+    guard let token, let codecs = HigherQualities.requested else { return nil }
+    let master = await usherLiveLinks(login: login, token: token, lowLatency: lowLatency, codecs: codecs)
+    let top = master.variants.values.map(\.height).max() ?? 0
+    guard top > 1080 else {
+        if !master.links.isEmpty {
+            logger.info("LIVE", "Rien au-dessus de 1080p par le compte", "source habituelle, sans pub")
+        }
+        return nil
+    }
+    logger.success("LIVE", "✅ Qualités supérieures par le compte : \(top)p",
+                   "pauses pub de Twitch par la source habituelle")
+    return master
 }
 
 /// Jeton du compte seulement si on en a donné un (iPhone, réglage actif).
@@ -816,6 +863,9 @@ private func ttvlolLiveLinks(login: String, lowLatency: Bool) async -> MasterPla
 /// AV1. Jamais pour un jeton anonyme (proxys, Worker, Twitch officiel sans
 /// compte) : Twitch le plafonne à 1080p (`maximum_resolution` FULL_HD,
 /// « AUTHZ_NOT_LOGGED_IN » au-delà) et ces demandes restent telles quelles.
+/// Compte sans abonnement ni Turbo : le direct passe aussi par lui, mais
+/// seulement au-dessus de 1080p, et la source habituelle (sans pub) prend
+/// le relais pendant ses pauses pub (MainTabView.adBreakChanged).
 enum HigherQualities {
     static let key = "cfg_higher_qualities"
     static var enabled: Bool { UserDefaults.standard.bool(forKey: key) }

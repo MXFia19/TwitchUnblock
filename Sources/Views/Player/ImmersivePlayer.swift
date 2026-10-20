@@ -1059,6 +1059,11 @@ struct ImmersivePlayer: View {
     /// nouvel état, pour le bandeau.
     var onToggleChatVisibility: () -> LandscapeChat = { .hidden }
     var onSleep:    () -> Void = {}
+    /// Pause pub à l'écran (secondes restantes, nil hors pause), et lecture
+    /// arrêtée sur une erreur (après les relances) : le parent bascule de
+    /// source (qualités supérieures sans abonnement, MainTabView).
+    var onAdBreak:  (Int?) -> Void = { _ in }
+    var onFailed:   () -> Void = {}
 
     @EnvironmentObject private var store: AppStore
     @StateObject private var model: ImmersivePlayerModel
@@ -1162,7 +1167,9 @@ struct ImmersivePlayer: View {
          onMultiLive: (() -> Void)? = nil,
          multiLiveOn: Bool = false,
          multiLiveFull: Bool = false,
-         onRewind: (() -> Void)? = nil) {
+         onRewind: (() -> Void)? = nil,
+         onAdBreak: @escaping (Int?) -> Void = { _ in },
+         onFailed: @escaping () -> Void = {}) {
         self.url = url; self.isLive = isLive; self.dvrEnabled = dvrEnabled
         self.savedTime = savedTime; self.contentID = contentID
         self.info = info; self.onChannel = onChannel
@@ -1183,6 +1190,7 @@ struct ImmersivePlayer: View {
         self.onBackToLive = onBackToLive; self.onSeekToArchive = onSeekToArchive
         self.onMultiLive = onMultiLive; self.multiLiveOn = multiLiveOn
         self.multiLiveFull = multiLiveFull; self.onRewind = onRewind
+        self.onAdBreak = onAdBreak; self.onFailed = onFailed
         _model = StateObject(wrappedValue: ImmersivePlayerModel(
             url: url, isLive: isLive, savedTime: savedTime,
             onProgress: onProgress, onLatency: onLatency, onBehind: onBehind))
@@ -1402,6 +1410,10 @@ struct ImmersivePlayer: View {
             onPlaying(model.isPlaying)
         }
         .onChange(of: model.isPlaying) { onPlaying($0) }
+        // Qualités supérieures sans abonnement : le parent bascule de source
+        // pendant les pauses pub, ou si le flux du compte ne joue pas.
+        .onReceive(model.adBreaks.$remaining) { onAdBreak($0) }
+        .onChange(of: model.failed) { if $0 { onFailed() } }
         .onChange(of: notice) { n in
             if let n { flash(n, duration: 2_500_000_000) }
         }

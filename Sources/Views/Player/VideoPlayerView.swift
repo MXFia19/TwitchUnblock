@@ -769,9 +769,20 @@ struct VideoPlayerView: View {
     var onChat: (() -> Void)? = nil
     var onRewind: (() -> Void)? = nil
     var onBackToLive: (() -> Void)? = nil
+    /// Qualité voulue par le parent quand il change lui-même de source
+    /// (qualités supérieures : 1080p sans pub le temps d'une pause pub, puis
+    /// retour au compte) : prise dès que les liens l'ont, tant qu'aucune n'a
+    /// été choisie ici.
+    var wantedQuality: String? = nil
+    /// Pause pub à l'écran (secondes restantes, nil hors pause), pour le parent.
+    var onAdBreak: (Int?) -> Void = { _ in }
 
     @EnvironmentObject private var store: AppStore
     @State private var selectedQuality: String = ""
+    /// Qualité choisie ici (menu, ou baissée après des calages) : reprise dès
+    /// que les liens l'ont de nouveau (retour d'une pause pub), et
+    /// `wantedQuality` ne passe plus devant.
+    @State private var picked: String? = nil
     @State private var showQualityPicker = false
     @State private var currentTime: Double = 0
     @State private var lastPersisted: Double = -99
@@ -786,7 +797,12 @@ struct VideoPlayerView: View {
     /// coup : le temps d'un rendu, l'adresse manquait, et le lecteur était
     /// détruit puis recréé (ou restait absent, zone vidéo vide).
     private var quality: String {
-        qualityLinks[selectedQuality] != nil ? selectedQuality : preferredSelection(qualityLinks)
+        if let picked {
+            if qualityLinks[picked] != nil { return picked }
+        } else if let wanted = wantedQuality, qualityLinks[wanted] != nil {
+            return wanted
+        }
+        return qualityLinks[selectedQuality] != nil ? selectedQuality : preferredSelection(qualityLinks)
     }
     private var currentURL: URL? { qualityLinks[quality].flatMap(URL.init) }
 
@@ -853,6 +869,7 @@ struct VideoPlayerView: View {
                             }
                             currentTime = 0
                             selectedQuality = q
+                            picked = q
                             showQualityPicker = false
                         } label: {
                             HStack {
@@ -905,7 +922,11 @@ struct VideoPlayerView: View {
             guard let next, next != current else { return }
             logger.warn("LECTEUR", "Calages répétés : qualité baissée", "\(current) → \(next)")
             selectedQuality = next
+            picked = next
         }
+        // Qualités supérieures sans abonnement : le parent bascule de source
+        // pendant les pauses pub (MainTabView.adBreakChanged).
+        .onReceive(adBreaks.$remaining) { onAdBreak($0) }
     }
 
     /// Qualité préférée, ou la plus proche en dessous (même règle que le lecteur immersif).

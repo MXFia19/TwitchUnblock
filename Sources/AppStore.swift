@@ -296,7 +296,8 @@ final class AppStore: ObservableObject {
     /// Abonné : le direct passe par le compte (session web) quand Twitch le
     /// sert sans pub sur cette chaîne — plus de pauses pub. Twitch voit alors
     /// le compte regarder, d'où le réglage. Jamais pour une chaîne où le
-    /// compte aurait des pubs (getLive).
+    /// compte aurait des pubs (getLive), sauf qualités supérieures : au-dessus
+    /// de 1080p seulement, la source sans pub pendant ses pauses pub.
     @Published var subAdFree: Bool = true {
         didSet { UserDefaults.standard.set(subAdFree, forKey: "cfg_sub_adfree") }
     }

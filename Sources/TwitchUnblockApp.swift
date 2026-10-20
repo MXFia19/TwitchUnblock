@@ -41,6 +41,8 @@ struct TwitchUnblockApp: App {
                         // Dernier moment sûr pour sauvegarder : iOS peut
                         // fermer l'app ensuite sans prévenir.
                         store.flushToCloud(force: true)
+                        // Réglages changés à l'instant : partent aussi.
+                        store.flushSettingsSync()
                         LiveNotifier.schedule()
                         FeedbackStore.shared.stopForegroundChecks()
                         VodDownloads.shared.sceneInactive()

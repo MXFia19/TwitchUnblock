@@ -16,6 +16,79 @@ enum NotifChannels {
 
     static func setMuted(_ logins: Set<String>) {
         UserDefaults.standard.set(logins.sorted(), forKey: mutedKey)
+        // Cloches des pages de chaîne et du chat : à jour sans relecture.
+        NotificationCenter.default.post(name: .notifChannelsChanged, object: nil)
+    }
+
+    /// Une seule chaîne (cloche, action d'une notification) : notifiée ou coupée.
+    static func setNotify(_ login: String, _ on: Bool) {
+        let l = login.lowercased()
+        var next = muted
+        if on { next.remove(l) } else { next.insert(l) }
+        setMuted(next)
+    }
+}
+
+extension Notification.Name {
+    /// Liste des chaînes coupées changée (réglages, cloche, notification).
+    static let notifChannelsChanged = Notification.Name("NotifChannelsChanged")
+}
+
+/// Cloche d'une chaîne (sa page, la barre au-dessus du chat) : coupe ou
+/// rallume ses notifications de live, même réglage que « Chaînes notifiées ».
+/// Seulement si les notifications de live (réveils d'iOS ou ntfy) sont
+/// activées et que la chaîne est suivie (compte ou appareil).
+struct NotifBellButton: View {
+    let login: String
+    let followed: Bool
+    /// Pastille de la barre du chat ; sinon, capsule de la page de la chaîne.
+    var compact = false
+
+    @EnvironmentObject private var store: AppStore
+    @AppStorage(LiveNotifier.enabledKey) private var liveNotifOn = false
+    @AppStorage(NtfyNotifier.enabledKey) private var ntfyOn = false
+    @State private var muted = NotifChannels.muted
+
+    private var key: String { login.lowercased() }
+    private var on: Bool { !muted.contains(key) }
+
+    var body: some View {
+        if (liveNotifOn || ntfyOn), followed, !key.isEmpty {
+            Button(action: toggle) {
+                Image(systemName: on ? "bell.fill" : "bell.slash")
+                    .font(.system(size: compact ? 10 : 14, weight: .bold))
+                    .foregroundColor(on ? .tPrimary : .tMuted)
+                    .padding(.horizontal, compact ? 7 : 12)
+                    .padding(.vertical, compact ? 3 : 8)
+                    .background((on ? Color.tPrimary : Color.tMuted).opacity(compact ? 0.15 : 0.14))
+                    .clipShape(compact ? AnyShape(RoundedRectangle(cornerRadius: 6)) : AnyShape(Capsule()))
+                    .overlay {
+                        if !compact {
+                            Capsule().stroke(on ? Color.tPrimary : Color.tMuted, lineWidth: 1)
+                        }
+                    }
+            }
+            .buttonStyle(.plain)
+            .fixedSize()
+            .accessibilityLabel(store.t(on ? "notif_bell_on" : "notif_bell_off"))
+            // Coupée ailleurs (réglages, action d'une notification) pendant
+            // que la cloche était masquée ou affichée.
+            .onAppear { muted = NotifChannels.muted }
+            .onReceive(NotificationCenter.default.publisher(for: .notifChannelsChanged)) { _ in
+                muted = NotifChannels.muted
+            }
+        }
+    }
+
+    private func toggle() {
+        let next = !on
+        NotifChannels.setNotify(key, next)
+        muted = NotifChannels.muted
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        logger.info("NOTIF", next ? "Cloche : notifications activées" : "Cloche : notifications coupées", "@\(key)")
+        // ntfy : la liste filtrée part au Worker (rien si elle n'a pas changé).
+        let lang = store.lang
+        Task { await NtfyNotifier.sync(lang: lang) }
     }
 }
 
@@ -72,6 +145,12 @@ struct NotifChannelsView: View {
             }
         }
         .task { await load() }
+        // Coupée ailleurs pendant que la liste est ouverte (« Ne plus notifier »
+        // d'une notification) : sans relecture, l'interrupteur suivant
+        // réécrivait l'ancienne liste et la rallumait.
+        .onReceive(NotificationCenter.default.publisher(for: .notifChannelsChanged)) { _ in
+            muted = NotifChannels.muted
+        }
         // ntfy : la liste filtrée part au Worker (rien si elle n'a pas changé).
         .onDisappear {
             let lang = store.lang

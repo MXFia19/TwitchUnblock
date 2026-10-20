@@ -71,9 +71,23 @@ final class TwitchGQL {
     /// échouait, et le second arrivait trop tard pour un pari qui fermait.
     func mutation(_ op: String, variables: [String: Any], sha256: String,
                   token: String, retried: Bool = false) async -> [String: Any]? {
+        guard let payload = persistedBody(op, variables, sha256) else { return nil }
+        return await send(op, payload: payload, token: token, retried: retried)
+    }
+
+    /// Mutation écrite en toutes lettres, faute de requête enregistrée connue
+    /// (création d'un clip) : même jeton d'intégrité, même nouvel essai.
+    func rawMutation(_ op: String, query: String, variables: [String: Any],
+                     token: String) async -> [String: Any]? {
+        let body: [[String: Any]] = [["operationName": op, "query": query, "variables": variables]]
+        guard let payload = try? JSONSerialization.data(withJSONObject: body) else { return nil }
+        return await send(op, payload: payload, token: token)
+    }
+
+    private func send(_ op: String, payload: Data, token: String,
+                      retried: Bool = false) async -> [String: Any]? {
         guard await validIntegrity(token: token), let it = integrityTok,
-              let url = URL(string: "https://gql.twitch.tv/gql"),
-              let payload = persistedBody(op, variables, sha256) else { return nil }
+              let url = URL(string: "https://gql.twitch.tv/gql") else { return nil }
         var req = URLRequest(url: url); req.httpMethod = "POST"
         req.setValue(kGQLClientID,               forHTTPHeaderField: "Client-ID")
         req.setValue("OAuth \(token)",           forHTTPHeaderField: "Authorization")
@@ -92,7 +106,7 @@ final class TwitchGQL {
                 integrityTok = nil
                 integrityExpiry = .distantPast
                 if !retried {
-                    return await mutation(op, variables: variables, sha256: sha256, token: token, retried: true)
+                    return await send(op, payload: payload, token: token, retried: true)
                 }
             }
         }

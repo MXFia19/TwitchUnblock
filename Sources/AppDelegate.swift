@@ -45,11 +45,21 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         Task { @MainActor in _ = VodDownloads.shared }
     }
 
-    // Notification touchée → on ouvre le direct de la chaîne.
+    // Notification touchée (ou « Regarder ») → on ouvre le direct de la chaîne.
     func userNotificationCenter(_ center: UNUserNotificationCenter,
                                 didReceive response: UNNotificationResponse,
                                 withCompletionHandler completionHandler: @escaping () -> Void) {
         if let login = response.notification.request.content.userInfo["login"] as? String {
+            if response.actionIdentifier == LiveNotifier.muteAction {
+                // « Ne plus notifier cette chaîne » : sans ouvrir l'app. iOS
+                // peut la suspendre dès completionHandler : appelé une fois la
+                // chaîne coupée et ntfy prévenu.
+                Task { @MainActor in
+                    await LiveNotifier.mute(login)
+                    completionHandler()
+                }
+                return
+            }
             DispatchQueue.main.async {
                 NotificationCenter.default.post(name: .openLiveChannel, object: nil, userInfo: ["login": login])
             }

@@ -176,9 +176,13 @@ final class ChannelPointsService: ObservableObject {
     private func refreshBalance() async {
         // Polling silencieux : on ne logge que les vrais changements (gains/pertes/coffre).
         guard let b = await fetchBalance(quiet: true) else { return }
-        balanceKnown = true
         let delta = b.balance - balance
-        if delta > 0 {
+        if !balanceKnown {
+            // Première lecture réussie (celle de l'ouverture du chat avait
+            // échoué) : le solde est posé tel quel. Compté comme un gain, il
+            // s'animait en entier (« +250 000 ») et faussait le suivi des points.
+            balance = b.balance
+        } else if delta > 0 {
             logger.success("POINTS", "Points passifs gagnés",
                            "+\(delta) pts · total: \(formatted(b.balance))")
             PointsTracker.shared.addGain(delta, channelLogin)
@@ -381,7 +385,12 @@ final class ChannelPointsService: ObservableObject {
         // toujours `currentPoints` : on nettoie le coffre et on rafraîchit le solde.
         pendingClaimId = nil
         PointsTracker.shared.addChest(channelLogin)
-        if let pts = claim["currentPoints"] as? Int {
+        if let pts = claim["currentPoints"] as? Int, !balanceKnown {
+            // Solde encore inconnu (lecture ratée à l'ouverture) : posé tel
+            // quel, sans le compter comme gain du coffre.
+            logger.success("POINTS", "🎉 Coffre réclamé !", "total: \(formatted(pts))")
+            balance = pts
+        } else if let pts = claim["currentPoints"] as? Int {
             let gained = pts - balance
             logger.success("POINTS", "🎉 Coffre réclamé !", "+\(gained) pts · total: \(formatted(pts))")
             PointsTracker.shared.addGain(gained, channelLogin)

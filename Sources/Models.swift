@@ -26,6 +26,15 @@ struct LiveData {
     var webSessionExpired: Bool = false
     /// Abonné à la chaîne d'après le jeton du compte (nil : pas demandé).
     var subscriber: Bool? = nil
+    /// Qualités supérieures (HigherQualities) d'un compte que Twitch ne sert
+    /// pas sans pub : sa liste maîtresse quand elle dépasse 1080p, à côté de
+    /// la source habituelle (`links`), gardée pour ses pauses pub (iPhone,
+    /// MainTabView). nil sinon.
+    var hqAccountLinks: QualityLinks? = nil
+    var hqAccountVariants: [String: VariantInfo] = [:]
+    /// `links` vient du compte alors que Twitch lui sert des pubs (qualités
+    /// supérieures, aucune source habituelle n'a répondu).
+    var accountAds: Bool = false
 }
 
 /// Ce que la liste maîtresse dit d'une variante (RESOLUTION, FRAME-RATE,
@@ -192,7 +201,68 @@ struct AutocompleteSuggestion: Identifiable {
     /// En live : nombre de spectateurs et jeu (nil hors live).
     var viewers: Int? = nil
     var game: String? = nil
+    /// Nombre de followers (résultats de la recherche), nil s'il manque.
+    var followers: Int? = nil
     var isLive: Bool { viewers != nil }
+}
+
+/// VOD trouvée par la recherche : la vidéo, et la chaîne qui l'a diffusée.
+struct SearchVod: Identifiable {
+    let vod: VodData
+    let login: String
+    let name: String
+    /// Catégorie de la VOD (masquage), vide si Twitch ne la donne pas.
+    var gameId: String = ""
+    var id: String { vod.id }
+}
+
+/// Créneau du planning d'une chaîne.
+struct ScheduleSegment: Identifiable {
+    let id: String
+    let start: Date
+    /// nil : fin non précisée par le streamer.
+    let end: Date?
+    let title: String
+    /// Catégorie prévue, vide si aucune.
+    let category: String
+    /// Créneau répété chaque semaine.
+    var recurring: Bool
+    /// Annulé (par le streamer, ou pendant ses vacances).
+    var canceled = false
+}
+
+/// Vacances annoncées dans le planning d'une chaîne.
+struct ScheduleVacation {
+    let start: Date
+    let end: Date
+}
+
+/// Planning d'une chaîne : ses prochains créneaux, et ses vacances si elle
+/// en annonce. Vide : la chaîne n'a pas de planning.
+struct ChannelSchedule {
+    /// Du plus proche au plus lointain.
+    let segments: [ScheduleSegment]
+    var vacation: ScheduleVacation? = nil
+
+    static let empty = ChannelSchedule(segments: [])
+
+    /// Créneaux pas encore finis (une heure comptée sans fin connue).
+    func upcoming(at now: Date = Date()) -> [ScheduleSegment] {
+        segments.filter { ($0.end ?? $0.start.addingTimeInterval(3600)) > now }
+    }
+    /// Prochain live maintenu (ni annulé ni fini).
+    func next(at now: Date = Date()) -> ScheduleSegment? {
+        upcoming(at: now).first { !$0.canceled }
+    }
+    /// Vacances en cours ou à venir.
+    func activeVacation(at now: Date = Date()) -> ScheduleVacation? {
+        guard let v = vacation, v.end > now else { return nil }
+        return v
+    }
+    /// Rien à montrer : ni créneau à venir, ni vacances.
+    func isEmpty(at now: Date = Date()) -> Bool {
+        upcoming(at: now).isEmpty && activeVacation(at: now) == nil
+    }
 }
 
 struct VodMeta {

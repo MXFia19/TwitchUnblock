@@ -1,4 +1,6 @@
 import Foundation
+import CoreMedia
+import VideoToolbox   // codecs décodés par l'appareil (HigherQualities)
 
 // MARK: – Helpers
 private let requestHeaders: [String: String] = [
@@ -220,9 +222,11 @@ func accountPlaybackToken(login: String, webToken: String,
     // jeton recevrait alors de vraies pubs.
     let adFree = hideAds == true || showAds == false
     func flag(_ b: Bool?) -> String { b.map { $0 ? "oui" : "non" } ?? "?" }
+    // Plus haute résolution permise (« QUAD_HD » : 1440p, voir HigherQualities).
+    let maxRes: String = (flags["maximum_resolution"] as? String).map { " · max \($0)" } ?? ""
     logger.info("TOKEN", "Jeton du compte pour \"\(login)\"",
                 "abonné \(flag(subscriber)) · turbo \(flag(turbo)) · hide_ads \(flag(hideAds)) · show_ads \(flag(showAds))"
-                + (forbidden ? " · lecture refusée" : ""))
+                + maxRes + (forbidden ? " · lecture refusée" : ""))
     return .token(AccountPlaybackToken(value: value, signature: signature, adFree: adFree,
                                        subscriber: subscriber, forbidden: forbidden))
 }
@@ -495,11 +499,16 @@ func apiErrorKey(_ code: String) -> String {
 /// pub sur cette chaîne (abonné, Turbo accepté), le direct passe par lui avant
 /// les proxys — qui reçoivent, eux aussi, les pauses pub de la chaîne. Jamais
 /// pour un compte qui aurait des pubs : il en recevrait de vraies, ciblées sur
-/// son adresse réelle. `integrity` : voir accountPlaybackToken. `onSource` :
-/// appelé avec chaque source avant de l'essayer (« as », « al », « eu »,
-/// « twitch », « worker »), pour l'écran de chargement ; hors du fil principal.
+/// son adresse réelle — sauf qualités supérieures (higherQualitiesMaster),
+/// seulement si `hqAccount` (lecteur principal, qui bascule pendant ses
+/// pauses pub ; pas le multi-live) : sa liste maîtresse au-dessus de 1080p,
+/// à côté de la source habituelle qui sert ses pauses pub. `integrity` : voir
+/// accountPlaybackToken. `onSource` : appelé avec chaque source avant de
+/// l'essayer (« as », « al », « eu », « twitch », « worker »), pour l'écran
+/// de chargement ; hors du fil principal.
 func getLive(channelName: String, webToken: String? = nil,
              integrity: (() async -> (token: String, deviceId: String)?)? = nil,
+             hqAccount: Bool = false,
              onSource: ((String) -> Void)? = nil) async -> LiveData {
     let login = channelName.trimmingCharacters(in: .whitespaces).lowercased()
     logger.info("LIVE", "Lancement stream \"\(login)\"")
@@ -578,6 +587,8 @@ func getLive(channelName: String, webToken: String? = nil,
     var usedSource: String? = nil
     var webSessionExpired = false
     var subscriber: Bool? = nil
+    // Qualités supérieures pour un compte qui aurait des pubs : son jeton.
+    var hqToken: (value: String, signature: String)? = nil
 
     // Compte sans pub sur cette chaîne : son flux officiel d'abord. S'il ne
     // répond pas (géoblocage, réseau filtré), l'ordre habituel reprend.
@@ -585,14 +596,22 @@ func getLive(channelName: String, webToken: String? = nil,
     case .token(let pat):
         subscriber = pat.subscriber
         if pat.adFree && !pat.forbidden {
+            // Jeton lié au compte : le seul que Twitch serve au-dessus de 1080p.
             found = await usherLiveLinks(login: login, token: (value: pat.value, signature: pat.signature),
-                                         lowLatency: lowLatency)
+                                         lowLatency: lowLatency, codecs: HigherQualities.requested)
             if !found.links.isEmpty {
                 usedSource = "account"
                 logger.success("LIVE", "✅ Direct par le compte (sans pub)", "\(found.links.count) qualités")
             } else {
                 logger.warn("LIVE", "⚠️ Flux du compte indisponible", "sources habituelles…")
             }
+        } else if !pat.forbidden, hqAccount, HigherQualities.enabled {
+            // Pas sans pub ici, mais seul ce jeton dépasse 1080p : sa liste
+            // maîtresse est demandée en même temps que les sources habituelles,
+            // qui restent celles du direct (voir hqAccountLinks).
+            hqToken = (value: pat.value, signature: pat.signature)
+            logger.info("LIVE", "Compte pas sans pub : qualités supérieures demandées en parallèle",
+                        "sources habituelles")
         } else {
             logger.info("LIVE", "Compte pas sans pub sur cette chaîne", "jeton anonyme, sources habituelles")
         }
@@ -602,6 +621,8 @@ func getLive(channelName: String, webToken: String? = nil,
     case .unavailable:
         break
     }
+    let hqTokenValue = hqToken
+    async let hqTask = higherQualitiesMaster(login: login, token: hqTokenValue, lowLatency: lowLatency)
 
     // Ordre des sources (Réglages → Lecteur, ou menu du lecteur) : essayées
     // l'une après l'autre, pour que le direct se lance quand même.
@@ -622,6 +643,19 @@ func getLive(channelName: String, webToken: String? = nil,
             workerInfo = worker.info
         }
         if !found.links.isEmpty { usedSource = src }
+    }
+
+    // Qualités supérieures par le compte : à côté de la source habituelle,
+    // que MainTabView garde pour les pauses pub. Aucune source habituelle :
+    // le flux du compte, pubs de Twitch comprises, plutôt que rien.
+    var hqMaster = await hqTask
+    var accountAds = false
+    if let master = hqMaster, found.links.isEmpty {
+        found = master
+        usedSource = "account"
+        accountAds = true
+        hqMaster = nil
+        logger.warn("LIVE", "Aucune source habituelle : direct par le compte", "pubs de Twitch comprises")
     }
 
     if let uid = userId {
@@ -652,7 +686,32 @@ func getLive(channelName: String, webToken: String? = nil,
                     userId: userId, links: found.links, viewerCount: viewerCount,
                     startedAt: startedAt, dvrVideoId: dvrVideoId, error: error, source: usedSource,
                     variants: found.variants, webSessionExpired: webSessionExpired,
-                    subscriber: subscriber)
+                    subscriber: subscriber, hqAccountLinks: hqMaster?.links,
+                    hqAccountVariants: hqMaster?.variants ?? [:], accountAds: accountAds)
+}
+
+/// Liste maîtresse du compte avec les qualités supérieures (HigherQualities),
+/// pour un jeton à qui Twitch sert des pubs : seulement si elle dépasse
+/// 1080p — sinon la source habituelle suffit, aucune pub risquée pour rien.
+/// nil aussi sans jeton (réglage coupé, compte sans pub, multi-live, Apple TV).
+private func higherQualitiesMaster(login: String, token: (value: String, signature: String)?,
+                                   lowLatency: Bool) async -> MasterPlaylist? {
+    guard let token, let codecs = HigherQualities.requested else { return nil }
+    // 2 s au plus : le direct l'attend, puis la playlist du compte
+    // (MainTabView.hqLaunch, 2 s aussi) — 4 s de plus au pire. Au-delà, la
+    // source habituelle, comme sans le réglage.
+    let master = await usherLiveLinks(login: login, token: token, lowLatency: lowLatency,
+                                      codecs: codecs, timeout: 2)
+    let top = master.variants.values.map(\.height).max() ?? 0
+    guard top > 1080 else {
+        if !master.links.isEmpty {
+            logger.info("LIVE", "Rien au-dessus de 1080p par le compte", "source habituelle, sans pub")
+        }
+        return nil
+    }
+    logger.success("LIVE", "✅ Qualités supérieures par le compte : \(top)p",
+                   "pauses pub de Twitch par la source habituelle")
+    return master
 }
 
 /// Jeton du compte seulement si on en a donné un (iPhone, réglage actif).
@@ -803,11 +862,48 @@ private func ttvlolLiveLinks(login: String, lowLatency: Bool) async -> MasterPla
     return ([:], [:])
 }
 
+// MARK: – Qualités supérieures (Enhanced Broadcasting)
+/// Réglage « Qualités supérieures » (iPhone, coupé par défaut) : la demande
+/// de playlist du direct par le compte annonce à Twitch les codecs que
+/// l'appareil décode (`supported_codecs`), et les chaînes en Enhanced
+/// Broadcasting y ajoutent leurs variantes 1440p et plus, parfois en HEVC ou
+/// AV1. Jamais pour un jeton anonyme (proxys, Worker, Twitch officiel sans
+/// compte) : Twitch le plafonne à 1080p (`maximum_resolution` FULL_HD,
+/// « AUTHZ_NOT_LOGGED_IN » au-delà) et ces demandes restent telles quelles.
+/// Compte sans abonnement ni Turbo : le direct passe aussi par lui, mais
+/// seulement au-dessus de 1080p, et la source habituelle (sans pub) prend
+/// le relais pendant ses pauses pub (MainTabView.adBreakChanged).
+enum HigherQualities {
+    static let key = "cfg_higher_qualities"
+    static var enabled: Bool { UserDefaults.standard.bool(forKey: key) }
+
+    /// H.264 toujours ; HEVC et AV1 seulement si l'appareil les décode en
+    /// matériel (AV1 : puces A17 Pro, M3 et suivantes). Le plus efficace d'abord.
+    static let codecs: [String] = {
+        var list: [String] = []
+        // « av01 » écrit en clair : la constante manque aux SDK plus anciens.
+        if VTIsHardwareDecodeSupported(CMVideoCodecType(0x6176_3031)) { list.append("av1") }
+        if VTIsHardwareDecodeSupported(kCMVideoCodecType_HEVC) { list.append("h265") }
+        list.append("h264")
+        return list
+    }()
+
+    /// Valeur de `supported_codecs` si le réglage est actif, sinon nil.
+    static var requested: String? { enabled ? codecs.joined(separator: ",") : nil }
+
+    /// « H.264 · HEVC · AV1 » (Réglages).
+    static var label: String { codecs.reversed().map { names[$0] ?? $0 }.joined(separator: " · ") }
+    private static let names: [String: String] = ["h264": "H.264", "h265": "HEVC", "av1": "AV1"]
+}
+
 /// Flux officiel de Twitch (usher), avec ses pubs.
 /// `lowLatency` : Twitch sert alors la variante « low latency » (segments
-/// plus courts, playlist rafraîchie plus souvent).
+/// plus courts, playlist rafraîchie plus souvent). `codecs` :
+/// `supported_codecs`, pour le jeton du compte seulement (HigherQualities) ;
+/// nil, la demande ne change pas. `timeout` : voir higherQualitiesMaster.
 private func usherLiveLinks(login: String, token: (value: String, signature: String),
-                            lowLatency wantsLowLatency: Bool) async -> MasterPlaylist {
+                            lowLatency wantsLowLatency: Bool, codecs: String? = nil,
+                            timeout: TimeInterval = 8) async -> MasterPlaylist {
     guard login.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "_" }), !login.isEmpty,
           var comps = URLComponents(string: "https://usher.ttvnw.net/api/channel/hls/\(login).m3u8")
     else { return ([:], [:]) }
@@ -824,11 +920,15 @@ private func usherLiveLinks(login: String, token: (value: String, signature: Str
         .init(name: "sig",                        value: token.signature),
         .init(name: "token",                      value: token.value),
     ]
+    if let codecs {
+        comps.queryItems?.append(.init(name: "supported_codecs", value: codecs))
+        logger.info("LIVE", "Qualités supérieures demandées à Twitch", codecs)
+    }
     if wantsLowLatency { logger.info("LIVE", "Mode faible latence demandé à Twitch") }
-    // 8 s au plus (au lieu des 60 s par défaut) : réseau filtré, la source
-    // suivante doit prendre le relais sans faire attendre.
+    // 8 s au plus par défaut (au lieu des 60 s d'URLSession) : réseau
+    // filtré, la source suivante doit prendre le relais sans faire attendre.
     guard let url = comps.url,
-          let (data, resp) = try? await URLSession.shared.data(for: URLRequest(url: url, timeoutInterval: 8)),
+          let (data, resp) = try? await URLSession.shared.data(for: URLRequest(url: url, timeoutInterval: timeout)),
           (resp as? HTTPURLResponse)?.statusCode == 200,
           let body = String(data: data, encoding: .utf8) else { return ([:], [:]) }
     let master = parseMaster(body, baseURL: url)
@@ -1123,6 +1223,106 @@ func getUserAvatarGQL(login: String) async -> String? {
     return img
 }
 
+/// Fiche d'une personne du chat : date de création de son compte (API
+/// publique). nil : compte introuvable, ou Twitch n'a pas répondu. Gardée
+/// pour la session (UserCardCache) : rouvrir la fiche ne redemande rien.
+func getUserCreatedAt(login: String) async -> Date? {
+    await UserCardCache.shared.createdAt(login: login.lowercased())
+}
+
+/// Depuis quand `login` suit la chaîne `channel` (API publique). Requête à
+/// part de getUserCreatedAt : si Twitch refuse ce champ, la date de création
+/// du compte reste affichée. nil : ne la suit pas, ou Twitch ne le dit pas.
+func getFollowedAt(login: String, channel: String) async -> Date? {
+    guard !channel.isEmpty else { return nil }
+    return await UserCardCache.shared.followedAt(login: login.lowercased(), channel: channel.lowercased())
+}
+
+/// Fiche d'une personne du chat (MessageSheet) : dates gardées pour la
+/// session — chaque ouverture refaisait les deux requêtes. Sans réponse
+/// (réseau) : redemandées à la fiche suivante.
+actor UserCardCache {
+    static let shared = UserCardCache()
+    private var created: [String: Date] = [:]
+    /// Par personne et chaîne : la date, ou nil (ne la suit pas).
+    private var followed: [String: Date?] = [:]
+    /// Date de suivi refusée par Twitch (champ réservé ou retiré) : plus
+    /// demandée de la session, et notée une fois au journal — avant, un
+    /// « Requête refusée » à chaque fiche ouverte.
+    private var followRefused = false
+
+    func createdAt(login: String) async -> Date? {
+        guard !login.isEmpty else { return nil }
+        if let hit = created[login] { return hit }
+        guard let date = await fetchUserCreatedAt(login) else { return nil }
+        created[login] = date
+        return date
+    }
+
+    func followedAt(login: String, channel: String) async -> Date? {
+        guard !followRefused, !login.isEmpty else { return nil }
+        let key = login + "|" + channel
+        if let hit = followed[key] { return hit }
+        switch await fetchFollowedAt(login, channel) {
+        case .date(let date):
+            followed.updateValue(date, forKey: key)
+            return date
+        case .refused(let why):
+            // Deux fiches ouvertes coup sur coup : une seule ligne au journal.
+            if !followRefused {
+                followRefused = true
+                logger.warn("GQL", "Date de suivi refusée par Twitch : plus demandée de la session", why)
+            }
+            return nil
+        case .unreachable:
+            return nil
+        }
+    }
+}
+
+private func fetchUserCreatedAt(_ login: String) async -> Date? {
+    let q = "query($l: String!) { user(login: $l) { createdAt } }"
+    guard let d = await gqlRequest(q, ["l": login]),
+          let user = d["user"] as? [String: Any] else { return nil }
+    return parseTwitchDate(user["createdAt"] as? String)
+}
+
+/// Réponse de Twitch à la date de suivi : la date (nil : ne suit pas), un
+/// refus (ses messages), ou rien (réseau).
+private enum FollowLookup {
+    case date(Date?)
+    case refused(String)
+    case unreachable
+}
+
+private func fetchFollowedAt(_ login: String, _ channel: String) async -> FollowLookup {
+    let q = "query($l: String!, $c: String!) { user(login: $l) { follow(targetLogin: $c) { followedAt } } }"
+    guard let json = await gqlResponse(q, ["l": login, "c": channel]) else { return .unreachable }
+    if json["errors"] != nil { return .refused(gqlErrorSummary(json)) }
+    let user = (json["data"] as? [String: Any])?["user"] as? [String: Any]
+    let follow = user?["follow"] as? [String: Any]
+    return .date(parseTwitchDate(follow?["followedAt"] as? String))
+}
+
+/// Diffusion en cours d'une chaîne, pour en créer un clip : id de la chaîne,
+/// id de la diffusion et heure de début (nils hors ligne).
+struct LiveBroadcast {
+    let channelId: String
+    let broadcastId: String?
+    let startedAt: Date?
+}
+
+/// nil : pas de réponse de Twitch (ou chaîne introuvable).
+func getLiveBroadcast(login: String) async -> LiveBroadcast? {
+    let q = "query($l: String!) { user(login: $l) { id stream { id createdAt } } }"
+    guard let d = await gqlRequest(q, ["l": login.lowercased()]),
+          let user = d["user"] as? [String: Any],
+          let id = user["id"] as? String, !id.isEmpty else { return nil }
+    let stream = user["stream"] as? [String: Any]
+    return LiveBroadcast(channelId: id, broadcastId: stream?["id"] as? String,
+                         startedAt: parseTwitchDate(stream?["createdAt"] as? String))
+}
+
 /// Lives suivis par le compte : 100 par page (le plafond de Helix), puis les
 /// pages suivantes jusqu'à 300. Avant, les 50 premiers seulement : au-delà,
 /// des chaînes manquaient à l'accueil, et les notifications revenaient pour
@@ -1350,11 +1550,18 @@ private func streamFromDict(_ d: [String: Any]) -> TwitchStream {
 }
 
 // MARK: – Autocomplete GQL
+/// Suggestions pendant la frappe : les 5 premières chaînes trouvées.
 func searchUsersGQL(_ query: String) async -> [AutocompleteSuggestion] {
+    await searchChannelsGQL(query, first: 5) ?? []
+}
+
+/// Chaînes dont le nom correspond (GQL public) : suggestions de la frappe et
+/// onglet « Chaînes » des résultats. nil si Twitch n'a pas répondu.
+func searchChannelsGQL(_ query: String, first: Int = 30) async -> [AutocompleteSuggestion]? {
     // `stream` : présent seulement si la chaîne est en live (pastille dans la liste).
-    let q = "query($q: String!) { searchUsers(userQuery: $q, first: 5) { edges { node { login displayName profileImageURL(width: 70) stream { viewersCount game { displayName } } } } } }"
+    let q = "query($q: String!) { searchUsers(userQuery: $q, first: \(min(max(first, 1), 50))) { edges { node { login displayName profileImageURL(width: 70) followers { totalCount } stream { viewersCount game { displayName } } } } } }"
     guard let data = await gqlRequest(q, ["q": query]),
-          let edges = (data["searchUsers"] as? [String: Any])?["edges"] as? [[String: Any]] else { return [] }
+          let edges = (data["searchUsers"] as? [String: Any])?["edges"] as? [[String: Any]] else { return nil }
     let list: [AutocompleteSuggestion] = edges.compactMap { e in
         guard let node  = e["node"] as? [String: Any],
               let login = node["login"] as? String else { return nil }
@@ -1363,7 +1570,8 @@ func searchUsersGQL(_ query: String) async -> [AutocompleteSuggestion] {
                                       name: node["displayName"] as? String ?? login,
                                       avatar: node["profileImageURL"] as? String,
                                       viewers: stream.map { $0["viewersCount"] as? Int ?? 0 },
-                                      game: (stream?["game"] as? [String: Any])?["displayName"] as? String)
+                                      game: (stream?["game"] as? [String: Any])?["displayName"] as? String,
+                                      followers: (node["followers"] as? [String: Any])?["totalCount"] as? Int)
     }
     // Les chaînes en live d'abord, sans changer l'ordre de Twitch entre elles.
     return list.filter(\.isLive) + list.filter { !$0.isLive }
@@ -1726,6 +1934,14 @@ func gqlStr(_ s: String) -> String {
 // MARK: – Clips
 /// Requête GQL avec variables (les valeurs ne sont jamais collées dans le texte).
 private func gqlRequest(_ query: String, _ variables: [String: Any]) async -> [String: Any]? {
+    guard let json = await gqlResponse(query, variables) else { return nil }
+    if json["errors"] != nil { logger.warn("GQL", "Requête refusée", gqlErrorSummary(json)) }
+    return json["data"] as? [String: Any]
+}
+
+/// Réponse entière (données et erreurs), sans noter les refus : l'appelant
+/// en juge (date de suivi de la fiche d'une personne, notée une fois).
+private func gqlResponse(_ query: String, _ variables: [String: Any]) async -> [String: Any]? {
     guard let url = URL(string: "https://gql.twitch.tv/gql"),
           let body = try? JSONSerialization.data(withJSONObject: ["query": query, "variables": variables]) else { return nil }
     var req = URLRequest(url: url)
@@ -1738,8 +1954,7 @@ private func gqlRequest(_ query: String, _ variables: [String: Any]) async -> [S
         logger.warn("GQL", "Requête sans réponse (réseau)", String(query.prefix(60)))
         return nil
     }
-    if json["errors"] != nil { logger.warn("GQL", "Requête refusée", gqlErrorSummary(json)) }
-    return json["data"] as? [String: Any]
+    return json
 }
 
 /// Messages d'erreur d'une réponse GQL (codes compris), pour le journal.
@@ -1832,11 +2047,14 @@ private func streamFromGQL(user u: [String: Any], stream s: [String: Any]) -> Tw
 /// Lesquelles de ces chaînes sont en live (suivis sans compte). 100 max par requête.
 /// nil si Twitch n'a pas répondu (réseau, requête annulée) : à ne pas
 /// confondre avec « personne en live », sinon la liste se viderait.
+/// La catégorie vient avec son identifiant : sans lui, une catégorie masquée
+/// n'était pas écartée (onglet « Lives » de la recherche, quand il reprend
+/// les chaînes trouvées en live).
 func getLiveStreamsGQL(logins: [String]) async -> [TwitchStream]? {
     guard !logins.isEmpty else { return [] }
     let q = """
     query($l: [String!]) { users(logins: $l) { id login displayName
-      stream { title viewersCount previewImageURL(width: 440, height: 248) game { displayName } freeformTags { name } } } }
+      stream { title viewersCount previewImageURL(width: 440, height: 248) game { id displayName } freeformTags { name } } } }
     """
     var out: [TwitchStream] = []
     for start in stride(from: 0, to: logins.count, by: 100) {
@@ -2014,6 +2232,57 @@ func searchCategoriesGQL(query: String) async -> [TwitchCategory]? {
     guard let d = await gqlRequest(q, ["q": query]),
           let edges = (d["searchCategories"] as? [String: Any])?["edges"] as? [[String: Any]] else { return nil }
     return edges.compactMap { ($0["node"] as? [String: Any]).flatMap(categoryFromGQL) }
+}
+
+/// Lives trouvés par la recherche de Twitch (titre, tags, catégorie, nom de
+/// la chaîne), GQL public : onglet « Lives » des résultats. nil si Twitch
+/// n'a pas répondu ou refuse la requête.
+func searchStreamsGQL(query: String) async -> [TwitchStream]? {
+    let q = """
+    query($q: String!) { searchStreams(userQuery: $q, first: 30) {
+      edges { node { title viewersCount previewImageURL(width: 440, height: 248) game { id displayName } freeformTags { name }
+        broadcaster { id login displayName } } }
+    } }
+    """
+    guard let d = await gqlRequest(q, ["q": query]),
+          let edges = (d["searchStreams"] as? [String: Any])?["edges"] as? [[String: Any]] else { return nil }
+    return streamsFromGQL(edges)
+}
+
+/// VODs trouvées par la recherche de Twitch (GQL public, celle de sa page de
+/// résultats) : onglet « VODs » des résultats. D'abord l'index des VODs seul
+/// (30 au plus), puis, si Twitch refuse ce ciblage, l'aperçu de la page de
+/// résultats (quelques VODs). nil si Twitch n'a pas répondu ou refuse.
+func searchVideosGQL(query: String) async -> [SearchVod]? {
+    let fields = """
+    videos { edges { item { ... on Video { id title lengthSeconds publishedAt
+      previewThumbnailURL(width: 320, height: 180) owner { login displayName } game { id } } } } }
+    """
+    let requests = [
+        "query($q: String!) { searchFor(userQuery: $q, platform: \"web\", target: { index: VOD, limit: 30 }) { \(fields) } }",
+        "query($q: String!) { searchFor(userQuery: $q, platform: \"web\") { \(fields) } }",
+    ]
+    for q in requests {
+        guard let d = await gqlRequest(q, ["q": query]),
+              let found = d["searchFor"] as? [String: Any] else { continue }
+        // `videos` nul : aucune VOD trouvée.
+        let edges = (found["videos"] as? [String: Any])?["edges"] as? [[String: Any]] ?? []
+        let list: [SearchVod] = edges.compactMap { e in
+            guard let v = e["item"] as? [String: Any], let id = v["id"] as? String else { return nil }
+            let owner = v["owner"] as? [String: Any]
+            let login = owner?["login"] as? String ?? ""
+            let vod = VodData(id: id,
+                              title: v["title"] as? String ?? "",
+                              previewThumbnailURL: v["previewThumbnailURL"] as? String ?? "",
+                              publishedAt: v["publishedAt"] as? String ?? "",
+                              lengthSeconds: v["lengthSeconds"] as? Int ?? 0)
+            return SearchVod(vod: vod, login: login,
+                             name: owner?["displayName"] as? String ?? login,
+                             gameId: (v["game"] as? [String: Any])?["id"] as? String ?? "")
+        }
+        return list
+    }
+    return nil
 }
 
 /// Les 100 lives les plus regardés d'une catégorie, d'une langue si `lang`
@@ -2234,6 +2503,377 @@ func getChannelAbout(login: String) async -> ChannelAbout? {
     return ChannelAbout(description: u["description"] as? String ?? "",
                         followers: (u["followers"] as? [String: Any])?["totalCount"] as? Int,
                         socials: socials, panels: panels)
+}
+
+// MARK: – Planning d'une chaîne
+/// Planning d'une chaîne : ses créneaux à venir et ses vacances. Avec le
+/// jeton du compte, Helix `schedule` (documenté : il dit aussi les créneaux
+/// répétés, annulés et les vacances). Sans compte, ou si Helix échoue, GQL
+/// public ; s'il refuse la requête ou ne donne rien, l'export iCalendar de
+/// Helix, public lui aussi (sans jeton). Chaîne sans planning : planning
+/// vide. nil si rien n'a répondu.
+func getChannelSchedule(login: String, channelId: String?, token: String?) async -> ChannelSchedule? {
+    let l = login.lowercased()
+    var id = channelId ?? ""
+    if let token, !id.isEmpty, let s = await helixSchedule(channelId: id, token: token) {
+        logSchedule(l, s, source: "Helix")
+        return s
+    }
+    let fromGQL = await gqlSchedule(login: l)
+    if let s = fromGQL, !s.isEmpty() {
+        logSchedule(l, s, source: "GQL")
+        return s
+    }
+    // GQL refuse la requête, ou ne donne rien (peut-être faute d'en lire la
+    // réponse comme il faut) : l'export iCalendar tranche.
+    if id.isEmpty { id = await getUserIdGQL(login: l) ?? "" }
+    if !id.isEmpty, let s = await icalSchedule(channelId: id) {
+        logSchedule(l, s, source: "iCalendar")
+        return s
+    }
+    if fromGQL == nil { logger.warn("PLANNING", "Planning de \"\(l)\" indisponible") }
+    return fromGQL
+}
+
+/// Journal : seulement un planning qui a quelque chose à montrer (la plupart
+/// des chaînes n'en ont pas).
+private func logSchedule(_ login: String, _ s: ChannelSchedule, source: String) {
+    guard !s.isEmpty() else { return }
+    logger.info("PLANNING", "Planning de \"\(login)\" : \(s.upcoming().count) créneaux à venir", source)
+}
+
+/// Planning par Helix, avec le jeton du compte. 404 : la chaîne n'a pas de
+/// planning. nil si Twitch n'a pas répondu ou refuse (jeton expiré…).
+private func helixSchedule(channelId: String, token: String) async -> ChannelSchedule? {
+    guard !channelId.isEmpty, channelId.allSatisfy(\.isNumber),
+          let url = URL(string: "https://api.twitch.tv/helix/schedule?broadcaster_id=\(channelId)&first=25")
+    else { return nil }
+    var req = URLRequest(url: url)
+    req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+    req.setValue(kHelixClientID, forHTTPHeaderField: "Client-Id")
+    guard let (data, resp) = try? await URLSession.shared.data(for: req) else { return nil }
+    let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
+    if status == 404 { return .empty }
+    guard status == 200, let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+          let d = json["data"] as? [String: Any] else {
+        logger.warn("PLANNING", "Planning refusé par Helix", "HTTP \(status)")
+        return nil
+    }
+    var segments: [ScheduleSegment] = []
+    for s in d["segments"] as? [[String: Any]] ?? [] {
+        guard let start = parseTwitchDate(s["start_time"] as? String) else { continue }
+        segments.append(ScheduleSegment(
+            id: "\(s["id"] as? String ?? "")-\(Int(start.timeIntervalSince1970))",
+            start: start,
+            end: parseTwitchDate(s["end_time"] as? String),
+            title: s["title"] as? String ?? "",
+            category: (s["category"] as? [String: Any])?["name"] as? String ?? "",
+            recurring: s["is_recurring"] as? Bool ?? false,
+            // Annulé par le streamer, ou pendant ses vacances.
+            canceled: (s["canceled_until"] as? String) != nil))
+    }
+    var vacation: ScheduleVacation? = nil
+    if let v = d["vacation"] as? [String: Any],
+       let start = parseTwitchDate(v["start_time"] as? String),
+       let end = parseTwitchDate(v["end_time"] as? String) {
+        vacation = ScheduleVacation(start: start, end: end)
+    }
+    return ChannelSchedule(segments: segments.sorted { $0.start < $1.start }, vacation: vacation)
+}
+
+/// Planning par GQL public : `segments(relativeDate:)` rend la semaine qui
+/// contient la date (Twitch refuse `startAt`/`endAt`). Il n'en sert qu'une
+/// par requête et par chaîne (plusieurs semaines dans une même requête
+/// reviennent vides ou mêlées) : une requête par semaine, celle en cours,
+/// puis les trois suivantes en parallèle. Pas de « répété » dans GQL, mais
+/// `repeatEndsAfterCount` vaut 1 pour un créneau unique (0 : répété sans
+/// fin). Les vacances sont son « interruption ». nil si Twitch n'a pas
+/// répondu ou refuse une des requêtes ; chaîne introuvable ou sans
+/// planning : vide.
+private func gqlSchedule(login: String) async -> ChannelSchedule? {
+    let now = Date()
+    let week: TimeInterval = 7 * 86400
+    func scheduleOf(_ d: [String: Any]) -> [String: Any]? {
+        ((d["user"] as? [String: Any])?["channel"] as? [String: Any])?["schedule"] as? [String: Any]
+    }
+    guard let first = await gqlScheduleWeek(login: login, at: now,
+                                            extra: "nextSegment { id } interruption { startAt endAt }")
+    else { return nil }
+    guard let schedule = scheduleOf(first) else { return .empty }
+    var weeks = [schedule]
+    // Ni prochain live ni vacances (la plupart des chaînes) : les semaines
+    // suivantes n'ont rien à dire.
+    if schedule["nextSegment"] is [String: Any] || schedule["interruption"] is [String: Any] {
+        async let second = gqlScheduleWeek(login: login, at: now.addingTimeInterval(week))
+        async let third = gqlScheduleWeek(login: login, at: now.addingTimeInterval(2 * week))
+        async let fourth = gqlScheduleWeek(login: login, at: now.addingTimeInterval(3 * week))
+        let rest = await [second, third, fourth]
+        for result in rest {
+            guard let data = result else { return nil }
+            weeks.append(scheduleOf(data) ?? [:])
+        }
+    }
+    // Fenêtre : douze heures en arrière (un créneau en cours), quatre
+    // semaines devant, comme l'export iCalendar ; la semaine en cours
+    // commence avant aujourd'hui.
+    let windowStart = now.addingTimeInterval(-12 * 3600)
+    let windowEnd = now.addingTimeInterval(28 * 86400)
+    var segments: [ScheduleSegment] = []
+    var seen = Set<String>()
+    for w in weeks {
+        for s in w["segments"] as? [[String: Any]] ?? [] {
+            guard let start = parseTwitchDate(s["startAt"] as? String) else { continue }
+            let end = parseTwitchDate(s["endAt"] as? String)
+            guard (end ?? start.addingTimeInterval(3600)) > windowStart, start < windowEnd else { continue }
+            // Un créneau répété garde son id d'une semaine à l'autre : l'heure
+            // le distingue. Rendu deux fois : gardé une fois.
+            let id = "\(s["id"] as? String ?? "")-\(Int(start.timeIntervalSince1970))"
+            guard seen.insert(id).inserted else { continue }
+            let repeats = s["repeatEndsAfterCount"] as? Int
+            segments.append(ScheduleSegment(
+                id: id,
+                start: start,
+                end: end,
+                title: s["title"] as? String ?? "",
+                category: (s["categories"] as? [[String: Any]])?.first?["displayName"] as? String ?? "",
+                recurring: repeats != nil && repeats != 1,
+                canceled: s["isCancelled"] as? Bool ?? false))
+        }
+    }
+    var vacation: ScheduleVacation? = nil
+    if let v = schedule["interruption"] as? [String: Any],
+       let start = parseTwitchDate(v["startAt"] as? String),
+       let end = parseTwitchDate(v["endAt"] as? String) {
+        vacation = ScheduleVacation(start: start, end: end)
+    }
+    return ChannelSchedule(segments: segments.sorted { $0.start < $1.start }, vacation: vacation)
+}
+
+/// Une semaine du planning par GQL public : celle qui contient `date`, avec
+/// `extra` (champs du planning demandés en plus). Ses données ; nil si
+/// Twitch n'a pas répondu ou refuse la requête, même en partie.
+private func gqlScheduleWeek(login: String, at date: Date, extra: String = "") async -> [String: Any]? {
+    let iso = ISO8601DateFormatter()
+    iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    // Date calculée ici, jamais saisie : écrite dans la requête, son type GQL
+    // n'a pas à être nommé.
+    let q = """
+    query($l: String!) { user(login: $l) { channel { schedule {
+      \(extra)
+      segments(relativeDate: "\(iso.string(from: date))") {
+        id startAt endAt title isCancelled repeatEndsAfterCount categories { displayName }
+      }
+    } } } }
+    """
+    guard let json = await gqlResponse(q, ["l": login]) else { return nil }
+    if let errors = json["errors"] as? [Any], !errors.isEmpty {
+        logger.warn("GQL", "Requête refusée", gqlErrorSummary(json))
+        return nil
+    }
+    return json["data"] as? [String: Any] ?? [:]
+}
+
+/// Planning par l'export iCalendar de Helix, public (sans jeton) : créneaux
+/// répétés compris (RRULE). Les vacances n'y sont qu'un texte : ignorées.
+/// 404 : pas de planning. nil si Twitch n'a pas répondu.
+private func icalSchedule(channelId: String) async -> ChannelSchedule? {
+    guard !channelId.isEmpty, channelId.allSatisfy(\.isNumber),
+          let url = URL(string: "https://api.twitch.tv/helix/schedule/icalendar?broadcaster_id=\(channelId)")
+    else { return nil }
+    guard let (data, resp) = try? await URLSession.shared.data(from: url) else { return nil }
+    let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
+    if status == 404 { return .empty }
+    guard status == 200 else {
+        logger.warn("PLANNING", "Export iCalendar refusé", "HTTP \(status)")
+        return nil
+    }
+    return parseICalSchedule(icalUnfolded(data), now: Date())
+}
+
+/// Texte d'un export iCalendar, lignes repliées (RFC 5545, 3.1) recollées
+/// sur les octets, avant le décodage : un repli peut couper en deux un
+/// caractère UTF-8 (accent, émoji d'un titre), et le décodage strict
+/// rejetait alors tout le planning.
+private func icalUnfolded(_ data: Data) -> String {
+    let raw = [UInt8](data)
+    var bytes: [UInt8] = []
+    bytes.reserveCapacity(raw.count)
+    var i = 0
+    while i < raw.count {
+        // Fin de ligne (LF ou CRLF) suivie d'une espace ou d'une tabulation :
+        // la ligne continue, les trois (ou deux) octets disparaissent.
+        var eol = 0
+        if raw[i] == 10 {
+            eol = 1
+        } else if raw[i] == 13, i + 1 < raw.count, raw[i + 1] == 10 {
+            eol = 2
+        }
+        if eol > 0, i + eol < raw.count, raw[i + eol] == 32 || raw[i + eol] == 9 {
+            i += eol + 1
+            continue
+        }
+        bytes.append(raw[i])
+        i += 1
+    }
+    return String(decoding: bytes, as: UTF8.self)
+}
+
+/// Propriété d'un VEVENT : ses paramètres (TZID…) et sa valeur.
+private typealias ICalProperty = (params: [String: String], value: String)
+
+/// Créneaux d'un calendrier iCalendar (RFC 5545) des quatre prochaines
+/// semaines : chaque VEVENT, et ses répétitions.
+private func parseICalSchedule(_ text: String, now: Date) -> ChannelSchedule {
+    // Lignes repliées (RFC 5545, 3.1) : une ligne qui commence par une
+    // espace ou une tabulation prolonge la précédente.
+    var lines: [String] = []
+    let normalized = text.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: "\r", with: "\n")
+    for line in normalized.components(separatedBy: "\n") {
+        if line.hasPrefix(" ") || line.hasPrefix("\t"), !lines.isEmpty {
+            lines[lines.count - 1] += String(line.dropFirst())
+        } else if !line.isEmpty {
+            lines.append(line)
+        }
+    }
+    let windowStart = now.addingTimeInterval(-12 * 3600)
+    let windowEnd = now.addingTimeInterval(28 * 86400)
+    var events: [(props: [String: ICalProperty], exdates: [Date])] = []
+    var event: [String: ICalProperty]? = nil
+    var exdates: [Date] = []
+    for line in lines {
+        let upper = line.trimmingCharacters(in: .whitespaces).uppercased()
+        if upper == "BEGIN:VEVENT" { event = [:]; exdates = []; continue }
+        if upper == "END:VEVENT" {
+            if let e = event { events.append((props: e, exdates: exdates)) }
+            event = nil
+            continue
+        }
+        guard event != nil, let colon = line.firstIndex(of: ":") else { continue }
+        var parts = line[..<colon].components(separatedBy: ";")
+        let name = parts.removeFirst().uppercased()
+        var params: [String: String] = [:]
+        for p in parts {
+            let kv = p.components(separatedBy: "=")
+            if kv.count == 2 { params[kv[0].uppercased()] = kv[1].replacingOccurrences(of: "\"", with: "") }
+        }
+        let value = String(line[line.index(after: colon)...])
+        if name == "EXDATE" {
+            exdates += value.components(separatedBy: ",").compactMap { icalDate($0, tzid: params["TZID"]) }
+        } else {
+            event?[name] = (params: params, value: value)
+        }
+    }
+    // Occurrence d'une série modifiée ou annulée à part (même UID, avec
+    // RECURRENCE-ID) : elle remplace celle que donnerait la répétition, qui
+    // sinon restait affichée en double (et maintenue, si l'autre est annulée).
+    var replaced: [String: [Date]] = [:]
+    for e in events {
+        guard let r = e.props["RECURRENCE-ID"], let uid = e.props["UID"]?.value,
+              let at = icalDate(r.value, tzid: r.params["TZID"]) else { continue }
+        replaced[uid, default: []].append(at)
+    }
+    var segments: [ScheduleSegment] = []
+    for e in events {
+        var excluded = e.exdates
+        if e.props["RECURRENCE-ID"] == nil, let uid = e.props["UID"]?.value {
+            excluded += replaced[uid] ?? []
+        }
+        segments += icalOccurrences(e.props, exdates: excluded, from: windowStart, to: windowEnd)
+    }
+    return ChannelSchedule(segments: segments.sorted { $0.start < $1.start })
+}
+
+/// Occurrences d'un VEVENT dans la fenêtre : lui seul, ou ses répétitions
+/// (RRULE quotidienne ou hebdomadaire ; dates exclues par EXDATE).
+private func icalOccurrences(_ e: [String: ICalProperty], exdates: [Date],
+                             from windowStart: Date, to windowEnd: Date) -> [ScheduleSegment] {
+    guard let startProp = e["DTSTART"],
+          let start = icalDate(startProp.value, tzid: startProp.params["TZID"]) else { return [] }
+    let end = e["DTEND"].flatMap { icalDate($0.value, tzid: $0.params["TZID"]) }
+    let duration = end.map { $0.timeIntervalSince(start) }
+    let uid = e["UID"]?.value ?? ""
+    let title = icalText(e["SUMMARY"]?.value ?? "")
+    let category = icalText(e["CATEGORIES"]?.value ?? "")
+    let canceled = e["STATUS"]?.value.uppercased() == "CANCELLED"
+    func segment(_ at: Date, recurring: Bool) -> ScheduleSegment {
+        ScheduleSegment(id: "\(uid)-\(Int(at.timeIntervalSince1970))", start: at,
+                        end: duration.map { at.addingTimeInterval($0) },
+                        title: title, category: category, recurring: recurring, canceled: canceled)
+    }
+    // Règle de répétition : FREQ, INTERVAL, COUNT, UNTIL.
+    var rule: [String: String] = [:]
+    for part in (e["RRULE"]?.value ?? "").components(separatedBy: ";") {
+        let kv = part.components(separatedBy: "=")
+        if kv.count == 2 { rule[kv[0].uppercased()] = kv[1] }
+    }
+    let freq = rule["FREQ"]?.uppercased() ?? ""
+    let stepDays = freq == "DAILY" ? 1 : freq == "WEEKLY" ? 7 : 0
+    guard stepDays > 0 else {
+        let last = end ?? start.addingTimeInterval(3600)
+        return last > windowStart && start < windowEnd ? [segment(start, recurring: false)] : []
+    }
+    // Calendrier du fuseau du créneau : l'heure reste la même d'une semaine
+    // à l'autre, passage à l'heure d'été compris.
+    var cal = Calendar(identifier: .gregorian)
+    cal.timeZone = icalTimeZone(startProp.params["TZID"], value: startProp.value)
+    // INTERVAL borné : une valeur démesurée faisait déborder le calcul (plantage).
+    let step = stepDays * min(max(1, Int(rule["INTERVAL"] ?? "") ?? 1), 1000)
+    let count = rule["COUNT"].flatMap { Int($0) }
+    let until = rule["UNTIL"].flatMap { icalDate($0, tzid: startProp.params["TZID"]) }
+    // Droit vers la fenêtre, sans parcourir des années de répétitions.
+    var k = max(0, Int(windowStart.timeIntervalSince(start) / (Double(step) * 86400)) - 1)
+    var out: [ScheduleSegment] = []
+    while out.count < 60 {
+        if let count, k >= count { break }
+        guard let at = cal.date(byAdding: .day, value: k * step, to: start), at < windowEnd else { break }
+        if let until, at > until { break }
+        let last = duration.map { at.addingTimeInterval($0) } ?? at.addingTimeInterval(3600)
+        if last > windowStart, !exdates.contains(where: { abs($0.timeIntervalSince(at)) < 60 }) {
+            out.append(segment(at, recurring: true))
+        }
+        k += 1
+    }
+    return out
+}
+
+/// Date iCalendar : « 20261020T200000Z » (UTC), « 20261020T200000 » dans le
+/// fuseau du TZID, ou « 20261020 ».
+private func icalDate(_ raw: String, tzid: String?) -> Date? {
+    let v = raw.trimmingCharacters(in: .whitespaces)
+    let df = DateFormatter()
+    df.locale = Locale(identifier: "en_US_POSIX")
+    df.calendar = Calendar(identifier: .gregorian)
+    df.timeZone = icalTimeZone(tzid, value: v)
+    df.dateFormat = v.hasSuffix("Z") ? "yyyyMMdd'T'HHmmss'Z'" : v.count == 8 ? "yyyyMMdd" : "yyyyMMdd'T'HHmmss"
+    return df.date(from: v)
+}
+
+/// Fuseau d'une date iCalendar : UTC pour « …Z », sinon celui du TZID
+/// (« /America/New_York » chez Twitch, barre de tête comprise), UTC à défaut.
+private func icalTimeZone(_ tzid: String?, value: String) -> TimeZone {
+    let utc = TimeZone(secondsFromGMT: 0) ?? TimeZone.current
+    guard !value.hasSuffix("Z"), var id = tzid, !id.isEmpty else { return utc }
+    if id.hasPrefix("/") { id.removeFirst() }
+    if let tz = TimeZone(identifier: id) { return tz }
+    // Préfixe d'éditeur (« /mozilla.org/…/Europe/Paris ») : les deux derniers éléments.
+    return TimeZone(identifier: id.split(separator: "/").suffix(2).joined(separator: "/")) ?? utc
+}
+
+/// Texte iCalendar : « \, », « \; » et « \\ » rendus, retours à la ligne en espaces.
+private func icalText(_ raw: String) -> String {
+    var out = ""
+    var escaped = false
+    for ch in raw {
+        if escaped {
+            out.append(ch == "n" || ch == "N" ? " " : ch)
+            escaped = false
+        } else if ch == "\\" {
+            escaped = true
+        } else {
+            out.append(ch)
+        }
+    }
+    return out.trimmingCharacters(in: .whitespaces)
 }
 
 /// Highlights d'une chaîne (les 50 plus récents).

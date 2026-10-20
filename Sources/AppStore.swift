@@ -122,6 +122,9 @@ final class AppStore: ObservableObject {
         // expirée, cookies effacés) au lieu de passer pour une reconnexion.
         // Pseudo absent du cookie : le compte est vérifié au passage.
         await validateWebSession()
+        // Catégories suivies du compte : jamais masquées, sans attendre un
+        // passage par l'accueil.
+        if twitchWebToken != nil { Task { [weak self] in await self?.loadAccountFollowedCategories() } }
         return twitchWebToken != nil
     }
 
@@ -184,6 +187,17 @@ final class AppStore: ObservableObject {
     @Published var enableRaids: Bool = true {
         didSet { UserDefaults.standard.set(enableRaids, forKey: "cfg_raids") }
     }
+    /// Sous « Événements live », chaque bandeau à part (Réglages →
+    /// Personnaliser). Hype train coupé : il n'est plus relevé.
+    @Published var showPolls: Bool = true {
+        didSet { UserDefaults.standard.set(showPolls, forKey: "cfg_show_polls") }
+    }
+    @Published var showPredictions: Bool = true {
+        didSet { UserDefaults.standard.set(showPredictions, forKey: "cfg_show_predictions") }
+    }
+    @Published var showHypeTrain: Bool = true {
+        didSet { UserDefaults.standard.set(showHypeTrain, forKey: "cfg_show_hype") }
+    }
     /// En paysage, bandeaux du chat (épinglé, drops, sondages, prédictions,
     /// raid) repliés en une ligne d'icônes au-dessus des messages.
     @Published var landscapeNoticesHidden: Bool = false {
@@ -202,9 +216,10 @@ final class AppStore: ObservableObject {
     }
 
     /// Vitesse de lecture des VODs (pas des directs, ni des clips qui partent
-    /// à 1×), gardée d'une VOD à l'autre. Seule source de vérité : une vitesse
-    /// imposée par le lecteur (refus, AirPlay, bord du DVR rattrapé) y est
-    /// réécrite. Même nom que le site dans la sauvegarde (« vodSpeed »).
+    /// à 1×), gardée d'une VOD à l'autre. Une vitesse imposée par le lecteur
+    /// immersif (refus, AirPlay, bord du DVR rattrapé) ne vaut que pour la
+    /// lecture en cours (MainTabView.forcedVodSpeed). Même nom que le site
+    /// dans la sauvegarde (« vodSpeed »).
     @Published var vodSpeed: Double = 1 {
         didSet { UserDefaults.standard.set(vodSpeed, forKey: "cfg_vod_speed") }
     }
@@ -221,6 +236,11 @@ final class AppStore: ObservableObject {
     /// « auto » par défaut, la qualité suit le débit (NetworkStatus).
     @Published var cellularQuality: String = "auto" {
         didSet { UserDefaults.standard.set(cellularQuality, forKey: "cfg_quality_cellular") }
+    }
+    /// Qualités supérieures (1440p et plus, HEVC ou AV1) demandées au direct
+    /// par le compte, coupé par défaut ; lu par getLive (HigherQualities).
+    @Published var higherQualities: Bool = false {
+        didSet { UserDefaults.standard.set(higherQualities, forKey: HigherQualities.key) }
     }
     /// Audio seul préféré : ce que retenaient les versions d'avant (gardé
     /// dans la sauvegarde pour elles).
@@ -276,7 +296,8 @@ final class AppStore: ObservableObject {
     /// Abonné : le direct passe par le compte (session web) quand Twitch le
     /// sert sans pub sur cette chaîne — plus de pauses pub. Twitch voit alors
     /// le compte regarder, d'où le réglage. Jamais pour une chaîne où le
-    /// compte aurait des pubs (getLive).
+    /// compte aurait des pubs (getLive), sauf qualités supérieures : au-dessus
+    /// de 1080p seulement, la source sans pub pendant ses pauses pub.
     @Published var subAdFree: Bool = true {
         didSet { UserDefaults.standard.set(subAdFree, forKey: "cfg_sub_adfree") }
     }
@@ -406,6 +427,11 @@ final class AppStore: ObservableObject {
     @Published var chatKeyboardSuggestions: Bool = true {
         didSet { UserDefaults.standard.set(chatKeyboardSuggestions, forKey: "cfg_chat_kbd_suggest") }
     }
+    /// Entrée envoie le message. Coupé (par défaut) : Entrée ferme le
+    /// clavier, le bouton ➤ envoie.
+    @Published var chatReturnSends: Bool = false {
+        didSet { UserDefaults.standard.set(chatReturnSends, forKey: "cfg_chat_return_sends") }
+    }
     /// Garder les messages supprimés, barrés, au lieu de les faire disparaître.
     @Published var chatShowDeleted: Bool = false {
         didSet { UserDefaults.standard.set(chatShowDeleted, forKey: "cfg_chat_deleted") }
@@ -429,6 +455,21 @@ final class AppStore: ObservableObject {
     @Published var shareUsage: Bool = true {
         didSet { UserDefaults.standard.set(shareUsage, forKey: "cfg_share_usage") }
     }
+
+    // MARK: – Synchro des réglages
+    /// Synchroniser mes réglages avec le compte connecté (site, autres
+    /// appareils) : voir SettingsSync.swift. Activé par défaut ; propre à cet
+    /// appareil, jamais synchronisé lui-même. Coupé, rien ne part ni n'arrive ;
+    /// réactivé, les réglages du compte sont relus tout de suite.
+    @Published var syncSettings: Bool = true {
+        didSet {
+            UserDefaults.standard.set(syncSettings, forKey: "cfg_sync_settings")
+            guard syncSettings != oldValue else { return }
+            Task { @MainActor [weak self] in self?.settingsSyncToggled() }
+        }
+    }
+    /// Dates, empreintes et file d'échanges de cette synchro.
+    let prefsSync = SettingsSyncState()
 
     /// Chaîne à ouvrir dans l'onglet Recherche (depuis le lecteur, l'accueil…).
     /// L'onglet la consomme puis la remet à nil.
@@ -456,13 +497,49 @@ final class AppStore: ObservableObject {
         }
     }
 
-    /// Chaînes suivies par le compte Twitch, telles que lues par l'accueil
-    /// (non enregistrées) : l'export les ajoute aux suivis de l'appareil.
+    /// Chaînes suivies par le compte Twitch, en minuscules (non enregistrées),
+    /// lues au lancement, à la connexion et par l'accueil : jamais masquées,
+    /// et l'export les ajoute aux suivis de l'appareil.
     var accountFollowLogins: [String] = []
-    /// Catégories suivies sur Twitch (session web), telles que lues par
-    /// l'accueil et l'onglet Catégories (non enregistrées) : jamais masquées.
-    /// Vidées quand la session web disparaît.
+    /// Catégories suivies sur Twitch (session web), lues au lancement, à la
+    /// connexion de la session, par l'accueil et l'onglet Catégories (non
+    /// enregistrées) : jamais masquées. Vidées quand la session web disparaît.
     var accountFollowedCategoryIds: Set<String> = []
+
+    /// Suivis du compte, chaînes et catégories, quel que soit l'onglet
+    /// affiché : seuls l'accueil et l'onglet Catégories les lisaient.
+    @MainActor
+    func loadAccountFollows() async {
+        await loadAccountFollowLogins()
+        await loadAccountFollowedCategories()
+    }
+
+    /// Chaînes suivies par le compte (Helix). En cas d'échec, la liste déjà
+    /// connue est gardée ; sans compte, elle est vidée.
+    @MainActor
+    func loadAccountFollowLogins() async {
+        guard let token = twitchToken else {
+            accountFollowLogins = []
+            return
+        }
+        // Connexion à l'instant : le compte n'est pas encore lu (l'accueil
+        // s'en charge), son identifiant est demandé ici sans être gardé.
+        var uid = twitchUserId ?? ""
+        if uid.isEmpty, let user = await getTwitchUser(token: token) { uid = user.id }
+        guard !uid.isEmpty, let logins = await getFollowedLogins(token: token, userId: uid),
+              twitchToken == token else { return }
+        accountFollowLogins = logins.map { $0.lowercased() }
+    }
+
+    /// Catégories suivies sur Twitch (session web). En cas d'échec, la liste
+    /// déjà connue est gardée.
+    @MainActor
+    func loadAccountFollowedCategories() async {
+        guard let web = twitchWebToken,
+              let list = await getFollowedCategoriesGQL(webToken: web),
+              twitchWebToken == web else { return }
+        accountFollowedCategoryIds = Set(list.map(\.id))
+    }
 
     /// Chaînes suivies sans compte Twitch (sur cet appareil), en minuscules.
     @Published var localFollows: [String] = [] {
@@ -556,9 +633,43 @@ final class AppStore: ObservableObject {
     @Published var showRecentChannels: Bool = true {
         didSet { UserDefaults.standard.set(showRecentChannels, forKey: "cfg_recent") }
     }
-    /// Onglet Découvrir (fil de lives et de clips) dans la barre d'onglets.
-    @Published var showDiscoverTab: Bool = true {
-        didSet { UserDefaults.standard.set(showDiscoverTab, forKey: "cfg_discover_tab") }
+    /// Recherche : les 10 derniers textes cherchés (résultats en onglets), sur
+    /// cet appareil. Effaçables d'un geste, ou avec l'historique (Réglages).
+    @Published var searchHistory: [String] = [] {
+        didSet { UserDefaults.standard.set(searchHistory, forKey: "search_history") }
+    }
+    func saveSearch(_ text: String) {
+        let t = String(text.trimmingCharacters(in: .whitespacesAndNewlines).prefix(100))
+        guard !t.isEmpty else { return }
+        // La même recherche remonte en tête au lieu de se répéter.
+        var list = searchHistory.filter { $0.lowercased() != t.lowercased() }
+        list.insert(t, at: 0)
+        searchHistory = Array(list.prefix(10))
+    }
+    func removeSearch(_ text: String) { searchHistory.removeAll { $0 == text } }
+    func clearSearchHistory() { searchHistory = [] }
+    /// Onglets, accueil et boutons du lecteur choisis dans Réglages →
+    /// Personnaliser (voir Customization.swift), gardés en JSON.
+    @Published var customization = UICustomization() {
+        didSet {
+            guard customization != oldValue,
+                  let data = try? JSONEncoder().encode(customization) else { return }
+            UserDefaults.standard.set(data, forKey: "cfg_customization")
+        }
+    }
+    /// Onglet Découvrir dans la barre : l'ancien réglage, lu et écrit dans la
+    /// personnalisation (sauvegardes d'avant elle).
+    var showDiscoverTab: Bool {
+        get { !customization.hiddenTabs.contains("discover") }
+        set { customization.set("discover", hidden: !newValue, in: \.hiddenTabs) }
+    }
+    /// Réglages → Personnaliser → Rétablir : disposition et bandeaux du chat
+    /// comme au premier lancement.
+    func resetCustomization() {
+        customization = UICustomization()
+        showPinnedMessages = true; showDropsNotice = true
+        showLiveEvents = true; showPolls = true; showPredictions = true; showHypeTrain = true
+        enableRaids = true; showWatchStreak = true; showFollowButton = true
     }
 
     /// Langue du top des lives ; nil = celle de l'appareil.
@@ -601,14 +712,26 @@ final class AppStore: ObservableObject {
     @Published var showLatency: Bool = false {
         didSet { UserDefaults.standard.set(showLatency, forKey: "dbg_latency") }
     }
-    /// Retarder le chat de la latence mesurée, pour qu'il colle à l'image.
-    @Published var autoChatDelay: Bool = false {
-        didSet { UserDefaults.standard.set(autoChatDelay, forKey: "dbg_chat_delay") }
+    /// Chat du direct synchronisé avec la vidéo (ChatSync), activé par défaut.
+    /// Nouvelle clé : l'ancienne synchro auto, en essai (« dbg_chat_delay »),
+    /// était coupée par défaut.
+    @Published var chatSync: Bool = true {
+        didSet { UserDefaults.standard.set(chatSync, forKey: "cfg_chat_sync") }
     }
     /// VODs récentes : remettre le son des passages coupés par Twitch quand
     /// l'original est encore sur le CDN (VodUnmuteLoader).
     @Published var restoreMutedAudio: Bool = true {
         didSet { UserDefaults.standard.set(restoreMutedAudio, forKey: "cfg_restore_muted") }
+    }
+    /// Téléchargements de VODs en Wi-Fi seulement (VodDownloads le lit dans
+    /// UserDefaults) : désactivé par défaut. Changé, ce qui attendait le
+    /// Wi-Fi repart, ou ce qui passe par les données mobiles s'arrête.
+    @Published var downloadWifiOnly: Bool = false {
+        didSet {
+            UserDefaults.standard.set(downloadWifiOnly, forKey: "cfg_dl_wifi_only")
+            guard downloadWifiOnly != oldValue else { return }
+            Task { @MainActor in VodDownloads.shared.networkChanged() }
+        }
     }
     /// Retouche de la synchro auto, en secondes (+ = chat plus tard). Le bon
     /// décalage dépend aussi du retard des autres spectateurs, qu'on ne peut
@@ -704,6 +827,9 @@ final class AppStore: ObservableObject {
         showWatchStreak    = ud.object(forKey: "cfg_streak") as? Bool ?? true
         showLiveEvents     = ud.object(forKey: "cfg_events") as? Bool ?? true
         enableRaids        = ud.object(forKey: "cfg_raids")  as? Bool ?? true
+        showPolls          = ud.object(forKey: "cfg_show_polls") as? Bool ?? true
+        showPredictions    = ud.object(forKey: "cfg_show_predictions") as? Bool ?? true
+        showHypeTrain      = ud.object(forKey: "cfg_show_hype") as? Bool ?? true
         landscapeNoticesHidden = ud.bool(forKey: "cfg_land_notices_hidden")
         autoPurgeImageCache = ud.object(forKey: "cfg_purge_cache") as? Bool ?? true
         // Actif par défaut depuis la 1.2.21 (direct à quelques secondes au lieu
@@ -738,8 +864,10 @@ final class AppStore: ObservableObject {
         chatLoadRecent     = ud.object(forKey: "cfg_chat_recent")       as? Bool ?? true
         chatAutocomplete   = ud.object(forKey: "cfg_chat_autocomplete") as? Bool ?? true
         chatKeyboardSuggestions = ud.object(forKey: "cfg_chat_kbd_suggest") as? Bool ?? true
+        chatReturnSends = ud.object(forKey: "cfg_chat_return_sends") as? Bool ?? false
         chatShowDeleted    = ud.object(forKey: "cfg_chat_deleted")      as? Bool ?? false
         shareUsage         = ud.object(forKey: "cfg_share_usage") as? Bool ?? true
+        syncSettings       = ud.object(forKey: "cfg_sync_settings") as? Bool ?? true
         // « zh_hk » importé du site par une version d'avant : ramené à « zh-hk ».
         topLang            = ud.string(forKey: "cfg_top_lang")
             .map { $0.replacingOccurrences(of: "_", with: "-") }
@@ -758,7 +886,13 @@ final class AppStore: ObservableObject {
         }
         homeListLayout     = ud.bool(forKey: "cfg_home_list")
         showRecentChannels = ud.object(forKey: "cfg_recent") as? Bool ?? true
-        showDiscoverTab = ud.object(forKey: "cfg_discover_tab") as? Bool ?? true
+        searchHistory      = Array((ud.stringArray(forKey: "search_history") ?? []).prefix(10))
+        if let saved = UICustomization.saved(ud) {
+            customization = saved
+        } else if ud.object(forKey: "cfg_discover_tab") as? Bool == false {
+            // Avant Personnaliser : Découvrir masqué par son propre réglage.
+            customization.hiddenTabs = ["discover"]
+        }
         // Qualité préférée ; avant elle, seul l'audio seul était retenu.
         if let pref = ud.string(forKey: "cfg_quality_pref"), kQualityPrefs.contains(pref) {
             preferredQuality = pref
@@ -769,10 +903,12 @@ final class AppStore: ObservableObject {
         if let cell = ud.string(forKey: "cfg_quality_cellular"), kCellularQualityPrefs.contains(cell) {
             cellularQuality = cell
         }
+        higherQualities    = ud.bool(forKey: HigherQualities.key)
         showLatency        = ud.object(forKey: "dbg_latency")    as? Bool ?? false
-        autoChatDelay      = ud.object(forKey: "dbg_chat_delay") as? Bool ?? false
+        chatSync           = ud.object(forKey: "cfg_chat_sync")  as? Bool ?? true
         chatSyncNudge      = ud.double(forKey: "chat_sync_nudge")
         restoreMutedAudio  = ud.object(forKey: "cfg_restore_muted") as? Bool ?? true
+        downloadWifiOnly   = ud.bool(forKey: "cfg_dl_wifi_only")
         // Lu élément par élément : un seul illisible ne vide plus toute la
         // liste. S'il en manque, la base de la synchro n'est plus fiable (un
         // élément perdu ici passerait pour supprimé) : elle est oubliée.
@@ -823,6 +959,8 @@ final class AppStore: ObservableObject {
         syncTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.flushToCloud() }
         }
+        // Réglages du compte : changements suivis (SettingsSync.swift).
+        startSettingsSync()
     }
 
     // MARK: – Translation
@@ -842,8 +980,9 @@ final class AppStore: ObservableObject {
         let isNew = token != twitchToken
         if isNew {
             // Ce qui restait à envoyer part sur le compte d'avant, avec son
-            // jeton, avant que son identité ne soit oubliée.
+            // jeton, avant que son identité ne soit oubliée (réglages compris).
             finalCloudFlush()
+            finalSettingsFlush()
             // Vu d'ici à ce que le compte de ce jeton soit connu : à lui, pas
             // au compte d'avant (adoptSyncOwner).
             markSyncDetached()
@@ -861,6 +1000,12 @@ final class AppStore: ObservableObject {
             let enabled = shareUsage
             Task { await UsageService.shared.ping(enabled: enabled, force: true) }
         }
+        // Suivis du compte relus quel que soit l'onglet affiché : ceux du
+        // compte d'avant ne protègent plus rien du masquage.
+        if isNew {
+            accountFollowLogins = []
+            Task { @MainActor [weak self] in await self?.loadAccountFollowLogins() }
+        }
     }
 
     /// L'historique d'ici reste celui du compte, et une copie en est prise
@@ -870,6 +1015,7 @@ final class AppStore: ObservableObject {
     /// retiré.
     func logout() {
         finalCloudFlush()
+        finalSettingsFlush()
         markSyncDetached()
         twitchToken    = nil
         twitchWebToken = nil
@@ -881,6 +1027,7 @@ final class AppStore: ObservableObject {
         twitchUserId   = nil
         twitchLogin    = nil   // ← nettoyage complet
         twitchAvatar   = nil
+        accountFollowLogins = []
         // La prochaine connexion demandera le compte au lieu de reprendre
         // celui dont Safari se souvient (TwitchAuthManager).
         UserDefaults.standard.set(true, forKey: TwitchAuthManager.privateSessionKey)
@@ -905,9 +1052,11 @@ final class AppStore: ObservableObject {
         sendDeletion()
     }
 
-    /// Réglages → Effacer l'historique : chaînes, VODs et positions de reprise.
+    /// Réglages → Effacer l'historique : chaînes, VODs, positions de reprise
+    /// et recherches récentes.
     func clearHistory() {
         history = []
+        searchHistory = []
         vodProgress = [:]
         progressChanged()
         sendDeletion()
@@ -1160,9 +1309,11 @@ final class AppStore: ObservableObject {
     ///   avec celui-ci) n'est pas à lui : ça reste ici et part sur le nouveau.
     /// - Aucun compte avant : tout le rejoint, comme avant.
     private func adoptSyncOwner(_ id: String) {
-        // Nouvelle connexion : relue tout de suite, pas 10 minutes plus tard.
+        // Nouvelle connexion : relue tout de suite, pas 10 minutes plus tard
+        // (réglages compris).
         lastPullAt = .distantPast
         lastSyncAt = .distantPast
+        settingsAccountChanged()
         let detached = syncDetached
         syncDetached = nil
         if syncOwner == id {
@@ -1275,9 +1426,11 @@ final class AppStore: ObservableObject {
     }
 
     /// Relit la sauvegarde si la dernière relecture réussie date de plus de
-    /// 10 minutes. Une lecture ne coûte presque rien.
+    /// 10 minutes. Une lecture ne coûte presque rien. Les réglages du compte
+    /// suivent le même rythme, à part (SettingsSync.swift).
     @MainActor
     func refreshFromCloudIfStale(userId: String? = nil) async {
+        refreshSettingsIfStale()
         guard let target = syncTarget, userId == nil || userId == target.userId,
               Date().timeIntervalSince(lastPullAt) > pullEvery else { return }
         await requestSync(push: false).value
@@ -1603,10 +1756,11 @@ enum VodSpeed {
         return all.min { abs($0 - v) < abs($1 - v) } ?? 1
     }
 
-    /// « 1,5× » : virgule en français, espagnol et russe, point en anglais.
+    /// « 1,5× » : virgule en français, espagnol, russe et italien, point en
+    /// anglais et en japonais.
     static func label(_ v: Double, _ lang: Lang) -> String {
         var s = String(format: "%g", v)
-        if lang != .en { s = s.replacingOccurrences(of: ".", with: ",") }
+        if lang != .en && lang != .ja { s = s.replacingOccurrences(of: ".", with: ",") }
         return s + "×"
     }
 }

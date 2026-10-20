@@ -37,6 +37,21 @@ enum PlayerActivity {
         PlayerActivityController.shared.end()
     }
 
+    /// Lecteur démonté (vue retirée). Au premier plan, l'activité disparaît :
+    /// le lecteur suivant en démarre une. En arrière-plan — raid suivi, VOD
+    /// suivante de « Tout lire », écran verrouillé —, iOS refuse au suivant
+    /// d'en démarrer une autre, et elle disparaissait : elle reste, en pause
+    /// d'ici là, et il la reprend (voir `shownChannel`). La vraie fermeture
+    /// la termine (MainTabView.stopPlayer).
+    static func playerRemoved() {
+        guard #available(iOS 16.2, *) else { return }
+        if UIApplication.shared.applicationState == .active {
+            PlayerActivityController.shared.end()
+        } else {
+            PlayerActivityController.shared.pause()
+        }
+    }
+
     /// Activités restées d'une session précédente (app fermée en pleine
     /// lecture) : iOS les garderait affichées des heures. `wait` bloque un
     /// instant, à la fermeture de l'app, le temps qu'elles se terminent.
@@ -61,6 +76,11 @@ private final class PlayerActivityController {
     private var activity: Activity<PlayerActivityAttributes>?
     private var attributes: PlayerActivityAttributes?
     private var state: PlayerActivityAttributes.ContentState?
+    /// iOS a refusé l'activité faute de la clé NSSupportsLiveActivities
+    /// (app réinstallée par un outil qui réécrit l'Info.plist) : plus d'essai
+    /// avant le prochain lancement. Chaque lecture en redemandait une, et
+    /// chaque refus ajoutait une ligne au journal.
+    private var unsupported = false
 
     var currentID: String? { activity?.id }
 
@@ -109,7 +129,7 @@ private final class PlayerActivityController {
 
         // Sinon, nouvelle activité : l'ancienne (autre chaîne) disparaît.
         end()
-        guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
+        guard !unsupported, ActivityAuthorizationInfo().areActivitiesEnabled else { return }
         let attrs = PlayerActivityAttributes(channel: channel, isLive: isLive,
                                              liveLabel: meta.liveLabel)
         do {
@@ -120,8 +140,21 @@ private final class PlayerActivityController {
             state = newState
             logger.info("ACTIVITY", "Live Activity démarrée", channel)
         } catch {
-            logger.warn("ACTIVITY", "Live Activity refusée", error.localizedDescription)
+            if Self.isMissingPlistKey(error) {
+                unsupported = true
+                logger.warn("ACTIVITY", "Live Activity impossible avec cette installation",
+                            "clé NSSupportsLiveActivities absente : plus d'essai avant le prochain lancement")
+            } else {
+                logger.warn("ACTIVITY", "Live Activity refusée", error.localizedDescription)
+            }
         }
+    }
+
+    /// Refus « Target does not include NSSupportsLiveActivities plist key »
+    /// (ActivityAuthorizationError.unsupportedTarget), reconnu à son texte.
+    private static func isMissingPlistKey(_ error: Error) -> Bool {
+        let text = "\(error) \(error.localizedDescription)"
+        return text.contains("NSSupportsLiveActivities") || text.contains("unsupportedTarget")
     }
 
     func end() {
@@ -130,6 +163,15 @@ private final class PlayerActivityController {
         attributes = nil
         state = nil
         Task { await activity.end(nil, dismissalPolicy: .immediate) }
+    }
+
+    /// Plus rien ne joue, mais l'activité reste (voir PlayerActivity.playerRemoved).
+    func pause() {
+        guard let activity, var paused = state, paused.isPlaying else { return }
+        paused.isPlaying = false
+        state = paused
+        let content = ActivityContent(state: paused, staleDate: nil)
+        Task { await activity.update(content) }
     }
 
     /// Une VOD en lecture recalcule son départ à chaque appel (heure moins

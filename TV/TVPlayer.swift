@@ -8,7 +8,8 @@ import AVFoundation
 //  Qualité, Chat (le chat posé sur l'image, direct ou VOD, voir TVChat) et
 //  pour un direct Source. Mêmes liens que l'iPhone :
 //  sources sans pub pour les lives, passages coupés rétablis sur les VODs
-//  récentes quand c'est possible.
+//  récentes quand c'est possible, et le même bandeau pendant une pause pub
+//  de la chaîne (compte à rebours).
 // ═══════════════════════════════════════════════════════════════════════════
 
 struct TVPlayerScreen: View {
@@ -28,15 +29,21 @@ struct TVPlayerScreen: View {
                 TVPlayerController(player: player, model: model, session: session, chat: chat,
                                    channel: item.channel, onChannel: openChannel)
                     .ignoresSafeArea()
-                    // Avis passager (source qui ne répond pas) : la lecture continue.
                     .overlay(alignment: .top) {
-                        if let notice = model.notice {
-                            Text(notice)
-                                .font(.headline)
-                                .padding(.horizontal, 32).padding(.vertical, 16)
-                                .background(.ultraThinMaterial, in: Capsule())
-                                .padding(.top, 60)
+                        VStack(spacing: 24) {
+                            // Avis passager (source qui ne répond pas) : la lecture continue.
+                            if let notice = model.notice {
+                                Text(notice)
+                                    .font(.headline)
+                                    .padding(.horizontal, 32).padding(.vertical, 16)
+                                    .background(.ultraThinMaterial, in: Capsule())
+                            }
+                            // Pause pub de la chaîne (direct) : ce qu'est cet écran,
+                            // et dans combien de temps le direct revient.
+                            TVAdBreakBanner(watcher: model.adBreaks, session: session)
                         }
+                        .padding(.top, 60)
+                        .allowsHitTesting(false)
                     }
             } else if let error = model.error {
                 VStack(spacing: 40) {
@@ -85,6 +92,9 @@ final class TVPlayerModel: ObservableObject {
     /// Hauteur et cadence de chaque qualité (qualité préférée, ordre du menu).
     private(set) var variants: [String: VariantInfo] = [:]
     private(set) var isLive = false
+    /// Source qui sert le direct : getLive passe aux suivantes quand la
+    /// préférée ne répond pas. C'est elle que le menu Source coche.
+    private(set) var liveSource: String?
 
     private var current: TVPlayback?
     private var title = ""
@@ -99,6 +109,10 @@ final class TVPlayerModel: ObservableObject {
     /// Avis passager par-dessus la lecture (source qui ne répond pas…).
     @Published private(set) var notice: String?
     private var noticeTask: Task<Void, Never>?
+    /// Pause pub cousue par Twitch dans le direct : bandeau avec compte à
+    /// rebours, comme sur l'iPhone. Le son n'y est pas coupé : le lecteur de
+    /// tvOS n'a pas de bouton pour le remettre.
+    let adBreaks = AdBreakWatcher(managesAudio: false)
 
     private func flash(_ text: String) {
         notice = text
@@ -137,6 +151,7 @@ final class TVPlayerModel: ObservableObject {
             TVUsage.count("live_\(data.source ?? "unknown")")
             logger.info("TV/LECTEUR", "Direct : \(login)", "source \(data.source ?? "?")")
             subtitle = data.title
+            liveSource = data.source
             // Playlists réécrites avec la vraie durée des segments (2 s) : le
             // lecteur tient le bord du direct au lieu de rester ~20 s derrière.
             links = LivePlaylistLoader.wrap(raw)
@@ -194,6 +209,8 @@ final class TVPlayerModel: ObservableObject {
                 return "lecture relancée (VOD à l'endroit, direct au bord)"
             }
             interruptions?.watch(p)
+            // Direct : pauses pub suivies d'après l'image affichée.
+            if isLive { adBreaks.attach(p) }
             // Avancement d'une VOD gardé toutes les 10 s (reprise au même endroit).
             if let id = vodId {
                 timeObs = p.addPeriodicTimeObserver(forInterval: CMTime(seconds: 10, preferredTimescale: 1),
@@ -237,6 +254,7 @@ final class TVPlayerModel: ObservableObject {
     func stop() {
         // Lecteur fermé : une fin d'interruption ne doit plus le relancer.
         interruptions = nil
+        adBreaks.detach()
         if let p = player, let id = vodId {
             let duration = p.currentItem?.duration.seconds ?? 0
             TVProgress.save(id, at: p.currentTime().seconds, duration: duration.isFinite ? duration : 0)
@@ -336,8 +354,14 @@ struct TVPlayerController: UIViewControllerRepresentable {
                    children: qualities)
         ]
         if model.isLive {
+            // Cochée : la source qui sert le direct — la préférée a pu ne pas
+            // répondre et une suivante la remplacer, la coche restait sur elle.
+            // « Automatique » tant que c'est le choix ; le Worker, absent du
+            // menu, laisse le choix coché.
+            let served = model.liveSource.flatMap { kLiveSourceChoices.contains($0) ? $0 : nil }
+            let checked = session.liveSource == "auto" ? "auto" : (served ?? session.liveSource)
             let sources: [UIMenuElement] = kLiveSourceChoices.map { id in
-                UIAction(title: session.t("src_\(id)"), state: id == session.liveSource ? .on : .off) { _ in
+                UIAction(title: session.t("src_\(id)"), state: id == checked ? .on : .off) { _ in
                     Task { @MainActor in
                         let before = session.liveSource
                         session.liveSource = id
@@ -414,5 +438,40 @@ struct TVPlayerController: UIViewControllerRepresentable {
     /// Libellé commun avec l'iPhone ; l'audio seul garde le texte de la TV.
     private func label(_ key: String) -> String {
         isAudioQuality(key) ? session.t("tv_audio") : qualityText(key, session.lang)
+    }
+}
+
+// MARK: – Pause pub de la chaîne
+/// Bandeau d'une pause pub cousue par Twitch (AdBreakWatcher), comme celui
+/// du lecteur de l'iPhone (AdBreakBanner) : ce qu'est l'écran violet, et
+/// dans combien de temps le direct revient. Rien hors pause ; jamais le
+/// focus.
+struct TVAdBreakBanner: View {
+    @ObservedObject var watcher: AdBreakWatcher
+    @ObservedObject var session: TVSession
+
+    var body: some View {
+        if let left = watcher.remaining {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 12) {
+                    Image(systemName: "megaphone.fill")
+                    Text(session.t("ad_break_title"))
+                }
+                .font(.headline)
+                Text(session.t("ad_break_sub").replacingOccurrences(of: "{n}", with: "\(left)"))
+                    .font(.callout)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .foregroundColor(.white)
+            .padding(.horizontal, 32).padding(.vertical, 20)
+            .frame(maxWidth: 760, alignment: .leading)
+            .background(Color.black.opacity(0.7))
+            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .stroke(Color.tPurple.opacity(0.6), lineWidth: 2))
+            .allowsHitTesting(false)
+            .transition(.opacity)
+            .accessibilityElement(children: .combine)
+        }
     }
 }

@@ -8,7 +8,8 @@ import Foundation
 //  chaînes sont retenues par pseudo (comme les suivis et les épingles), les
 //  catégories par identifiant (le nom change selon la source). `at` en
 //  millisecondes, comme sur le site : la sauvegarde passe de l'un à l'autre.
-//  Sur cet appareil seulement (pas de synchro cloud pour l'instant).
+//  Synchronisées avec le compte sur l'iPhone (SettingsSync.swift, section
+//  « hidden ») ; sur l'Apple TV, sur cet appareil seulement.
 // ═══════════════════════════════════════════════════════════════════════════
 
 struct HiddenChannel: Codable, Equatable, Identifiable {
@@ -150,6 +151,38 @@ struct HiddenContent: Codable, Equatable {
             cats[id] = item
         }
         categories = Array(cats.values.sorted { $0.at > $1.at }.prefix(Self.maxCategories))
+    }
+
+    /// Synchro des réglages, quand les deux côtés ont changé : `remote`
+    /// (format de la sauvegarde) réuni à ce qui est ici comme à l'import
+    /// (merge(backup:) : le masquage le plus récent l'emporte), sauf ce que
+    /// `base` — la liste du serveur au dernier échange — dit retiré d'un côté
+    /// depuis : un élément qu'elle avait, absent d'un côté et pas remasqué de
+    /// l'autre depuis, ne revient pas. Sans base : réunion simple.
+    mutating func mergeSync(remote: Any?, base: HiddenContent?) {
+        var incoming = HiddenContent()
+        incoming.merge(backup: remote)
+        if let base {
+            let wasChannel = Dictionary(base.channels.map { ($0.login, $0.at) }, uniquingKeysWith: { a, _ in a })
+            let wasCategory = Dictionary(base.categories.map { ($0.id, $0.at) }, uniquingKeysWith: { a, _ in a })
+            let hereChannels = Set(channels.map(\.login)), thereChannels = Set(incoming.channels.map(\.login))
+            let hereCategories = Set(categories.map(\.id)), thereCategories = Set(incoming.categories.map(\.id))
+            // Réaffiché là-bas depuis le dernier échange : réaffiché ici.
+            channels.removeAll { c in
+                !thereChannels.contains(c.login) && (wasChannel[c.login].map { c.at <= $0 } ?? false)
+            }
+            categories.removeAll { c in
+                !thereCategories.contains(c.id) && (wasCategory[c.id].map { c.at <= $0 } ?? false)
+            }
+            // Réaffiché ici depuis : ne revient pas.
+            incoming.channels.removeAll { c in
+                !hereChannels.contains(c.login) && (wasChannel[c.login].map { c.at <= $0 } ?? false)
+            }
+            incoming.categories.removeAll { c in
+                !hereCategories.contains(c.id) && (wasCategory[c.id].map { c.at <= $0 } ?? false)
+            }
+        }
+        merge(backup: incoming.backupJSON())
     }
 
     // MARK: Top filtré

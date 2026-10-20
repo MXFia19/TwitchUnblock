@@ -495,7 +495,9 @@ struct ChatInfoSheet: View {
                       systemImage: copied ? "checkmark" : "doc.on.doc")
             }
             .buttonStyle(.borderedProminent).tint(.tPrimary)
-            if let onInsert {
+            // Emote d'abonné verrouillée (sélecteur) : la fiche ne l'insère
+            // pas plus que la grille.
+            if let onInsert, !e.locked {
                 Button { onInsert(e) } label: {
                     Label(store.t("chat_info_insert"), systemImage: "text.cursor")
                 }

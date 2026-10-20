@@ -255,17 +255,22 @@ struct PinnedMark: View {
 struct VodCardView: View {
     let vod: VodData
     let progress: Double
+    /// Nom de la chaîne, devant la date (résultats de la recherche, où les
+    /// VODs viennent de chaînes différentes).
+    var channel: String? = nil
     let onPress: () -> Void
 
     private var dateString: String {
         let formatter = ISO8601DateFormatter()
-        if let date = formatter.date(from: vod.publishedAt) {
+        var date = String(vod.publishedAt.prefix(10))
+        if let d = formatter.date(from: vod.publishedAt) {
             let df = DateFormatter()
             df.dateStyle = .short
             df.timeStyle = .none
-            return df.string(from: date)
+            date = df.string(from: d)
         }
-        return String(vod.publishedAt.prefix(10))
+        guard let channel, !channel.isEmpty else { return date }
+        return date.isEmpty ? channel : "\(channel) · \(date)"
     }
 
     var body: some View {
@@ -563,6 +568,12 @@ struct ChannelHeroView: View {
     let viewerCount: Int
     let offlineSince: String?
     let onWatchLive: (() -> Void)?
+    /// Chaîne hors ligne : son prochain live prévu (« Prochain live : mardi
+    /// · 20:00 ») ou ses vacances, d'après son planning ; le toucher ouvre
+    /// l'onglet Planning.
+    var nextLive: String? = nil
+    var nextLiveIcon = "calendar"
+    var onNextLive: (() -> Void)? = nil
 
     @EnvironmentObject private var store: AppStore
 
@@ -617,6 +628,32 @@ struct ChannelHeroView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            if !isOnline, let next = nextLive {
+                Button { onNextLive?() } label: {
+                    HStack(spacing: TSpace.sm) {
+                        Image(systemName: nextLiveIcon)
+                            .font(.system(size: 13, weight: .bold))
+                        Text(next)
+                            .font(.tLabel)
+                            .lineLimit(2)
+                            .multilineTextAlignment(.leading)
+                        Spacer(minLength: 0)
+                        if onNextLive != nil {
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 11, weight: .bold))
+                        }
+                    }
+                    .foregroundColor(.tPrimary)
+                    .padding(.horizontal, TSpace.md)
+                    .padding(.vertical, TSpace.sm)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.tPrimary.opacity(0.12))
+                    .cornerRadius(TRadius.control)
+                }
+                .buttonStyle(.plain)
+                .disabled(onNextLive == nil)
             }
 
             if isOnline, let action = onWatchLive {

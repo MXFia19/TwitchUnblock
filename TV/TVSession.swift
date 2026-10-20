@@ -159,8 +159,26 @@ final class TVSession: ObservableObject {
     }
 
     // MARK: Session
+    /// Vérification du lancement en cours : la vue racine et l'onglet Suivies
+    /// la demandent ensemble (jusqu'à 3 fois) ; une seule part, les autres
+    /// l'attendent.
+    private var restoring: Task<Void, Never>?
+    /// Renouvellement en cours, partagé de même. Chacun envoyait le même jeton
+    /// de renouvellement : si Twitch le refuse une fois utilisé, le suivant
+    /// recevait un refus, et la déconnexion effaçait le jeton tout juste
+    /// renouvelé (Apple TV déconnectée au lancement).
+    private var renewing: Task<Renewal, Never>?
+
     /// Au lancement : jeton vérifié, renouvelé s'il a expiré, compte chargé.
     func restore() async {
+        if let restoring { await restoring.value; return }
+        let task = Task { await self.performRestore() }
+        restoring = task
+        await task.value
+        restoring = nil
+    }
+
+    private func performRestore() async {
         guard let current = token else { return }
         if await Self.isValid(current) == false {
             switch await renew() {
@@ -180,6 +198,15 @@ final class TVSession: ObservableObject {
     /// expirent au bout de quelques heures). `refused` : Twitch n'en veut
     /// plus ; `unreachable` : pas de réponse (rien n'est effacé).
     func renew() async -> Renewal {
+        if let renewing { return await renewing.value }
+        let task = Task { await self.performRenew() }
+        renewing = task
+        let result = await task.value
+        renewing = nil
+        return result
+    }
+
+    private func performRenew() async -> Renewal {
         guard let refresh = Keychain.loadToken(Self.refreshKey) else { return .refused }
         guard let json = await Self.post("https://id.twitch.tv/oauth2/token", [
             "client_id": kHelixClientID,
@@ -335,6 +362,9 @@ func tvQRCode(_ text: String) -> UIImage? {
 // MARK: – Avancement des VODs (sur cet appareil)
 enum TVProgress {
     private static let key = "tv_vod_progress"
+    /// Dernier visionnage de chaque VOD (secondes depuis 1970) : la rangée
+    /// « Reprendre » de Suivies, la plus récente d'abord.
+    private static let watchedKey = "tv_vod_watched_at"
 
     static func position(_ id: String?) -> Double {
         guard let id else { return 0 }
@@ -344,14 +374,37 @@ enum TVProgress {
     static func save(_ id: String, at seconds: Double, duration: Double) {
         guard seconds.isFinite, seconds > 0 else { return }
         var all = UserDefaults.standard.dictionary(forKey: key) ?? [:]
+        var watched = UserDefaults.standard.dictionary(forKey: watchedKey) ?? [:]
         // Terminée (moins de 2 min avant la fin) : elle reprendra du début.
         if duration > 0, duration - seconds < 120 {
             all.removeValue(forKey: id)
+            watched.removeValue(forKey: id)
         } else {
             all[id] = seconds
+            watched[id] = Date().timeIntervalSince1970
         }
         // tvOS limite le stockage local : 200 VODs suffisent.
-        if all.count > 200, let any = all.keys.first(where: { $0 != id }) { all.removeValue(forKey: any) }
+        if all.count > 200, let any = all.keys.first(where: { $0 != id }) {
+            all.removeValue(forKey: any)
+            watched.removeValue(forKey: any)
+        }
         UserDefaults.standard.set(all, forKey: key)
+        UserDefaults.standard.set(watched.filter { all[$0.key] != nil }, forKey: watchedKey)
+    }
+
+    /// VODs entamées (plus de 30 s vues, pas finies), la dernière regardée
+    /// d'abord : `limit` au plus. Celles d'avant la date de visionnage
+    /// passent après, les plus récentes (identifiants croissants) d'abord.
+    static func recent(limit: Int = 10) -> [(id: String, seconds: Double)] {
+        let ud = UserDefaults.standard
+        let all = (ud.dictionary(forKey: key) ?? [:]).compactMapValues { $0 as? Double }
+        let watched = (ud.dictionary(forKey: watchedKey) ?? [:]).compactMapValues { $0 as? Double }
+        let started = all.filter { $0.value > 30 }
+        let ordered = started.keys.sorted { a, b in
+            let ta = watched[a] ?? 0, tb = watched[b] ?? 0
+            if ta != tb { return ta > tb }
+            return (Int(a) ?? 0) > (Int(b) ?? 0)
+        }
+        return ordered.prefix(limit).map { (id: $0, seconds: started[$0] ?? 0) }
     }
 }

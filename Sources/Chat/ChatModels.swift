@@ -89,6 +89,9 @@ struct TwitchEmote: Identifiable, Hashable {
     var isModifier = false
     /// Plus grande image servie (fiche) : BTTV 3x, FFZ 4, 7TV 4x.
     var largeURL: String? = nil
+    /// Sélecteur : emote d'abonné de la chaîne hors des jeux d'emotes du
+    /// compte — grisée, et un toucher ne l'insère pas (EmoteService).
+    var locked = false
 }
 
 enum EmoteSource: String {

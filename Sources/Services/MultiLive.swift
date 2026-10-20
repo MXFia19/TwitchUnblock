@@ -147,8 +147,22 @@ final class MultiLive: ObservableObject {
     nonisolated static func pick(_ links: QualityLinks, count: Int,
                                  variants: [String: VariantInfo] = [:]) -> URL? {
         let rule = count <= 1 ? 1080 : count == 2 ? 720 : 480
-        let pref = UserDefaults.standard.string(forKey: "cfg_quality_pref") ?? "source"
-        let want = Int(pref).map { min($0, rule) } ?? rule
+        let ud = UserDefaults.standard
+        let pref = ud.string(forKey: "cfg_quality_pref") ?? "source"
+        var want = Int(pref).map { min($0, rule) } ?? rule
+        // En données mobiles, la qualité choisie pour elles, comme le lecteur
+        // (launchQualityKey) : une tuile seule partait en 1080p60 sur le
+        // forfait. « Auto » : 720p au plus (une liste adaptative ne connaît
+        // pas le palier de la mosaïque) ; « Audio seul » : la vidéo la plus
+        // basse, une tuile ayant besoin d'image.
+        if NetworkStatus.shared.isCellular {
+            switch ud.string(forKey: "cfg_quality_cellular") ?? "auto" {
+            case "same":  break
+            case "auto":  want = min(want, 720)
+            case "audio": want = 160
+            case let cell: want = min(Int(cell) ?? want, rule)
+            }
+        }
         let video = links.keys.filter { !isAudioQuality($0) }
         let key: String? = video.isEmpty ? links.keys.first
             : preferredQualityKey(video, pref: String(want), variants: variants)
@@ -178,7 +192,7 @@ final class MultiTileModel: ObservableObject {
     /// Pause pub à l'écran (bandeau de la tuile), son coupé le temps qu'elle
     /// dure — seule la tuile qui a le son en a un à couper.
     let adBreaks = AdBreakWatcher()
-    @Published private(set) var phase: Phase = .loading
+    @Published private(set) var phase: Phase = .loading { didSet { onPlayState() } }
     /// En lecture mais à l'arrêt faute de données (roue légère sur la tuile).
     @Published private(set) var buffering = false
     /// Identifiant Twitch de la chaîne (emotes et badges de son chat).
@@ -188,10 +202,23 @@ final class MultiTileModel: ObservableObject {
     @Published private(set) var position: Double = 0
     @Published private(set) var duration: Double = 0
     /// VOD mise en pause à la main : rien ne la relance seul.
-    @Published private(set) var userPaused = false
+    @Published private(set) var userPaused = false { didSet { onPlayState() } }
     /// Lecteur à l'arrêt, d'après AVPlayer : redessine la tuile (voir
     /// `heldBySystem`).
-    @Published private var playerPaused = false
+    @Published private var playerPaused = false { didSet { onPlayState() } }
+    /// Lecture qui part ou s'arrête (phase, pauses) : la mosaïque revoit si
+    /// l'écran doit rester allumé (MultiLiveSession.keepsScreenOn).
+    var onPlayState: @MainActor () -> Void = {}
+
+    /// L'écran reste allumé pour elle : en lecture, ou en route. Pas en pause
+    /// (voulue ou d'iOS), hors ligne, en échec ou finie.
+    var keepsScreenOn: Bool {
+        switch phase {
+        case .loading:                  return !userPaused
+        case .playing:                  return !userPaused && !playerPaused
+        case .offline, .failed, .ended: return false
+        }
+    }
 
     /// Arrêtée sans qu'on l'ait voulu — appel, Siri, son d'une autre app
     /// qu'on ne coupe pas sans un geste, fin du flux : la tuile montre
@@ -211,6 +238,8 @@ final class MultiTileModel: ObservableObject {
     private var count = 2
     /// Relances après une coupure, remises à zéro dès que l'image revient.
     private var restarts = 0
+    /// Élément dont la coupure est déjà traitée (voir `interrupted`).
+    private weak var failedItem: AVPlayerItem?
     /// Session web à donner à getLive (abonné sans pub, voir AppStore).
     private let accountToken: (String) -> String?
     /// Progression des VODs (AppStore) : reprise, enregistrement, et premier
@@ -348,7 +377,7 @@ final class MultiTileModel: ObservableObject {
             item.observe(\.status, options: [.initial, .new]) { [weak self] item, _ in
                 switch item.status {
                 case .readyToPlay: Task { @MainActor in self?.applyPendingSeek(on: item) }
-                case .failed:      Task { @MainActor in self?.interrupted() }
+                case .failed:      Task { @MainActor in self?.interrupted(item) }
                 default:           break
                 }
             },
@@ -361,8 +390,9 @@ final class MultiTileModel: ObservableObject {
         if let o = failObserver { NotificationCenter.default.removeObserver(o) }
         failObserver = NotificationCenter.default.addObserver(
             forName: .AVPlayerItemFailedToPlayToEndTime, object: item, queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor in self?.interrupted() }
+        ) { [weak self] note in
+            let failed = note.object as? AVPlayerItem
+            Task { @MainActor in self?.interrupted(failed) }
         }
         // Chargement sans fin (proxy qui accepte sans rien livrer) : au bout de
         // 20 s sans image, la tuile relance, puis propose « Réessayer ».
@@ -372,7 +402,7 @@ final class MultiTileModel: ObservableObject {
             guard let self, !Task.isCancelled, self.phase == .loading, !self.userPaused,
                   self.player.currentItem === item else { return }
             logger.warn("MULTI", "Tuile sans image depuis 20 s : relance", self.login)
-            self.interrupted()
+            self.interrupted(item)
         }
     }
 
@@ -556,8 +586,14 @@ final class MultiTileModel: ObservableObject {
     }
 
     /// Coupure : on redemande les liens, trois fois au plus (une VOD repart
-    /// de sa position).
-    private func interrupted() {
+    /// de sa position). Une seule fois par élément : un échec en route
+    /// arrive à la fois par le statut et par la notification, et comptait
+    /// deux relances (une ou deux au lieu de trois).
+    private func interrupted(_ item: AVPlayerItem?) {
+        if let item {
+            guard failedItem !== item else { return }
+            failedItem = item
+        }
         restarts += 1
         guard restarts <= 3 else { phase = .failed; return }
         phase = .loading
@@ -577,6 +613,10 @@ final class MultiLiveSession: ObservableObject {
     @Published private(set) var tiles: [String: MultiTileModel] = [:]
     /// Entrée (`MultiLiveEntry.id`) qui a le son.
     @Published var audible: String? { didSet { applyAudio() } }
+    /// Au moins une tuile en lecture (ou en route) : l'écran reste allumé
+    /// (MultiLiveView). Toutes en pause, hors ligne, en échec ou finies, il
+    /// peut s'éteindre, comme pour le lecteur.
+    @Published private(set) var keepsScreenOn = false
     /// Session web à donner à getLive pour une chaîne (AppStore).
     var accountToken: (String) -> String? = { _ in nil }
     /// Progression des VODs et premier démarrage (fournis par la vue, depuis
@@ -588,6 +628,8 @@ final class MultiLiveSession: ObservableObject {
     /// elles repartent à la fin (PlaybackInterruptions) — les VODs à
     /// l'endroit, les directs relus au bord.
     private var interruptions: PlaybackInterruptions?
+    /// Relance prévue au retour du réseau (une seule à la fois).
+    private var networkRetry: Task<Void, Never>?
 
     func configure(resume: @escaping (String) -> Double,
                    save: @escaping (String, Double) -> Void,
@@ -609,11 +651,13 @@ final class MultiLiveSession: ObservableObject {
             if let model = tiles[entry.id] { model.adjust(count: entries.count); continue }
             let model = MultiTileModel(entry: entry, accountToken: accountToken,
                                        resume: resume, save: save, onStarted: onStarted)
+            model.onPlayState = { [weak self] in self?.refreshScreen() }
             tiles[entry.id] = model
             model.start(count: entries.count)
         }
         if audible.map({ !wanted.contains($0) }) ?? true { audible = entries.first?.id }
         applyAudio()
+        refreshScreen()
         if interruptions == nil, !tiles.isEmpty {
             interruptions = PlaybackInterruptions(name: "multi-live") { [weak self] _ in
                 Task { @MainActor in self?.tiles.values.forEach { $0.resumeIfStopped() } }
@@ -626,8 +670,16 @@ final class MultiLiveSession: ObservableObject {
     /// Fermeture : chaque VOD enregistre sa position avant de s'arrêter.
     func stopAll() {
         interruptions = nil
+        networkRetry?.cancel()
+        networkRetry = nil
         tiles.values.forEach { $0.stop() }
         tiles = [:]
+        refreshScreen()
+    }
+
+    private func refreshScreen() {
+        let on = tiles.values.contains { $0.keepsScreenOn }
+        if on != keepsScreenOn { keepsScreenOn = on }
     }
 
     /// « Lecture » sur une tuile arrêtée par iOS : un geste, qui peut couper
@@ -637,6 +689,22 @@ final class MultiLiveSession: ObservableObject {
     func resumeStopped() {
         interruptions?.settle()
         tiles.values.forEach { $0.resumeIfStopped() }
+    }
+
+    /// Réseau revenu après une coupure : 2 s plus tard (le temps que la
+    /// connexion s'établisse), les tuiles en échec repartent, une fois, comme
+    /// avec « Réessayer ». Rien si aucune n'était en échec.
+    func networkRestored() {
+        guard networkRetry == nil, tiles.values.contains(where: { $0.phase == .failed }) else { return }
+        networkRetry = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            guard let self, !Task.isCancelled else { return }
+            self.networkRetry = nil
+            let failed = self.tiles.values.filter { $0.phase == .failed }
+            guard !failed.isEmpty else { return }
+            logger.info("MULTI", "Réseau revenu : relance des tuiles en échec", "\(failed.count)")
+            failed.forEach { $0.retry() }
+        }
     }
 
     /// Avant l'arrière-plan, les positions (la sauvegarde part en

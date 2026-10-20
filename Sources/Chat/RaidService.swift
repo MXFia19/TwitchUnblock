@@ -4,6 +4,8 @@ import SwiftUI
 // MARK: – Raid sortant (Hermes, topic raid.<channelID>)
 // Détecte quand la chaîne regardée lance un raid vers une autre chaîne :
 // bannière pendant le décompte, puis auto-bascule quand le raid part (raid_go).
+// Lecteur principal avec session web : le raid annoncé est aussi rejoint
+// (JoinRaid), pour le bonus de points comme sur twitch.tv.
 //
 // Hermes (wss://hermes.twitch.tv) remplace l'ancien PubSub côté site Twitch :
 // même contenu, anonyme, avec keepalive. La connexion se relance seule si
@@ -15,23 +17,32 @@ final class RaidService: ObservableObject {
     @Published var raid: RaidInfo? = nil     // raid en préparation (bannière)
     private var expiry: Task<Void, Never>?
     @Published var joinTarget: String? = nil // login à rejoindre (raid parti)
+    /// Raid rejoint avec la session web (JoinRaid accepté) : le bandeau
+    /// annonce le bonus de points.
+    @Published private(set) var bonusRaidID: String? = nil
 
     private var ws: URLSessionWebSocketTask?
     private let session = URLSession(configuration: .default)
     private var watchdog: Timer?
     private var reconnectTask: Task<Void, Never>?
     private var channelId = ""
-    private var token = ""
+    private var token = ""   // session web (cookie auth-token), pour JoinRaid
+    /// Lecteur principal (le raid y est suivi) : le raid annoncé est rejoint.
+    /// Faux en multi-live.
+    private var joinsRaids = false
+    /// Raids déjà vus : un seul JoinRaid par raid, même si l'annonce revient
+    /// (mise à jour, reconnexion).
+    private var seenRaidIDs: Set<String> = []
     private var subscriptionId = ""
     private var lastSeen = Date()
     private var keepalive: TimeInterval = 15
     private var retryDelay: Double = 2
     private static let endpoint = "wss://hermes.twitch.tv/v1?clientId=\(kGQLClientID)"
 
-    func connect(channelId: String, token: String = "") {
+    func connect(channelId: String, token: String = "", joinsRaids: Bool = false) {
         disconnect()
         guard !channelId.isEmpty else { return }
-        self.channelId = channelId; self.token = token
+        self.channelId = channelId; self.token = token; self.joinsRaids = joinsRaids
         open(Self.endpoint)
         logger.debug("RAID", "Écoute des raids", "canal \(channelId)")
     }
@@ -163,6 +174,9 @@ final class RaidService: ObservableObject {
                     guard let self, !Task.isCancelled, self.raid?.id == id else { return }
                     self.raid = nil
                 }
+                // Comme « Rejoindre » sur twitch.tv : sans JoinRaid, le raid
+                // était suivi mais son bonus de points perdu.
+                if let raidID = id, !raidID.isEmpty { joinRaid(raidID, target: login) }
             }
         case "raid_go_v2", "raid_go":
             let login = (r?["target_login"] as? String) ?? raid?.targetLogin
@@ -175,6 +189,54 @@ final class RaidService: ObservableObject {
             raid = nil
         default:
             logger.debug("RAID", "Type inattendu: \(mtype)", nil)
+        }
+    }
+
+    // MARK: Bonus de raid (JoinRaid)
+    // Requête enregistrée de twitch.tv, reprise de TwitchChannelPointsMiner
+    // (non vérifiée) ; requête écrite si Twitch ne la connaît pas.
+    private static let joinRaidHash = "c6a332a86d1087fbbb1a8623aa01bd1313d2386e7c63be60fdb2d1901f01a4ae"
+    private static let joinRaidQuery = "mutation JoinRaid($input: JoinRaidInput!) { joinRaid(input: $input) { raidID } }"
+
+    /// Rejoint le raid annoncé au nom de la session web, une fois par raid.
+    /// Mutation protégée comme le coffre (jeton d'intégrité gardé, régénéré
+    /// s'il est refusé, un seul nouvel essai : TwitchGQL), lancée à part :
+    /// la bascule (raid_go) ne l'attend jamais, un échec ne la bloque pas.
+    private func joinRaid(_ raidID: String, target: String) {
+        guard joinsRaids, seenRaidIDs.insert(raidID).inserted else { return }
+        guard !token.isEmpty else {
+            logger.info("RAID", "Raid pas rejoint", "pas de session web, pas de bonus")
+            return
+        }
+        let webToken = token
+        Task { [weak self] in
+            let vars: [String: Any] = ["input": ["raidID": raidID]]
+            var res = await TwitchGQL.shared.mutation("JoinRaid", variables: vars,
+                                                      sha256: Self.joinRaidHash, token: webToken)
+            // Hash périmé ou faux : même mutation, écrite en toutes lettres.
+            let unknown = ((res?["errors"] as? [[String: Any]]) ?? []).contains {
+                ($0["message"] as? String)?.contains("PersistedQueryNotFound") == true
+            }
+            if unknown {
+                logger.info("RAID", "JoinRaid inconnu de Twitch", "nouvel essai en requête écrite")
+                res = await TwitchGQL.shared.rawMutation("JoinRaid", query: Self.joinRaidQuery,
+                                                         variables: vars, token: webToken)
+            }
+            guard let json = res else {
+                logger.warn("RAID", "Pas de réponse de Twitch", "réseau ou jeton d'intégrité")
+                return
+            }
+            // Accepté : `joinRaid` est un objet, sans `error` ni erreur GQL.
+            let payload = (json["data"] as? [String: Any])?["joinRaid"] as? [String: Any]
+            let refusal = (payload?["error"] as? [String: Any])?["code"] as? String
+            let errors = ((json["errors"] as? [[String: Any]]) ?? []).compactMap { $0["message"] as? String }
+            guard payload != nil, refusal == nil, errors.isEmpty else {
+                let code = refusal ?? (errors.isEmpty ? "?" : errors.joined(separator: " · "))
+                logger.warn("RAID", "Raid pas rejoint", "code: \(code)")
+                return
+            }
+            logger.success("RAID", "🎁 Raid rejoint", "bonus de points → \(target)")
+            self?.bonusRaidID = raidID
         }
     }
 }

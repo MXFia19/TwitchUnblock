@@ -3,13 +3,19 @@ import SwiftUI
 // ═══════════════════════════════════════════════════════════════════════════
 //  Accueil : ce qui est en direct maintenant.
 //  Deux vues — les lives (suivies en direct, top, suivies hors ligne) et les
-//  catégories.
+//  catégories. Au-dessus des lives, « Continuer à regarder » : les VODs
+//  entamées de l'historique.
 // ═══════════════════════════════════════════════════════════════════════════
 
 struct HomeView: View {
     let onPlayStream: (String) -> Void
+    /// VOD reprise depuis « Continuer à regarder » (même chemin que « Mes VODs »).
+    var onPlayVod: (String, String?, String?, String?) -> Void = { _, _, _, _ in }
 
     @EnvironmentObject private var store: AppStore
+    /// Durées des VODs entamées : « Continuer à regarder » ne montre que
+    /// celles qui ne sont pas finies.
+    @ObservedObject private var metaStore = VodMetaStore.shared
 
     @State private var followedStreams: [TwitchStream] = []
     /// Lives des chaînes suivies sans compte (sur cet appareil).
@@ -75,10 +81,14 @@ struct HomeView: View {
         // Avec ou sans compte : sans, lives et catégories passent par des
         // requêtes publiques, et l'accueil invite à se connecter.
         VStack(spacing: 0) {
-            TSegmented(items: HomeSection.allCases,
-                       selection: $section) { $0.label(store) }
+            // Vue Catégories masquée (Réglages → Personnaliser) : les lives
+            // seuls, sans sélecteur.
+            if showsCard("categories") {
+                TSegmented(items: HomeSection.allCases,
+                           selection: $section) { $0.label(store) }
+            }
 
-            if section == .live {
+            if section == .live || !showsCard("categories") {
                 liveSection
             } else {
                 CategoriesView(onPlayStream: onPlayStream)
@@ -159,19 +169,25 @@ struct HomeView: View {
     // MARK: – Accueil (avec ou sans compte)
     /// Suivis du compte Twitch et de cet appareil, sans doublon, mêlés et
     /// triés par audience comme sur Twitch (pas relégués en bas) ; les
-    /// streamers épinglés passent devant, dans l'ordre d'épinglage.
+    /// streamers épinglés passent devant, triés entre eux par audience ou
+    /// dans l'ordre d'épinglage (Réglages → Personnaliser).
     private var allFollowedLive: [TwitchStream] {
         let known = Set(followedStreams.map { $0.userLogin.lowercased() })
+        let byRank = !store.customization.pinnedByViewers
         return (followedStreams + localLive.filter { !known.contains($0.userLogin.lowercased()) })
             .sorted { a, b in
-                pinnedFirst(a.userLogin, b.userLogin) ?? (a.viewerCount > b.viewerCount)
+                // Épinglées à égalité de spectateurs : l'ordre d'épinglage,
+                // pour qu'elles ne s'échangent pas d'une lecture à l'autre.
+                pinnedFirst(a.userLogin, b.userLogin, byRank: byRank || a.viewerCount == b.viewerCount)
+                    ?? (a.viewerCount > b.viewerCount)
             }
     }
 
-    /// Ordre imposé par l'épinglage (nil : aucun des deux n'est épinglé).
-    private func pinnedFirst(_ a: String, _ b: String) -> Bool? {
+    /// Ordre imposé par l'épinglage (nil : aucun des deux n'est épinglé, ou
+    /// les deux le sont et `byRank` est faux : l'audience tranche).
+    private func pinnedFirst(_ a: String, _ b: String, byRank: Bool = true) -> Bool? {
         switch (store.pinRank(a), store.pinRank(b)) {
-        case let (x?, y?): return x < y
+        case let (x?, y?): return byRank ? (x < y) : nil
         case (.some, nil): return true
         case (nil, .some): return false
         case (nil, nil): return nil
@@ -290,34 +306,42 @@ struct HomeView: View {
 
     // MARK: – Lives
     @ViewBuilder private var liveSection: some View {
-        ScrollView {
+        // Onglet Accueil touché à nouveau : retour en haut du fil, quel que
+        // soit l'onglet des lives.
+        TabScrollView(tab: .home) {
             LazyVStack(alignment: .leading, spacing: TSpace.lg) {
 
                 // ── Annonce du développeur (si une est en cours) ────
-                if let a = announcements.current {
+                if showsCard("announcement"), let a = announcements.current {
                     AnnouncementBanner(announcement: a) { announcements.dismiss(a) }
                         .padding(.horizontal, TSpace.lg)
                         .padding(.top, TSpace.md)
                 }
                 // ── Sondage du développeur (si un est en cours) ─────
-                if let p = polls.poll {
+                if showsCard("poll"), let p = polls.poll {
                     DevPollCard(poll: p)
                         .padding(.horizontal, TSpace.lg)
-                        .padding(.top, announcements.current == nil ? TSpace.md : 0)
+                        .padding(.top, announcements.current == nil || !showsCard("announcement") ? TSpace.md : 0)
                 }
 
                 // ── Pas de compte : invitation compacte ──────────────
-                if store.twitchToken == nil {
+                if store.twitchToken == nil && showsCard("login") {
                     loginCard
                         .padding(.horizontal, TSpace.lg)
                         .padding(.top, TSpace.md)
                 }
 
                 // ── Session web absente : points, coffres, prédictions ──
-                if store.twitchToken != nil && store.twitchWebToken == nil && Date().timeIntervalSince1970 > webBannerHiddenUntil {
+                if showsCard("web") && store.twitchToken != nil && store.twitchWebToken == nil
+                    && Date().timeIntervalSince1970 > webBannerHiddenUntil {
                     webSessionBanner
                         .padding(.horizontal, TSpace.lg)
                         .padding(.top, TSpace.md)
+                }
+
+                // ── Continuer à regarder : VODs entamées, pas finies ───
+                if showsCard("continue") && !continueItems.isEmpty {
+                    continueRow
                 }
 
                 // ── Suivies | Top | Hors ligne : des onglets plutôt qu'à la
@@ -326,10 +350,11 @@ struct HomeView: View {
                 HStack(spacing: TSpace.sm) {
                     // Défile si les trois ne tiennent pas (langue, grand texte).
                     ScrollView(.horizontal, showsIndicators: false) {
+                        // Dans l'ordre choisi (Réglages → Personnaliser).
                         HStack(spacing: TSpace.sm) {
-                            TChip(title: store.t("home_followed"), isOn: liveTab == 0) { liveTab = 0 }
-                            TChip(title: store.t("top_streams"), isOn: liveTab == 1) { liveTab = 1 }
-                            TChip(title: store.t("offline_channels"), icon: "moon.fill", isOn: liveTab == 2) { liveTab = 2 }
+                            ForEach(store.customization.visibleHomeChips, id: \.self) { key in
+                                homeChip(key)
+                            }
                         }
                     }
                     .tourAnchor(.homeTabs)
@@ -348,7 +373,7 @@ struct HomeView: View {
                 .padding(.horizontal, TSpace.lg)
                 .padding(.top, TSpace.md)
 
-                switch liveTab {
+                switch shownTab {
                 case 1:  topTab
                 case 2:  offlineTab
                 default: followedTab
@@ -360,6 +385,143 @@ struct HomeView: View {
         // Tâche détachée : tirer pour rafraîchir annule sa propre tâche dès que
         // la vue se redessine, et la requête annulée vidait les suivis locaux.
         .refreshable { await Task { await loadAll(isRefresh: true) }.value }
+        // Durées des VODs entamées (Continuer à regarder), relues quand
+        // l'historique change ; rien si la carte est masquée.
+        .task(id: continueWanted) { await loadContinueMetas(continueWanted) }
+    }
+
+    // MARK: – Continuer à regarder
+    /// VODs de l'historique (les plus récentes d'abord) vues plus de 30 s.
+    private var continueCandidates: [HistoryItem] {
+        store.history.filter { $0.type == .vod && store.getVodProgress($0.term) > 30 }
+    }
+
+    /// Celles dont il faut la durée ; aucune si la carte est masquée.
+    private var continueWanted: [String] {
+        showsCard("continue") ? continueCandidates.map(\.term) : []
+    }
+
+    /// Les 10 plus récentes qui ne sont pas finies. Durée pas (encore)
+    /// connue : la VOD attend, elle est peut-être finie, ou supprimée.
+    private var continueItems: [HistoryItem] {
+        Array(continueCandidates.filter { isUnfinished($0.term) }.prefix(10))
+    }
+
+    /// Il reste plus de 30 s (sinon la reprise repartirait du début, voir
+    /// ImmersivePlayerModel), et plus de 2 min d'une longue VOD : la fin
+    /// d'un live (écran de fin, raid) ne compte pas.
+    private func isUnfinished(_ vodId: String) -> Bool {
+        guard let total = metaStore.meta(vodId)?.lengthSeconds, total > 0 else { return false }
+        let length = Double(total)
+        let margin = max(30, min(120, length * 0.05))
+        return length - store.getVodProgress(vodId) > margin
+    }
+
+    /// Durées demandées dans l'ordre de l'historique, jusqu'à en avoir 10 à
+    /// montrer (une requête par VOD et par session : VodMetaStore).
+    private func loadContinueMetas(_ ids: [String]) async {
+        var shown = 0
+        for id in ids {
+            await metaStore.load(id)
+            guard !Task.isCancelled else { return }
+            if isUnfinished(id) { shown += 1 }
+            if shown >= 10 { return }
+        }
+    }
+
+    /// Rangée qui défile de côté, sous les cartes du haut.
+    @ViewBuilder private var continueRow: some View {
+        VStack(alignment: .leading, spacing: TSpace.sm) {
+            TSectionHeader(store.t("continue_watching"), icon: "play.circle.fill")
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(alignment: .top, spacing: TSpace.md) {
+                    ForEach(continueItems) { continueCard($0) }
+                }
+                .padding(.horizontal, TSpace.lg)
+            }
+        }
+        .padding(.top, TSpace.md)
+    }
+
+    /// Une VOD entamée : image et part déjà vue, titre, chaîne. Un toucher
+    /// la reprend à la position enregistrée, comme depuis « Mes VODs ».
+    private func continueCard(_ item: HistoryItem) -> some View {
+        let meta: VodMeta? = metaStore.meta(item.term)
+        let total = Double(meta?.lengthSeconds ?? 0)
+        let ratio: Double = total > 0 ? min(1, store.getVodProgress(item.term) / total) : 0
+        // Ce que l'historique n'a pas (VOD ouverte sans ses infos) : Twitch.
+        let title: String = item.display == "VOD \(item.term)" ? (meta?.title ?? item.display) : item.display
+        let savedThumb: String? = item.thumb.flatMap { $0.isEmpty ? nil : $0 }
+        let thumb: String = savedThumb ?? meta?.thumb ?? ""
+        let savedStreamer: String? = item.streamer.flatMap { $0.isEmpty ? nil : $0 }
+        let streamer: String? = savedStreamer ?? meta.flatMap { $0.streamer.isEmpty ? nil : $0.streamer }
+        return Button {
+            onPlayVod(item.term, title, thumb.isEmpty ? nil : thumb, streamer)
+        } label: {
+            VStack(alignment: .leading, spacing: TSpace.xs) {
+                // Taille portée par le ZStack (voir LibraryView).
+                ZStack(alignment: .bottom) {
+                    AsyncImage(url: URL(string: thumb)) { img in
+                        img.resizable().aspectRatio(16/9, contentMode: .fill)
+                    } placeholder: {
+                        Rectangle().fill(Color.tSurface)
+                            .overlay(Image(systemName: "film")
+                                .font(.system(size: 18)).foregroundColor(.tMuted))
+                    }
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            Color.black.opacity(0.5)
+                            Color.tPrimary.frame(width: geo.size.width * ratio)
+                        }
+                    }
+                    .frame(height: 3)
+                }
+                .frame(width: 176, height: 99)
+                .clipped()
+                .cornerRadius(TRadius.chip)
+
+                Text(title)
+                    .font(.tCardTitle).foregroundColor(.tText)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                if let streamer {
+                    Text(streamer)
+                        .font(.tMeta).foregroundColor(.tPurple).lineLimit(1)
+                }
+            }
+            .frame(width: 176, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: – Personnalisation (Réglages → Personnaliser)
+    private func showsCard(_ key: String) -> Bool { store.customization.shows(home: key) }
+
+    /// Onglets des lives : 0 = suivies en live, 1 = top, 2 = hors ligne.
+    private static func chipTab(_ key: String) -> Int {
+        switch key {
+        case "top":     return 1
+        case "offline": return 2
+        default:        return 0
+        }
+    }
+
+    /// Onglet des lives affiché : le dernier choisi s'il est encore là, sinon
+    /// le premier de ceux qui restent.
+    private var shownTab: Int {
+        let tabs = store.customization.visibleHomeChips.map(Self.chipTab)
+        return tabs.contains(liveTab) ? liveTab : (tabs.first ?? 0)
+    }
+
+    @ViewBuilder
+    private func homeChip(_ key: String) -> some View {
+        let tab = Self.chipTab(key)
+        switch tab {
+        case 1:  TChip(title: store.t("top_streams"), isOn: shownTab == 1) { liveTab = 1 }
+        case 2:  TChip(title: store.t("offline_channels"), icon: "moon.fill", isOn: shownTab == 2) { liveTab = 2 }
+        default: TChip(title: store.t("home_followed"), isOn: shownTab == 0) { liveTab = 0 }
+        }
     }
 
     // MARK: – Onglet « Suivies » (en direct seulement)
@@ -388,7 +550,8 @@ struct HomeView: View {
             TEmptyState(icon: "moon.zzz",
                         title: store.t("no_followed_live"),
                         message: store.t("no_followed_live_msg"),
-                        actionTitle: "\(store.t("see_offline")) · \(offlineChannels.count)") { liveTab = 2 }
+                        actionTitle: store.customization.visibleHomeChips.contains("offline")
+                            ? "\(store.t("see_offline")) · \(offlineChannels.count)" : nil) { liveTab = 2 }
         } else {
             TEmptyState(icon: "moon.zzz",
                         title: store.t("no_followed_live"),
@@ -567,13 +730,10 @@ struct HomeView: View {
     /// (compte Twitch + appareil), en une requête GQL publique.
     @MainActor private func loadLocalFollows() async {
         defer { followsLoaded = true }
-        if let token = store.twitchToken, let uid = store.twitchUserId, !uid.isEmpty,
-           let logins = await getFollowedLogins(token: token, userId: uid) {
-            twitchFollowLogins = logins.map { $0.lowercased() }
-        } else if store.twitchToken == nil {
-            twitchFollowLogins = []
-        }
-        store.accountFollowLogins = twitchFollowLogins   // pour l'export
+        // Suivis du compte : lus par AppStore (aussi au lancement et à la
+        // connexion, pour les autres onglets et l'export).
+        await store.loadAccountFollowLogins()
+        twitchFollowLogins = store.accountFollowLogins
         var seen = Set<String>()
         let all = (twitchFollowLogins + store.localFollows).filter { seen.insert($0).inserted }
         // Échec réseau : on garde les listes affichées au lieu de les vider.
@@ -592,22 +752,37 @@ struct HomeView: View {
         topGen += 1
         let gen = topGen
         if topStreams.isEmpty && !isRefresh { loadingTop = true }
-        // Plus de « Charger plus » pendant le rechargement : l'ancienne suite
-        // n'est peut-être plus la bonne (autre langue), et la garde
-        // `topNext == after` de loadMoreTop écarte une page déjà en route.
-        topNext = nil
-        topRefused = false
+        // Sans compte, rafraîchissement automatique (même langue) : « Charger
+        // plus » reste affiché, et les pages qu'il a ajoutées restent aussi
+        // (voir plus bas). Tout disparaissait toutes les 3 min, la liste
+        // rétrécissant sous le doigt.
+        let silent = isRefresh && store.twitchToken == nil
+        if !silent {
+            // Plus de « Charger plus » pendant le rechargement : l'ancienne suite
+            // n'est peut-être plus la bonne (autre langue), et la garde
+            // `topNext == after` de loadMoreTop écarte une page déjà en route.
+            topNext = nil
+            topRefused = false
+        }
         guard let token = store.twitchToken else {
             // Sans compte : même top, par la requête publique, par pages de
             // 30 ; la suite passe par le Client-ID d'Android (loadMoreTop).
             // Chaque rechargement repart de la 1ʳᵉ page ; en cas d'échec, la
-            // liste est gardée, sans suite.
+            // liste est gardée (sans suite, sauf rafraîchissement automatique).
             let page = await getTopStreamsPageGQL(lang: lang, after: nil)
             // Un chargement plus récent est parti : c'est lui qui conclut.
             guard gen == topGen else { return }
             if let page, !page.streams.isEmpty {
-                topStreams = page.streams
-                topNext = page.next
+                if silent, topStreams.count > 30 {
+                    // Plus d'une page de 30 : seule la 1ʳᵉ est remplacée, la
+                    // suite reste (sans doublons), avec son curseur.
+                    let first = Set(page.streams.map { $0.userLogin.lowercased() })
+                    topStreams = page.streams + topStreams.dropFirst(page.streams.count)
+                        .filter { !first.contains($0.userLogin.lowercased()) }
+                } else {
+                    topStreams = page.streams
+                    topNext = page.next
+                }
             }
             loadingTop = false
             await refillTopIfNeeded()
@@ -662,7 +837,10 @@ struct HomeView: View {
             helix: { _, _ in nil })
         // Top rechargé entre-temps (tirage, langue) : il est reparti de la 1ʳᵉ page.
         guard l == topLang, topNext == after else { return }
-        topStreams += result.fresh
+        // 1ʳᵉ page relue pendant ce temps (rafraîchissement qui garde la
+        // suite) : sans les lives qu'elle a amenés.
+        let known = Set(topStreams.map { $0.userLogin.lowercased() })
+        topStreams += result.fresh.filter { !known.contains($0.userLogin.lowercased()) }
         if case .gql(let next)? = result.cursor { topNext = next } else { topNext = nil }
         topRefused = result.locked
     }
@@ -692,18 +870,9 @@ struct HomeView: View {
         async let top: Void = loadTopStreams(lang, isRefresh: isRefresh)
         await loadFollowedStreams()
         await loadLocalFollows()
-        await loadAccountFollowedCategories()
+        // Catégories suivies sur Twitch (session web) relues aussi : le top ne
+        // les masque pas et son menu ne propose pas de les masquer.
+        await store.loadAccountFollowedCategories()
         await top
-    }
-
-    /// Catégories suivies sur Twitch (session web), lues dès l'accueil : le
-    /// top ne les masque pas et son menu ne propose pas de les masquer, même
-    /// avant un passage par l'onglet Catégories. En cas d'échec, la liste
-    /// déjà connue est gardée.
-    @MainActor private func loadAccountFollowedCategories() async {
-        guard let web = store.twitchWebToken,
-              let list = await getFollowedCategoriesGQL(webToken: web),
-              store.twitchWebToken == web else { return }
-        store.accountFollowedCategoryIds = Set(list.map(\.id))
     }
 }

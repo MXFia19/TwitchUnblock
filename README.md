@@ -63,7 +63,9 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   keeps your place, in Apple's player too (a live you rewound keeps its delay);
   a VOD you had finished starts over from the beginning; when the stream drops for good, the
   player says so with **Retry** instead of freezing (a live first reloads
-  itself twice, unless you had paused it).
+  itself twice, unless you had paused it). When the connection comes back
+  after a drop, a player stopped on **Retry** (or on a loading error) and
+  failed multi-live tiles start again on their own, once, two seconds later.
 * 🐢 **Playback speed** — 0.25× to 2× on VODs and clips, from the ⋯ menu (or
   Apple's own speed menu in the native player and on Apple TV). The VOD speed
   is remembered from one VOD to the next, shown next to the timer, and synced
@@ -84,7 +86,10 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   lock screen activity.
 * 🔒 **Lock Screen and Dynamic Island** — the live or VOD you're watching
   (channel, title, playback) as a Live Activity; turn it off in Settings →
-  Player → Live Activity if you don't need it.
+  Player → Live Activity if you don't need it. When iOS refuses it because the
+  installer rewrote the app's Info.plist (missing `NSSupportsLiveActivities`),
+  the app stops asking until its next launch: one line in the log instead of
+  one per video.
 * 🏷️ **Full title** — tap the title at the top of the player (often cut off)
   to read it in full, with the category, viewers, uptime and a shortcut to the
   channel.
@@ -131,15 +136,49 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   your Twitch account and Twitch serves it without ad breaks, just like on
   Twitch (Settings → Player → Watch ad-free with my sub, on by default; Twitch
   then sees your account watching). Never used on a channel where your account
-  would get ads; if your account's stream doesn't answer, the usual sources
-  take over. Picking a source in the ⋯ menu skips your account for that
-  channel until the app restarts.
+  would get ads (except for Higher qualities, below, with the ad-free source
+  taking over during Twitch's ad breaks); if your account's stream doesn't
+  answer, the usual sources take over. Picking a source in the ⋯ menu skips
+  your account for that channel until the app restarts.
+* 💎 **Higher qualities (if the channel offers them)** — off by default
+  (Settings → Player, under Watch ad-free with my sub). Channels on Enhanced
+  Broadcasting can send 1440p and above, sometimes in HEVC or AV1; the app
+  then tells Twitch which codecs the device decodes (`supported_codecs`: H.264
+  always, HEVC and AV1 only when decoded in hardware) and the extra qualities
+  show up in the quality picker. Twitch only serves them to a signed-in
+  account (an anonymous playback token stops at 1080p), so 1440p goes through
+  your account (web session); the mirrors, official Twitch without an account
+  and the TwitchUnblock server stay as they are. With a sub or Turbo, nothing
+  else changes: the whole stream is ad-free through your account. Without
+  them, the app asks for your account's playlist alongside the usual ad-free
+  source and only plays through your account when it goes above 1080p and
+  your starting quality is above 1080p too (Source by default) — otherwise the
+  usual source plays, exactly as before. Twitch puts its ads in your account's
+  stream, so during each Twitch ad break (the `twitch-stitched-ad` tags the
+  player already reads) the player switches by itself to the usual source in
+  1080p without ads (“Twitch ad break: 1080p without ads”), the way it
+  switches qualities: no reload, chat and Live Activity stay. When the break
+  is over (its announced length plus a margin, and once your account's
+  playlist is back to the stream for the last few seconds, which also covers
+  an ad announced later), it goes back to your account in 1440p. A pre-roll at
+  the start of your account's stream is caught before playback: the stream
+  opens on the ad-free source and moves to your account when the ad ends.
+  A quality you picked yourself is kept (1080p during the break if yours is
+  higher). Ads again right after two returns, an account stream that stops
+  working or no longer answers: the app stays on the ad-free source and skips
+  your account on that channel until it restarts. If the ad-free source fails
+  during a break, the player goes back to your account at once (the ad muted
+  and explained, as on the other sources) and reloads the usual source for
+  the next break. The source shows as “Your account (higher quality)” in the
+  ⋯ menu; picking a source there leaves your account for that channel, as
+  with a sub.
 * 📢 **Channel ad breaks explained** — during an ad break (or the pre-roll
   when a stream opens), Twitch replaces the stream with its purple
   “Commercial break in progress” screen or a real ad. The player now says so,
   with a countdown to the stream's return, and mutes the sound meanwhile
-  (restored at the end). Works in the app's player, Apple's player and each
-  multi-live tile.
+  (restored at the end). Works in the app's player, Apple's player, each
+  multi-live tile and on Apple TV (banner and countdown only: tvOS's player
+  has no button to turn the sound back on).
 * ⏪ **Rewind a live stream (DVR)** — when the channel archives its broadcasts,
   the progress bar covers the *whole* stream, not just the rewindable window.
   Scrub past that window and the recording takes over at that exact moment.
@@ -182,6 +221,14 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   third party).
 * ✂️ **Clips** — a Clips tab on every channel (24 h, 7 days, 30 days, all time),
   played with the original chat replayed.
+* 📤 **Share & clip the moment** — **Share** in the player's ⋯ menu opens iOS's
+  share sheet with the VOD (or the rewound live) at the current time
+  (`twitch.tv/videos/<id>?t=1h2m3s`), the channel during a live, or the clip's
+  link. **Create a clip** (same menu, during a live) clips the moment on screen
+  with your Twitch account, through the web session as for channel points
+  (connect it from there if it isn't); the clip's link comes back with **Copy**
+  and **Share**. A channel that refuses clips, a stream that has ended or
+  Twitch saying no is told plainly (details in the log).
 * 📥 **Offline downloads** — download a whole VOD or just a part of it (from one
   time to another, from where you are, the next 10 minutes) in the quality you
   pick (your preferred quality is suggested first), then watch it without a connection from the My VODs tab. With the app
@@ -192,7 +239,12 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   Twitch still has it (a day or two after the stream; on VODs in the MP4
   format, whenever Twitch serves them with their sound). The chat can be kept
   too and is replayed offline, emotes included. Export a download as a single
-  file (Files, AirDrop, VLC). Pause, resume and delete from the list.
+  file (Files, AirDrop, VLC). Before it starts, the sheet shows the estimated
+  size (the quality's bitrate × the length) and the free space, and refuses
+  with a clear message when there isn't enough room. **Download on Wi-Fi
+  only** (Settings → Player, or right in the sheet; off by default) keeps
+  downloads off cellular data: they wait for Wi-Fi, then resume on their own.
+  Pause, resume (▶), retry (⟳) and delete from the list.
 * 🧩 **Multi-live** — up to four videos side by side, lives and VODs mixed,
   on iPad as on iPhone: long-press a live or VOD card (a channel's VODs and
   highlights, My VODs), or use the player's ⋯ menu, to add it — a “+” then
@@ -228,7 +280,11 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   adds the personal emotes of BTTV Pro users (once BTTV announces them, i.e.
   when they open the chat) and the emotes added to the channel during the
   stream. The emote picker is translated; long-press an emote there to open
-  its card or copy its name.
+  its card or copy its name. Its channel tab also lists the channel's own
+  Twitch emotes (follower, then sub tiers; one public Twitch request per
+  channel and session), so channels with only Twitch sub emotes get a tab too.
+  Sub emotes your account doesn't have (from the chat's `emote-sets`) are
+  greyed out with a lock: tapping one opens its card instead of adding it.
 * 🔎 **Tap an emote or a badge** — a card with the image in large, its exact
   name and source (Twitch, BTTV, FFZ, 7TV, personal), copy it or add it to your
   message. BetterTTV, FFZ and 7TV emotes show their scope (global or channel),
@@ -252,8 +308,11 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
 * 🗑 **Deleted messages** — optionally kept struck through instead of vanishing.
 * 🎨 **Username colour** — changed through Helix (needs a re-login after the
   permission was added).
-* 👤 **Tap a message** — opens the person: their avatar, everything they wrote
-  in this session, reply, mention, copy.
+* 👤 **Tap a message** — opens the person's card: avatar, name and badges, when
+  the account was created and, when Twitch tells, since when they follow the
+  channel; **Mention** (adds `@name` to your message), **Hide** (as in the chat
+  settings) and **Channel** (opens their page); then their recent messages in
+  this chat, with the reply thread below. Reply and copy too.
 * 📌 **Pinned messages** — compact banner with badges, emotes, who pinned it and
   a countdown; collapse it to a chip. Shown in landscape too, along with polls,
   predictions and raids; there, **Hide** under them folds them all into one
@@ -286,13 +345,26 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   same dialog can hide the button (Settings → Chat → Customization → Follow
   button above the chat).
 * 🎁 **Channel points** — balance, rewards, and automatic bonus chest claiming.
+  Raids are joined with your Twitch web session, like on twitch.tv, so the raid
+  bonus is earned too (main player; the raid banner shows it).
   Settings → Channel points tracks, like drops, the time watched and the points
   earned by watching (passive points, streaks, chests; not prediction
   winnings): right now, in total and per channel, on this device.
-* ⏱ **Auto-sync chat delay** — delays the chat by how far behind live you are,
-  measured from the stream's timestamps so it doesn't drift each time the
-  playlist reloads. Still off on a given stream? Nudge it by ±1 s from the ⏱
-  badge above the chat, or in Settings.
+* ⏱ **Chat synced with the video** (Settings → Chat, on by default) — live
+  messages arrive almost instantly while the picture is seconds behind, so
+  each one waits until the video catches up: your delay behind live as the
+  other viewers see it (from the stream's timestamps, so it doesn't drift
+  each time the playlist reloads), minus about 2 s for their reaction time,
+  60 s at most. The delay follows the player on its own: it grows when the
+  video stalls or falls behind, and shrinks when you jump back to live
+  (**Live**, the seek bar, catching up) — waiting messages then come out in
+  order over a few seconds instead of all at once. Your own messages, the
+  app's notices and the banners (pinned, polls, predictions, raids) are never
+  delayed, and moderation also applies to waiting messages. Main player's
+  live only: not VODs (their chat already follows playback), rewinds through
+  the recording, multi-live or chat only. A ⏱ −6 s badge above the chat (in
+  portrait) shows the delay — tap it for real-time chat (or to sync again),
+  long-press it to nudge it by ±1 s (also in Settings).
 * 📼 **VOD chat** — replayed in sync with playback position.
 
 ### Drops
@@ -335,10 +407,14 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   channel or its category; tap the video for the full player (sound, chat), or
   the name or picture for the channel's page. Previews stop as soon as a player
   or multi-live opens, and come back when it closes. Settings → General →
-  **Discover tab** hides it.
+  **Customize the app** hides it.
 * 🏠 **Home** — your followed channels that are live (up to 300 at once), top
   streams (France or worldwide; without an account, **Load more** adds 30 at a
   time).
+* ▶️ **Continue watching** — at the top of Home, the VODs you started (more
+  than 30 s watched, not finished), latest first (up to 10), with their
+  progress; a tap resumes where you stopped, as from My VODs. Hide it in
+  Settings → General → Customize the app.
 * 📜 **Long lists without an account** — a channel's VODs and clips, the
   categories and the live channels in a category keep loading past the first
   100 without logging in (the next pages are asked the way Twitch's Android
@@ -346,12 +422,16 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   categories, lives and clips, or a short note says so.
 * 📍 **Pinned streamers** — long-press a followed channel (live or offline) →
   **Pin to the top of Following**: pinned ones come first, with a small pin.
+  Their live streams are sorted by viewers among themselves (or in the order
+  you pinned them: Settings → General → Customize → **Pinned sorted by
+  viewers**).
 * 🙈 **Hide channels and categories** — long-press a stream in Top or in a
   category → **Hide this channel** or **Hide the "…" category** (or
   long-press a category card). They leave Top, the category grid and category
   pages; Top tops itself up so it doesn't get shorter. What you follow or pin
-  is never hidden, search still finds everything (with **Hidden · Show
-  again**), and Settings → General lists them to show them again. Kept on the
+  is never hidden, search still finds the channels and categories themselves
+  (with **Hidden · Show again**) but leaves out their live streams and VODs,
+  and Settings → General lists them to show them again. Kept on the
   device and in the backup file (same format as the website).
 * 🎮 **Categories** — browse by game, then the live channels in it, filtered
   by language if you like (all, or a single one — kept for every category).
@@ -361,10 +441,26 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   Errors and empty lists have **Retry** / pull to refresh.
 * 🏷 **Stream tags** — language, DropsEnabled… under each live stream, like on
   Twitch.
-* 🔍 **Search** — by streamer name, channel link, VOD link or ID (a `?t=`
-  link starts at that time) or clip link (played right away). On a channel,
-  the VOD keyword filter can also look through older VODs (**Search older
-  VODs**).
+* 🔍 **Search** — type anything and the results come in tabs, like Twitch's
+  results page: **Channels** (live ones first, with viewers or followers),
+  **Categories**, **Live** (streams whose title, tags, category or name
+  match) and **VODs** (with their channel), each tab with its count. Live
+  streams and VODs from hidden channels or categories are left out (unless
+  you follow them); channels and categories you searched for still show,
+  marked hidden. A category opens its live channels, and **‹ Results for
+  "…"** brings you back from a channel without searching again. A channel
+  link (or `@name`), a VOD link or ID (a `?t=` link starts at that time) or
+  a clip link still opens directly. The last 10 searches are kept on the
+  device under the field, each removable, or **Clear** them all (also
+  cleared with the history in Settings). On a channel, the VOD keyword
+  filter can also look through older VODs (**Search older VODs**).
+* 🗓 **Schedule** — a channel with a streaming schedule gets a **Schedule**
+  tab: its next streams in your device's day and time, with length, title,
+  category, **Every week** for recurring ones and **Canceled** ones struck
+  through, plus its vacation if it announced one. When it's offline, its page
+  says **Next stream: Tuesday · 8:00 PM** (or "On vacation until …") right
+  under its name. Read with your Twitch account if you're signed in, or
+  publicly without one; a channel without a schedule shows nothing more.
 * ℹ️ **About** — a channel's description, followers, social links and panels.
 * 🕒 **History** — recently watched VODs and channels, each removable.
 * 🔄 **Cloud sync** — watch progress and history follow your Twitch account, so
@@ -385,6 +481,29 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   included) and come back when it signs in again (up to 5 accounts, more
   while one still has unsent changes), and what you watch while signed out
   goes to the next account that signs in.
+* ⚙️ **Synced settings** — signed in, your settings follow your Twitch account
+  on the website and your other devices (Settings → Twitch Account → **Sync my
+  settings**, on by default): the chat settings shared with the website
+  (timestamps, 12/24 h, deleted messages, bots, commands, hidden words and
+  people, highlighted words), the top streams language, the VOD speed, pinned
+  channels, hidden channels and categories, and the app's own customization
+  (tabs, home, player buttons, chat banners, channel points chests, raids,
+  ad-free with your sub, chat autocomplete and keyboard suggestions). Not
+  synced, because they depend on the device: the app language, quality and
+  mobile data, notifications and the Live Activity, downloads, the chat's
+  sizes and landscape layout, fill screen, low latency, the chat synced with
+  the video, the player type, the
+  image cache and the home list layout. One document per account on the
+  Worker (`/api/sync/prefs`), apart from the history backup — the 1.5.0 app
+  and the Android app never touch it — in four parts, each with its own
+  date: the latest change wins part by part, and pinned or hidden lists
+  changed on both sides are merged (something removed on one side stays
+  removed). Changes leave a few seconds after the last one, or when the app
+  goes to the background; the account's settings are read at the history's
+  pace (at most every 10 minutes). A device that never changed anything for
+  the account first takes what the account has, adding its own lists
+  (pinned, hidden, hidden chat words and people); one still on default
+  values never sends them. Off, nothing is sent or applied on this device.
 * ⬆️ **Update check** — the app tells you when a new version is out on the
   source, with a shortcut to Feather / SideStore / AltStore.
 * 🔔 **Live notifications** — be told when a followed channel goes live
@@ -397,10 +516,26 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   turns away the backend's shared Cloudflare addresses, so they leave from the
   project's own server (the video relay); **Test** tells you when ntfy.sh is
   refusing messages for now (sending limit reached). **Notified channels**
-  (same place) picks which followed channels notify you, for both.
+  (same place) picks which followed channels notify you, for both. The app's
+  own notifications show the stream's thumbnail, are grouped per channel, and
+  have **Watch** and **Stop notifying for this channel** (press and hold). A
+  **bell** on a channel's page and next to **Follow** above the chat turns that
+  channel's notifications on or off (shown when live notifications are on and
+  you follow the channel).
 
 ### Look & feel
 
+* 🧩 **Customize the app** (Settings → General) — show, hide and reorder the
+  tabs (and pick the one the app opens on), Home's live tabs and cards
+  (Followed / Top / Offline, announcements, sign-in and web session cards,
+  Continue watching, the Categories view), a channel page's tabs (VODs,
+  Highlights, Playlists, Clips, Schedule, About — the page opens on the first
+  one shown), the player's bottom bar buttons (mute, PiP, reload,
+  chat layout, rotation, and optionally sleep timer, multi-live and rewind;
+  AirPlay too) and the chat banners (pinned message, drops, polls,
+  predictions, hype train, raids, watch streak, Follow button). Drag ≡ to
+  reorder; **Restore the default layout** puts everything back. Kept in the
+  backup file.
 * 🎨 **Themes** — 7 accent colours and 3 backgrounds (dark, OLED black, slate),
   in Settings → General → Appearance.
 * 🖼️ **App icons** — six to pick from in Settings → General → Appearance
@@ -415,6 +550,9 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   **Merge Entitlements** option that fixes the signature.
 * 🫧 **Liquid Glass** — optional on iOS 26: a floating tab bar and glass buttons
   over the picture.
+* ⬆️ **Back to the top** — tap the tab you're already on to scroll Home (any
+  live tab), Search or My VODs back to the top, or Discover back to its first
+  page.
 
 ### The rest
 
@@ -435,9 +573,12 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   first message, like on Twitch; and when Twitch refuses a message, it's
   removed and the reason shown in your language instead of looking sent;
   banned from the chat, it switches to read-only (see above).
-* 🌍 **Four languages** — English (default), French, Spanish and Russian. The
-  Russian translation was made with AI: the app says so next to the language
-  picker, with a button to report a mistake.
+* 🌍 **Six languages** — English (default), French, Spanish, Russian, Italian
+  and Japanese, on the iPhone and the Apple TV. The Russian translation was
+  made with AI; the Italian one was contributed by Domenico-lel and the
+  Japanese one by kinboy56 (made with AI), newer texts translated with AI. For
+  these three, the iPhone app says so next to the language picker, with a
+  button to report a mistake.
 * 🐞 **Bug reports & ideas** — a form in the header, in Settings and in the
   player menu, screenshots included. **My reports** shows where each one stands
   (received, seen, accepted, in progress, done, declined) and the developer's reply,
@@ -487,6 +628,10 @@ unsigned `tv-test-N` pre-release:
   Following list refreshes on its own (back on the tab or in the app, every
   2 minutes while it's shown, and when you come back down from the tab bar),
   so ended lives don't linger.
+* **Continue watching** at the top of Following, with or without an
+  account: the VODs started on this Apple TV (more than 30 s, not finished),
+  last watched first (up to 10), with their progress; Select or Play resumes
+  where you stopped.
 * The remote's **Play** button starts the focused live or VOD, like Select; on
   an offline channel (Following, Search) it opens the channel and plays its
   latest broadcast (or its live, if it just started).
@@ -501,6 +646,8 @@ unsigned `tv-test-N` pre-release:
 * **View channel** in the player's bar opens the channel's page, with its
   past broadcasts; a video started there plays on top of it, and Menu goes
   back.
+* During a channel's ad break on a live, the same banner as on the iPhone
+  says what the purple screen is, with a countdown to the stream's return.
 * Usage count, like the iPhone (Account → Share my usage): a random install ID,
   or your Twitch account when signed in, the version, the language and how many
   lives and VODs started (which source, failures), at most once an hour; never
@@ -520,11 +667,19 @@ unsigned `tv-test-N` pre-release:
 Installing it needs a tool that can sideload on tvOS, or a Mac with Xcode and
 the Apple TV paired with it (AltStore, SideStore and Feather don't handle
 tvOS). **ATVLoadly** (or any tool that reads AltStore sources) can update it
-on its own from this source, rewritten by each build with its release notes
-(`Changelog: Apple TV: …` lines of the commits that touch the TV):
+on its own from a source rewritten by each build with its release notes
+(`Changelog: Apple TV: …` lines of the commits that touch the TV). Test
+builds, from the test branch:
 
 ```
 https://raw.githubusercontent.com/MXFia19/TwitchUnblock/test-17d298/apps-tv.json
+```
+
+Releases built with the iPhone app (`master`, `tv-N`), from the next release
+on:
+
+```
+https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps-tv-stable.json
 ```
 
 Its GitHub releases can't be used for that: they also hold the iPhone IPAs.
@@ -597,6 +752,20 @@ it points at the shared instance out of the box.
 If you **fork** the project and want your own backend, the Worker code and
 deployment notes are in [`worker/`](worker/); change `kAPIURL` in
 [`Sources/Constants.swift`](Sources/Constants.swift) to point at it.
+
+---
+
+## 🙌 Contributors
+
+Thanks to the people who improved the app (also credited in the app, under
+Settings → About):
+
+* [Domenico-lel](https://github.com/Domenico-lel) — Italian translation
+* [kinboy56](https://github.com/kinboy56) — Japanese translation
+* [dwojc6](https://github.com/dwojc6) — more responsive swipe-down on the player
+
+All contributors on GitHub:
+https://github.com/MXFia19/TwitchUnblock/graphs/contributors
 
 ---
 

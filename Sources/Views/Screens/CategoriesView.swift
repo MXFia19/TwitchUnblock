@@ -723,8 +723,15 @@ struct CategoryStreamsView: View {
     }
 
     /// Langue des lives (la même pour toutes les catégories) : toutes, celle
-    /// de l'appareil, ou une autre.
+    /// de l'appareil, ou une autre. Refait seulement quand le choix, la
+    /// langue de l'interface ou le thème change (KeyedView) : pendant une
+    /// lecture, la liste ouverte remontait en haut à chaque rendu de l'écran.
     private var languageMenu: some View {
+        KeyedView(key: "\(store.categoryLang ?? "")|\(store.lang.rawValue)|\(store.themeID)") { languageMenuContent }
+            .equatable()
+    }
+
+    private var languageMenuContent: some View {
         let current = store.categoryLang
         let device = TopLanguage.device
         let others = TopLanguage.codes

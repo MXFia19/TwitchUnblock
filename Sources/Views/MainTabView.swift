@@ -3,7 +3,9 @@ import AVFoundation
 
 struct MainTabView: View {
     @EnvironmentObject private var store: AppStore
-    @State private var activeTab: TabName = .home
+    /// Onglet choisi pour le lancement (Réglages → Personnaliser), lu une fois.
+    private static let launchTab = TabName(rawValue: UICustomization.saved()?.startTab ?? "home") ?? .home
+    @State private var activeTab: TabName = MainTabView.launchTab
     @State private var headerSafeTop = HeaderView.windowSafeTop
 
     // ── Player state ─────────────────────────────────────────────────────
@@ -18,6 +20,8 @@ struct MainTabView: View {
     @State private var playerVisible = false
     @State private var loading = false
     @State private var errorMsg: String? = nil
+    /// Relance prévue au retour du réseau, lecteur resté sur son erreur.
+    @State private var networkRetry: Task<Void, Never>? = nil
     @State private var statusTitle = ""
     /// Source du direct en cours d'essai (écran de chargement) : elles sont
     /// essayées l'une après l'autre, l'attente peut durer.
@@ -44,6 +48,14 @@ struct MainTabView: View {
     @State private var liveGame: String = ""
     /// Source qui sert le direct en cours (menu du lecteur).
     @State private var liveSourceUsed: String? = nil
+    /// Qualités supérieures par le compte d'un non-abonné (voir HQLive) ;
+    /// nil hors de ce cas, et dès qu'on reste sur la source sans pub.
+    @State private var hqLive: HQLive? = nil
+    /// Retour prévu au flux du compte après une pause pub.
+    @State private var hqReturnTask: Task<Void, Never>? = nil
+    /// Bascule annoncée dans le lecteur (4 s), et son effacement.
+    @State private var hqNotice: String? = nil
+    @State private var hqNoticeTask: Task<Void, Never>? = nil
     /// Feuille « Télécharger » (VOD en cours).
     @State private var showDownloadSheet = false
     /// Multi-live : la sélection, et la mosaïque ouverte.
@@ -57,15 +69,10 @@ struct MainTabView: View {
     // ── Débogage / synchro ────────────────────────────────────────────────
     /// Latence mesurée du direct, arrondie à la seconde (affichée).
     @State private var liveLatency: Double = 0
-    /// Distance au bord du direct, arrondie à la seconde (synchro auto du chat).
-    @State private var liveBehind: Double = 0
     /// Glissé vers le bas du lecteur en cours : décalage suivi au doigt.
     /// Objet gardé en @State sans être observé ici : seul PlayerPullEffect
     /// se redessine pendant le geste (voir PlayerPull.swift).
     @State private var pull = PlayerPull()
-    /// Glissé du bandeau du lecteur natif en cours (revient seul à faux,
-    /// même si le geste est interrompu).
-    @GestureState private var topBarDragging = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     // ── Minuteur de veille ────────────────────────────────────────────────
@@ -73,6 +80,8 @@ struct MainTabView: View {
     @State private var showSleepSheet  = false
     @State private var showSettings    = false
     @State private var showPlayerMenu  = false
+    /// « Créer un clip » (menu du lecteur) : création, puis lien du clip.
+    @State private var showClipSheet   = false
     /// Formulaire de retour, et ce qui se lisait quand on l'a ouvert depuis
     /// le lecteur (joint au message).
     @State private var showFeedback    = false
@@ -83,6 +92,11 @@ struct MainTabView: View {
     @State private var immersiveQuality = ""
     /// « Connexion lente » annoncé dans le lecteur après une baisse de qualité.
     @State private var slowNetworkNotice: String? = nil
+    /// Effacement de cet avis, 4 s après le dernier.
+    @State private var slowNoticeTask: Task<Void, Never>? = nil
+    /// « Connexion lente » déjà annoncé pendant cette lecture : l'avis du
+    /// compte ne revient plus après lui (voir `accountNotice`).
+    @State private var slowNoticeShown = false
     /// Largeur du chat au début d'un glissement : la translation du geste est
     /// relative à son point de départ, que la vue ne connaît plus une fois
     /// qu'elle a commencé à rétrécir.
@@ -125,25 +139,17 @@ struct MainTabView: View {
     /// Vitesse du clip en cours : un clip part toujours à 1×, et celle qu'on
     /// y choisit n'est pas retenue pour les VODs.
     @State private var clipSpeed: Double = 1
+    /// Vitesse imposée par le lecteur immersif (bord d'un enregistrement en
+    /// cours rattrapé, récepteur AirPlay qui refuse) : pour cette lecture
+    /// seulement. Écrite dans la préférence, elle remettait toutes les VODs
+    /// suivantes à 1×. Un choix dans le menu l'efface.
+    @State private var forcedVodSpeed: Double? = nil
     /// Chapitres de la VOD en cours (changements de jeu).
     @State private var vodChapters: [VodChapter] = []
     /// Passages de la VOD dont Twitch a coupé le son (et que l'app n'a pas pu
     /// rétablir), et nombre de segments rétablis (VodUnmuteLoader).
     @State private var vodMuted: [MutedRange] = []
     @State private var vodUnmuted = 0
-
-    /// Décalage à appliquer au chat, si la synchro est active : notre retard
-    /// sur le bord du direct. Les messages viennent de spectateurs qui
-    /// regardent eux-mêmes près de ce bord. La latence totale (horodatage de
-    /// Twitch → écran) compte en plus leur propre retard et, surtout, le délai
-    /// que certaines chaînes ajoutent à leur diffusion — que ces spectateurs
-    /// subissent aussi : le chat arrivait alors 10 s trop tard, ou plus.
-    private var chatDelay: Double {
-        guard store.autoChatDelay, isLivePlaying else { return 0 }
-        // Borne haute : évite un décalage absurde. La retouche manuelle
-        // (pastille du chat, réglages) s'ajoute à l'estimation.
-        return max(0, min(liveBehind + store.chatSyncNudge, 60))
-    }
 
     /// Infos affichées par-dessus l'image en mode immersif.
     private var overlayInfo: PlayerOverlayInfo {
@@ -242,14 +248,22 @@ struct MainTabView: View {
         (playerMode != nil && playerVisible && !closingPlayer) || showMultiLive
     }
 
+    /// L'onglet affiché doit être dans la barre ; sinon, le premier qui y est.
+    /// Pas pendant la visite guidée, qui passe par tous les onglets.
+    private func keepVisibleTab() {
+        guard onboardingDone else { return }
+        let visible = TabName.visible(store)
+        if !visible.contains(activeTab), let first = visible.first { activeTab = first }
+    }
+
     private var chatTarget: String? {
         if let ch = currentChannelName { return ch }
         return currentVodId
     }
 
     /// « Streamer » et « Lien / ID » ont fusionné dans Recherche, et les
-    /// Réglages sont passés derrière l'avatar de l'en-tête. Découvrir (fil de
-    /// lives et de clips) se masque dans les Réglages.
+    /// Réglages sont passés derrière l'avatar de l'en-tête. Chaque onglet se
+    /// masque ou se déplace dans Réglages → Personnaliser.
     enum TabName: String, CaseIterable {
         case home, discover, search, library
 
@@ -286,9 +300,12 @@ struct MainTabView: View {
             }
         }
 
-        /// Onglets de la barre : Découvrir seulement s'il n'est pas masqué.
-        static func visible(_ store: AppStore) -> [TabName] {
-            allCases.filter { $0 != .discover || store.showDiscoverTab }
+        /// Onglets de la barre, dans l'ordre choisi (Réglages → Personnaliser).
+        /// `all` : les masqués aussi — la visite guidée fait toucher Recherche
+        /// et Bibliothèque.
+        static func visible(_ store: AppStore, all: Bool = false) -> [TabName] {
+            let c = store.customization
+            return (all ? c.tabs : c.visibleTabs).compactMap(TabName.init(rawValue:))
         }
     }
 
@@ -309,10 +326,12 @@ struct MainTabView: View {
                     // valeurs par défaut (`soft:`) quand une méthode est passée
                     // comme valeur, donc `playLive` vaudrait ici
                     // `(String, Bool) -> Void` et ne collerait pas au callback.
-                    case .home:    HomeView(onPlayStream: { playLive($0) })
-                    // Aperçus seulement sans lecteur ouvert (ni réduit, ni multi-live).
-                    case .discover: DiscoverView(active: playerMode == nil && !showMultiLive
-                                                     && channelSheet == nil && !showSettings,
+                    case .home:    HomeView(onPlayStream: { playLive($0) },
+                                            onPlayVod: { playVod($0, $1, $2, $3) })
+                    // Aperçus seulement sans lecteur ouvert (ni réduit, ni
+                    // multi-live) et sans feuille par-dessus.
+                    case .discover: DiscoverView(active: playerMode == nil && !presentationOpen,
+                                                 bottomInset: floatingBarsInset,
                                                  onPlayLive: { playLive($0) },
                                                  onPlayClip: { playClip($0, $1) })
                     case .search:  SearchView(onPlayVod: { playVod($0, $1, $2, $3) },
@@ -342,10 +361,11 @@ struct MainTabView: View {
             // pour qu'aucune vue ne garde les anciennes couleurs. Le lecteur et
             // la feuille des réglages, hors de ce bloc, restent en place.
             .id(store.themeID)
-            // Découvrir masqué pendant qu'il est affiché : retour à l'accueil.
-            .onChange(of: store.showDiscoverTab) { on in
-                if !on, activeTab == .discover { activeTab = .home }
-            }
+            // Onglet masqué pendant qu'il est affiché (Réglages →
+            // Personnaliser), ou fin de la visite guidée qui les montrait
+            // tous : le premier de la barre.
+            .onChange(of: store.customization.visibleTabs) { _ in keepVisibleTab() }
+            .onChange(of: onboardingDone) { _ in keepVisibleTab() }
             // Multi-live ouvert ou fermé : aperçus de Découvrir bloqués ou permis.
             .onChange(of: showMultiLive) { on in DiscoverGate.shared.blocked = on || playerMode != nil }
             // iPhone : portrait, sauf lecteur ouvert en grand ou multi-live.
@@ -417,8 +437,11 @@ struct MainTabView: View {
                     // faisait rien). Lecture par le compte : un choix de source
                     // est respecté — le compte est mis de côté pour cette
                     // chaîne jusqu'au prochain lancement.
-                    let fromAccount = liveSourceUsed == "account"
-                    guard id != liveSourceUsed else { return }
+                    // Qualités supérieures (compte, ou source sans pub le
+                    // temps d'une pause) : toute source choisie, même celle en
+                    // cours, quitte le compte et ses retours.
+                    let fromAccount = liveSourceUsed == "account" || hqLive != nil
+                    guard id != liveSourceUsed || hqLive != nil else { return }
                     if fromAccount, case .live(let ch)? = playerMode {
                         store.accountPlaybackSkipped.insert(ch.lowercased())
                         logger.info("LECTEUR", "Compte mis de côté pour \(ch)", "source choisie : \(id)")
@@ -432,10 +455,20 @@ struct MainTabView: View {
                 onDownload: downloadAction,
                 onMultiLive: multiLiveAction,
                 multiLiveOn: menuMultiLiveOn,
-                multiLiveFull: multi.isFull
+                multiLiveFull: multi.isFull,
+                shareURL: shareURL,
+                shareDetail: shareDetail,
+                onCreateClip: createClipAction
             )
             .presentationDetents([.medium])
             .inAppNoticeHost()
+        }
+        // Clip du direct en cours (menu ⋯ du lecteur).
+        .sheet(isPresented: $showClipSheet) {
+            ClipSheet()
+                .environmentObject(store)
+                .presentationDetents([.medium, .large])
+                .inAppNoticeHost()
         }
         // Multi-live : jusqu'à quatre vidéos côte à côte, directs et VODs.
         .fullScreenCover(isPresented: $showMultiLive) {
@@ -466,9 +499,12 @@ struct MainTabView: View {
                     .presentationDetents([.large])
             }
         }
-        // Réglages : ouverts depuis l'avatar de l'en-tête.
+        // Réglages : ouverts depuis l'avatar de l'en-tête. `.equatable()` :
+        // cette vue se redessine chaque seconde pendant une lecture, les
+        // Réglages n'ont pas à suivre (voir SettingsView: Equatable).
         .sheet(isPresented: $showSettings) {
             SettingsView()
+                .equatable()
                 .inAppNoticeHost()
         }
         // Signaler un bug ou proposer une idée (en-tête, menu du lecteur).
@@ -621,6 +657,20 @@ struct MainTabView: View {
             guard note.object as? String == "immersive" else { return }
             lowerQualityAfterStalls()
         }
+        // Réseau revenu après une coupure : un lecteur resté sur son erreur
+        // (« Réessayer ») relit le flux seul, une fois, 2 s plus tard. Celui
+        // dont la lecture s'est arrêtée en route se relance de lui-même
+        // (ImmersivePlayer).
+        .onReceive(NotificationCenter.default.publisher(for: .tuNetworkRestored)) { _ in
+            guard playerMode != nil, errorMsg != nil, !loading, networkRetry == nil else { return }
+            networkRetry = Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                networkRetry = nil
+                guard !Task.isCancelled, playerMode != nil, errorMsg != nil, !loading else { return }
+                logger.info("LECTEUR", "Réseau revenu : relance de la lecture", nil)
+                reloadCurrent()
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .openMyFeedback)) { _ in
             guard !showMyFeedback else { return }
             afterClosingPresentations { showMyFeedback = true }
@@ -640,6 +690,10 @@ struct MainTabView: View {
         // Session web : vérifiée une fois au lancement. Sans ça on ne s'aperçoit
         // de son expiration que quand les points cessent de répondre.
         .task { await store.validateWebSession() }
+        // Suivis du compte (chaînes, catégories) lus au lancement, quel que
+        // soit l'onglet de départ : seul l'accueil les lisait, et Découvrir
+        // proposait de masquer une chaîne suivie.
+        .task { await store.loadAccountFollows() }
         // Session web changée (déconnexion, expiration, autre compte) pendant
         // un direct lu par le compte (abonné sans pub) : sa liste de lecture
         // est signée pour l'ancienne session, que Twitch continuerait de
@@ -651,8 +705,10 @@ struct MainTabView: View {
             if case .live(let channel)? = playerMode, dvrSourceChannel == nil, !closingPlayer {
                 startDropsHeartbeat(channel: channel)
             }
+            // Qualités supérieures : les liens du compte, gardés pour le retour
+            // pendant une pause pub, sont signés pour l'ancienne session.
             guard case .live(let channel)? = playerMode, dvrSourceChannel == nil,
-                  liveSourceUsed == "account", !closingPlayer else { return }
+                  liveSourceUsed == "account" || hqLive != nil, !closingPlayer else { return }
             logger.info("LECTEUR", "Session web changée : direct relu", channel)
             let visible = playerVisible, onlyChat = chatOnly
             playLive(channel, soft: true)
@@ -664,6 +720,12 @@ struct MainTabView: View {
             guard on, case .live(let channel)? = playerMode, dvrSourceChannel == nil,
                   !closingPlayer else { return }
             startDropsHeartbeat(channel: channel)
+        }
+        // Qualités supérieures : lecture reprise sur la source sans pub, dont
+        // le retour au compte s'était arrêté avec la pause (scheduleHQReturn).
+        .onChange(of: playerPlaying) { playing in
+            guard playing, hqLive?.onAdFree == true, hqReturnTask == nil else { return }
+            scheduleHQReturn(after: 2)
         }
         // Minuteur de veille écoulé → on coupe la lecture.
         .onChange(of: sleepTimer.fireCount) { _ in
@@ -682,11 +744,43 @@ struct MainTabView: View {
             UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder),
                                             to: nil, from: nil, for: nil)
         }
+        // Chat seul (empilé, sans image) après le bouton de rotation : retour
+        // au portrait aussi. Le lecteur ne le fait plus en disparaissant (il
+        // disparaît aussi à chaque relance).
+        .onChange(of: chatOnly) { only in
+            if only { PlayerOrientation.restorePortraitIfForced() }
+            // Plus d'image (le lecteur part) : le chat n'a plus rien à suivre.
+            if only { ChatSync.shared.reset() }
+        }
+        // Liens arrivés sans qualité choisie : celle de départ du lecteur
+        // immersif est figée, comme le fait le lecteur natif. Recalculée à
+        // chaque rendu, elle suivait la connexion (Wi-Fi ↔ données mobiles)
+        // et rechargeait le flux à un moment quelconque, parfois plusieurs fois.
+        .onChange(of: qualityLinks) { links in
+            guard immersiveQuality.isEmpty, let links, !links.isEmpty else { return }
+            immersiveQuality = currentQuality(links)
+        }
     }
 
     private func updateHeaderSafeTop(_ top: CGFloat) {
         let value = top > 0 ? top : HeaderView.windowSafeTop
         if abs(value - headerSafeTop) > 0.5 { headerSafeTop = value }
+    }
+
+    /// Une des feuilles (ou la mosaïque) attachées à cet écran est ouverte.
+    /// Découvrir n'y joue pas d'aperçu : il continuait sous « Signaler un
+    /// problème » ou le minuteur, avec le son s'il avait été rallumé.
+    private var presentationOpen: Bool {
+        showSettings || showFeedback || showMyFeedback || showPlayerMenu || showClipSheet
+            || showDownloadSheet || showSleepSheet || channelSheet != nil || showMultiLive
+    }
+
+    /// Hauteur que la mini-barre et la barre du multi-live, posées par-dessus
+    /// le bas des onglets, cachent à Découvrir (voir DiscoverView.bottomInset).
+    private var floatingBarsInset: CGFloat {
+        guard !playerVisible, !closingPlayer else { return 0 }
+        let bars = (playerMode != nil ? 1 : 0) + (multi.entries.isEmpty ? 0 : 1)
+        return bars == 0 ? 0 : CGFloat(20 + 65 * bars)
     }
 
     /// Feuilles et mosaïque attachées à cet écran : une notification touchée
@@ -695,13 +789,12 @@ struct MainTabView: View {
     /// (SwiftUI refuse une seconde feuille, « Mes signalements » ne s'ouvrait
     /// pas). Tout se ferme, puis l'action part une fois la fermeture finie.
     private func afterClosingPresentations(_ action: @escaping () -> Void) {
-        let open = showSettings || showFeedback || showMyFeedback || showPlayerMenu
-            || showDownloadSheet || showSleepSheet || channelSheet != nil || showMultiLive
-        guard open else { action(); return }
+        guard presentationOpen else { action(); return }
         showSettings = false
         showFeedback = false
         showMyFeedback = false
         showPlayerMenu = false
+        showClipSheet = false
         showDownloadSheet = false
         showSleepSheet = false
         channelSheet = nil
@@ -935,7 +1028,7 @@ struct MainTabView: View {
                 channelId: currentChannelId,
                 token: store.twitchToken,
                 login: store.twitchLogin,
-                chatDelay: chatDelay,
+                syncsWithPlayer: true,
                 chatOnly: $chatOnly,
                 style: style,
                 onJoinChannel: { target in   // raid → suit la chaîne raidée
@@ -994,8 +1087,9 @@ struct MainTabView: View {
                 unmutedCount: vodUnmuted,
                 nowPlaying: nowPlayingMeta,
                 speed: playbackSpeed,
-                onSpeedChange: { setPlaybackSpeed($0) },
-                notice: slowNetworkNotice ?? accountNotice,
+                // Toujours une vitesse imposée par le lecteur (voir forcedVodSpeed).
+                onSpeedChange: { setForcedSpeed($0) },
+                notice: slowNetworkNotice ?? hqNotice ?? accountNotice,
                 onProgress: { time in
                     // Pendant une bascule, `playerMode` désigne déjà la
                     // nouvelle source alors que le lecteur en place joue encore
@@ -1028,7 +1122,16 @@ struct MainTabView: View {
                     store.setVodProgress(dvr, time: offset)
                     pendingDvrChannel = ch
                     playVod(dvr, statusTitle, nil, ch, soft: true)
-                }
+                },
+                // Boutons de la barre, s'ils y sont mis (Réglages → Personnaliser).
+                onMultiLive: multiLiveAction,
+                multiLiveOn: menuMultiLiveOn,
+                multiLiveFull: multi.isFull,
+                onRewind: dvrSourceChannel == nil ? rewindAction : nil,
+                // Qualités supérieures sans abonnement : pauses pub et échec
+                // du flux du compte (voir adBreakChanged).
+                onAdBreak: { adBreakChanged($0) },
+                onFailed: { hqStreamFailed() }
             )
         } else {
             VideoPlayerView(
@@ -1048,19 +1151,28 @@ struct MainTabView: View {
                 onLatency: { updateLatency($0) },
                 onBehind: { updateBehind($0) },
                 onPlaying: { playerPlaying = $0 },
-                notice: slowNetworkNotice ?? accountNotice,
+                notice: slowNetworkNotice ?? hqNotice ?? accountNotice,
+                onPull: { pullPlayer($0) },
+                onPullEnd: { endPull($0, predicted: $1) },
                 onChat: nil,
                 onRewind: rewindAction,
-                onBackToLive: backToLiveAction
+                onBackToLive: backToLiveAction,
+                // Qualités supérieures sans abonnement : la qualité du compte au
+                // retour d'une pause pub, et les pauses elles-mêmes.
+                wantedQuality: hqLive?.accountQuality,
+                onAdBreak: { adBreakChanged($0) }
             )
         }
     }
 
     /// Bandeau au-dessus de la vidéo (mode natif) : qui regarde-t-on, et quoi.
+    /// Ses boutons ne font rien pendant un glissé du lecteur et juste après
+    /// (PlayerPull.guarded) : parti sur un bouton, le glissé l'emporte avec
+    /// le doigt, encore dessus au doigt levé — la croix fermait le lecteur.
     @ViewBuilder
     private var playerTopBar: some View {
         HStack(spacing: TSpace.sm) {
-            Button { reducePlayer() } label: {
+            Button { PlayerPull.guarded { reducePlayer() } } label: {
                 Image(systemName: "chevron.down")
                     .font(.system(size: 14, weight: .bold))
                     .foregroundColor(.tPrimary)
@@ -1082,7 +1194,9 @@ struct MainTabView: View {
                 Text(currentChannelName ?? statusTitle)
                     .font(.tCardTitle).foregroundColor(.tText).lineLimit(1)
                     // Toucher le pseudo : page de la chaîne.
-                    .onTapGesture { if let l = playerChannelLogin { store.openChannelPage(l) } }
+                    .onTapGesture {
+                        PlayerPull.guarded { if let l = playerChannelLogin { store.openChannelPage(l) } }
+                    }
 
                 HStack(spacing: TSpace.sm) {
                     if isLivePlaying {
@@ -1096,7 +1210,9 @@ struct MainTabView: View {
                         // Un appui ramène au bord du direct, sans recharger.
                         if store.showLatency, liveLatency > 0 {
                             Button {
-                                NotificationCenter.default.post(name: .tuGoLive, object: nil)
+                                PlayerPull.guarded {
+                                    NotificationCenter.default.post(name: .tuGoLive, object: nil)
+                                }
                             } label: {
                                 TMeta(icon: "waveform.path.ecg",
                                       text: String(format: "%.0f s", liveLatency))
@@ -1112,7 +1228,7 @@ struct MainTabView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
 
             // Minuteur de veille
-            Button { showSleepSheet = true } label: {
+            Button { PlayerPull.guarded { showSleepSheet = true } } label: {
                 HStack(spacing: 3) {
                     Image(systemName: "moon.zzz.fill").font(.system(size: 11))
                     if sleepTimer.isActive {
@@ -1129,7 +1245,7 @@ struct MainTabView: View {
             }
             .buttonStyle(.plain)
 
-            TIconButton(icon: "xmark", size: 32) { stopPlayer() }
+            TIconButton(icon: "xmark", size: 32) { PlayerPull.guarded { stopPlayer() } }
         }
         .padding(.horizontal, TSpace.md)
         .padding(.top, TSpace.sm)
@@ -1137,11 +1253,12 @@ struct MainTabView: View {
         .background(Color.tCard)
         .overlay(Divider().background(Color.tBorder), alignment: .bottom)
         .contentShape(Rectangle())
-        .gesture(topBarPull)
-        // Geste interrompu en plein glissé : le lecteur reprend sa place.
-        .onChange(of: topBarDragging) { active in
-            if !active, playerVisible, pull.y > 0 { pullPlayer(0) }
-        }
+        // Le tirer vers le bas réduit le lecteur (l'image du lecteur natif
+        // aussi, voir VideoPlayerView). Geste interrompu : il reprend sa place.
+        .modifier(PlayerPullGesture(
+            onPull: { pullPlayer($0) },
+            onPullEnd: { endPull($0, predicted: $1) }
+        ))
     }
 
     /// Barre de l'écran de chargement : réduire (le chargement continue, la
@@ -1183,16 +1300,25 @@ struct MainTabView: View {
         logger.warn("LECTEUR", "Calages répétés : qualité baissée", "\(current) → \(next)")
         immersiveQuality = next
         slowNetworkNotice = store.t("slow_network_quality")
-        DispatchQueue.main.asyncAfter(deadline: .now() + 4) { slowNetworkNotice = nil }
+        slowNoticeShown = true
+        // Annulable : un second avis reste ses 4 s (l'effacement du premier,
+        // par asyncAfter, l'emportait au bout d'une seconde).
+        slowNoticeTask?.cancel()
+        slowNoticeTask = Task {
+            try? await Task.sleep(nanoseconds: 4_000_000_000)
+            guard !Task.isCancelled else { return }
+            slowNetworkNotice = nil
+        }
     }
 
     /// Qualité en cours pour le lecteur immersif : celle choisie, sinon la
-    /// qualité préférée (ou la plus proche en dessous).
-    private func currentQuality(_ links: QualityLinks) -> String {
+    /// qualité préférée (ou la plus proche en dessous). `variants` : celles de
+    /// `links` quand ce ne sont pas les liens en cours (qualités supérieures).
+    private func currentQuality(_ links: QualityLinks, variants: [String: VariantInfo]? = nil) -> String {
         if !immersiveQuality.isEmpty, links[immersiveQuality] != nil { return immersiveQuality }
         // En données mobiles : la qualité choisie pour elles (Auto par défaut).
         return launchQualityKey(Array(links.keys), pref: store.preferredQuality, cellularPref: store.cellularQuality,
-                                cellular: NetworkStatus.shared.isCellular, variants: qualityVariants)
+                                cellular: NetworkStatus.shared.isCellular, variants: variants ?? qualityVariants)
     }
 
     /// Arrondi à la seconde : sinon la vue se recalculerait à chaque tick.
@@ -1201,15 +1327,18 @@ struct MainTabView: View {
         if abs(rounded - liveLatency) >= 1 { liveLatency = rounded }
     }
 
+    /// Retard de l'image, pour la synchro du chat (ChatSync) : le direct du
+    /// lecteur principal seulement. Une VOD, l'enregistrement (DVR, même
+    /// pendant la bascule) ou le chat seul n'ont pas d'image à suivre.
     private func updateBehind(_ value: Double?) {
-        let rounded = max(0, value ?? 0).rounded()
-        if abs(rounded - liveBehind) >= 1 { liveBehind = rounded }
+        if isLivePlaying, !chatOnly { ChatSync.shared.update(value) } else { ChatSync.shared.reset() }
     }
 
     /// Réduit le lecteur en mini-barre (flèche, ou glissé vers le bas) : il
     /// file jusqu'en bas en s'effaçant, comme dans l'app Twitch. Avec
     /// « Réduire les animations », un simple fondu.
     private func reducePlayer() {
+        guard playerVisible, !closingPlayer else { return }
         if reduceMotion {
             withAnimation(.easeOut(duration: 0.15)) { playerVisible = false }
         } else {
@@ -1228,6 +1357,7 @@ struct MainTabView: View {
     /// Doigt levé : assez loin (seuil selon la hauteur), ou lancé
     /// franchement, on réduit ; sinon le lecteur revient à sa place.
     private func endPull(_ distance: CGFloat, predicted: CGFloat) {
+        guard playerVisible, !closingPlayer else { return }
         let threshold = PlayerPull.threshold(for: pull.height)
         if distance >= threshold || (distance > 20 && predicted >= threshold * 1.8) {
             reducePlayer()
@@ -1238,25 +1368,17 @@ struct MainTabView: View {
 
     /// Le lecteur suit le doigt ; 0 = relâché trop tôt, il revient en place.
     private func pullPlayer(_ y: CGFloat) {
+        guard playerVisible, !closingPlayer else { return }
         if y <= 0 {
             guard pull.y != 0 else { return }
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { pull.y = 0 }
+            withAnimation(reduceMotion ? .easeOut(duration: 0.15) : .spring(response: 0.3, dampingFraction: 0.8)) { pull.y = 0 }
         } else {
-            pull.y = y
+            // Au doigt, sans animation : même si le lecteur revenait encore
+            // en place, il suit aussitôt (borné à sa hauteur).
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) { pull.y = min(y, pull.height) }
         }
-    }
-
-    /// Bandeau du lecteur natif : le tirer vers le bas réduit le lecteur.
-    /// (Sur l'image, le lecteur d'Apple garde ses propres gestes.)
-    /// Repère global : le bandeau descend avec le doigt ; mesuré dans son
-    /// propre repère, le déplacement se fausserait à chaque image (à-coups).
-    private var topBarPull: some Gesture {
-        DragGesture(minimumDistance: 12, coordinateSpace: CoordinateSpace.global)
-            .updating($topBarDragging) { _, active, _ in active = true }
-            .onChanged { v in pullPlayer(max(0, v.translation.height)) }
-            .onEnded { v in
-                endPull(max(0, v.translation.height), predicted: v.predictedEndTranslation.height)
-            }
     }
 
     /// VOD en cours : de quoi proposer d'en télécharger un passage (liens
@@ -1320,15 +1442,73 @@ struct MainTabView: View {
         }
     }
 
-    /// Direct servi par le compte (abonné sans pub) : annoncé au lancement.
+    /// Position de la VOD en cours, en secondes entières (0 si illisible).
+    private var vodShareSeconds: Int {
+        vodPlaybackTime.isFinite ? max(0, Int(vodPlaybackTime)) : 0
+    }
+
+    /// Lien partagé depuis le menu du lecteur : la VOD (ou le rembobinage
+    /// d'un direct) à la position en cours, la chaîne d'un direct, le clip.
+    /// Rien pour une VOD retrouvée ou téléchargée : pas de page Twitch.
+    private var shareURL: URL? {
+        switch playerMode {
+        case .live(let channel)?:
+            return URL(string: "https://www.twitch.tv/\(channel.lowercased())")
+        case .vod(let id, _, _, _)?:
+            let t = vodShareSeconds
+            return URL(string: "https://www.twitch.tv/videos/\(id)?t=\(t / 3600)h\((t % 3600) / 60)m\(t % 60)s")
+        case .clip(let slug, _)?:
+            return URL(string: "https://clips.twitch.tv/\(slug)")
+        default:
+            return nil
+        }
+    }
+
+    /// Position partagée d'une VOD, affichée à côté de « Partager ».
+    private var shareDetail: String? {
+        guard case .vod? = playerMode else { return nil }
+        let t = vodShareSeconds
+        return t >= 3600 ? String(format: "%d:%02d:%02d", t / 3600, (t % 3600) / 60, t % 60)
+                         : String(format: "%d:%02d", t / 60, t % 60)
+    }
+
+    /// Direct en cours (pas son rembobinage) : en créer un clip, à l'image
+    /// affichée — maintenant moins la latence mesurée du direct (inconnue :
+    /// 5 s, celle d'un direct ordinaire).
+    private var createClipAction: (() -> Void)? {
+        guard case .live(let channel)? = playerMode, qualityLinks != nil, !loading,
+              errorMsg == nil else { return nil }
+        return {
+            showPlayerMenu = false
+            let moment = Date().addingTimeInterval(-(liveLatency > 0 ? liveLatency : 5))
+            ClipCreator.shared.start(login: channel, moment: moment, store: store)
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 400_000_000)
+                showClipSheet = true
+            }
+        }
+    }
+
+    /// Direct servi par le compte (abonné sans pub) : annoncé au lancement,
+    /// une fois. Revenu après « Connexion lente » (4 s plus tard), il était
+    /// réannoncé à chaque baisse de qualité. Qualités supérieures sans
+    /// abonnement : pas « sans pub », et plus après une première bascule
+    /// (chacune a son avis, hqNotice).
     private var accountNotice: String? {
-        menuLiveSource == "account" ? store.t("src_account_toast") : nil
+        guard !slowNoticeShown else { return nil }
+        switch menuLiveSource {
+        case "account"?: return store.t("src_account_toast")
+        case "account_hq"? where (hqLive?.switches ?? 0) == 0: return store.t("src_account_hq_toast")
+        default: return nil
+        }
     }
 
     /// Source du direct pour le menu du lecteur : seulement pendant un direct
-    /// (pas pendant son rembobinage, qui lit la VOD en cours).
+    /// (pas pendant son rembobinage, qui lit la VOD en cours). Le compte d'un
+    /// non-abonné en qualité supérieure : « account_hq » (pas sans pub).
     private var menuLiveSource: String? {
         guard case .live? = playerMode, dvrSourceChannel == nil else { return nil }
+        if liveSourceUsed == "account", hqLive != nil { return "account_hq" }
         return liveSourceUsed
     }
 
@@ -1397,16 +1577,31 @@ struct MainTabView: View {
     }
 
     /// Vitesse de ce qui se lit hors direct : celle des VODs (retenue d'une
-    /// VOD à l'autre, seule source de vérité), ou celle du clip en cours.
-    private var playbackSpeed: Double { isClipPlaying ? clipSpeed : store.vodSpeed }
+    /// VOD à l'autre, sauf vitesse imposée pour la lecture en cours), ou
+    /// celle du clip en cours.
+    private var playbackSpeed: Double { isClipPlaying ? clipSpeed : (forcedVodSpeed ?? store.vodSpeed) }
 
     private func setPlaybackSpeed(_ v: Double) {
         let speed = VodSpeed.nearest(v)
         if isClipPlaying {
             clipSpeed = speed
-        } else if speed != store.vodSpeed {
-            store.vodSpeed = speed
-            logger.settingChanged("Vitesse des VODs", value: String(format: "×%g", speed))
+        } else {
+            forcedVodSpeed = nil
+            if speed != store.vodSpeed {
+                store.vodSpeed = speed
+                logger.settingChanged("Vitesse des VODs", value: String(format: "×%g", speed))
+            }
+        }
+    }
+
+    /// Vitesse imposée par le lecteur immersif : retenue pour cette lecture
+    /// seulement (voir `forcedVodSpeed`) ; celle d'un clip, comme un choix.
+    private func setForcedSpeed(_ v: Double) {
+        let speed = VodSpeed.nearest(v)
+        if isClipPlaying {
+            clipSpeed = speed
+        } else {
+            forcedVodSpeed = speed == store.vodSpeed ? nil : speed
         }
     }
 
@@ -1598,9 +1793,12 @@ struct MainTabView: View {
         vodPlaybackTime = 0
         liveDvrVideoId  = nil
         liveLatency     = 0
-        liveBehind      = 0
+        ChatSync.shared.reset()
         pull.y          = 0
         loadingSource   = nil
+        slowNoticeShown = false
+        // Qualités supérieures : décidées de nouveau par cette lecture.
+        resetHQLive()
 
         if soft {
             switchingSource = true
@@ -1617,6 +1815,9 @@ struct MainTabView: View {
             liveAvatar       = nil
             liveGame         = ""
             immersiveQuality = ""
+            // Vitesse imposée à la lecture précédente : la préférence revient.
+            // Gardée en bascule (direct ↔ enregistrement, même chaîne).
+            forcedVodSpeed   = nil
             // Titre provisoire (mini-barre d'un chargement réduit) : le vrai
             // arrive avec les liens.
             switch mode {
@@ -1742,9 +1943,11 @@ struct MainTabView: View {
                 // Abonné sans pub sur cette chaîne : le direct passe par son
                 // compte (session web), sinon jeton anonyme comme avant.
                 let web = store.accountPlaybackWebToken(for: channel)
-                // Source essayée : dite par l'écran de chargement.
+                // Source essayée : dite par l'écran de chargement. Qualités
+                // supérieures sans abonnement : ce lecteur seulement (HQLive).
                 let data = await getLive(channelName: channel, webToken: web,
                                          integrity: web.map { dropsIntegrity(for: $0) },
+                                         hqAccount: true,
                                          onSource: { source in
                                              DispatchQueue.main.async {
                                                  if gen == loadGeneration { loadingSource = source }
@@ -1774,12 +1977,24 @@ struct MainTabView: View {
                     // durée des segments (LivePlaylistLoader), relue toutes les
                     // 2 s au lieu de 6 — le lecteur peut tenir près du bord.
                     let playable = store.lowLatency ? LivePlaylistLoader.wrap(links) : links
+                    // Qualités supérieures par le compte d'un non-abonné.
+                    let hq = await hqLaunch(data)
                     await MainActor.run {
                         guard gen == loadGeneration else { return }
-                        qualityLinks      = playable
+                        if let live = hq?.live {
+                            hqLive            = live
+                            // Qualité du compte, retrouvée après chaque pause pub.
+                            immersiveQuality  = live.accountQuality
+                            qualityLinks      = live.onAdFree ? live.adFree : live.account
+                            qualityVariants   = live.onAdFree ? live.adFreeVariants : live.accountVariants
+                            liveSourceUsed    = live.onAdFree ? live.adFreeSource : "account"
+                        } else {
+                            qualityLinks      = playable
+                            qualityVariants   = data.variants
+                            liveSourceUsed    = data.source
+                        }
                         linksContentID    = playerContentID
                         linksAreLive      = true
-                        qualityVariants   = data.variants
                         statusTitle       = data.title.isEmpty ? channel : data.title
                         liveViewerCount   = data.viewerCount
                         liveStartedAt     = data.startedAt
@@ -1789,10 +2004,16 @@ struct MainTabView: View {
                         liveAvatar        = data.avatar
                         liveGame          = data.game
                         liveDvrVideoId    = data.dvrVideoId
-                        liveSourceUsed    = data.source
                         loading           = false
                         switchingSource   = false
                         startLiveTimers(channel: channel)
+                        // Pub au début du flux du compte : annoncée, et retour
+                        // prévu à sa fin.
+                        if let hq, hq.live.onAdFree {
+                            let q = hqQualityLabel(hq.live.adFree, hq.live.adFreeVariants)
+                            showHQNotice(store.t("hq_ad_fallback").replacingOccurrences(of: "{q}", with: q))
+                            scheduleHQReturn(after: hq.wait + 1)
+                        }
                     }
                     // GQL ne rend pas toujours `profileImageURL` : repli Helix,
                     // plutôt qu'un rond gris pour le reste de la session.
@@ -1821,6 +2042,7 @@ struct MainTabView: View {
         loadGeneration += 1   // un chargement encore en cours sera ignoré
         let gen = loadGeneration
         stopLiveTimers()
+        resetHQLive()
         // Fin de visionnage : la progression part maintenant, plutôt que
         // toutes les quelques secondes pendant la lecture.
         store.flushToCloud(force: true)
@@ -1838,6 +2060,10 @@ struct MainTabView: View {
             // touchables dès son début) : c'est elle qui compte. Le ménage
             // effaçait son état, alors que son chargement se poursuivait.
             guard gen == loadGeneration else { return }
+            // Vraie fermeture : la Live Activity part. Le démontage du lecteur
+            // ne la termine qu'au premier plan (PlayerActivity.playerRemoved) :
+            // arrêté écran verrouillé (minuteur de veille), il la laissait.
+            PlayerActivity.end()
             chatOnly           = false
             currentChannelName = nil
             currentChannelId   = nil
@@ -1848,7 +2074,7 @@ struct MainTabView: View {
             liveStartedAt      = nil
             liveUptimeText     = ""
             liveLatency        = 0
-            liveBehind         = 0
+            ChatSync.shared.reset()
             pull.y             = 0
             liveAvatar         = nil
             clipVodId          = nil
@@ -1878,6 +2104,316 @@ struct MainTabView: View {
             vodUnmuted         = 0
             closingPlayer      = false
         }
+    }
+
+    // MARK: – Qualités supérieures sans abonnement
+    /// Dernières secondes de la playlist du compte qui doivent être sans pub
+    /// pour y revenir : le lecteur repart à quelques secondes du bord (6 s en
+    /// faible latence, trois segments sinon).
+    private var hqEdgeWindow: TimeInterval { store.lowLatency ? 10 : 20 }
+
+    /// Qualités supérieures par le compte d'un non-abonné (getLive :
+    /// hqAccountLinks) : seulement si la qualité de départ y dépasse 1080p
+    /// (sinon aucune pub risquée pour rien), et d'abord par la source sans pub
+    /// quand une pub ouvre la playlist du compte (`wait` : ses secondes
+    /// restantes) ; sans bascule si la source habituelle a elle aussi des
+    /// pubs (Twitch officiel). nil : la source habituelle, comme avant.
+    private func hqLaunch(_ data: LiveData) async -> (live: HQLive, wait: TimeInterval)? {
+        let wrap = { (links: QualityLinks) -> QualityLinks in
+            store.lowLatency ? LivePlaylistLoader.wrap(links) : links
+        }
+        // Aucune source habituelle n'a répondu : le compte, sans bascule possible.
+        if data.accountAds, let links = data.links {
+            let live = HQLive(account: wrap(links), accountVariants: data.variants,
+                              accountQuality: currentQuality(links, variants: data.variants),
+                              adFree: [:], adFreeVariants: [:], adFreeSource: nil)
+            return (live, 0)
+        }
+        guard let account = data.hqAccountLinks, !account.isEmpty,
+              let adFree = data.links, !adFree.isEmpty else { return nil }
+        let start = currentQuality(account, variants: data.hqAccountVariants)
+        guard qualityHeight(start, among: Array(account.keys), variants: data.hqAccountVariants) > 1080 else {
+            logger.info("LECTEUR", "Qualité de départ en 1080p ou moins", "source habituelle, sans pub")
+            return nil
+        }
+        // 2 s au plus : avec la liste du compte (getLive, 2 s aussi), le
+        // lancement attend 4 s de plus au pire.
+        guard let url = account[start].flatMap({ URL(string: $0) }),
+              let wait = await AdBreakMonitor.adWait(at: url, window: hqEdgeWindow, timeout: 2) else {
+            logger.warn("LECTEUR", "Flux du compte injoignable", "source habituelle, sans pub")
+            return nil
+        }
+        // Source habituelle = Twitch officiel sans compte : des pubs elle
+        // aussi, aucune bascule n'y gagnerait. Le compte seul, comme sans
+        // source habituelle : ses pubs coupées et annoncées, pré-roll compris.
+        guard data.source != "twitch" else {
+            logger.info("LECTEUR", "Source habituelle avec pubs (Twitch officiel) : direct par le compte",
+                        "pubs de Twitch comprises")
+            let live = HQLive(account: wrap(account), accountVariants: data.hqAccountVariants,
+                              accountQuality: start, adFree: [:], adFreeVariants: [:], adFreeSource: nil)
+            return (live, 0)
+        }
+        var live = HQLive(account: wrap(account), accountVariants: data.hqAccountVariants,
+                          accountQuality: start, adFree: wrap(adFree), adFreeVariants: data.variants,
+                          adFreeSource: data.source)
+        if wait > 0 {
+            // Twitch coud souvent une pub au début de la séance : la source
+            // sans pub d'abord, le compte à sa fin.
+            live.onAdFree = true
+            live.switches = 1
+            logger.info("PUB", "Pub au début du flux du compte", "source sans pub d'abord")
+        }
+        return (live, wait)
+    }
+
+    /// Pause pub à l'écran d'après le lecteur (secondes restantes, nil hors
+    /// pause). Sur le flux du compte : la source sans pub — pas en pause (la
+    /// bascule relancerait la lecture ; le compte à rebours, qui reprend avec
+    /// elle, la refait). Sur la source sans pub : une pause de la chaîne
+    /// (écran violet), que le retour attend.
+    private func adBreakChanged(_ left: Int?) {
+        guard var live = hqLive, linksAreLive, dvrSourceChannel == nil,
+              !switchingSource, !closingPlayer else { return }
+        if live.onAdFree {
+            guard live.adFreeBreak != left else { return }
+            live.adFreeBreak = left
+            hqLive = live
+        } else if let left, playerPlaying {
+            switchToAdFree(remaining: left)
+        }
+    }
+
+    /// Pause pub de Twitch sur le flux du compte : la source sans pub (1080p
+    /// au plus ; la qualité choisie si elle y est), comme un changement de
+    /// qualité — lecteur, chat et Live Activity restent. Retour prévu à la fin
+    /// de la pause : `left` s et une marge (scheduleHQReturn).
+    private func switchToAdFree(remaining left: Int) {
+        guard var live = hqLive, !live.onAdFree, !live.adFree.isEmpty, !live.refreshing else { return }
+        // Liens lus il y a plus de 10 min : leurs adresses de séance ont pu
+        // expirer, et le lecteur resterait figé dessus. Relus d'abord ; la
+        // bascule attend des liens frais (seconde suivante de la pause). Ratée,
+        // la pub reste sur le compte, coupée et annoncée comme ailleurs, et
+        // pas de nouvel essai avant une minute.
+        if live.adFreeStale {
+            if let failed = live.refreshFailed, Date().timeIntervalSince(failed) < 60 { return }
+            logger.info("PUB", "Source sans pub lue il y a plus de 10 min", "relue avant la bascule")
+            refreshAdFree()
+            return
+        }
+        // Pub revenue moins de 30 s après un retour : la pause n'était pas
+        // finie, ou Twitch en remet. Deux fois de suite : plus de retour.
+        if let back = live.lastReturn, Date().timeIntervalSince(back) < 30 {
+            live.quickAds += 1
+        } else {
+            live.quickAds = 0
+        }
+        live.onAdFree = true
+        live.adFreeBreak = nil
+        live.switches += 1
+        hqLive = live
+        qualityLinks = live.adFree
+        qualityVariants = live.adFreeVariants
+        liveSourceUsed = live.adFreeSource
+        let q = hqQualityLabel(live.adFree, live.adFreeVariants)
+        showHQNotice(store.t("hq_ad_fallback").replacingOccurrences(of: "{q}", with: q))
+        logger.info("PUB", "Pause pub Twitch : source sans pub", "\(q) · \(left) s")
+        if live.quickAds >= 2 {
+            logger.warn("PUB", "Pubs répétées sur le flux du compte", "reste sur la source sans pub")
+            settleOnAdFree()
+        } else {
+            scheduleHQReturn(after: TimeInterval(left) + 2)
+        }
+    }
+
+    /// Retour au flux du compte, `delay` s plus tard. Pas tant que la source
+    /// sans pub montre elle-même une pause (celle de la chaîne), ni que le bord
+    /// de la playlist du compte est en pub (pub suivante, annoncée après
+    /// coup) : on attend encore, vingt vérifications au plus, puis on reste
+    /// sur la source sans pub, qui a l'image. Playlist du compte injoignable :
+    /// on y reste aussi. Lecture en pause : plus de vérification (le retour la
+    /// relancerait) ; elles reprennent avec la lecture (onChange playerPlaying).
+    private func scheduleHQReturn(after delay: TimeInterval) {
+        hqReturnTask?.cancel()
+        let gen = loadGeneration
+        hqReturnTask = Task { @MainActor in
+            var wait = delay
+            var checks = 0
+            while true {
+                try? await Task.sleep(nanoseconds: UInt64(max(1, wait) * 1_000_000_000))
+                guard !Task.isCancelled, gen == loadGeneration, let live = hqLive, live.onAdFree else { return }
+                // En pause : la tâche s'arrête, la reprise la relance. Pas
+                // annulée, c'est bien elle que tient hqReturnTask.
+                guard playerPlaying else {
+                    hqReturnTask = nil
+                    return
+                }
+                checks += 1
+                guard checks <= 20 else {
+                    logger.warn("PUB", "Retour au flux du compte impossible", "reste sur la source sans pub")
+                    settleOnAdFree()
+                    return
+                }
+                // Pause de la chaîne sur la source sans pub : le compte a la sienne.
+                if let left = live.adFreeBreak {
+                    wait = TimeInterval(left) + 2
+                    continue
+                }
+                // Bascule ou erreur en cours : un peu plus tard.
+                guard linksAreLive, !switchingSource, errorMsg == nil,
+                      let link = live.account[currentQuality(live.account, variants: live.accountVariants)],
+                      let url = URL(string: link).flatMap({ LivePlaylistLoader.unwrap($0) }) else {
+                    wait = 5
+                    continue
+                }
+                let pending = await AdBreakMonitor.adWait(at: url, window: hqEdgeWindow)
+                guard !Task.isCancelled, gen == loadGeneration, let after = hqLive, after.onAdFree else { return }
+                // Mise en pause pendant la vérification : comme plus haut.
+                guard playerPlaying else {
+                    hqReturnTask = nil
+                    return
+                }
+                // Pause de la chaîne commencée pendant la vérification.
+                if let left = after.adFreeBreak {
+                    wait = TimeInterval(left) + 2
+                    continue
+                }
+                guard let pending else {
+                    logger.warn("PUB", "Flux du compte injoignable", "reste sur la source sans pub")
+                    settleOnAdFree()
+                    return
+                }
+                if pending > 0 {
+                    wait = min(pending + 1, 30)
+                    logger.debug("PUB", "Pub encore au bord du flux du compte", "nouvel essai dans \(Int(wait)) s")
+                    continue
+                }
+                returnToAccount()
+                return
+            }
+        }
+    }
+
+    /// Fin de la pause pub : retour au flux du compte, dans la qualité qu'il
+    /// avait (ou celle choisie entre-temps, si elle y est).
+    private func returnToAccount() {
+        guard var live = hqLive, live.onAdFree else { return }
+        live.onAdFree = false
+        live.adFreeBreak = nil
+        live.lastReturn = Date()
+        hqLive = live
+        qualityLinks = live.account
+        qualityVariants = live.accountVariants
+        liveSourceUsed = "account"
+        let q = hqQualityLabel(live.account, live.accountVariants)
+        showHQNotice(store.t("hq_ad_back").replacingOccurrences(of: "{q}", with: q))
+        logger.info("PUB", "Fin de la pause pub : retour au flux du compte", q)
+    }
+
+    /// Lecture arrêtée sur une erreur (après les relances du lecteur). Flux du
+    /// compte : la source sans pub, pour de bon (relue d'abord si ses liens
+    /// sont trop anciens). Source sans pub, pendant une pause : retour au
+    /// compte tout de suite — sa pub y est coupée et annoncée, comme sur les
+    /// autres sources — et la source habituelle est relue pour les pauses
+    /// suivantes ; rien où basculer d'ici là.
+    private func hqStreamFailed() {
+        guard var live = hqLive, !live.adFree.isEmpty, linksAreLive,
+              dvrSourceChannel == nil, !switchingSource else { return }
+        guard live.onAdFree else {
+            logger.warn("LECTEUR", "Flux du compte en échec", "reste sur la source sans pub")
+            if live.adFreeStale { refreshAdFree { settleOnAdFree() } } else { settleOnAdFree() }
+            return
+        }
+        logger.warn("LECTEUR", "Source sans pub en échec", "retour au flux du compte, source relue")
+        hqReturnTask?.cancel()
+        hqReturnTask = nil
+        live.onAdFree = false
+        live.adFreeBreak = nil
+        // Liens morts : plus de bascule dessus tant qu'ils ne sont pas relus.
+        live.adFreeAt = .distantPast
+        hqLive = live
+        qualityLinks = live.account
+        qualityVariants = live.accountVariants
+        liveSourceUsed = "account"
+        refreshAdFree()
+    }
+
+    /// Source habituelle relue sans le compte, comme au lancement (getLive sans
+    /// hqAccount) : des liens frais pour les pauses pub. Twitch officiel sans
+    /// compte n'en est pas une (des pubs aussi). Ratée : les anciens liens ne
+    /// servent plus, nouvel essai une minute plus tard au plus tôt
+    /// (switchToAdFree). `done` : après une relecture réussie, même lecture.
+    private func refreshAdFree(then done: (() -> Void)? = nil) {
+        guard var live = hqLive, !live.refreshing, case .live(let channel)? = playerMode else { return }
+        live.refreshing = true
+        hqLive = live
+        let gen = loadGeneration
+        Task { @MainActor in
+            let data = await getLive(channelName: channel)
+            guard gen == loadGeneration, var now = hqLive else { return }
+            now.refreshing = false
+            guard let links = data.links, !links.isEmpty, data.source != "twitch" else {
+                now.refreshFailed = Date()
+                hqLive = now
+                logger.warn("PUB", "Source sans pub injoignable", "reste sur le flux du compte")
+                return
+            }
+            now.adFree = store.lowLatency ? LivePlaylistLoader.wrap(links) : links
+            now.adFreeVariants = data.variants
+            now.adFreeSource = data.source
+            now.adFreeAt = Date()
+            now.refreshFailed = nil
+            hqLive = now
+            done?()
+        }
+    }
+
+    /// Plus de retour au compte pour cette lecture (pubs répétées, flux du
+    /// compte injoignable ou en échec) : la source sans pub reste, comme un
+    /// direct ordinaire, et le compte n'est plus essayé sur cette chaîne
+    /// jusqu'au prochain lancement de l'app (relecture, « Réessayer »).
+    private func settleOnAdFree() {
+        hqReturnTask?.cancel()
+        hqReturnTask = nil
+        guard let live = hqLive, !live.adFree.isEmpty else { return }
+        if !live.onAdFree {
+            qualityLinks = live.adFree
+            qualityVariants = live.adFreeVariants
+            liveSourceUsed = live.adFreeSource
+        }
+        hqLive = nil
+        guard case .live(let channel)? = playerMode else { return }
+        store.accountPlaybackSkipped.insert(channel.lowercased())
+        // Le compte ne lit plus le flux : la pulsation des drops s'en charge.
+        startDropsHeartbeat(channel: channel)
+    }
+
+    /// Qualité lue sur ces liens, pour les avis : « Source » par sa hauteur
+    /// (« 1080p »), les autres par leur nom des menus.
+    private func hqQualityLabel(_ links: QualityLinks, _ variants: [String: VariantInfo]) -> String {
+        let key = currentQuality(links, variants: variants)
+        if isSourceQuality(key), let height = variants[key]?.height, height > 0 { return "\(height)p" }
+        return qualityText(key, store.lang)
+    }
+
+    /// Bascule annoncée dans le lecteur, 4 s.
+    private func showHQNotice(_ text: String) {
+        hqNotice = text
+        hqNoticeTask?.cancel()
+        hqNoticeTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 4_000_000_000)
+            guard !Task.isCancelled else { return }
+            hqNotice = nil
+        }
+    }
+
+    /// Autre lecture, ou fermeture : plus de bascule ni de retour prévu.
+    private func resetHQLive() {
+        hqReturnTask?.cancel()
+        hqReturnTask = nil
+        hqLive = nil
+        hqNoticeTask?.cancel()
+        hqNoticeTask = nil
+        hqNotice = nil
     }
 
     // MARK: – Live timers
@@ -1913,8 +2449,9 @@ struct MainTabView: View {
     /// progressait avant de rouvrir le live.
     private func startDropsHeartbeat(channel: String) {
         guard store.dropsProgress, let web = store.twitchWebToken, !web.isEmpty else { return }
+        // Qualités supérieures : le compte lit le flux, sauf le temps des pauses pub.
         DropsHeartbeat.shared.start(login: channel, token: web,
-                                    pollSegments: liveSourceUsed != "account")
+                                    pollSegments: liveSourceUsed != "account" && hqLive == nil)
     }
 
     private func stopLiveTimers() {
@@ -1947,6 +2484,8 @@ struct CustomTabBar: View {
     /// Verre liquide : capsule flottante au-dessus du contenu.
     var floating = false
     @EnvironmentObject private var store: AppStore
+    /// Visite guidée en cours : tous les onglets, même masqués.
+    @AppStorage("onboarding_done") private var onboardingDone = false
 
     private var bottomInset: CGFloat {
         UIApplication.shared.connectedScenes
@@ -1974,9 +2513,15 @@ struct CustomTabBar: View {
 
     private var tabs: some View {
         HStack(spacing: 0) {
-            ForEach(MainTabView.TabName.visible(store), id: \.self) { tab in
+            ForEach(MainTabView.TabName.visible(store, all: !onboardingDone), id: \.self) { tab in
                 let isActive = activeTab == tab
                 Button {
+                    // Onglet déjà affiché : sa liste remonte en haut, comme
+                    // dans les apps d'iOS (TabScrollView, Découvrir).
+                    guard activeTab != tab else {
+                        NotificationCenter.default.post(name: .tuTabReselected, object: tab)
+                        return
+                    }
                     withAnimation(.easeOut(duration: 0.15)) { activeTab = tab }
                 } label: {
                     VStack(spacing: 4) {
@@ -1993,6 +2538,35 @@ struct CustomTabBar: View {
                 }
                 .buttonStyle(.plain)
                 .tourAnchor(tab.tourTarget)
+            }
+        }
+    }
+}
+
+extension Notification.Name {
+    /// Onglet de la barre touché alors qu'il est déjà affiché (objet : son
+    /// MainTabView.TabName) : l'écran remonte en haut de sa liste.
+    static let tuTabReselected = Notification.Name("TUTabReselected")
+}
+
+/// Liste défilante d'un onglet de la barre : l'onglet touché à nouveau la
+/// ramène en haut, en douceur. Le contenu est posé sous un repère sans
+/// hauteur, que vise le ScrollViewReader.
+struct TabScrollView<Content: View>: View {
+    let tab: MainTabView.TabName
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(spacing: 0) {
+                    Color.clear.frame(height: 0).id("tab_top")
+                    content()
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .tuTabReselected)) { note in
+                guard (note.object as? MainTabView.TabName) == tab else { return }
+                withAnimation(.easeInOut(duration: 0.35)) { proxy.scrollTo("tab_top", anchor: .top) }
             }
         }
     }
@@ -2017,4 +2591,39 @@ enum ScreenAwake {
         guard UIApplication.shared.isIdleTimerDisabled != wanted else { return }
         UIApplication.shared.isIdleTimerDisabled = wanted
     }
+}
+
+/// Direct en qualité supérieure par le compte d'un non-abonné
+/// (HigherQualities) : les liens du compte, que Twitch coupe de ses pubs, et
+/// ceux de la source habituelle sans pub, lue le temps de chaque pause pub
+/// (MainTabView.adBreakChanged).
+private struct HQLive {
+    /// Liens jouables (tulive:// en faible latence) et variantes du compte.
+    let account: QualityLinks
+    let accountVariants: [String: VariantInfo]
+    /// Qualité de départ sur le flux du compte (au-dessus de 1080p).
+    let accountQuality: String
+    /// Source habituelle : vide si aucune n'a répondu, ou si c'est Twitch
+    /// officiel, avec ses pubs (rien où basculer).
+    var adFree: QualityLinks
+    var adFreeVariants: [String: VariantInfo]
+    var adFreeSource: String?
+    /// Lecture de ces liens (lancement, ou relus) : adresses de séance, qui
+    /// peuvent expirer ; plus de 10 min, relus avant une bascule.
+    var adFreeAt = Date()
+    var adFreeStale: Bool { Date().timeIntervalSince(adFreeAt) > 600 }
+    /// Relecture en cours (refreshAdFree), et dernière ratée.
+    var refreshing = false
+    var refreshFailed: Date? = nil
+    /// Sur la source sans pub en ce moment.
+    var onAdFree = false
+    /// Pause à l'écran sur la source sans pub (pause de la chaîne, écran
+    /// violet) : secondes restantes, que le retour attend.
+    var adFreeBreak: Int? = nil
+    /// Dernier retour au compte, et pubs revenues juste après (voir
+    /// switchToAdFree).
+    var lastReturn: Date? = nil
+    var quickAds = 0
+    /// Bascules faites : l'avis « par ton compte » n'est plus redit après.
+    var switches = 0
 }

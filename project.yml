@@ -68,6 +68,8 @@ targets:
       - path: Sources/Theme.swift
       - path: Sources/Models.swift
       - path: Sources/Localization/RussianStrings.swift
+      - path: Sources/Localization/ItalianStrings.swift
+      - path: Sources/Localization/JapaneseStrings.swift
       - path: Sources/Services/Logger.swift
       - path: Sources/Services/Keychain.swift
       - path: Sources/Services/TopLanguage.swift

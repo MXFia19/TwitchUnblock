@@ -43,11 +43,12 @@ struct SettingsView: View {
     @State private var apiLoggingIn    = false
     @State private var cacheBytes: Int64 = 0
     @State private var cacheFiles      = 0
-    @ObservedObject private var sleepTimer = SleepTimerService.shared
+    // Minuteur de veille : suivi par sa seule ligne (SleepTimerSettingRow).
     @ObservedObject private var usage      = UsageService.shared
     @Environment(\.dismiss) private var dismiss
     @State private var showSleepSheet  = false
     @State private var showHidden      = false   // chaînes et catégories masquées
+    @State private var showCustomize   = false   // onglets, accueil, lecteur, chat
     // Sauvegarde (export / import)
     @State private var exportDoc: BackupDocument? = nil
     @State private var showExporter    = false
@@ -156,6 +157,11 @@ struct SettingsView: View {
         // ── Chaînes et catégories masquées ───────────────────────────
         .sheet(isPresented: $showHidden) {
             HiddenContentSheet().environmentObject(store)
+                .inAppNoticeHost()
+        }
+        // ── Personnaliser : onglets, accueil, lecteur, chat ──────────
+        .sheet(isPresented: $showCustomize) {
+            CustomizeView().environmentObject(store)
                 .inAppNoticeHost()
         }
         // ── Logs sheet ───────────────────────────────────────────────
@@ -498,6 +504,7 @@ struct SettingsView: View {
                     usageCard
                 case .general:
                     langueCard
+                    customizeCard
                     hiddenCard
                     apparenceCard
                     autoclaimCard
@@ -697,15 +704,41 @@ struct SettingsView: View {
                 Divider().background(Color.tBorder)
                 toggleRow(store.t("show_recent"), store.t("show_recent_sub"),
                           $store.showRecentChannels, log: "Streamers récents")
-                Divider().background(Color.tBorder)
-                toggleRow(store.t("discover_tab"), store.t("discover_tab_sub"),
-                          $store.showDiscoverTab, log: "Onglet Découvrir")
             }
         }
     }
 
     /// Chaînes et catégories masquées du top et des catégories : combien, et
     /// la feuille pour les réafficher.
+    /// Réglages → Personnaliser : onglets, accueil, boutons du lecteur et
+    /// bandeaux du chat (CustomizeView).
+    @ViewBuilder private var customizeCard: some View {
+        settingCard {
+            VStack(alignment: .leading, spacing: 12) {
+                label("square.grid.3x2.fill", store.t("cust_title"))
+                Text(store.t("cust_sub"))
+                    .font(.tMeta).foregroundColor(.tMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button { showCustomize = true } label: {
+                    HStack(spacing: 8) {
+                        Text(store.t("cust_open"))
+                            .font(.tCardTitle).foregroundColor(.tText)
+                            .lineLimit(1)
+                        Spacer(minLength: 0)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(.tMuted)
+                    }
+                    .padding(12)
+                    .background(Color.tSurface)
+                    .cornerRadius(10)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
     @ViewBuilder private var hiddenCard: some View {
         settingCard {
             VStack(alignment: .leading, spacing: 12) {
@@ -870,9 +903,6 @@ struct SettingsView: View {
     /// Langue des streamers dans « Top des lives » (appareil par défaut).
     @ViewBuilder private var topLangRow: some View {
         let device = TopLanguage.name(TopLanguage.device, in: store.lang)
-        let options = TopLanguage.codes
-            .map { ($0, TopLanguage.name($0, in: store.lang)) }
-            .sorted { $0.1.localizedCompare($1.1) == .orderedAscending }
         HStack(alignment: .center, spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(store.t("top_lang"))
@@ -884,28 +914,38 @@ struct SettingsView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 8)
-            Menu {
-                Button { store.topLang = nil } label: {
-                    if store.topLang == nil { Label("\(store.t("lang_auto")) · \(device)", systemImage: "checkmark") }
-                    else { Text("\(store.t("lang_auto")) · \(device)") }
-                }
-                Divider()
-                ForEach(options, id: \.0) { code, name in
-                    Button { store.topLang = code } label: {
-                        if store.topLang == code { Label(name, systemImage: "checkmark") } else { Text(name) }
+            // Menu refait seulement quand le choix, la langue de l'interface
+            // ou le thème change (KeyedView) : pendant une lecture, les
+            // Réglages se redessinent sans cesse et la liste ouverte remontait
+            // en haut. Thème compris : l'accent se choisit sur cette page.
+            KeyedView(key: "\(store.topLang ?? "")|\(store.lang.rawValue)|\(store.themeID)") {
+                let options = TopLanguage.codes
+                    .map { ($0, TopLanguage.name($0, in: store.lang)) }
+                    .sorted { $0.1.localizedCompare($1.1) == .orderedAscending }
+                Menu {
+                    Button { store.topLang = nil } label: {
+                        if store.topLang == nil { Label("\(store.t("lang_auto")) · \(device)", systemImage: "checkmark") }
+                        else { Text("\(store.t("lang_auto")) · \(device)") }
                     }
+                    Divider()
+                    ForEach(options, id: \.0) { code, name in
+                        Button { store.topLang = code } label: {
+                            if store.topLang == code { Label(name, systemImage: "checkmark") } else { Text(name) }
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Text(store.topLang.map { TopLanguage.name($0, in: store.lang) } ?? store.t("lang_auto"))
+                            .font(.tCardTitle)
+                        Image(systemName: "chevron.up.chevron.down").font(.system(size: 11, weight: .semibold))
+                    }
+                    .foregroundColor(.tPrimary)
+                    .padding(.horizontal, 12).padding(.vertical, 8)
+                    .background(Color.tPrimary.opacity(0.12))
+                    .cornerRadius(10)
                 }
-            } label: {
-                HStack(spacing: 4) {
-                    Text(store.topLang.map { TopLanguage.name($0, in: store.lang) } ?? store.t("lang_auto"))
-                        .font(.tCardTitle)
-                    Image(systemName: "chevron.up.chevron.down").font(.system(size: 11, weight: .semibold))
-                }
-                .foregroundColor(.tPrimary)
-                .padding(.horizontal, 12).padding(.vertical, 8)
-                .background(Color.tPrimary.opacity(0.12))
-                .cornerRadius(10)
             }
+            .equatable()
         }
         .padding(.top, 6)
     }
@@ -1025,6 +1065,9 @@ struct SettingsView: View {
                 toggleRow(store.t("cfg_kbd_suggest"), store.t("cfg_kbd_suggest_sub"),
                           $store.chatKeyboardSuggestions, log: "Suggestions du clavier")
                 Divider().background(Color.tBorder)
+                toggleRow(store.t("cfg_return_sends"), store.t("cfg_return_sends_sub"),
+                          $store.chatReturnSends, log: "Entrée envoie le message")
+                Divider().background(Color.tBorder)
                 toggleRow(store.t("cfg_deleted"), store.t("cfg_deleted_sub"),
                           $store.chatShowDeleted, log: "Messages supprimés")
                 Divider().background(Color.tBorder)
@@ -1034,9 +1077,9 @@ struct SettingsView: View {
                 toggleRow(store.t("hide_commands"), store.t("hide_commands_sub"),
                           $store.chatHideCommands, log: "Masquer les commandes")
                 Divider().background(Color.tBorder)
-                toggleRow(store.t("dbg_chat_delay"), store.t("dbg_chat_delay_sub"),
-                          $store.autoChatDelay, log: "Synchro auto du chat")
-                if store.autoChatDelay {
+                toggleRow(store.t("cfg_chat_sync"), store.t("cfg_chat_sync_sub"),
+                          $store.chatSync, log: "Chat synchronisé avec la vidéo")
+                if store.chatSync {
                     chatSyncNudgeRow
                 }
                 Divider().background(Color.tBorder)
@@ -1187,6 +1230,9 @@ struct SettingsView: View {
                 toggleRow(store.t("restore_muted"), store.t("restore_muted_sub"),
                           $store.restoreMutedAudio, log: "Rétablir le son des passages coupés")
                 Divider().background(Color.tBorder)
+                toggleRow(store.t("dl_wifi_only"), store.t("dl_wifi_only_sub"),
+                          $store.downloadWifiOnly, log: "Téléchargements en Wi-Fi seulement")
+                Divider().background(Color.tBorder)
                 toggleRow(store.t("multi_chat"), store.t("multi_chat_sub"),
                           $store.multiLiveChat, log: "Chat dans le multi-live")
                 Divider().background(Color.tBorder)
@@ -1216,16 +1262,20 @@ struct SettingsView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 8)
-            Picker("", selection: $store.preferredQuality) {
-                ForEach(kQualityPrefs, id: \.self) { pref in
-                    Text(pref == "source" ? store.t("q_source")
-                         : pref == "audio" ? store.t("q_audio") : "\(pref)p")
-                        .tag(pref)
+            // Comme la langue du top : menu refait seulement si son contenu change.
+            KeyedView(key: "\(store.preferredQuality)|\(store.lang.rawValue)|\(store.themeID)") {
+                Picker("", selection: $store.preferredQuality) {
+                    ForEach(kQualityPrefs, id: \.self) { pref in
+                        Text(pref == "source" ? store.t("q_source")
+                             : pref == "audio" ? store.t("q_audio") : "\(pref)p")
+                            .tag(pref)
+                    }
                 }
+                .pickerStyle(.menu)
+                .labelsHidden()
+                .tint(.tPrimary)
             }
-            .pickerStyle(.menu)
-            .labelsHidden()
-            .tint(.tPrimary)
+            .equatable()
             .onChange(of: store.preferredQuality) { value in
                 logger.settingChanged("Qualité préférée", value: value)
             }
@@ -1243,16 +1293,19 @@ struct SettingsView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 8)
-            Picker("", selection: $store.cellularQuality) {
-                ForEach(kCellularQualityPrefs, id: \.self) { pref in
-                    Text(pref == "auto" ? store.t("q_auto") : pref == "same" ? store.t("q_same_wifi")
-                         : pref == "audio" ? store.t("q_audio") : "\(pref)p")
-                        .tag(pref)
+            KeyedView(key: "\(store.cellularQuality)|\(store.lang.rawValue)|\(store.themeID)") {
+                Picker("", selection: $store.cellularQuality) {
+                    ForEach(kCellularQualityPrefs, id: \.self) { pref in
+                        Text(pref == "auto" ? store.t("q_auto") : pref == "same" ? store.t("q_same_wifi")
+                             : pref == "audio" ? store.t("q_audio") : "\(pref)p")
+                            .tag(pref)
+                    }
                 }
+                .pickerStyle(.menu)
+                .labelsHidden()
+                .tint(.tPrimary)
             }
-            .pickerStyle(.menu)
-            .labelsHidden()
-            .tint(.tPrimary)
+            .equatable()
             .onChange(of: store.cellularQuality) { value in
                 logger.settingChanged("Qualité en données mobiles", value: value)
             }
@@ -1298,6 +1351,16 @@ struct SettingsView: View {
                 }
                 .buttonStyle(.plain)
             }
+            // Qualités supérieures : Twitch ne les sert qu'au jeton du compte,
+            // donc par la lecture du compte ci-dessus (grisé tant qu'elle est
+            // coupée) ; sans abonnement, les pauses pub passent par la source
+            // sans pub (MainTabView.adBreakChanged).
+            Divider().background(Color.tBorder)
+            toggleRow(store.t("higher_qualities"),
+                      store.t("higher_qualities_sub").replacingOccurrences(of: "{c}", with: HigherQualities.label),
+                      $store.higherQualities, log: "Qualités supérieures")
+                .disabled(!store.subAdFree)
+                .opacity(store.subAdFree ? 1 : 0.5)
             Divider().background(Color.tBorder)
             VStack(alignment: .leading, spacing: 2) {
                 Text(store.t("live_source_order"))
@@ -1372,34 +1435,7 @@ struct SettingsView: View {
         settingCard {
             VStack(alignment: .leading, spacing: 12) {
                 label("moon.zzz.fill", store.t("sleep_timer"))
-                HStack(spacing: 12) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        if sleepTimer.isActive {
-                            Text(store.t("sleep_remaining"))
-                                .font(.tMeta).foregroundColor(.tMuted)
-                            Text(sleepTimer.label)
-                                .font(.system(size: 26, weight: .bold).monospacedDigit())
-                                .foregroundColor(.tPurple)
-                        } else {
-                            Text(store.t("sleep_timer_sub"))
-                                .font(.tMeta).foregroundColor(.tMuted)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
-                    Spacer(minLength: 8)
-                    Button { showSleepSheet = true } label: {
-                        Text(sleepTimer.isActive ? store.t("sleep_edit")
-                                                 : store.t("sleep_set"))
-                            .font(.tLabel)
-                            .foregroundColor(.tPrimary)
-                            .fixedSize()
-                            .padding(.horizontal, 14).padding(.vertical, 8)
-                            .background(Color.tPrimary.opacity(0.15))
-                            .cornerRadius(8)
-                            .overlay(RoundedRectangle(cornerRadius: 8)
-                                .stroke(Color.tPrimary, lineWidth: 1))
-                    }
-                }
+                SleepTimerSettingRow { showSleepSheet = true }
             }
         }
     }
@@ -1526,6 +1562,11 @@ struct SettingsView: View {
                     }
                     .buttonStyle(.plain)
                     .disabled(apiLoggingIn)
+
+                    // Réglages du compte, les mêmes sur le site et les autres
+                    // appareils (SettingsSync.swift).
+                    toggleRow(store.t("cfg_sync_settings"), store.t("cfg_sync_settings_sub"),
+                              $store.syncSettings, log: "Synchronisation des réglages")
                 }
 
                 Divider().background(Color.tBorder)
@@ -1560,7 +1601,7 @@ struct SettingsView: View {
                     statBox(value: vodCount, label: store.t("vods"), icon: "film")
                     statBox(value: channelCount, label: store.t("channels"), icon: "person.fill")
                 }
-                if vodCount > 0 || channelCount > 0 {
+                if vodCount > 0 || channelCount > 0 || !store.searchHistory.isEmpty {
                     TSecondaryButton(title: store.t("btn_clear"), icon: "trash",
                                      tint: .tDanger, fullWidth: true) {
                         showClearAlert = true
@@ -1861,6 +1902,39 @@ struct SettingsView: View {
         }
     }
 
+    /// Un contributeur : son pseudo GitHub (jamais traduit) et son apport ;
+    /// le toucher ouvre son profil.
+    @ViewBuilder
+    private func contributorLink(_ contributor: Contributor) -> some View {
+        if let url = contributor.profileURL {
+            Link(destination: url) {
+                HStack(spacing: TSpace.sm) {
+                    Image(systemName: "person.crop.circle")
+                        .font(.system(size: 13, weight: .semibold))
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(contributor.login)
+                            .font(.tLabel)
+                        Text(store.t(contributor.contributionKey))
+                            .font(.tMeta)
+                            .foregroundColor(.tMuted)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer()
+                    Image(systemName: "arrow.up.right").font(.system(size: 12, weight: .semibold))
+                }
+                .foregroundColor(.tText)
+                .padding(.horizontal, TSpace.md)
+                .padding(.vertical, 8)
+                .frame(minHeight: 44)
+                .background(Color.tSurface)
+                .cornerRadius(TRadius.control)
+            }
+            // VoiceOver : le pseudo et son apport, sans le nom des icônes
+            // (« person crop circle », « arrow up right »).
+            .accessibilityLabel(contributor.login + ", " + store.t(contributor.contributionKey))
+        }
+    }
+
     @ViewBuilder private var aboutCard: some View {
         // ── À propos / Logs ─────────────────────────────────
         settingCard {
@@ -1959,6 +2033,16 @@ struct SettingsView: View {
                 creditLink(icon: "bubble.left.and.bubble.right.fill",
                            title: store.t("discord_join"),
                            url: kDiscordURL)
+
+                // ── Contributeurs (liste : Contributor.all, en bas du fichier) ──
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(store.t("credits_contributors"))
+                        .font(.tLabel)
+                        .foregroundColor(.tMuted)
+                    ForEach(Contributor.all) { contributor in
+                        contributorLink(contributor)
+                    }
+                }
 
                 Text(store.t("credits_thanks"))
                     .font(.tMeta)
@@ -2373,5 +2457,73 @@ struct SettingsView: View {
         .padding(.vertical, TSpace.lg)
         .background(Color.tSurface)
         .cornerRadius(TRadius.control)
+    }
+}
+
+// MARK: – Contributeurs
+/// Personnes qui ont contribué à l'app sur GitHub, dans Réglages → À propos.
+/// Pour en ajouter une : une ligne dans `all`, et la clé de son apport dans
+/// les six langues (Constants.swift et Localization/). Le pseudo GitHub ne se
+/// traduit pas ; il donne aussi l'adresse de son profil.
+struct Contributor: Identifiable, Sendable {
+    let login: String
+    /// Clé du texte de son apport (translate).
+    let contributionKey: String
+
+    var id: String { login }
+    var profileURL: URL? { URL(string: "https://github.com/\(login)") }
+
+    static let all: [Contributor] = [
+        Contributor(login: "Domenico-lel", contributionKey: "credits_contrib_it"),
+        Contributor(login: "kinboy56", contributionKey: "credits_contrib_ja"),
+        Contributor(login: "dwojc6", contributionKey: "credits_contrib_swipe"),
+    ]
+}
+
+// Réglages : rien ne vient du parent. MainTabView se redessine chaque seconde
+// pendant une lecture (durée du direct, position d'une VOD, latence) et
+// refaisait alors tout cet écran, menus ouverts compris. Ses propres états
+// et objets observés suffisent à le tenir à jour (`.equatable()` à l'appel).
+extension SettingsView: Equatable {
+    nonisolated static func == (lhs: SettingsView, rhs: SettingsView) -> Bool { true }
+}
+
+// MARK: – Minuteur de veille (ligne des Réglages)
+/// Seule vue des Réglages à suivre le décompte, qui publie chaque seconde
+/// quand il tourne : observé par tout l'écran, il le redessinait sans arrêt.
+private struct SleepTimerSettingRow: View {
+    @EnvironmentObject private var store: AppStore
+    @ObservedObject private var sleepTimer = SleepTimerService.shared
+    let onEdit: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                if sleepTimer.isActive {
+                    Text(store.t("sleep_remaining"))
+                        .font(.tMeta).foregroundColor(.tMuted)
+                    Text(sleepTimer.label)
+                        .font(.system(size: 26, weight: .bold).monospacedDigit())
+                        .foregroundColor(.tPurple)
+                } else {
+                    Text(store.t("sleep_timer_sub"))
+                        .font(.tMeta).foregroundColor(.tMuted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            Spacer(minLength: 8)
+            Button(action: onEdit) {
+                Text(sleepTimer.isActive ? store.t("sleep_edit")
+                                         : store.t("sleep_set"))
+                    .font(.tLabel)
+                    .foregroundColor(.tPrimary)
+                    .fixedSize()
+                    .padding(.horizontal, 14).padding(.vertical, 8)
+                    .background(Color.tPrimary.opacity(0.15))
+                    .cornerRadius(8)
+                    .overlay(RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.tPrimary, lineWidth: 1))
+            }
+        }
     }
 }

@@ -6,8 +6,9 @@ struct ChatView: View {
     let channelId: String?
     let token: String?
     let login: String?
-    /// Décalage (s) appliqué aux messages reçus pour les recaler sur l'image.
-    var chatDelay: Double = 0
+    /// Chat du lecteur principal : les messages reçus attendent que l'image
+    /// les rejoigne (ChatSync). Faux en multi-live.
+    var syncsWithPlayer = false
     /// Mode « chat seul » : la vidéo est masquée, le parent en a besoin.
     @Binding var chatOnly: Bool
     /// Présentation : plein cadre, colonne étroite, ou calque sur l'image.
@@ -59,6 +60,10 @@ struct ChatView: View {
     /// actifs pour une vue déjà fermée.
     @State private var setupTask: Task<Void, Never>? = nil
     @FocusState private var isInputFocused: Bool
+    /// Clavier fermé par un toucher du chat : le même toucher n'ouvre ni le
+    /// fil d'un message ni la fiche d'une emote ou d'un badge (les gestes
+    /// arrivent dans un ordre variable, d'où ce délai).
+    @State private var keyboardClosedAt = Date.distantPast
 
     @State private var emoteMatches: [TwitchEmote] = []   // autocomplétion en cours
     @State private var sentinelVisible = true   // le bas de la liste est-il visible ?
@@ -73,6 +78,30 @@ struct ChatView: View {
         chat.isConnected && chat.isAuthenticated &&
         !messageText.trimmingCharacters(in: .whitespaces).isEmpty &&
         messageText.count <= 500
+    }
+
+    /// « Sa chaîne » dans la fiche d'une personne : la feuille se ferme
+    /// d'abord (une seule à la fois), puis la page s'ouvre (le lecteur se
+    /// réduit). Pas en multi-live : la mosaïque plein écran la cacherait.
+    private var openChannelFromThread: ((String) -> Void)? {
+        guard opensChannelPages else { return nil }
+        return { login in
+            threadRoot = nil
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 400_000_000)
+                store.openChannelPage(login)
+            }
+        }
+    }
+
+    /// Chaîne suivie (compte ou appareil), pour la cloche des notifications.
+    /// Le statut lu sur Twitch (session web) fait foi quand il est connu ;
+    /// sinon, la liste des suivis du compte lue au lancement.
+    private var channelFollowed: Bool {
+        let l = channelName.lowercased()
+        if store.isLocallyFollowed(l) { return true }
+        if follow.localStore == nil, let on = follow.isFollowing { return on }
+        return store.accountFollowLogins.contains(l)
     }
 
     /// Barre de statut au-dessus des messages : connexion, synchro, suivre,
@@ -92,40 +121,11 @@ struct ChatView: View {
                     .accessibilityLabel(chat.readOnly ? store.t("chat_ban_banner")
                                         : chat.isConnected ? store.t("chat_connected") : store.t("chat_connecting"))
                 Spacer(minLength: 4)
-                // Synchro auto : décalage appliqué au chat. Un appui le retouche
-                // d'une seconde : le bon réglage dépend aussi du retard des
-                // autres spectateurs, qu'on ne peut qu'estimer.
-                if store.autoChatDelay, chatDelay >= 0.5 || store.chatSyncNudge != 0 {
-                    Menu {
-                        Section(store.t("chat_sync_hint")) {
-                            Button { nudgeChatSync(1) } label: {
-                                Label(store.t("chat_sync_later"), systemImage: "plus.circle")
-                            }
-                            Button { nudgeChatSync(-1) } label: {
-                                Label(store.t("chat_sync_earlier"), systemImage: "minus.circle")
-                            }
-                            if store.chatSyncNudge != 0 {
-                                Button { nudgeChatSync(0) } label: {
-                                    Label(store.t("chat_sync_reset"), systemImage: "arrow.counterclockwise")
-                                }
-                            }
-                        }
-                    } label: {
-                        HStack(spacing: 2) {
-                            Image(systemName: "clock.arrow.2.circlepath").font(.system(size: 9))
-                            Text(String(format: "%.0fs", chatDelay))
-                                .font(.system(size: 10, weight: .bold).monospacedDigit())
-                            if store.chatSyncNudge != 0 {
-                                Text(String(format: "(%+.0f)", store.chatSyncNudge))
-                                    .font(.system(size: 9, weight: .semibold).monospacedDigit())
-                                    .opacity(0.75)
-                            }
-                        }
-                        .foregroundColor(.tOutplayer)
-                        .fixedSize()
-                        .padding(.horizontal, 6).padding(.vertical, 3)
-                        .background(Color.tOutplayer.opacity(0.15)).cornerRadius(6)
-                    }
+                // Synchro avec la vidéo : retard appliqué au chat. Un toucher
+                // la coupe ou la rallume, un appui long la retouche d'une
+                // seconde. Vue à part : elle seule se redessine avec la mesure.
+                if syncsWithPlayer {
+                    ChatSyncBadge()
                 }
                 // Série de visionnage
                 if store.showWatchStreak, events.watchStreak > 0 {
@@ -186,6 +186,9 @@ struct ChatView: View {
                         Text(store.t("follow_hide_hint"))
                     }
                 }
+                // Cloche : notifications de live de cette chaîne seulement
+                // (affichée si elles sont activées et la chaîne suivie).
+                NotifBellButton(login: channelName, followed: channelFollowed, compact: true)
                 // Épingle réduite : une pastille la rouvre.
                 if store.showPinnedMessages, let pin = pubsub.pinned, pin.id == dismissedPinId {
                     Button {
@@ -270,6 +273,15 @@ struct ChatView: View {
                                 Text("\(r.viewers) \(store.tn("viewers", r.viewers))")
                                     .font(.system(size: 10)).foregroundColor(.tMuted)
                             }
+                            // Raid rejoint avec la session web (JoinRaid
+                            // accepté) : bonus de points, comme sur twitch.tv.
+                            if raidService.bonusRaidID == r.id {
+                                HStack(spacing: 3) {
+                                    Image(systemName: "checkmark.seal.fill").font(.system(size: 9, weight: .bold))
+                                    Text(store.t("raid_bonus")).font(.system(size: 10, weight: .semibold))
+                                }
+                                .foregroundColor(.tPrimary)
+                            }
                         }
                         Spacer(minLength: 0)
                         Text(store.t("join")).font(.system(size: 11, weight: .bold))
@@ -293,9 +305,9 @@ struct ChatView: View {
         if store.showPinnedMessages, pubsub.pinned != nil { kinds.append(.pinned) }
         if store.showDropsNotice, dropsNotice.campaign != nil { kinds.append(.drops) }
         if store.showLiveEvents {
-            if events.poll != nil { kinds.append(.poll) }
-            if events.prediction != nil { kinds.append(.prediction) }
-            if events.hype != nil { kinds.append(.hype) }
+            if store.showPolls, events.poll != nil { kinds.append(.poll) }
+            if store.showPredictions, events.prediction != nil { kinds.append(.prediction) }
+            if store.showHypeTrain, events.hype != nil { kinds.append(.hype) }
         }
         if store.enableRaids, raidService.raid != nil { kinds.append(.raid) }
         return kinds
@@ -305,9 +317,9 @@ struct ChatView: View {
     private var closedKinds: [ChatNoticeKind] {
         guard store.showLiveEvents, !closedNotices.isEmpty else { return [] }
         var kinds: [ChatNoticeKind] = []
-        if let p = events.poll, closedNotices.contains(p.noticeKey) { kinds.append(.poll) }
-        if let p = events.prediction, closedNotices.contains(p.noticeKey) { kinds.append(.prediction) }
-        if let h = events.hype, closedNotices.contains(h.noticeKey) { kinds.append(.hype) }
+        if store.showPolls, let p = events.poll, closedNotices.contains(p.noticeKey) { kinds.append(.poll) }
+        if store.showPredictions, let p = events.prediction, closedNotices.contains(p.noticeKey) { kinds.append(.prediction) }
+        if store.showHypeTrain, let h = events.hype, closedNotices.contains(h.noticeKey) { kinds.append(.hype) }
         return kinds
     }
 
@@ -411,7 +423,10 @@ struct ChatView: View {
                     .inAppNoticeHost()
             }
             // Toucher une emote ou un badge (messages, épinglé) : sa fiche.
-            .environment(\.chatInfoAction, { infoItem = $0 })
+            .environment(\.chatInfoAction, { item in
+                if closesKeyboard() { return }
+                infoItem = item
+            })
     }
 
     private var content: some View {
@@ -447,6 +462,8 @@ struct ChatView: View {
                                         .id(msg.id)
                                         .contentShape(Rectangle())
                                         .onTapGesture {
+                                            // Clavier ouvert : ce toucher le ferme, sans plus.
+                                            if closesKeyboard() { return }
                                             guard msg.userId != "system" else { return }
                                             threadRoot = msg
                                         }
@@ -488,7 +505,7 @@ struct ChatView: View {
                             // seul moyen, au risque d'envoyer un brouillon).
                             .scrollDismissesKeyboard(.interactively)
                             .simultaneousGesture(TapGesture().onEnded {
-                                if isInputFocused { isInputFocused = false }
+                                _ = closesKeyboard()
                             })
                             .onChange(of: chat.messages.first?.id) { _ in
                                 // Suit les nouveaux messages seulement si en bas et hors défilement
@@ -567,7 +584,8 @@ struct ChatView: View {
                              messageText += (messageText.isEmpty || messageText.hasSuffix(" ")
                                              ? "" : " ") + "@\(name) "
                              isInputFocused = true
-                         })
+                         },
+                         onOpenChannel: openChannelFromThread)
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
                 .inAppNoticeHost()
@@ -651,9 +669,11 @@ struct ChatView: View {
             // démarrage : parier répondait « connecte ta session ».
             if store.showWatchStreak || store.showLiveEvents {
                 events.start(login: channelName, channelId: cid, token: newWebToken,
-                             viewerId: store.twitchUserId ?? "", hype: store.showLiveEvents)
+                             viewerId: store.twitchUserId ?? "", hype: store.showLiveEvents && store.showHypeTrain)
             }
-            if store.enableRaids { raidService.connect(channelId: cid, token: newWebToken ?? "") }
+            if store.enableRaids {
+                raidService.connect(channelId: cid, token: newWebToken ?? "", joinsRaids: onJoinChannel != nil)
+            }
         }
         // Bouton Suivre réactivé pendant le live : il revient tout de suite.
         .onChange(of: store.showFollowButton) { show in
@@ -666,8 +686,16 @@ struct ChatView: View {
             closedNotices.formIntersection(keys)
         }
         // Événements masqués ou réaffichés pendant le live : le relevé du
-        // hype train (toutes les 5 s pendant une approche) suit.
-        .onChange(of: store.showLiveEvents) { events.setHypeEnabled($0) }
+        // hype train (toutes les 5 s pendant une approche) suit. Série et
+        // événements coupés tous deux à l'ouverture du chat : le service
+        // n'avait pas démarré, il démarre au premier réactivé.
+        .onChange(of: store.showLiveEvents) { on in
+            if on, !events.running { startEvents() } else { events.setHypeEnabled(on && store.showHypeTrain) }
+        }
+        .onChange(of: store.showWatchStreak) { on in
+            if on, !events.running { startEvents() }
+        }
+        .onChange(of: store.showHypeTrain) { events.setHypeEnabled($0 && store.showLiveEvents) }
         // ── Compte changé → reconnecte uniquement l'IRC ───────────────
         // Jeton et login arrivent l'un après l'autre : on attend les deux
         // (la reconnexion partait sans login, en anonyme, champ grisé). À la
@@ -684,7 +712,8 @@ struct ChatView: View {
             chat.connect(channel: channelName, token: tok, login: login)
         }
         .onChange(of: store.autoClaimChest) { pointsService.autoClaim = $0 }
-        .onChange(of: chatDelay) { chat.displayDelay = $0 }
+        .onChange(of: store.chatSync) { chat.syncEnabled = $0 }
+        .onChange(of: store.chatSyncNudge) { chat.syncNudge = $0 }
         .onChange(of: raidService.joinTarget) { target in
             // Raid parti → on suit automatiquement vers la chaîne raidée.
             guard let target = target, store.enableRaids, let join = onJoinChannel else { return }
@@ -752,6 +781,12 @@ struct ChatView: View {
                 }
             }
         }
+        // Emotes Twitch de la chaîne, pour le sélecteur (avec un compte
+        // seulement : sans, on ne peut pas écrire). À part : le chat ne les
+        // attend pas pour se connecter.
+        if let cid, tok != nil {
+            Task { await EmoteService.shared.loadTwitchChannel(channelId: cid) }
+        }
         let ready = await finishes(assets, within: 3.5)
         if !ready { logger.warn("CHAT", "Emotes et badges encore en chargement après 3,5 s", "connexion sans les attendre") }
         // Chat refermé pendant l'attente : pas de connexion orpheline (de même
@@ -759,7 +794,9 @@ struct ChatView: View {
         guard setupWanted else { return }
         pointsService.autoClaim = store.autoClaimChest
         chat.channelId = channelId
-        chat.displayDelay = chatDelay
+        chat.syncsWithPlayer = syncsWithPlayer
+        chat.syncEnabled = store.chatSync
+        chat.syncNudge = store.chatSyncNudge
         // Réglés AVANT la connexion : c'est elle qui déclenche le rejeu de
         // l'historique, et la modération peut frapper dès les premières secondes.
         chat.loadRecent  = store.chatLoadRecent
@@ -804,13 +841,26 @@ struct ChatView: View {
                 events.start(login: channelName, channelId: cid,
                              token: store.twitchWebToken,
                              viewerId: store.twitchUserId ?? "",
-                             hype: store.showLiveEvents)
+                             hype: store.showLiveEvents && store.showHypeTrain)
             }
-            // Raid sortant (auto-bascule vers la chaîne raidée)
+            // Raid sortant (auto-bascule vers la chaîne raidée). Lecteur
+            // principal (raid suivi, pas en multi-live) : le raid annoncé est
+            // aussi rejoint, pour son bonus de points.
             if store.enableRaids {
-                raidService.connect(channelId: cid, token: store.twitchWebToken ?? "")
+                raidService.connect(channelId: cid, token: store.twitchWebToken ?? "",
+                                    joinsRaids: onJoinChannel != nil)
             }
         }
+    }
+
+    /// Série de visionnage et événements du live (sondage, prédiction, hype
+    /// train), réactivés pendant le direct alors qu'ils étaient tous coupés.
+    private func startEvents() {
+        guard isSetup, let cid = channelId else { return }
+        events.start(login: channelName, channelId: cid,
+                     token: store.twitchWebToken,
+                     viewerId: store.twitchUserId ?? "",
+                     hype: store.showLiveEvents && store.showHypeTrain)
     }
 
     /// Statut de suivi : celui du compte avec la session web (champ
@@ -1004,8 +1054,12 @@ struct ChatView: View {
                     .autocorrectionDisabled(!store.chatKeyboardSuggestions)
                     .autocapitalization(.sentences)
                     .foregroundColor(.tText)
-                    .submitLabel(.send)
-                    .onSubmit { sendMessage() }
+                    // Entrée ferme le clavier, le bouton ➤ envoie (réglage
+                    // « Entrée envoie le message » pour l'inverse).
+                    .submitLabel(store.chatReturnSends ? .send : .done)
+                    .onSubmit {
+                        if store.chatReturnSends { sendMessage() } else { isInputFocused = false }
+                    }
                     .disabled(!chat.isConnected || !chat.isAuthenticated)
                     .onChange(of: isInputFocused) { focused in
                         if focused && showEmotePicker {
@@ -1146,6 +1200,17 @@ struct ChatView: View {
     }
 
     // MARK: – Actions
+    /// Ferme le clavier s'il était ouvert, ou s'il vient de l'être par ce
+    /// même toucher. Vrai : le toucher n'a rien d'autre à faire.
+    private func closesKeyboard() -> Bool {
+        if isInputFocused {
+            isInputFocused = false
+            keyboardClosedAt = Date()
+            return true
+        }
+        return Date().timeIntervalSince(keyboardClosedAt) < 0.35
+    }
+
     private func sendMessage() {
         let trimmed = messageText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, trimmed.count <= 500 else { return }
@@ -1157,8 +1222,7 @@ struct ChatView: View {
             showRules = true
             return
         }
-        messageText = ""; autoScroll = true
-        Task { await chat.sendMessage(trimmed) }
+        send(trimmed)
     }
 
     private func closeRules(accepted: Bool) {
@@ -1166,21 +1230,24 @@ struct ChatView: View {
         defer { pendingMessage = nil }
         guard accepted, let text = pendingMessage else { return }
         ChatRules.accept(chat.channelName, rules: chat.rules)
+        send(text)
+    }
+
+    /// Champ vidé, puis le message part. Pas parti (connexion tombée entre
+    /// la frappe et l'envoi) : il revient dans le champ, s'il est resté vide,
+    /// au lieu d'être perdu sans un mot ; l'état du chat (« Connexion… »)
+    /// dit pourquoi.
+    private func send(_ text: String) {
         messageText = ""; autoScroll = true
-        Task { await chat.sendMessage(text) }
+        Task {
+            let sent = await chat.sendMessage(text)
+            if !sent, messageText.isEmpty { messageText = text }
+        }
     }
 
     private func insertEmote(_ emote: TwitchEmote) {
         messageText += (messageText.isEmpty || messageText.hasSuffix(" ") ? "" : " ")
             + emote.name + " "
-    }
-
-    /// Retouche de la synchro auto (pastille de la barre de statut) : ±1 s,
-    /// ou 0 pour revenir à l'estimation seule.
-    private func nudgeChatSync(_ step: Double) {
-        let v = step == 0 ? 0 : min(20, max(-20, store.chatSyncNudge + step))
-        store.chatSyncNudge = v
-        logger.settingChanged("Retouche de la synchro du chat", value: String(format: "%+.0f s", v))
     }
 
     /// Transforme les URLs d'un texte en liens tappables (message épinglé).
@@ -1523,8 +1590,8 @@ struct ChatRulesSheet: View {
 }
 
 /// Attend `work` au plus `seconds` secondes ; au-delà, il continue sans nous.
-/// true s'il a fini à temps.
-private func finishes(_ work: Task<Void, Never>, within seconds: Double) async -> Bool {
+/// true s'il a fini à temps. Aussi pour le chat des VODs (VodChatService).
+func finishes(_ work: Task<Void, Never>, within seconds: Double) async -> Bool {
     await withCheckedContinuation { (cont: CheckedContinuation<Bool, Never>) in
         let gate = FirstResume(cont)
         Task { await work.value; gate.resume(true) }

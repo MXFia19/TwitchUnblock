@@ -37,6 +37,11 @@ final class PlaybackAudio {
     /// Minuteur de veille : la relâche ne réveillera pas les autres apps, même
     /// si un PiP la fait attendre. Oublié à l'ouverture suivante.
     private var quiet = false
+    /// Relâche prévue qui préviendra les autres apps. Un aperçu de Découvrir
+    /// lancé avant qu'elle n'ait lieu la reporte : c'est alors la fin de
+    /// l'aperçu qui les prévient — relâchée sans, une musique coupée par la
+    /// vidéo ne reprenait jamais seule.
+    private var wakeOthersPending = false
 
     private init() {}
 
@@ -56,6 +61,7 @@ final class PlaybackAudio {
             owners.insert(owner)
             generation += 1
             quiet = false
+            wakeOthersPending = false
             // Catégorie des lecteurs reposée à chaque ouverture : les aperçus
             // muets de Découvrir passent en « ambient », qui se tait en mode
             // silencieux — un lecteur ouvert juste après restait sans son.
@@ -84,6 +90,7 @@ final class PlaybackAudio {
             let wanted = generation
             let notify = !quiet
             quiet = false
+            wakeOthersPending = notify
             queue.asyncAfter(deadline: .now() + 1.5) { [self] in
                 deactivate(notifyOthers: notify, generation: wanted)
             }
@@ -100,9 +107,21 @@ final class PlaybackAudio {
             guard owners.isEmpty else { return }
             let session = AVAudioSession.sharedInstance()
             if on {
-                // Une relâche prévue (lecteur fermé à l'instant) n'arrête pas l'aperçu.
+                // Une relâche prévue (lecteur fermé à l'instant) n'arrête pas
+                // l'aperçu : elle attend sa fin (`wakeOthersPending`).
                 generation += 1
                 try? session.setCategory(.ambient, mode: .default)
+            } else if wakeOthersPending {
+                // Relâche du lecteur reportée par l'aperçu : elle repart, en
+                // prévenant les autres apps, avec le même délai (un lecteur
+                // qui s'ouvre aussitôt l'annule, sans réveil d'un instant).
+                generation += 1
+                let wanted = generation
+                queue.asyncAfter(deadline: .now() + 1.5) { [self] in
+                    guard wanted == generation, owners.isEmpty else { return }
+                    deactivate(notifyOthers: true, generation: wanted)
+                    try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
+                }
             } else {
                 try? session.setActive(false)
                 try? session.setCategory(.playback, mode: .moviePlayback)
@@ -125,6 +144,7 @@ final class PlaybackAudio {
     /// entre-temps. D'où le PiP, détenteur à part entière tant qu'il dure.
     private func deactivate(notifyOthers: Bool, generation wanted: Int) {
         guard wanted == generation, owners.isEmpty else { return }
+        wakeOthersPending = false
         let detail = notifyOthers ? "les autres apps peuvent reprendre leur son"
                                   : "sans réveiller les autres apps (minuteur de veille)"
         do {

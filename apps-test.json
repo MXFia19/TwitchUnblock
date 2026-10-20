@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.5.25",
+          "buildVersion": "345",
+          "date": "2026-10-20",
+          "localizedDescription": "- Player: the zoom level no longer shows up under the pause button\n- Other improvements and fixes",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-345/TwitchUnblock.ipa",
+          "size": 4280124,
+          "commit": "14c0754c3f4ac46c356f1eb57e26bf6600ac03aa"
+        },
+        {
           "version": "1.5.22",
           "buildVersion": "342",
           "date": "2026-10-20",
@@ -280,25 +289,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-313/TwitchUnblock.ipa",
           "size": 3745828,
           "commit": "c11d520f738d273a74e10f3f6b0f3434f1710dd2"
-        },
-        {
-          "version": "1.4.12",
-          "buildVersion": "312",
-          "date": "2026-10-18",
-          "localizedDescription": "- Channel points: a chest already there when you open a live is claimed automatically, \"Bonus claimed\" only shows when it really was, and a chest claimed elsewhere disappears\n- VOD chat follows your chat filters; downloads keep the full chat of very long streams\n- Live notifications: no burst of notifications for lives already running when you turn them on, the app keeps notifying while ntfy isn't working yet, and ntfy notifications switch language right away",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-312/TwitchUnblock.ipa",
-          "size": 3720450,
-          "commit": "0c74fa76664acb162651fc1132b60d259a667888"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.5.22",
+      "version": "1.5.25",
       "versionDate": "2026-10-20",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-342/TwitchUnblock.ipa",
-      "size": 4274993
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-345/TwitchUnblock.ipa",
+      "size": 4280124
     }
   ],
   "news": []

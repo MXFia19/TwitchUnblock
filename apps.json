@@ -176,6 +176,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.6.0",
+          "buildVersion": "351",
+          "date": "2026-10-20",
+          "localizedDescription": "- Improvements and fixes",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-351/TwitchUnblock.ipa",
+          "size": 4381506,
+          "commit": "5375594f5890d36c97355010bc4290dea28d58e6"
+        },
+        {
           "version": "1.5.35",
           "buildVersion": "350",
           "date": "2026-10-20",
@@ -255,25 +264,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-340/TwitchUnblock.ipa",
           "size": 4251784,
           "commit": "acfecbb08414ef3672dffef0e28445fd15c8e4f9"
-        },
-        {
-          "version": "1.5.14",
-          "buildVersion": "339",
-          "date": "2026-10-20",
-          "localizedDescription": "- Customize: reorder and hide the tabs of a channel page (VODs, Highlights, Playlists, Clips, Schedule, About); the page opens on the first one shown\n- Tap the tab you're on again to scroll back to the top (Home, Search, My VODs) or to Discover's first page\n- Home: pinned channels' live streams stay on top of Following, now sorted by viewers among themselves (Settings → Customize → Pinned sorted by viewers)",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-339/TwitchUnblock.ipa",
-          "size": 4244347,
-          "commit": "b16092f406b07a660351a8de8f344f3cbba8956e"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.5.35",
+      "version": "1.6.0",
       "versionDate": "2026-10-20",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-350/TwitchUnblock.ipa",
-      "size": 4381511
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-351/TwitchUnblock.ipa",
+      "size": 4381506
     }
   ],
   "news": []

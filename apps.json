@@ -176,6 +176,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.5.30",
+          "buildVersion": "347",
+          "date": "2026-10-20",
+          "localizedDescription": "- Settings: the top streams language list (and the Categories language menu) scrolls again while a VOD or a live plays in the background\n- Chat: the emote picker's channel tab now lists the channel's own Twitch emotes, with the sub emotes you don't have greyed out behind a lock\n- Player: when the installer removed Live Activity support, the app stops asking for one until its next launch instead of filling the log\n- Player: new Higher qualities setting (off by default) asks Twitch for 1440p and above, in HEVC or AV1 when the device decodes them, on the ad-free stream through your account\n- Other improvements and fixes",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-347/TwitchUnblock.ipa",
+          "size": 4333018,
+          "commit": "c63216c5e776dbc20b01b9cf56ee69921c4a4d21"
+        },
+        {
           "version": "1.5.28",
           "buildVersion": "346",
           "date": "2026-10-20",
@@ -255,25 +264,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-336/TwitchUnblock.ipa",
           "size": 4222082,
           "commit": "d83ce6240c749741663778400094090973873b50"
-        },
-        {
-          "version": "1.5.7",
-          "buildVersion": "335",
-          "date": "2026-10-19",
-          "localizedDescription": "- Search: typing text now shows results in tabs (Channels, Categories, Live by title or tags, VODs); live streams and VODs from hidden channels or categories are left out, and links or IDs still open directly\n- Search: your last 10 searches are listed under the search field, each removable, or clear them all\n- Channels: a Schedule tab lists a channel's upcoming streams in your local day and time, with length, title, category, weekly ones and vacation\n- Channels: an offline channel's page shows its next scheduled stream (or its vacation) right under its name",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-335/TwitchUnblock.ipa",
-          "size": 4183176,
-          "commit": "9e0a7847913c19a9432d20730dba2c5c9c963f27"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.5.28",
+      "version": "1.5.30",
       "versionDate": "2026-10-20",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-346/TwitchUnblock.ipa",
-      "size": 4310080
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-347/TwitchUnblock.ipa",
+      "size": 4333018
     }
   ],
   "news": []

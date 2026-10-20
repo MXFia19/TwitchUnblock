@@ -21,6 +21,105 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.5.0",
+          "buildVersion": "327",
+          "date": "2026-10-19",
+          "localizedDescription": "- Discover: opening a live or clip no longer leaves the preview playing underneath (no more double sound)\n- Discover: the speaker button turns the preview's sound on and off (lives and clips)\n- Discover: tap a channel's name or picture to open its page\n- A live opened from Discover now always has sound\n- On iPhone the app stays in portrait, except in the player and multi-live where landscape still works\n- Discover: the Clips feed loads again (Twitch refused the request)\n- Discover: the preview no longer fills and crops the whole screen, and the channel name, title, Follow and side buttons are visible again\n- New Discover tab: one live per screen to swipe through, with a muted preview, plus today's top clips; tap to open the player with sound and chat\n- Discover: follow, share or hide a channel or category right from the feed\n- Settings → Discover tab hides it if you don't want it\n- My reports: a conversation closed by the developer, or one that reached 100 messages, says so instead of showing the reply box and then failing.\n- The header margin now follows rotation (no title under the notch, no extra gap after turning the iPhone).\n- Counts agree with their word: 1 viewer, 1 vote, 1 file… (and the three Russian plural forms).\n- TU Test has its own link scheme: tapping a ntfy notification opens the right app when both are installed.\n- Downloads: original audio is still tried when the first check gets no answer, leaving the app right after tapping Download no longer fails it, a chat that can't be fetched no longer stays \"in progress\" forever, and other apps can no longer read your downloads list through the local server\n- Drops: a short streamer disconnection no longer stops progress for the session, and repeated refusals are shown as failing instead of retrying every 10 seconds\n- ntfy notifications: up to 500 channels kept in a sensible order (no longer cut alphabetically), the last known follow list is used when Twitch doesn't answer, and your subscription stays alive even if you don't open the app\n- Notifications are no longer lost when the app is woken in the background, and in-app notices now show above the player menu, sleep timer and chat sheets\n- Multi-live: tiles change quality when you add or remove lives, a tile stuck loading retries by itself then offers Retry, a light spinner shows while a tile buffers, and raids no longer stop being detected\n- Chat: messages waiting for the delay sync are no longer lost when the chat reconnects, your own Twitch emotes show as emotes, highlight words can be several words or emote names, the ⋯ menu is available without an account, and closing the emote picker brings the keyboard back\n- Chat: switching or logging out of your account reconnects the chat correctly, a reply from a thread that couldn't be sent stays in the field with the reason, and chat name colors are translated\n- Polls and predictions keep showing when your web session has expired, a refused vote says why, and the emote picker fills in as emotes finish loading\n- On mobile data, lives and VODs now start in Auto quality, which follows your connection speed (new setting: Quality on mobile data), so the picture no longer freezes while the chat keeps going\n- After a stall, the live keeps more margin from the edge instead of jumping straight back (which froze it again), and repeated stalls switch the player to Auto quality (or one step down) automatically\n- Logs show the connection type (Wi-Fi, mobile data, Low Data Mode) and when the quality is lowered because of stalls\n- Bug reports now include the latest errors from the logs (shown in the report summary), so problems can be found faster\n- Logs are kept between launches, so errors from a previous session or right before a crash can still be read and sent, and an abrupt stop of the app is flagged at the next launch\n- Logs screen: number of errors and warnings on each filter, repeated lines grouped (×N), a red error count in Settings, and exported logs start with the version, system and device\n- The player now logs why a stream breaks (segments or playlists refused with their HTTP code, stalls), and failures that used to be silent (account, followed channels and categories, clips) are logged\n- Apple TV: Account → Recent errors lists the latest warnings and errors, and failed lives or VODs are logged\n- Downloads: a temporary server error no longer swaps a segment's original audio for the muted version, a downloaded VOD sent with AirPlay keeps playing on your device instead of loading forever, and deleting the download you're watching closes the player\n- Drops: a network hiccup is no longer taken for \"no drops on this channel\" (checked again 45 s later), and a drop that couldn't be claimed automatically is still notified\n- ntfy notifications: turning them off is retried until the server confirms (no more duplicate notifications), even right after turning them on\n- Channel points: rewards with a multi-line description can be redeemed again, an unknown balance shows \"—\" instead of marking every reward \"Not enough\", and after switching accounts the first chest or redemption no longer fails\n- Follow, bets and votes retry once by themselves when Twitch refuses the security token, instead of failing the first time\n- VOD chat waits for the channel's emotes before showing the first messages, and its errors are shown in your language\n- Feedback: each report is read from the server that received it (switching to your own Worker no longer drops followed reports), unread replies no longer depend on your phone's clock, a reply you just sent no longer disappears for a moment, and more than 30 followed reports all stay up to date\n- Announcements disappear when they expire even if the app stays open, and quick reactions no longer end up out of sync\n- \"Check for updates\" says when it couldn't check instead of \"up to date\", two builds of the same version are told apart, and the update card fits on screen in landscape\n- Your own Worker: checking an address no longer gets mixed up when you change it, and the Worker in use stays shown; \"Manage feedback\" no longer comes back after logging out\n- Usage sharing: turning it off is retried until the server confirms, including on the Worker that received the counts, and counts are no longer sent twice\n- Logs screen fully translated, with timestamps no longer rewritten by region settings\n- Russian wording made consistent (\"follow\", \"emotes\"), Top lives in Traditional Chinese (Taiwan) shows Chinese streams, and system elements (Cancel, Copy, share sheet, video player) follow your language\n- Channel points: a chest already there when you open a live is claimed automatically, \"Bonus claimed\" only shows when it really was, and a chest claimed elsewhere disappears\n- VOD chat follows your chat filters; downloads keep the full chat of very long streams\n- Live notifications: no burst of notifications for lives already running when you turn them on, the app keeps notifying while ntfy isn't working yet, and ntfy notifications switch language right away\n- Chat: no more duplicate messages with recent history and delay sync on, /me shows as an action, other slash commands no longer show up as messages, and the replied-to message shows its text correctly\n- Chat: mentions and autocomplete use the username when the display name is localized; the chat follows new messages again after tapping the arrow\n- Raids: turning off raids during a live is respected, and a raid banner that never goes away clears itself\n- Chat: a network drop of a few seconds no longer signs your account out of the chat, and when Twitch really refuses it the read-only notice shows right away in your language\n- Chat: with delay sync on, messages deleted or users banned by moderators no longer show up a few seconds later\n- Chat: channel emotes and badges that fail to load are retried instead of missing until the app restarts; a mention followed by punctuation (@you,) is highlighted\n- Chat: connecting the web session during a live now also updates predictions, polls and raids; closing the chat while it loads no longer leaves connections running\n- Channel points: a chest that fails to claim stays claimable and is retried, and a failed balance refresh no longer shows 0 then a fake gain\n- Channel points, follows, bets and drops no longer fail when several of them need Twitch's integrity token at the same time\n- Animated emotes no longer pile up hundreds of MB of memory\n- Downloaded VODs keep playing after the app was suspended (lock screen, Picture in Picture)\n- Drops: turning on drop progress or connecting the web session during a live starts it right away, and a refused integrity token no longer blocks progress for hours\n- My reports: the \"fix is out\" message now reaches finished reports (they're checked once a day for 30 days)\n- The immersive player's controls now show and hide right away when you tap the video (in landscape they took up to a second); double-tap still skips 10 s on VODs and shows or hides the chat in landscape\n- In landscape with the chat shown, the video no longer goes under the Dynamic Island or the notch\n- VODs no longer stop at a muted part when the server can't fix its playlist: the app fixes it on the device, a VOD that stops on one restarts at the same place on its own, and Skip works even after a stop\n- Chat: the iOS keyboard shows its predicted words again (Settings → Chat → Keyboard suggestions, to turn off if iOS corrects your emotes)\n- Chat: swipe the chat down or tap it to hide the keyboard without sending; reducing the player hides it too\n- Settings → Player → Live Activity turns off the player's activity on the Lock Screen and in the Dynamic Island if you don't need it\n- Multi-live: the ⇄ button on a tile swaps its place with another video (with three, the first one is the big one)\n- Tapping the latency (Settings → Player → Show latency) brings a live back to the edge after a pause or a trip out of the app, without reloading the stream\n- Tap the title at the top of the player to read it in full, with the category, viewers, uptime and a shortcut to the channel\n- Live notifications: pick which followed channels notify you (Settings → Features in testing → Notified channels), for background checks and ntfy\n- The AltStore / SideStore / Feather source now also lists TU Test, the test builds, installed next to the normal app\n- The log shows in your language, and can be exported as a .txt file (Files, AirDrop, Mail…)\n- Chat and log times show in 12-hour or 24-hour format like your device, or the way you pick in Settings → Chat → Time format\n- A speaker button in the player mutes the stream, and on iPhone, leaving the player after rotating it with its button brings the app back to portrait\n- Chat: GIFs sent with Twitch's GIF keyboard now show in the chat, like in the Twitch app\n- Other improvements and fixes",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/nightly-327/TwitchUnblock.ipa",
+          "size": 3896286,
+          "commit": "d2122e6d9be4afd9e2f7a498277862b926f2a7e0"
+        },
+        {
+          "version": "1.4.0",
+          "buildVersion": "298",
+          "date": "2026-10-15",
+          "localizedDescription": "- Polls: the developer can ask a question under the home announcement; vote without an account, change your mind until it ends, and see the results once you've voted\n- Settings → Channel points tracks, like drops, the time you watched and the points you earned by watching: right now, in total and per channel\n- Predictions show, like the Twitch app, the points bet on each outcome, its return ratio, how many people bet and the biggest bet, plus what your bet would win\n- The Home live list refreshes on its own when you come back to the app and every 3 minutes while it's on screen\n- While a live loads, the player says which source it's trying and can be minimized or closed; the screen now only stays awake while a video plays on screen (paused, minimized or audio only, it sleeps).\n- Apple's player (immersive player off) resumes VODs and clips where they were, even after a quality change, and its lock screen activity follows pause and progress; the sleep timer now also stops multi-live.\n- Closing the player or starting another video during Picture in Picture now ends it cleanly, changing quality keeps your place, and a stream that drops shows a Retry button instead of freezing.\n- When no source can play a live stream, or Twitch doesn't answer, the player now says so with a Retry button instead of calling the channel offline; lives also start when Twitch's own API is unreachable.\n- Cloud sync keeps each Twitch account's history apart, and a VOD or channel you delete in the app is removed from the backup right away.\n- A category you follow on Twitch now shows as followed on its page and can be unfollowed there; category lists get Retry and pull to refresh.\n- Search opens clip links and starts VOD links at their ?t= time; channel pages open faster, and the VOD filter can look through older VODs.\n- Restoring an expired Twitch web session now asks you to sign in again, and drops stop counting for an account you signed out of.\n- Playback resumes on its own after a call or another app's audio: VODs where they left off, live streams back at live.\n- Opening the app no longer stops music playing in another app: the sound only switches over when a video starts, and goes back to that app when you close the player.\n- Multi-live now mixes lives and VODs (up to 4 videos): add a VOD from the player's ⋯ menu, by long-pressing a VOD card or My VODs, or by pasting its link or ID in the mosaic\n- VOD tiles resume where you left off, with play/pause, ±10 s, a seek bar and “Watch again”; their progress is saved and synced\n- The multi-live side chat replays the chat of the VOD you hear\n- The multi-live “+” accepts a channel link or @name\n- Chat: the Hype Train now shows up as soon as it is incoming, with its checkmarks, how many more supports it needs and a countdown, like on Twitch\n- Chat: see the Hype Train leave the station, the time left on each level, and a short message when a level or the whole train completes\n- Chat: the Hype Train banner no longer freezes when the Twitch web session has expired\n- Chat: the folded event icons show the time left on the Hype Train\n- Chat: if Twitch bans your account from a channel's chat, the chat now keeps going in read-only mode (without your account) with a clear banner and a \"Retry with my account\" button, instead of going silent with the message box still active.\n- Chat: when you're timed out in a chat, a line now says for how long.\n- Chat: the app's own lines in the chat are now labelled \"System\" in your language.\n- Subscribed to a channel (or Turbo)? With the web session connected, its lives now play through your Twitch account, without ad breaks (Settings → Player → Watch ad-free with my sub).\n- During a channel's ad break, the player now explains the purple “Commercial break in progress” screen, shows when the stream comes back and mutes the sound meanwhile.\n- Live source descriptions no longer claim the proxies are ad-free: they still get the channel's ad breaks.\n- The chat no longer stays stuck on “Connecting…” when an emote service is slow or blocked, and says so after three failed attempts.\n- Reopening a VOD in the same session no longer shows its restored muted parts in orange on the progress bar.\n- Muted parts of recent VODs in the MP4 format keep their sound again when Twitch still serves it, instead of being swapped for the silent version.\n- Emote cards also open from a message thread, with sharp FrankerFaceZ emotes and badges.\n- Emote cards now show the scope and author of BetterTTV, FFZ and 7TV emotes, the 7TV original name, zero-width and modifier emotes, and a link to the emote's page.\n- Twitch emote cards show the emote type (global, sub tier, channel points), the channel it belongs to (live or not, with See channel) and its other sub emotes of the same tier.\n- Animated FrankerFaceZ emotes now play in the chat.\n- Long-press an emote in the emote picker to open its card or copy its name; the picker is now translated.\n- VoiceOver can open emote and badge cards.\n- Chat: polls, predictions and hype trains get a × that tucks them into a small icon above the chat (tap it to bring them back); a new poll or prediction still shows up\n- Chat: locked predictions fold down to their title and your bet, finished polls to the winning choice; tap to see the bars\n- Unfollowing from the player or a channel page now asks for confirmation, with a shortcut to hide the player Follow button\n- Hype train: the bar shows the progress of the current level\n- Hide a channel or a category from Top and Categories with a long-press, and show it again from Settings → General\n- Apple TV: hide channels and categories too (press and hold a card)\n- A channel's VODs load past the first 100 again\n- Without an account, categories, live channels in a category and a channel's clips now load past the first 100\n- Without an account, top streams on Home get a Load more button (30 at a time)\n- Preferred quality in Settings → Player (Source, 1080p, 720p, 480p, 360p, 160p or audio only): lives, VODs and clips start in it, or in the closest one below when the channel doesn't have it.\n- Picking a quality in the player now becomes your preferred quality, and it travels with backups (same name as the website).\n- Qualities are sorted by height then frame rate, and \"audio_only\" now reads \"Audio only\".\n- Downloads suggest your preferred quality first; multi-live tiles never go above it.\n- Apple TV: preferred quality in Account → Settings, with the same closest-below rule.\n- Playback speed for VODs and clips (0.25× to 2×) in the ⋯ menu of the player; the VOD speed is remembered, shown next to the timer, and live streams always stay at normal speed.\n- The lock screen and the Live Activity follow the playback speed of a VOD.\n- Resuming from Picture-in-Picture now updates the play/pause button.\n- Live streams no longer speed up to catch up with the live edge, which could pull the sound out of sync; the player now makes a small jump only when it really falls behind.\n- Clips, recovered and downloaded videos no longer jump to the end in the Apple player when low latency mode is on.\n- VOD chat replay no longer stops after the first minute (iPhone, downloads and Apple TV).\n- A reply to your report, a drop ready or claimed, a finished download: with the app open, a banner inside the app tells you, even if notifications aren't allowed; one that arrives while the app is in the background without permission shows up when you come back.\n- In landscape, Hide under the chat banners (pinned message, drops, polls, predictions, raid) folds them into one line of icons with the poll or prediction countdown; tap it to bring them back. The choice is remembered (Settings → Customize).\n- When the developer replies to one of your reports (or changes its status), you get a notification, even with the app in the background; tap it to open My reports.\n- In landscape, the chat now shows the pinned message, polls, predictions and raids, plus a card when the channel has drops (reward, watch time, end date, details) that you can dismiss (Settings → Customize → Channel drops).\n- Tap an emote or a badge in the chat to see its exact name and where it comes from (Twitch, BetterTTV, FrankerFaceZ, 7TV), then copy it or add it to your message.\n- BetterTTV: personal emotes of BTTV Pro users show up once BTTV announces them, and emotes added to the channel during the stream appear right away.\n- Pin your favourite streamers: long-press a followed channel (live or offline) and pick \"Pin to the top of Following\". Pinned channels show first, with a small pin next to their name.\n- Lives never get closer than 4 seconds to the edge anymore (closer, playback could stall), including when skipping ahead or tapping Live. In landscape, the purple line between the video and the chat is gone; a small handle still lets you resize the chat.\n- Live notifications through ntfy: fixed on the server side (ntfy.sh was turning the server away), and the Test button now tells you when ntfy.sh is refusing messages for now instead of saying the server can't be reached.\n- Other improvements and fixes",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/nightly-298/TwitchUnblock.ipa",
+          "size": 3607485,
+          "commit": "d637535939a6b2f9165117889287d07b4df4138d"
+        },
+        {
+          "version": "1.3.0",
+          "buildVersion": "278",
+          "date": "2026-10-11",
+          "localizedDescription": "- Pick an app icon in Settings → General → Appearance: Classic, Purple, Night, Light, Contrast or Neon; “Contrast” stays the sharpest with iOS 26's clear and tinted icons. An app signed with a certificate's generic identifier can't change its icon: the setting says so.\n- Chat: the room's modes (followers only and for how long, subscribers only, slow mode…) show above the message box, the channel's chat rules are shown to accept before your first message, and a message Twitch refuses is removed with the reason.\n- Expert settings (Settings → Other): if the official Workers go down, give the address of your own Worker; it's checked, then tried first for lives, VODs and playlists, or used for everything.\n- Lives: double-tap no longer skips ahead; in landscape it shows or hides the chat, and a red Live button with the delay brings you back to the edge after a pause.\n- Categories: filter the lives by language (all, or a single one).\n- Pick the order of the live sources in Settings → Player: if one doesn't answer, the next one takes over; picking a source from the player menu moves it to the top.\n- My reports: a new “Seen” status once your message has been read.\n- Fixed a black screen in “Source” on Luminous Europe for channels that stream with multiple encodes (each quality now keeps its own name).\n- Downloads run faster while the app is open, and iOS takes over when you leave it; a stopped download now says why (connection lost, storage full, segments refused by Twitch).\n- Instant live notifications, even with the app closed, through the free ntfy app (Settings → Features in testing): add the topic shown there in ntfy, and tapping a notification opens the stream.\n- Multi-live on iPad: the chat of the stream you hear shows next to the mosaic (button in the mosaic, or Settings → Player).\n- Downloads keep going in the background, even with the app closed; the chat can be kept and replayed offline (emotes included); a finished download can be exported as a single file (Files, AirDrop, VLC).\n- Fixed a black screen on some recent VODs with muted parts (Twitch's new MP4 format); their original sound is restored too while Twitch still has it.\n- Multi-live: watch up to four streams side by side. Long-press a live card (or use the player's ⋯ menu) to add it, then tap Watch in the bar at the bottom; tap a stream to hear it.\n- Download a whole VOD or just a part of it (from one time to another) to watch offline, from the player's ⋯ menu. Parts muted for copyrighted music keep their original sound while Twitch still has it. Your downloads are in the My VODs tab.\n- Drops: a notification when a drop is ready to claim, or when the app has claimed it for you (Settings → Drops → Notify me).\n- Usage stats (if enabled) now also include the app language, iPhone or iPad, the iOS version and anonymous play counters (which source served a live, failures) — never the channels.",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/nightly-278/TwitchUnblock.ipa",
+          "size": 2932347,
+          "commit": "451d56662d8ecec306251dbf68b51b71a3bcf4e6"
+        },
+        {
+          "version": "1.2.29",
+          "buildVersion": "254",
+          "date": "2026-10-11",
+          "localizedDescription": "- Drops page: a step-by-step guide to earn drops, and a live status showing whether the stream you're watching makes your drops progress.\n- Drops: the Drops page now also lists every open campaign (all games) with its rewards.\n- The Twitch web session must be the app's account: another account is refused at sign-in (and disconnected if found later), so points, drops and predictions never go to the wrong account.\n- Drops: new Settings → Drops page with your campaigns' progress, a Claim button and automatic claiming.\n- Drops now progress while you watch a live with drops (Twitch only counts them when your account loads the stream; the app does it with small requests, no extra video download).\n- Spatial audio (AirPods): new setting in Settings → Player to turn it off in the app, head tracking included. “Fixed” is still picked in Control Center.\n- Choose the live source (Luminous Asia, Luminous Europe, Albania proxy or official Twitch) in Settings → Player or from the player's ⋯ menu, which also shows the source in use.\n- Stream tags (language, DropsEnabled…) under live streams, like on Twitch.\n- Category search puts the exact match first (VALORANT for “valorant”) and shows sharp box art.\n- Another ad-free source for live streams (an Albanian proxy) when Luminous is unavailable.\n- Live quality names stay correct when the app falls back to another ad-free mirror.",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/nightly-254/TwitchUnblock.ipa",
+          "size": 2443181,
+          "commit": "3e800621394f73115361034f4c93c916ad03b68e"
+        },
+        {
+          "version": "1.2.21",
+          "buildVersion": "244",
+          "date": "2026-10-10",
+          "localizedDescription": "- Live streams are much closer to real time: about 6 seconds of delay instead of about 20 (Low latency mode, now on by default).",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/nightly-244/TwitchUnblock.ipa",
+          "size": 2205851,
+          "commit": "1949fc3df09263d1e4dbeb48b41f1a3b2697e618"
+        },
+        {
+          "version": "1.2.20",
+          "buildVersion": "242",
+          "date": "2026-10-10",
+          "localizedDescription": "- Liquid Glass: buttons in the player (and the way back to home) work again while watching a stream.\n- My reports: replies and status changes now show up on their own, no need to refresh.",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/nightly-242/TwitchUnblock.ipa",
+          "size": 2200796,
+          "commit": "b3cfe55eafa9585789514e40e7e26661fe0a5a17"
+        },
+        {
+          "version": "1.2.19",
+          "buildVersion": "240",
+          "date": "2026-10-10",
+          "localizedDescription": "- Passages coupés : plus d'avertissement de concurrence à la publication du résultat\n- iPad: the back, AirPlay and close buttons at the top of the immersive player work again in landscape.\n- Chat auto-sync: a more accurate delay that no longer drifts every few seconds; fine-tune it by ±1 s from the chat's ⏱ badge or in Settings.\n- Themes: choose an accent color and a background (dark, OLED black, slate) in Settings > General > Appearance.\n- Liquid Glass option (iOS 26): floating tab bar and glass buttons.\n- Russian language, translated with AI (corrections welcome from Settings).\n- VODs: parts muted by Twitch show in orange with a Skip button; on recent VODs the original sound is restored when Twitch still has it.\n- Switch account button in Settings; after logging out, Twitch now asks which account to use.\n- Feedback: attach screenshots, follow your reports in \"My reports\", read the reply and answer back; a badge shows new replies.\n- The website moved to twitchunblock.vercel.app (Settings link updated).",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/nightly-240/TwitchUnblock.ipa",
+          "size": 2200764,
+          "commit": "938d0ebb261fa62d6506126eba33e08c1fd06b3d"
+        },
+        {
+          "version": "1.2.16",
+          "buildVersion": "237",
+          "date": "2026-10-07",
+          "localizedDescription": "- The bug report / idea form is now one tap away: header, Settings home and the player ⋯ menu\n- New \"Report a bug or suggest an idea\" form in Settings\n- Swiping the player down recovers if interrupted, adapts to the screen size and respects Reduce Motion\n- Without an account, the app explains why lists stop at 100\n- Predictions: you can now place bets (tap an outcome, pick an amount, Predict)\n- Swiping the player down is now smooth and slides it away like the Twitch app\n- Channel page: new \"About\" tab with the description, social links and panels\n- Clips: 100 at once instead of 30, and \"Load more\" when logged in\n- Links in bot command replies are now tappable\n- Tapping a streamer's name on a stream card opens their channel\n- Settings: option to hide recent streamers\n- Pasting a Twitch link (twitch.tv/xqc) in Search opens the channel\n- The Categories tab is now available without a Twitch account\n- Deleted or hidden VODs now appear right among a channel's VODs, marked \"Unlisted VOD\" (the \"Deleted\" tab is gone)\n- Recovered VODs that start with a muted (copyrighted) part now play",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/nightly-237/TwitchUnblock.ipa",
+          "size": 2017880,
+          "commit": "bce7e5375fc21e0369c730c3448b419ca35e96d8"
+        },
+        {
+          "version": "1.2.12",
+          "buildVersion": "232",
+          "date": "2026-10-06",
+          "localizedDescription": "- New interactive tutorial: a guided tour over the real screens (replay it from Settings > About)\n- Home: offline followed channels now have their own \"Offline\" tab, next to Top streams\n- Settings: new \"Changelog\" page listing every version and what changed\n- Channel page: the \"Deleted\" tab now comes right after VODs\n- New \"Deleted\" tab on a channel page: recover recently deleted VODs while Twitch still serves their segments.",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/nightly-232/TwitchUnblock.ipa",
+          "size": 1888465,
+          "commit": "5229ca86b09707b9a470cdd1d346068428d43821"
+        },
+        {
+          "version": "1.2.9",
+          "buildVersion": "228",
+          "date": "2026-10-05",
+          "localizedDescription": "- If the main server reaches its daily limit, VODs and lives switch to a backup server automatically.\n- Live Activity: the stream you are watching on the lock screen and in the Dynamic Island, with viewers and uptime, or the VOD's progress.\n- Seek bar: while dragging, a bubble shows the exact time you are seeking to (and the chapter on VODs).\n- Pinch with two fingers to zoom into the video, then drag to move around; pinch out to reset.\n- Lock screen and Control Center: title, channel and picture, with play/pause and ±10 s controls. Audio keeps playing when the phone is locked.\n- Minimized player: tapping the Search or VODs tab no longer re-opens the player full screen.",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/nightly-228/TwitchUnblock.ipa",
+          "size": 1809240,
+          "commit": "23e8cae3e8ff4cee0014433e8a7ea5fcb1d953a1"
+        },
+        {
+          "version": "1.2.2",
+          "buildVersion": "221",
+          "date": "2026-10-04",
+          "localizedDescription": "- Backup: export and import your follows, followed categories and settings (Settings > General), compatible with the website.\n- Channel page now has VODs, Highlights, Playlists and Clips tabs.\n- Audio only is remembered: new streams start in audio only until you pick another quality.\n- The streamer's profile picture now loads on VODs without a Twitch account.\n- Offline channels show how long ago and the date of their last stream, on the channel page and in Home.\n- Channel playlists: new Playlists tab on the channel page, with \"Play all\" to chain the videos.\n- Highlights (playlist videos) now play even when Twitch refuses the playback token.",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/nightly-221/TwitchUnblock.ipa",
+          "size": 1707520,
+          "commit": "0ca2bba3ea81ec9f175cc0266655b1829a04641f"
+        },
+        {
           "version": "1.2.0",
           "buildVersion": "218",
           "date": "2026-10-04",
@@ -60,10 +159,121 @@
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.2.0",
-      "versionDate": "2026-10-04",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/nightly-218/TwitchUnblock.ipa",
-      "size": 1663729
+      "version": "1.5.0",
+      "versionDate": "2026-10-19",
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/nightly-327/TwitchUnblock.ipa",
+      "size": 3896286
+    },
+    {
+      "name": "TU Test",
+      "bundleIdentifier": "com.mxfia19.TwitchUnblock.test",
+      "developerName": "MXFia19",
+      "subtitle": "Builds de test (branche test-17d298)",
+      "localizedDescription": "Version de test de TwitchUnblock : nouveautés en cours, peut être instable. Installée à côté de l’app normale.",
+      "iconURL": "https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/assets/icon.png",
+      "tintColor": "#9146ff",
+      "category": "entertainment",
+      "screenshots": [],
+      "versions": [
+        {
+          "version": "1.5.7",
+          "buildVersion": "335",
+          "date": "2026-10-19",
+          "localizedDescription": "- Search: typing text now shows results in tabs (Channels, Categories, Live by title or tags, VODs); live streams and VODs from hidden channels or categories are left out, and links or IDs still open directly\n- Search: your last 10 searches are listed under the search field, each removable, or clear them all\n- Channels: a Schedule tab lists a channel's upcoming streams in your local day and time, with length, title, category, weekly ones and vacation\n- Channels: an offline channel's page shows its next scheduled stream (or its vacation) right under its name",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-335/TwitchUnblock.ipa",
+          "size": 4183176,
+          "commit": "9e0a7847913c19a9432d20730dba2c5c9c963f27"
+        },
+        {
+          "version": "1.5.6",
+          "buildVersion": "334",
+          "date": "2026-10-19",
+          "localizedDescription": "- Player: Share in the ⋯ menu sends a VOD (or a rewound live) at the current time, the channel during a live, or the clip's link\n- Player: Create a clip during a live from the ⋯ menu, with your Twitch web session (connect it from there if needed), then copy or share its link\n- Notifications: live notifications show the stream's thumbnail, are grouped per channel, and offer Watch and Stop notifying for this channel\n- Notifications: a bell on channel pages and next to Follow above the chat turns live notifications on or off for that channel\n- Chat: tapping a message opens the person's card (badges, account creation date, follow date when Twitch gives it, Mention, Hide and Channel buttons), then their recent messages and the reply thread",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-334/TwitchUnblock.ipa",
+          "size": 4075860,
+          "commit": "b9945305e9528b83a31363aecf8d82a24e19543a"
+        },
+        {
+          "version": "1.5.5",
+          "buildVersion": "333",
+          "date": "2026-10-19",
+          "localizedDescription": "- Home: a new \"Continue watching\" row shows the VODs you started (up to 10, latest first) with their progress; a tap resumes where you stopped (hide it in Settings → General → Customize the app)\n- Player: when the connection comes back after a drop, a player stopped on Retry (or on a loading error) and failed multi-live tiles restart on their own, once\n- Downloads: the download sheet shows the estimated size and the free space, and refuses with a clear message when there isn't enough room\n- Downloads: new \"Download on Wi-Fi only\" option (Settings → Player, or in the download sheet; off by default): downloads wait for Wi-Fi, then resume on their own\n- Downloads: paused downloads now show a Resume button (▶), failed ones Retry (⟳)\n- Apple TV: a \"Continue watching\" row at the top of Following lists the VODs started on this Apple TV, with their progress\n- Apple TV: during a channel's ad break, a banner explains the purple screen with a countdown to the stream's return",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-333/TwitchUnblock.ipa",
+          "size": 4000187,
+          "commit": "b9586f3240a859942040ffb538776ed3e877ad4f"
+        },
+        {
+          "version": "1.5.4",
+          "buildVersion": "332",
+          "date": "2026-10-19",
+          "localizedDescription": "- Discover: hiding a channel or a category now removes it from the feed right away, and the ⋯ menu no longer offers to hide channels or categories you follow\n- Discover: coming back to the tab keeps your place, mode and sound (the top is reloaded after 10 minutes)\n- Discover: the Clips tab no longer spins forever when the top is empty, and Retry reloads it\n- Discover: clip durations show as m:ss instead of \"0min\"\n- Discover: the unfollow confirmation shows the channel's display name\n- Discover: previews now pause under every sheet (feedback, reports, downloads, sleep timer)\n- Discover: with the mini player or the multi-live bar shown, the game, tags and ⋯ button stay above them\n- Home: without an account, the automatic refresh no longer drops the streams loaded with \"Load more\"\n- Your account's followed channels and categories are now loaded at launch whatever the start tab, so Discover never hides them and backups include them\n- Channel points: a balance that couldn't be read when the chat opened no longer shows up later as a huge gain\n- Chat: a message that couldn't be sent goes back into the input field instead of being lost\n- Chat: turning the watch streak or live events back on during a stream now works without reopening the chat\n- VOD chat: comments appear within 3.5 s even when 7TV, BTTV or FFZ don't answer\n- Logs: the log screen no longer slows down while something is playing\n- Downloads: the default quality follows your playback quality, capped at 720p and never audio only\n- Player: a second \"slow connection\" notice now stays its full 4 seconds\n- Settings → Channel points: the per-channel list stays smooth with many channels",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-332/TwitchUnblock.ipa",
+          "size": 3967181,
+          "commit": "9d6743b73522147ae6dc6b5b2c025191f829d9d0"
+        },
+        {
+          "version": "1.5.3",
+          "buildVersion": "331",
+          "date": "2026-10-19",
+          "localizedDescription": "- Player: the landscape view forced by the rotate button is kept when the stream reloads (refresh, Retry, followed raid, next VOD)\n- Player: the Live Activity no longer disappears when following a raid or moving to the next VOD with the screen locked\n- Player: a recent VOD opened while AirPlay is on resumes where you left off instead of restarting from 0:00\n- Player: dragging the full-broadcast bar to the very start now opens the recording at its beginning instead of the present\n- Player: after a playback error, Play from the lock screen or headphones no longer keeps the screen awake or shows the video as playing\n- Player: the \"live via your account\" notice no longer comes back after each \"slow connection\" quality drop\n- Player: a speed forced by the player (caught up with a live recording, AirPlay) no longer resets later VODs to 1x\n- Player: the starting quality no longer changes, reloading the stream, when switching between Wi-Fi and cellular\n- Player: changing quality during AirPlay no longer leaves the receiver unable to play\n- Player: after stalls on cellular, the Live button no longer jumps to the very start of the live window\n- Player: a VOD stopped by a muted segment before resuming now restarts at your saved position instead of 0:00\n- Multi-live: the screen can sleep again when no tile is playing (all paused, offline, failed or finished)\n- Multi-live: a tile cut off mid-playback now gets its 3 retries instead of 1 or 2\n- Multi-live: on cellular, tiles follow the cellular quality setting instead of starting in 1080p\n- Discover: music from another app resumes after closing the player, even when a preview starts right away",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-331/TwitchUnblock.ipa",
+          "size": 3955460,
+          "commit": "10b243664cb859edb184a98e692e3879d51888f5"
+        },
+        {
+          "version": "1.5.2",
+          "buildVersion": "330",
+          "date": "2026-10-19",
+          "localizedDescription": "- New Settings → General → Customize the app: show, hide and reorder the tabs, and pick the tab the app opens on\n- Customize the Home screen: reorder or hide the Followed / Top / Offline tabs, hide the announcement, poll, sign-in and web session cards or the Categories view\n- Customize the player's bottom bar: reorder or hide its buttons, add sleep timer, multi-live and rewind buttons, hide AirPlay\n- Chat banners: polls, predictions and the hype train can now be hidden one by one",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-330/TwitchUnblock.ipa",
+          "size": 3949248,
+          "commit": "52a894bf3f24af5fcee63bcf8adb01cd0dc1ec5a"
+        },
+        {
+          "version": "1.5.1",
+          "buildVersion": "329",
+          "date": "2026-10-19",
+          "localizedDescription": "- Chat: the Return key now hides the keyboard instead of sending (the send button is right next to it); Settings → Chat → \"Return sends the message\" brings the old behavior back\n- Chat: tapping the chat while the keyboard is open only hides the keyboard, without opening the message or emote card",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-329/TwitchUnblock.ipa",
+          "size": 3898972,
+          "commit": "ec357e5b1bf0464cc186d94f066ea834541518ed"
+        },
+        {
+          "version": "1.5.0",
+          "buildVersion": "328",
+          "date": "2026-10-19",
+          "localizedDescription": "- Improvements and fixes",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-328/TwitchUnblock.ipa",
+          "size": 3896306,
+          "commit": "490136b5df2cb138e958a6b9737f6cce14586d11"
+        },
+        {
+          "version": "1.4.26",
+          "buildVersion": "326",
+          "date": "2026-10-19",
+          "localizedDescription": "- Discover: opening a live or clip no longer leaves the preview playing underneath (no more double sound)",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-326/TwitchUnblock.ipa",
+          "size": 3896302,
+          "commit": "5a70b5b10bcf1f8cfa37876b559e07ad26ebd104"
+        },
+        {
+          "version": "1.4.25",
+          "buildVersion": "325",
+          "date": "2026-10-19",
+          "localizedDescription": "- Discover: the speaker button turns the preview's sound on and off (lives and clips)\n- Discover: tap a channel's name or picture to open its page\n- A live opened from Discover now always has sound\n- On iPhone the app stays in portrait, except in the player and multi-live where landscape still works",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-325/TwitchUnblock.ipa",
+          "size": 3895957,
+          "commit": "b8870431fc74f6dd2a0a37039efcbf74bcc629fd"
+        }
+      ],
+      "appPermissions": {
+        "entitlements": [],
+        "privacy": {}
+      },
+      "version": "1.5.7",
+      "versionDate": "2026-10-19",
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-335/TwitchUnblock.ipa",
+      "size": 4183176
     }
   ],
   "news": []

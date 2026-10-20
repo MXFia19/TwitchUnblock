@@ -318,7 +318,7 @@ struct OnboardingTour: View {
     }
 
     private var languageButtons: some View {
-        HStack(spacing: 8) {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 100), spacing: 8)], spacing: 8) {
             ForEach(Lang.allCases) { l in
                 let on = store.lang == l
                 Button {

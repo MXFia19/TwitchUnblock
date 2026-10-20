@@ -236,17 +236,17 @@ extension Color {
 
 // MARK: – Language
 enum Lang: String, CaseIterable, Identifiable {
-    case fr, en, es, ru
+    case fr, en, es, ru, it
     var id: String { rawValue }
     var flag: String {
-        switch self { case .fr: "🇫🇷"; case .en: "🇬🇧"; case .es: "🇪🇸"; case .ru: "🇷🇺" }
+        switch self { case .fr: "🇫🇷"; case .en: "🇬🇧"; case .es: "🇪🇸"; case .ru: "🇷🇺"; case .it: "🇮🇹" }
     }
     var label: String {
-        switch self { case .fr: "Français"; case .en: "English"; case .es: "Español"; case .ru: "Русский" }
+        switch self { case .fr: "Français"; case .en: "English"; case .es: "Español"; case .ru: "Русский"; case .it: "Italiano" }
     }
     /// Traduite avec l'IA, sans relecture : on le dit à côté du choix de
     /// langue, avec un lien pour signaler les erreurs.
-    var machineTranslated: Bool { self == .ru }
+    var machineTranslated: Bool { self == .ru || self == .it }
 }
 
 // ✨ NOUVEAU : Les sources se traduisent automatiquement !
@@ -2383,6 +2383,7 @@ private let translations: [Lang: [String: String]] = [
     ],
     // Russe : dans son propre fichier (Localization/RussianStrings.swift).
     .ru: kRussianStrings,
+    .it: kItalianStrings,
 ]
 
 /// Une clé absente d'une langue retombe sur l'anglais, puis sur la clé

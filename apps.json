@@ -176,6 +176,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.5.35",
+          "buildVersion": "350",
+          "date": "2026-10-20",
+          "localizedDescription": "- Channel points: the app now joins raids with your Twitch session, so you get the raid bonus like on twitch.tv",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-350/TwitchUnblock.ipa",
+          "size": 4381511,
+          "commit": "cc4e1d685e1b217e472804d107857c69ea246589"
+        },
+        {
           "version": "1.5.34",
           "buildVersion": "349",
           "date": "2026-10-20",
@@ -255,25 +264,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-339/TwitchUnblock.ipa",
           "size": 4244347,
           "commit": "b16092f406b07a660351a8de8f344f3cbba8956e"
-        },
-        {
-          "version": "1.5.13",
-          "buildVersion": "338",
-          "date": "2026-10-19",
-          "localizedDescription": "- Channel schedule now loads without an account (Twitch's public schedule query)\n- Other improvements and fixes",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-338/TwitchUnblock.ipa",
-          "size": 4236402,
-          "commit": "ff7053ac8f7eb1af374a4128e71740033ab32795"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.5.34",
+      "version": "1.5.35",
       "versionDate": "2026-10-20",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-349/TwitchUnblock.ipa",
-      "size": 4373004
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-350/TwitchUnblock.ipa",
+      "size": 4381511
     }
   ],
   "news": []

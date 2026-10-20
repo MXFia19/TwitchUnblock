@@ -1,4 +1,6 @@
 import SwiftUI
+import UIKit
+import UIKit.UIGestureRecognizerSubclass
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  Glissé vers le bas du lecteur (flèche retour au doigt).
@@ -31,6 +33,62 @@ final class PlayerPull: ObservableObject {
     /// 120 points (un iPhone en paysage n'a pas la place d'aller plus loin).
     static func threshold(for height: CGFloat) -> CGFloat {
         min(120, max(80, height * 0.15))
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  Boutons du lecteur pendant un glissé.
+//
+//  Le glissé part dès le premier point, en geste simultané : commencé sur un
+//  bouton du lecteur (croix, ⋯, réduire, minuteur, « Direct »…), il emporte
+//  le bouton avec le doigt, qui est donc encore dessus au doigt levé — et le
+//  bouton faisait son action : la croix fermait le lecteur au lieu de le
+//  réduire. Tant qu'un glissé a vraiment déplacé le lecteur, et un court
+//  instant après le doigt levé, les boutons du lecteur ne font rien.
+//
+//  Un toucher normal (le doigt tremble de quelques points au plus) n'est pas
+//  concerné. Le double-tap ±10 s, le zoom et la barre de lecture ne passent
+//  pas par cette garde. Fil principal seulement : gestes et boutons.
+// ═══════════════════════════════════════════════════════════════════════════
+
+extension PlayerPull {
+    /// Déplacement du lecteur au-delà duquel le glissé compte.
+    static let buttonSlop: CGFloat = 10
+    /// Délai après la fin du glissé : le bouton peut recevoir son toucher
+    /// juste après le geste.
+    static let buttonDelay: TimeInterval = 0.35
+
+    /// Glissé en cours qui a déplacé le lecteur de plus de `buttonSlop`.
+    private static var pullMoved = false
+    /// Fin du dernier glissé qui a déplacé le lecteur.
+    private static var pullEndedAt = Date.distantPast
+
+    /// Le glissé en cours déplace le lecteur de `y` points (à chaque
+    /// `onPull`, et au doigt levé).
+    static func noteMove(_ y: CGFloat) {
+        if y > buttonSlop { pullMoved = true }
+    }
+
+    /// Fin du geste : doigt levé, geste interrompu, ou vue retirée en plein
+    /// glissé (sinon la garde resterait levée). Sans effet si le lecteur n'a
+    /// pas bougé.
+    static func noteEnd() {
+        guard pullMoved else { return }
+        pullMoved = false
+        pullEndedAt = Date()
+    }
+
+    /// Vrai pendant un glissé qui a déplacé le lecteur, et `buttonDelay` après.
+    /// Le doigt levé, l'ordre entre la fin du glissé et l'action du bouton
+    /// n'est pas garanti : l'un ou l'autre de ces deux cas couvre le bouton.
+    static var blocksButtons: Bool {
+        pullMoved || Date().timeIntervalSince(pullEndedAt) < buttonDelay
+    }
+
+    /// Action d'un bouton du lecteur : ignorée pendant un glissé et juste après.
+    static func guarded(_ action: () -> Void) {
+        guard !blocksButtons else { return }
+        action()
     }
 }
 
@@ -72,14 +130,20 @@ struct PlayerPullGesture: ViewModifier {
                             pulling = PlayerPull.direction(for: value.translation)
                         }
                         guard pulling == true else { return }
-                        onPull(max(0, value.translation.height))
+                        let y = max(0, value.translation.height)
+                        // Garde des boutons du bandeau et de l'image (voir plus haut).
+                        PlayerPull.noteMove(y)
+                        onPull(y)
                     }
                     .onEnded { value in
                         let shouldFinish = pulling == true
                         pulling = nil
                         if shouldFinish {
-                            onPullEnd(max(0, value.translation.height), value.predictedEndTranslation.height)
+                            let y = max(0, value.translation.height)
+                            PlayerPull.noteMove(y)
+                            onPullEnd(y, value.predictedEndTranslation.height)
                         }
+                        PlayerPull.noteEnd()
                     }
             )
             .onChange(of: active) { active in
@@ -88,6 +152,33 @@ struct PlayerPullGesture: ViewModifier {
                 // lecteur reprend sa place.
                 if pulling == true { onPull(0) }
                 pulling = nil
+                PlayerPull.noteEnd()
+            }
+            // Vue retirée en plein glissé (rotation…) : ni onEnded ni fin du
+            // geste, la garde des boutons ne doit pas rester levée.
+            .onDisappear {
+                if pulling != nil { PlayerPull.noteEnd() }
             }
     }
+}
+
+/// Bouton UIKit du lecteur (AirPlay) : son action ne passe pas par SwiftUI,
+/// donc pas par `PlayerPull.guarded`. Au doigt levé, ce geste reconnaît — ce
+/// qui annule le toucher du bouton (`cancelsTouchesInView`) — si la garde du
+/// glissé est levée ; sinon il échoue aussitôt et le bouton reçoit son
+/// toucher comme avant. Il n'empêche aucun autre geste, et aucun ne l'empêche.
+final class PlayerPullTouchGuard: UIGestureRecognizer {
+    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent) {
+        super.touchesEnded(touches, with: event)
+        state = PlayerPull.blocksButtons ? .recognized : .failed
+    }
+
+    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent) {
+        super.touchesCancelled(touches, with: event)
+        state = .failed
+    }
+
+    override func canPrevent(_ preventedGestureRecognizer: UIGestureRecognizer) -> Bool { false }
+
+    override func canBePrevented(by preventingGestureRecognizer: UIGestureRecognizer) -> Bool { false }
 }

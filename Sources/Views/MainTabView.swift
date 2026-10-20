@@ -1136,10 +1136,13 @@ struct MainTabView: View {
     }
 
     /// Bandeau au-dessus de la vidéo (mode natif) : qui regarde-t-on, et quoi.
+    /// Ses boutons ne font rien pendant un glissé du lecteur et juste après
+    /// (PlayerPull.guarded) : parti sur un bouton, le glissé l'emporte avec
+    /// le doigt, encore dessus au doigt levé — la croix fermait le lecteur.
     @ViewBuilder
     private var playerTopBar: some View {
         HStack(spacing: TSpace.sm) {
-            Button { reducePlayer() } label: {
+            Button { PlayerPull.guarded { reducePlayer() } } label: {
                 Image(systemName: "chevron.down")
                     .font(.system(size: 14, weight: .bold))
                     .foregroundColor(.tPrimary)
@@ -1161,7 +1164,9 @@ struct MainTabView: View {
                 Text(currentChannelName ?? statusTitle)
                     .font(.tCardTitle).foregroundColor(.tText).lineLimit(1)
                     // Toucher le pseudo : page de la chaîne.
-                    .onTapGesture { if let l = playerChannelLogin { store.openChannelPage(l) } }
+                    .onTapGesture {
+                        PlayerPull.guarded { if let l = playerChannelLogin { store.openChannelPage(l) } }
+                    }
 
                 HStack(spacing: TSpace.sm) {
                     if isLivePlaying {
@@ -1175,7 +1180,9 @@ struct MainTabView: View {
                         // Un appui ramène au bord du direct, sans recharger.
                         if store.showLatency, liveLatency > 0 {
                             Button {
-                                NotificationCenter.default.post(name: .tuGoLive, object: nil)
+                                PlayerPull.guarded {
+                                    NotificationCenter.default.post(name: .tuGoLive, object: nil)
+                                }
                             } label: {
                                 TMeta(icon: "waveform.path.ecg",
                                       text: String(format: "%.0f s", liveLatency))
@@ -1191,7 +1198,7 @@ struct MainTabView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
 
             // Minuteur de veille
-            Button { showSleepSheet = true } label: {
+            Button { PlayerPull.guarded { showSleepSheet = true } } label: {
                 HStack(spacing: 3) {
                     Image(systemName: "moon.zzz.fill").font(.system(size: 11))
                     if sleepTimer.isActive {
@@ -1208,7 +1215,7 @@ struct MainTabView: View {
             }
             .buttonStyle(.plain)
 
-            TIconButton(icon: "xmark", size: 32) { stopPlayer() }
+            TIconButton(icon: "xmark", size: 32) { PlayerPull.guarded { stopPlayer() } }
         }
         .padding(.horizontal, TSpace.md)
         .padding(.top, TSpace.sm)

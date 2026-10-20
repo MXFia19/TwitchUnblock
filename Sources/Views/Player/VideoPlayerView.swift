@@ -955,10 +955,13 @@ struct VideoPlayerView: View {
         .aspectRatio(16/9, contentMode: .fit)
         .background(Color.black)
         .overlay(alignment: .topLeading) {
-            // Un appui ramène au bord du direct, sans recharger.
+            // Un appui ramène au bord du direct, sans recharger. Rien pendant
+            // un glissé du lecteur (PlayerPull.guarded) : il part aussi d'ici.
             if store.showLatency, isLive {
                 Button {
-                    NotificationCenter.default.post(name: .tuGoLive, object: nil)
+                    PlayerPull.guarded {
+                        NotificationCenter.default.post(name: .tuGoLive, object: nil)
+                    }
                 } label: {
                     latencyChip
                 }

@@ -1353,6 +1353,7 @@ struct ImmersivePlayer: View {
             if !active {
                 if pulling == true { onPull(0) }
                 pulling = nil
+                PlayerPull.noteEnd()
             }
         }
         // Changement de source (direct ↔ enregistrement) : la position voulue
@@ -1436,6 +1437,9 @@ struct ImmersivePlayer: View {
             hideTask?.cancel()
             flashTask?.cancel()
             networkRetry?.cancel()
+            // Retirée en plein glissé (relance, rotation) : ni onEnded ni fin
+            // du geste, la garde des boutons ne doit pas rester levée.
+            if pulling != nil { PlayerPull.noteEnd() }
             // Pas de retour au portrait ici : la vue disparaît aussi à chaque
             // relance (⟳, « Réessayer », raid suivi, VOD suivante), et le
             // lecteur suivant s'ouvrait en portrait malgré le paysage forcé.
@@ -1577,10 +1581,11 @@ struct ImmersivePlayer: View {
 
             // Play / pause au centre — centré sur la partie visible de l'image,
             // pas sur l'écran entier : le chat superposé en masque la droite.
-            // En échec, la carte « Réessayer » prend sa place.
+            // En échec, la carte « Réessayer » prend sa place. Comme tous les
+            // boutons du lecteur, rien pendant un glissé (PlayerPull.guarded).
             if !model.failed {
                 Button {
-                    model.togglePlay(); scheduleAutoHide()
+                    PlayerPull.guarded { model.togglePlay(); scheduleAutoHide() }
                 } label: {
                     Image(systemName: model.isPlaying ? "pause.fill" : "play.fill")
                         .font(.system(size: 26, weight: .bold))
@@ -1639,14 +1644,15 @@ struct ImmersivePlayer: View {
                 .clipShape(Circle())
 
                 // Nom en clair, titre estompé : le nom prime. Toucher le nom
-                // ouvre la chaîne ; le titre (souvent coupé), sa fiche.
+                // ouvre la chaîne ; le titre (souvent coupé), sa fiche. Rien
+                // pendant un glissé du lecteur (PlayerPull.guarded).
                 if info.title.isEmpty {
                     Text(info.channel).font(.system(size: 14, weight: .bold))
                         .foregroundColor(.white)
                         .lineLimit(1)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .contentShape(Rectangle())
-                        .onTapGesture { onChannel?() }
+                        .onTapGesture { PlayerPull.guarded { onChannel?() } }
                 } else {
                     HStack(spacing: 0) {
                         Text(info.channel).font(.system(size: 14, weight: .bold))
@@ -1654,15 +1660,17 @@ struct ImmersivePlayer: View {
                             .lineLimit(1)
                             .layoutPriority(1)
                             .contentShape(Rectangle())
-                            .onTapGesture { onChannel?() }
+                            .onTapGesture { PlayerPull.guarded { onChannel?() } }
                         Text("  \(info.title)").font(.system(size: 14))
                             .foregroundColor(.white.opacity(0.65))
                             .lineLimit(1)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .contentShape(Rectangle())
                             .onTapGesture {
-                                hideTask?.cancel()
-                                showInfo = true
+                                PlayerPull.guarded {
+                                    hideTask?.cancel()
+                                    showInfo = true
+                                }
                             }
                             .accessibilityAddTraits(.isButton)
                     }
@@ -1836,7 +1844,7 @@ struct ImmersivePlayer: View {
                     // le retard, qui ramène au bord — le point grisé d'avant
                     // passait inaperçu.
                     Button {
-                        model.goLive(); scheduleAutoHide()
+                        PlayerPull.guarded { model.goLive(); scheduleAutoHide() }
                     } label: {
                         if model.atLiveEdge && model.isPlaying {
                             HStack(spacing: TSpace.xs) {
@@ -1866,7 +1874,7 @@ struct ImmersivePlayer: View {
                     }
                     // Un appui sur la latence ramène au bord, comme « Direct ».
                     if store.showLatency, let l = info.latency {
-                        Button { model.goLive(); scheduleAutoHide() } label: {
+                        Button { PlayerPull.guarded { model.goLive(); scheduleAutoHide() } } label: {
                             overlayMeta(icon: "waveform.path.ecg",
                                         text: String(format: "%.0f s", max(0, l)))
                         }
@@ -1891,8 +1899,10 @@ struct ImmersivePlayer: View {
                     // Chapitre en cours ; un appui liste les chapitres pour y sauter.
                     if chapters.count > 1 {
                         Button {
-                            hideTask?.cancel()
-                            showChapters = true
+                            PlayerPull.guarded {
+                                hideTask?.cancel()
+                                showChapters = true
+                            }
                         } label: {
                             HStack(spacing: 3) {
                                 Image(systemName: "list.bullet").font(.system(size: 10, weight: .bold))
@@ -1914,7 +1924,7 @@ struct ImmersivePlayer: View {
                 // Minuteur de veille : visible pendant la lecture, pas seulement
                 // dans les Réglages. Un appui ouvre le réglage rapide.
                 if let sleep = sleepLabel {
-                    Button { onSleep(); scheduleAutoHide() } label: {
+                    Button { PlayerPull.guarded { onSleep(); scheduleAutoHide() } } label: {
                         HStack(spacing: 3) {
                             Image(systemName: "moon.zzz.fill").font(.system(size: 10))
                             Text(sleep)
@@ -1933,7 +1943,7 @@ struct ImmersivePlayer: View {
                 // au direct était enfoui dans le menu « ⋯ », alors que c'est
                 // l'action qu'on cherche en premier.
                 if canReturnToLive {
-                    Button { onBackToLive() } label: {
+                    Button { PlayerPull.guarded { onBackToLive() } } label: {
                         HStack(spacing: TSpace.xs) {
                             Circle().fill(Color.tLive).frame(width: 7, height: 7)
                             Text(store.t("back_to_live"))
@@ -1975,11 +1985,13 @@ struct ImmersivePlayer: View {
                 .font(.system(size: 12, weight: .semibold))
                 .lineLimit(1)
             Button {
-                let after = model.endTime > 0 ? min(r.end + 0.5, model.endTime) : r.end + 0.5
-                // Lecture arrêtée (élément en échec) : chercher ne fait plus
-                // rien, on relit juste après le passage.
-                if model.failed { model.reload(at: after) } else { model.seek(to: after) }
-                scheduleAutoHide()
+                PlayerPull.guarded {
+                    let after = model.endTime > 0 ? min(r.end + 0.5, model.endTime) : r.end + 0.5
+                    // Lecture arrêtée (élément en échec) : chercher ne fait plus
+                    // rien, on relit juste après le passage.
+                    if model.failed { model.reload(at: after) } else { model.seek(to: after) }
+                    scheduleAutoHide()
+                }
             } label: {
                 HStack(spacing: 3) {
                     Text(store.t("vod_muted_skip")).font(.system(size: 12, weight: .bold))
@@ -2009,7 +2021,7 @@ struct ImmersivePlayer: View {
                 .font(.system(size: 14, weight: .semibold))
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
-            Button { onRefresh() } label: {
+            Button { PlayerPull.guarded { onRefresh() } } label: {
                 Text(store.t("retry"))
                     .font(.system(size: 13, weight: .bold))
                     .padding(.horizontal, 16).frame(height: 34)
@@ -2154,8 +2166,11 @@ struct ImmersivePlayer: View {
         }
     }
 
+    /// Bouton rond des commandes. Son action est ignorée pendant un glissé du
+    /// lecteur et juste après (voir PlayerPull.guarded) : parti sur le bouton,
+    /// le glissé l'emporte avec le doigt, encore dessus au doigt levé.
     private func overlayButton(icon: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+        Button { PlayerPull.guarded(action) } label: {
             Image(systemName: icon)
                 .font(.system(size: 13, weight: .bold))
                 .foregroundColor(.white)
@@ -2272,17 +2287,27 @@ struct ImmersivePlayer: View {
                 if pulling == nil {
                     pulling = PlayerPull.direction(for: value.translation)
                 }
-                if pulling == true { onPull(max(0, value.translation.height)) }
+                if pulling == true {
+                    let y = max(0, value.translation.height)
+                    // Garde des boutons du lecteur (voir PlayerPull.guarded).
+                    PlayerPull.noteMove(y)
+                    onPull(y)
+                }
             }
             .onEnded { value in
-                defer { pulling = nil }
+                defer {
+                    pulling = nil
+                    PlayerPull.noteEnd()
+                }
                 if zoom > 1 {
                     if pulling == true { onPull(0) }
                     panBase = pan
                     return
                 }
                 guard pulling == true else { return }
-                onPullEnd(max(0, value.translation.height), value.predictedEndTranslation.height)
+                let y = max(0, value.translation.height)
+                PlayerPull.noteMove(y)
+                onPullEnd(y, value.predictedEndTranslation.height)
             }
     }
 
@@ -2429,6 +2454,9 @@ struct AirPlayButton: UIViewRepresentable {
         v.activeTintColor = UIColor(red: 0.57, green: 0.27, blue: 1, alpha: 1)
         v.prioritizesVideoDevices = true
         v.backgroundColor = .clear
+        // Bouton UIKit : la garde du glissé du lecteur passe par un geste
+        // (voir PlayerPullTouchGuard), pas par PlayerPull.guarded.
+        v.addGestureRecognizer(PlayerPullTouchGuard(target: nil, action: nil))
         return v
     }
     func updateUIView(_ uiView: AVRoutePickerView, context: Context) {}

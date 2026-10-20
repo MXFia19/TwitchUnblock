@@ -42,7 +42,8 @@ final class ChatService: NSObject, ObservableObject {
     /// lignes de l'app (⚠️) : affichés tout de suite.
     private var pending: [PendingMessage] = []
     /// Au-delà (chat très rapide retardé d'une minute), les plus anciens
-    /// partent : ils n'auraient fait que défiler.
+    /// sortent en avance, à la sortie suivante (0,15 s). Jetés, ils laissaient
+    /// en tête de file des messages jamais échus : plus rien ne s'affichait.
     private let maxPending = 1500
     /// Sortie de la file au fil du temps ; nil quand elle est vide (une file
     /// vide ne fait tourner aucun minuteur).
@@ -113,7 +114,6 @@ final class ChatService: NSObject, ObservableObject {
         // passe par la file, derrière ceux qui y sont déjà.
         guard currentDelay(now) >= 0.5 || !pending.isEmpty else { insert(message); return }
         pending.append(PendingMessage(message: message, arrivedAt: now))
-        if pending.count > maxPending { pending.removeFirst(pending.count - maxPending) }
         startRelease()
     }
 
@@ -161,11 +161,13 @@ final class ChatService: NSObject, ObservableObject {
     }
 
     /// Rend, dans leur ordre d'arrivée, les messages dont l'heure est venue :
-    /// arrivée + retard appliqué.
+    /// arrivée + retard appliqué. File trop longue : les plus anciens aussi,
+    /// en avance (voir `maxPending`).
     private func releaseDue() {
         let now = Date()
         let horizon = now.addingTimeInterval(-currentDelay(now))
-        let count = pending.firstIndex(where: { $0.arrivedAt > horizon }) ?? pending.count
+        let ripe = pending.firstIndex(where: { $0.arrivedAt > horizon }) ?? pending.count
+        let count = max(ripe, pending.count - maxPending)
         guard count > 0 else { return }
         let due = pending.prefix(count).map(\.message)
         pending.removeFirst(count)
@@ -212,8 +214,12 @@ final class ChatService: NSObject, ObservableObject {
             added = true
         }
         guard added else { return }
+        // Plafond appliqué avant la publication : une seule copie de la liste
+        // et une seule mise à jour de l'affichage par lot (trimIfNeeded en
+        // refaisait une à chaque message, une fois la liste pleine).
+        let cap = pauseTrim ? maxMessagesPaused : maxMessages
+        if list.count > cap { list.removeLast(list.count - cap) }
         messages = list
-        trimIfNeeded()
     }
 
     // Infos du compte connecté (GLOBALUSERSTATE / USERSTATE)

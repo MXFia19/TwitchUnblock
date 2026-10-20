@@ -99,11 +99,13 @@ struct ChatSyncBadge: View {
     @ObservedObject private var sync = ChatSync.shared
 
     /// Retard du chat à afficher (s) ; nil : pas de pastille (rien à suivre,
-    /// ou moins d'une seconde).
+    /// ou moins d'une seconde sans retouche). Avec une retouche, elle reste
+    /// même à 0 s : avancée jusque-là depuis son menu, elle disparaissait
+    /// avec lui, et la retouche ne s'annulait plus depuis le chat.
     private var seconds: Int? {
         guard let player = sync.shownSeconds else { return nil }
         let delay = Int(ChatSync.chatDelay(player: Double(player), nudge: store.chatSyncNudge).rounded())
-        return delay >= 1 ? delay : nil
+        return (delay >= 1 || store.chatSyncNudge != 0) ? delay : nil
     }
 
     var body: some View {

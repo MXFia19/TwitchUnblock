@@ -1,0 +1,43 @@
+{
+  "name": "TwitchUnblock TV",
+  "subtitle": "Apple TV builds of TwitchUnblock",
+  "description": "Unsigned builds of the TwitchUnblock Apple TV app, released with the iPhone app. Add this source in ATVLoadly (or any tool that reads AltStore sources) to get updates automatically.",
+  "iconURL": "https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/assets/icon.png",
+  "website": "https://github.com/MXFia19/TwitchUnblock",
+  "tintColor": "#9146ff",
+  "featuredApps": [
+    "com.mxfia19.TwitchUnblockTV"
+  ],
+  "apps": [
+    {
+      "name": "TwitchUnblock TV",
+      "bundleIdentifier": "com.mxfia19.TwitchUnblockTV",
+      "developerName": "MXFia19",
+      "subtitle": "Twitch lives and VODs on Apple TV",
+      "localizedDescription": "Followed channels, top streams, categories and search, lives and VODs with the chat on the picture.",
+      "iconURL": "https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/assets/icon.png",
+      "tintColor": "#9146ff",
+      "category": "entertainment",
+      "screenshots": [],
+      "appPermissions": {
+        "entitlements": [],
+        "privacy": {}
+      },
+      "versions": [
+        {
+          "version": "0.1.34",
+          "buildVersion": "34",
+          "date": "2026-10-20",
+          "localizedDescription": "- A \"Continue watching\" row at the top of Following lists the VODs started on this Apple TV, with their progress\n- During a channel's ad break, a banner explains the purple screen with a countdown to the stream's return\n- Other improvements and fixes",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-34/TwitchUnblockTV.ipa",
+          "size": 2589185,
+          "commit": "31361aace31427663ca25a06adabd44206b8dd28"
+        }
+      ],
+      "version": "0.1.34",
+      "versionDate": "2026-10-20",
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-34/TwitchUnblockTV.ipa",
+      "size": 2589185
+    }
+  ]
+}

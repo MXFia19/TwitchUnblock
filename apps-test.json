@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.5.28",
+          "buildVersion": "346",
+          "date": "2026-10-20",
+          "localizedDescription": "- Settings → About now credits the people who contribute to the app\n- Japanese interface language (thanks to kinboy56)\n- Other improvements and fixes",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-346/TwitchUnblock.ipa",
+          "size": 4310080,
+          "commit": "5000d324dbf353e2830d60fbe10f56cbe7704c28"
+        },
+        {
           "version": "1.5.25",
           "buildVersion": "345",
           "date": "2026-10-20",
@@ -280,25 +289,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-314/TwitchUnblock.ipa",
           "size": 3746012,
           "commit": "6be15afd06dc58df7fa728e8cc59dbcf50aa1f6f"
-        },
-        {
-          "version": "1.4.13",
-          "buildVersion": "313",
-          "date": "2026-10-18",
-          "localizedDescription": "- Feedback: each report is read from the server that received it (switching to your own Worker no longer drops followed reports), unread replies no longer depend on your phone's clock, a reply you just sent no longer disappears for a moment, and more than 30 followed reports all stay up to date\n- Announcements disappear when they expire even if the app stays open, and quick reactions no longer end up out of sync\n- \"Check for updates\" says when it couldn't check instead of \"up to date\", two builds of the same version are told apart, and the update card fits on screen in landscape\n- Your own Worker: checking an address no longer gets mixed up when you change it, and the Worker in use stays shown; \"Manage feedback\" no longer comes back after logging out\n- Usage sharing: turning it off is retried until the server confirms, including on the Worker that received the counts, and counts are no longer sent twice\n- Logs screen fully translated, with timestamps no longer rewritten by region settings\n- Russian wording made consistent (\"follow\", \"emotes\"), Top lives in Traditional Chinese (Taiwan) shows Chinese streams, and system elements (Cancel, Copy, share sheet, video player) follow your language",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-313/TwitchUnblock.ipa",
-          "size": 3745828,
-          "commit": "c11d520f738d273a74e10f3f6b0f3434f1710dd2"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.5.25",
+      "version": "1.5.28",
       "versionDate": "2026-10-20",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-345/TwitchUnblock.ipa",
-      "size": 4280124
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-346/TwitchUnblock.ipa",
+      "size": 4310080
     }
   ],
   "news": []

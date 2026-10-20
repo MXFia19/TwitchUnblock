@@ -236,17 +236,22 @@ extension Color {
 
 // MARK: – Language
 enum Lang: String, CaseIterable, Identifiable {
-    case fr, en, es, ru, it
+    case fr, en, es, ru, it, ja
     var id: String { rawValue }
     var flag: String {
-        switch self { case .fr: "🇫🇷"; case .en: "🇬🇧"; case .es: "🇪🇸"; case .ru: "🇷🇺"; case .it: "🇮🇹" }
+        switch self {
+        case .fr: "🇫🇷"; case .en: "🇬🇧"; case .es: "🇪🇸"; case .ru: "🇷🇺"; case .it: "🇮🇹"; case .ja: "🇯🇵"
+        }
     }
     var label: String {
-        switch self { case .fr: "Français"; case .en: "English"; case .es: "Español"; case .ru: "Русский"; case .it: "Italiano" }
+        switch self {
+        case .fr: "Français"; case .en: "English"; case .es: "Español"; case .ru: "Русский"
+        case .it: "Italiano"; case .ja: "日本語"
+        }
     }
     /// Traduite avec l'IA, sans relecture : on le dit à côté du choix de
     /// langue, avec un lien pour signaler les erreurs.
-    var machineTranslated: Bool { self == .ru || self == .it }
+    var machineTranslated: Bool { self == .ru || self == .it || self == .ja }
 }
 
 // ✨ NOUVEAU : Les sources se traduisent automatiquement !
@@ -2384,6 +2389,8 @@ private let translations: [Lang: [String: String]] = [
     // Russe : dans son propre fichier (Localization/RussianStrings.swift).
     .ru: kRussianStrings,
     .it: kItalianStrings,
+    // Japonais : dans son propre fichier (Localization/JapaneseStrings.swift).
+    .ja: kJapaneseStrings,
 ]
 
 /// Une clé absente d'une langue retombe sur l'anglais, puis sur la clé

@@ -176,6 +176,60 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.5.17",
+          "buildVersion": "341",
+          "date": "2026-10-20",
+          "localizedDescription": "- Other improvements and fixes",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-341/TwitchUnblock.ipa",
+          "size": 4252146,
+          "commit": "5ff465d6696e0a634fe3051d25e6e6239b52569b"
+        },
+        {
+          "version": "1.5.16",
+          "buildVersion": "340",
+          "date": "2026-10-20",
+          "localizedDescription": "- Live chat now waits for the video: messages show up when the picture catches up, following stalls and jumps back to live (tap the ⏱ badge above the chat for real-time chat)\n- Other improvements and fixes",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-340/TwitchUnblock.ipa",
+          "size": 4251784,
+          "commit": "acfecbb08414ef3672dffef0e28445fd15c8e4f9"
+        },
+        {
+          "version": "1.5.14",
+          "buildVersion": "339",
+          "date": "2026-10-20",
+          "localizedDescription": "- Customize: reorder and hide the tabs of a channel page (VODs, Highlights, Playlists, Clips, Schedule, About); the page opens on the first one shown\n- Tap the tab you're on again to scroll back to the top (Home, Search, My VODs) or to Discover's first page\n- Home: pinned channels' live streams stay on top of Following, now sorted by viewers among themselves (Settings → Customize → Pinned sorted by viewers)",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-339/TwitchUnblock.ipa",
+          "size": 4244347,
+          "commit": "b16092f406b07a660351a8de8f344f3cbba8956e"
+        },
+        {
+          "version": "1.5.13",
+          "buildVersion": "338",
+          "date": "2026-10-19",
+          "localizedDescription": "- Channel schedule now loads without an account (Twitch's public schedule query)\n- Other improvements and fixes",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-338/TwitchUnblock.ipa",
+          "size": 4236402,
+          "commit": "ff7053ac8f7eb1af374a4128e71740033ab32795"
+        },
+        {
+          "version": "1.5.11",
+          "buildVersion": "337",
+          "date": "2026-10-19",
+          "localizedDescription": "- Other improvements and fixes",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-337/TwitchUnblock.ipa",
+          "size": 4231305,
+          "commit": "7510455c72b7845c006557bcec606033620890b5"
+        },
+        {
+          "version": "1.5.8",
+          "buildVersion": "336",
+          "date": "2026-10-19",
+          "localizedDescription": "- Settings: signed in, your settings now follow your Twitch account on the website and your other devices: chat settings, top streams language, VOD speed, pinned and hidden channels, and the app's customization (Settings → Twitch Account → Sync my settings, on by default)\n- Settings: language, quality, mobile data, notifications, downloads and appearance stay specific to each device; the latest change wins, and pinned or hidden lists changed on two devices are merged",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-336/TwitchUnblock.ipa",
+          "size": 4222082,
+          "commit": "d83ce6240c749741663778400094090973873b50"
+        },
+        {
           "version": "1.5.7",
           "buildVersion": "335",
           "date": "2026-10-19",
@@ -210,70 +264,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-332/TwitchUnblock.ipa",
           "size": 3967181,
           "commit": "9d6743b73522147ae6dc6b5b2c025191f829d9d0"
-        },
-        {
-          "version": "1.5.3",
-          "buildVersion": "331",
-          "date": "2026-10-19",
-          "localizedDescription": "- Player: the landscape view forced by the rotate button is kept when the stream reloads (refresh, Retry, followed raid, next VOD)\n- Player: the Live Activity no longer disappears when following a raid or moving to the next VOD with the screen locked\n- Player: a recent VOD opened while AirPlay is on resumes where you left off instead of restarting from 0:00\n- Player: dragging the full-broadcast bar to the very start now opens the recording at its beginning instead of the present\n- Player: after a playback error, Play from the lock screen or headphones no longer keeps the screen awake or shows the video as playing\n- Player: the \"live via your account\" notice no longer comes back after each \"slow connection\" quality drop\n- Player: a speed forced by the player (caught up with a live recording, AirPlay) no longer resets later VODs to 1x\n- Player: the starting quality no longer changes, reloading the stream, when switching between Wi-Fi and cellular\n- Player: changing quality during AirPlay no longer leaves the receiver unable to play\n- Player: after stalls on cellular, the Live button no longer jumps to the very start of the live window\n- Player: a VOD stopped by a muted segment before resuming now restarts at your saved position instead of 0:00\n- Multi-live: the screen can sleep again when no tile is playing (all paused, offline, failed or finished)\n- Multi-live: a tile cut off mid-playback now gets its 3 retries instead of 1 or 2\n- Multi-live: on cellular, tiles follow the cellular quality setting instead of starting in 1080p\n- Discover: music from another app resumes after closing the player, even when a preview starts right away",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-331/TwitchUnblock.ipa",
-          "size": 3955460,
-          "commit": "10b243664cb859edb184a98e692e3879d51888f5"
-        },
-        {
-          "version": "1.5.2",
-          "buildVersion": "330",
-          "date": "2026-10-19",
-          "localizedDescription": "- New Settings → General → Customize the app: show, hide and reorder the tabs, and pick the tab the app opens on\n- Customize the Home screen: reorder or hide the Followed / Top / Offline tabs, hide the announcement, poll, sign-in and web session cards or the Categories view\n- Customize the player's bottom bar: reorder or hide its buttons, add sleep timer, multi-live and rewind buttons, hide AirPlay\n- Chat banners: polls, predictions and the hype train can now be hidden one by one",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-330/TwitchUnblock.ipa",
-          "size": 3949248,
-          "commit": "52a894bf3f24af5fcee63bcf8adb01cd0dc1ec5a"
-        },
-        {
-          "version": "1.5.1",
-          "buildVersion": "329",
-          "date": "2026-10-19",
-          "localizedDescription": "- Chat: the Return key now hides the keyboard instead of sending (the send button is right next to it); Settings → Chat → \"Return sends the message\" brings the old behavior back\n- Chat: tapping the chat while the keyboard is open only hides the keyboard, without opening the message or emote card",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-329/TwitchUnblock.ipa",
-          "size": 3898972,
-          "commit": "ec357e5b1bf0464cc186d94f066ea834541518ed"
-        },
-        {
-          "version": "1.5.0",
-          "buildVersion": "328",
-          "date": "2026-10-19",
-          "localizedDescription": "- Improvements and fixes",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-328/TwitchUnblock.ipa",
-          "size": 3896306,
-          "commit": "490136b5df2cb138e958a6b9737f6cce14586d11"
-        },
-        {
-          "version": "1.4.26",
-          "buildVersion": "326",
-          "date": "2026-10-19",
-          "localizedDescription": "- Discover: opening a live or clip no longer leaves the preview playing underneath (no more double sound)",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-326/TwitchUnblock.ipa",
-          "size": 3896302,
-          "commit": "5a70b5b10bcf1f8cfa37876b559e07ad26ebd104"
-        },
-        {
-          "version": "1.4.25",
-          "buildVersion": "325",
-          "date": "2026-10-19",
-          "localizedDescription": "- Discover: the speaker button turns the preview's sound on and off (lives and clips)\n- Discover: tap a channel's name or picture to open its page\n- A live opened from Discover now always has sound\n- On iPhone the app stays in portrait, except in the player and multi-live where landscape still works",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-325/TwitchUnblock.ipa",
-          "size": 3895957,
-          "commit": "b8870431fc74f6dd2a0a37039efcbf74bcc629fd"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.5.7",
-      "versionDate": "2026-10-19",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-335/TwitchUnblock.ipa",
-      "size": 4183176
+      "version": "1.5.17",
+      "versionDate": "2026-10-20",
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-341/TwitchUnblock.ipa",
+      "size": 4252146
     }
   ],
   "news": []

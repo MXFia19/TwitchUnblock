@@ -1749,10 +1749,11 @@ enum VodSpeed {
         return all.min { abs($0 - v) < abs($1 - v) } ?? 1
     }
 
-    /// « 1,5× » : virgule en français, espagnol et russe, point en anglais.
+    /// « 1,5× » : virgule en français, espagnol, russe et italien, point en
+    /// anglais et en japonais.
     static func label(_ v: Double, _ lang: Lang) -> String {
         var s = String(format: "%g", v)
-        if lang != .en { s = s.replacingOccurrences(of: ".", with: ",") }
+        if lang != .en && lang != .ja { s = s.replacingOccurrences(of: ".", with: ",") }
         return s + "×"
     }
 }

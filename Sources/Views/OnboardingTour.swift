@@ -317,21 +317,30 @@ struct OnboardingTour: View {
         }
     }
 
+    /// Six langues sur deux lignes de trois, même sur un iPhone de 375 pt
+    /// (carte de 291 pt utiles) : la carte ne s'allonge pas et chaque nom
+    /// garde sa taille. Deux colonnes seulement sous 375 pt (zoom de
+    /// l'affichage), pour que les noms restent lisibles.
     private var languageButtons: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 100), spacing: 8)], spacing: 8) {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 84), spacing: 8)], spacing: 8) {
             ForEach(Lang.allCases) { l in
                 let on = store.lang == l
                 Button {
                     logger.settingChanged("Langue", value: l.rawValue)
                     store.lang = l
                 } label: {
-                    HStack(spacing: 5) {
-                        Text(l.flag)
+                    HStack(spacing: 4) {
+                        // Taille fixe, comme le nom : avec un grand texte
+                        // (Accessibilité), le drapeau grandirait seul et
+                        // rognerait le nom.
+                        Text(l.flag).font(.system(size: 16))
                         Text(l.label)
                             .font(.tLabel)
                             .lineLimit(1)
                             .minimumScaleFactor(0.7)
                     }
+                    // Le nom ne touche pas les bords arrondis du bouton.
+                    .padding(.horizontal, 6)
                     .foregroundColor(on ? .white : .tText)
                     .frame(maxWidth: .infinity)
                     .frame(height: 36)

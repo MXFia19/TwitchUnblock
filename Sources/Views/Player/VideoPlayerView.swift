@@ -796,6 +796,8 @@ struct VideoPlayerView: View {
             // ── Player ──────────────────────────────────────────────
             if let url = currentURL {
                 nativePlayer(url: url)
+                    // Glissé vers le bas sur l'image : réduit le lecteur, comme
+                    // le bandeau (geste simultané : ceux d'Apple restent).
                     .modifier(PlayerPullGesture(onPull: onPull, onPullEnd: onPullEnd))
             }
 

@@ -1216,6 +1216,8 @@ struct MainTabView: View {
         .background(Color.tCard)
         .overlay(Divider().background(Color.tBorder), alignment: .bottom)
         .contentShape(Rectangle())
+        // Le tirer vers le bas réduit le lecteur (l'image du lecteur natif
+        // aussi, voir VideoPlayerView). Geste interrompu : il reprend sa place.
         .modifier(PlayerPullGesture(
             onPull: { pullPlayer($0) },
             onPullEnd: { endPull($0, predicted: $1) }
@@ -1333,7 +1335,8 @@ struct MainTabView: View {
             guard pull.y != 0 else { return }
             withAnimation(reduceMotion ? .easeOut(duration: 0.15) : .spring(response: 0.3, dampingFraction: 0.8)) { pull.y = 0 }
         } else {
-            // Follow the finger immediately, even if another animation is in progress.
+            // Au doigt, sans animation : même si le lecteur revenait encore
+            // en place, il suit aussitôt (borné à sa hauteur).
             var transaction = Transaction()
             transaction.disablesAnimations = true
             withTransaction(transaction) { pull.y = min(y, pull.height) }

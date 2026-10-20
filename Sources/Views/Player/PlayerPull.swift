@@ -17,8 +17,10 @@ final class PlayerPull: ObservableObject {
     /// distance de la glissade finale. Pas publiée : rien à redessiner.
     var height: CGFloat = 800
 
-    /// Start following as soon as the finger moves down. Small sideways jitter
-    /// stays undecided rather than rejecting the entire swipe on its first sample.
+    /// Sens du geste, décidé dès les premiers points : vers le bas, le lecteur
+    /// suit aussitôt ; vers le haut ou de côté (8 points), rien ; entre les
+    /// deux, pas encore décidé — un léger tremblement de côté au premier point
+    /// ne fait plus perdre tout le glissé (nil : on attend le point suivant).
     static func direction(for translation: CGSize) -> Bool? {
         if translation.height > abs(translation.width) { return true }
         if translation.height < -8 || abs(translation.width) >= 8 { return false }
@@ -48,8 +50,11 @@ struct PlayerPullEffect: ViewModifier {
     }
 }
 
-/// A downward pull on the header or native video moves their shared player surface.
-/// Gesture state stays here so tracking a finger does not redraw MainTabView.
+/// Glissé vers le bas sur le bandeau ou l'image du lecteur natif : le lecteur
+/// (vidéo et chat) suit le doigt. Geste simultané, à partir d'un point : il
+/// n'attend pas que les touchers renoncent, et laisse au lecteur d'Apple ses
+/// propres gestes. L'état du geste vit ici : suivre le doigt ne redessine pas
+/// MainTabView.
 struct PlayerPullGesture: ViewModifier {
     var onPull: (CGFloat) -> Void
     var onPullEnd: (CGFloat, CGFloat) -> Void
@@ -79,7 +84,8 @@ struct PlayerPullGesture: ViewModifier {
             )
             .onChange(of: active) { active in
                 guard !active else { return }
-                // Cancellation does not call onEnded (for example, opening Control Center).
+                // Geste annulé (Centre de contrôle ouvert…) : pas d'onEnded, le
+                // lecteur reprend sa place.
                 if pulling == true { onPull(0) }
                 pulling = nil
             }

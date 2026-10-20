@@ -1345,7 +1345,8 @@ struct ImmersivePlayer: View {
         // l'image se déplace au doigt. À taille normale, glisser vers le bas
         // réduit le lecteur, comme la flèche en haut à gauche.
         .simultaneousGesture(zoomGesture)
-        // Do not wait for the tap/double-tap recognizers to fail before following a pull.
+        // Simultané : le glissé suit le doigt dès le premier point, sans
+        // attendre que le toucher (commandes, ±10 s) renonce.
         .simultaneousGesture(panGesture)
         // Geste interrompu en plein glissé : le lecteur reprend sa place.
         .onChange(of: panActive) { active in
@@ -2243,8 +2244,14 @@ struct ImmersivePlayer: View {
         DragGesture(minimumDistance: 1, coordinateSpace: CoordinateSpace.global)
             .updating($panActive) { _, active, _ in active = true }
             .onChanged { value in
-                // Un glissement sur la barre de lecture ne déplace rien.
-                guard !dragging else { return }
+                // Un glissement sur la barre de lecture ne déplace rien. Le
+                // geste partant dès le premier point, il a pu commencer avant
+                // que la barre ne prenne la main : le lecteur reprend sa place.
+                guard !dragging else {
+                    if pulling == true { onPull(0) }
+                    pulling = false
+                    return
+                }
                 if zoom > 1 {
                     pan = clampedPan(CGSize(width: panBase.width + value.translation.width,
                                             height: panBase.height + value.translation.height))

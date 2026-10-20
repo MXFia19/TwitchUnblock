@@ -1275,6 +1275,9 @@ struct SearchView: View {
             hasMoreVods = ch.cursor != nil
             // VODs non listées : en arrière-plan, la grille s'affiche sans attendre.
             Task { await recovery.load(channel: login) }
+            // Personnalisation changée pendant le chargement (réglages,
+            // synchro) : le sélecteur n'était pas là pour le voir.
+            if !channelTabs.contains(channelTab) { channelTab = channelTabs.first ?? 0 }
             // Page ouverte sur un autre onglet que les VODs : son contenu.
             loadChannelTab(channelTab)
         }

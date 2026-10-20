@@ -176,7 +176,10 @@ struct HomeView: View {
         let byRank = !store.customization.pinnedByViewers
         return (followedStreams + localLive.filter { !known.contains($0.userLogin.lowercased()) })
             .sorted { a, b in
-                pinnedFirst(a.userLogin, b.userLogin, byRank: byRank) ?? (a.viewerCount > b.viewerCount)
+                // Épinglées à égalité de spectateurs : l'ordre d'épinglage,
+                // pour qu'elles ne s'échangent pas d'une lecture à l'autre.
+                pinnedFirst(a.userLogin, b.userLogin, byRank: byRank || a.viewerCount == b.viewerCount)
+                    ?? (a.viewerCount > b.viewerCount)
             }
     }
 

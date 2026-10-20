@@ -2253,6 +2253,10 @@ struct ImmersivePlayer: View {
                     return
                 }
                 if zoom > 1 {
+                    // Glissé parti avant le zoom (le second doigt arrive après
+                    // le premier point) : le lecteur reprend sa place, sinon il
+                    // restait décalé vers le bas.
+                    if pulling == true { onPull(0); pulling = false }
                     pan = clampedPan(CGSize(width: panBase.width + value.translation.width,
                                             height: panBase.height + value.translation.height))
                     return
@@ -2272,7 +2276,11 @@ struct ImmersivePlayer: View {
             }
             .onEnded { value in
                 defer { pulling = nil }
-                if zoom > 1 { panBase = pan; return }
+                if zoom > 1 {
+                    if pulling == true { onPull(0) }
+                    panBase = pan
+                    return
+                }
                 guard pulling == true else { return }
                 onPullEnd(max(0, value.translation.height), value.predictedEndTranslation.height)
             }

@@ -1070,9 +1070,9 @@ struct SettingsView: View {
                 toggleRow(store.t("hide_commands"), store.t("hide_commands_sub"),
                           $store.chatHideCommands, log: "Masquer les commandes")
                 Divider().background(Color.tBorder)
-                toggleRow(store.t("dbg_chat_delay"), store.t("dbg_chat_delay_sub"),
-                          $store.autoChatDelay, log: "Synchro auto du chat")
-                if store.autoChatDelay {
+                toggleRow(store.t("cfg_chat_sync"), store.t("cfg_chat_sync_sub"),
+                          $store.chatSync, log: "Chat synchronisé avec la vidéo")
+                if store.chatSync {
                     chatSyncNudgeRow
                 }
                 Divider().background(Color.tBorder)

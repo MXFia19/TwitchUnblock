@@ -99,6 +99,7 @@ enum Backup {
             "ios_chatAutocomplete": store.chatAutocomplete,
             "ios_chatKeyboardSuggestions": store.chatKeyboardSuggestions,
             "ios_chatReturnSends": store.chatReturnSends,
+            "ios_chatSync": store.chatSync,
             "ios_downloadWifiOnly": store.downloadWifiOnly,
             "ios_syncSettings": store.syncSettings,
             // Pour les versions d'avant « qualityPref » (audio seul retenu).
@@ -236,6 +237,7 @@ enum Backup {
         bool("ios_chatAutocomplete") { store.chatAutocomplete = $0 }
         bool("ios_chatKeyboardSuggestions") { store.chatKeyboardSuggestions = $0 }
         bool("ios_chatReturnSends") { store.chatReturnSends = $0 }
+        bool("ios_chatSync") { store.chatSync = $0 }
         bool("ios_downloadWifiOnly") { store.downloadWifiOnly = $0 }
         bool("ios_syncSettings") { store.syncSettings = $0 }
         // Qualité préférée (nom du site). « auto » du site devient « source »

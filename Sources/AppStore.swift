@@ -706,9 +706,11 @@ final class AppStore: ObservableObject {
     @Published var showLatency: Bool = false {
         didSet { UserDefaults.standard.set(showLatency, forKey: "dbg_latency") }
     }
-    /// Retarder le chat de la latence mesurée, pour qu'il colle à l'image.
-    @Published var autoChatDelay: Bool = false {
-        didSet { UserDefaults.standard.set(autoChatDelay, forKey: "dbg_chat_delay") }
+    /// Chat du direct synchronisé avec la vidéo (ChatSync), activé par défaut.
+    /// Nouvelle clé : l'ancienne synchro auto, en essai (« dbg_chat_delay »),
+    /// était coupée par défaut.
+    @Published var chatSync: Bool = true {
+        didSet { UserDefaults.standard.set(chatSync, forKey: "cfg_chat_sync") }
     }
     /// VODs récentes : remettre le son des passages coupés par Twitch quand
     /// l'original est encore sur le CDN (VodUnmuteLoader).
@@ -896,7 +898,7 @@ final class AppStore: ObservableObject {
             cellularQuality = cell
         }
         showLatency        = ud.object(forKey: "dbg_latency")    as? Bool ?? false
-        autoChatDelay      = ud.object(forKey: "dbg_chat_delay") as? Bool ?? false
+        chatSync           = ud.object(forKey: "cfg_chat_sync")  as? Bool ?? true
         chatSyncNudge      = ud.double(forKey: "chat_sync_nudge")
         restoreMutedAudio  = ud.object(forKey: "cfg_restore_muted") as? Bool ?? true
         downloadWifiOnly   = ud.bool(forKey: "cfg_dl_wifi_only")

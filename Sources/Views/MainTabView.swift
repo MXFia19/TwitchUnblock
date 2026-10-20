@@ -61,8 +61,6 @@ struct MainTabView: View {
     // ── Débogage / synchro ────────────────────────────────────────────────
     /// Latence mesurée du direct, arrondie à la seconde (affichée).
     @State private var liveLatency: Double = 0
-    /// Distance au bord du direct, arrondie à la seconde (synchro auto du chat).
-    @State private var liveBehind: Double = 0
     /// Glissé vers le bas du lecteur en cours : décalage suivi au doigt.
     /// Objet gardé en @State sans être observé ici : seul PlayerPullEffect
     /// se redessine pendant le geste (voir PlayerPull.swift).
@@ -147,19 +145,6 @@ struct MainTabView: View {
     /// rétablir), et nombre de segments rétablis (VodUnmuteLoader).
     @State private var vodMuted: [MutedRange] = []
     @State private var vodUnmuted = 0
-
-    /// Décalage à appliquer au chat, si la synchro est active : notre retard
-    /// sur le bord du direct. Les messages viennent de spectateurs qui
-    /// regardent eux-mêmes près de ce bord. La latence totale (horodatage de
-    /// Twitch → écran) compte en plus leur propre retard et, surtout, le délai
-    /// que certaines chaînes ajoutent à leur diffusion — que ces spectateurs
-    /// subissent aussi : le chat arrivait alors 10 s trop tard, ou plus.
-    private var chatDelay: Double {
-        guard store.autoChatDelay, isLivePlaying else { return 0 }
-        // Borne haute : évite un décalage absurde. La retouche manuelle
-        // (pastille du chat, réglages) s'ajoute à l'estimation.
-        return max(0, min(liveBehind + store.chatSyncNudge, 60))
-    }
 
     /// Infos affichées par-dessus l'image en mode immersif.
     private var overlayInfo: PlayerOverlayInfo {
@@ -745,6 +730,8 @@ struct MainTabView: View {
         // disparaît aussi à chaque relance).
         .onChange(of: chatOnly) { only in
             if only { PlayerOrientation.restorePortraitIfForced() }
+            // Plus d'image (le lecteur part) : le chat n'a plus rien à suivre.
+            if only { ChatSync.shared.reset() }
         }
         // Liens arrivés sans qualité choisie : celle de départ du lecteur
         // immersif est figée, comme le fait le lecteur natif. Recalculée à
@@ -1022,7 +1009,7 @@ struct MainTabView: View {
                 channelId: currentChannelId,
                 token: store.twitchToken,
                 login: store.twitchLogin,
-                chatDelay: chatDelay,
+                syncsWithPlayer: true,
                 chatOnly: $chatOnly,
                 style: style,
                 onJoinChannel: { target in   // raid → suit la chaîne raidée
@@ -1302,9 +1289,11 @@ struct MainTabView: View {
         if abs(rounded - liveLatency) >= 1 { liveLatency = rounded }
     }
 
+    /// Retard de l'image, pour la synchro du chat (ChatSync) : le direct du
+    /// lecteur principal seulement. Une VOD, l'enregistrement (DVR, même
+    /// pendant la bascule) ou le chat seul n'ont pas d'image à suivre.
     private func updateBehind(_ value: Double?) {
-        let rounded = max(0, value ?? 0).rounded()
-        if abs(rounded - liveBehind) >= 1 { liveBehind = rounded }
+        if isLivePlaying, !chatOnly { ChatSync.shared.update(value) } else { ChatSync.shared.reset() }
     }
 
     /// Réduit le lecteur en mini-barre (flèche, ou glissé vers le bas) : il
@@ -1764,7 +1753,7 @@ struct MainTabView: View {
         vodPlaybackTime = 0
         liveDvrVideoId  = nil
         liveLatency     = 0
-        liveBehind      = 0
+        ChatSync.shared.reset()
         pull.y          = 0
         loadingSource   = nil
         slowNoticeShown = false
@@ -2022,7 +2011,7 @@ struct MainTabView: View {
             liveStartedAt      = nil
             liveUptimeText     = ""
             liveLatency        = 0
-            liveBehind         = 0
+            ChatSync.shared.reset()
             pull.y             = 0
             liveAvatar         = nil
             clipVodId          = nil

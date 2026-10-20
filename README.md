@@ -308,10 +308,21 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   Settings → Channel points tracks, like drops, the time watched and the points
   earned by watching (passive points, streaks, chests; not prediction
   winnings): right now, in total and per channel, on this device.
-* ⏱ **Auto-sync chat delay** — delays the chat by how far behind live you are,
-  measured from the stream's timestamps so it doesn't drift each time the
-  playlist reloads. Still off on a given stream? Nudge it by ±1 s from the ⏱
-  badge above the chat, or in Settings.
+* ⏱ **Chat synced with the video** (Settings → Chat, on by default) — live
+  messages arrive almost instantly while the picture is seconds behind, so
+  each one waits until the video catches up: your delay behind live as the
+  other viewers see it (from the stream's timestamps, so it doesn't drift
+  each time the playlist reloads), minus about 2 s for their reaction time,
+  60 s at most. The delay follows the player on its own: it grows when the
+  video stalls or falls behind, and shrinks when you jump back to live
+  (**Live**, the seek bar, catching up) — waiting messages then come out in
+  order over a few seconds instead of all at once. Your own messages, the
+  app's notices and the banners (pinned, polls, predictions, raids) are never
+  delayed, and moderation also applies to waiting messages. Main player's
+  live only: not VODs (their chat already follows playback), rewinds through
+  the recording, multi-live or chat only. A ⏱ −6 s badge above the chat (in
+  portrait) shows the delay — tap it for real-time chat (or to sync again),
+  long-press it to nudge it by ±1 s (also in Settings).
 * 📼 **VOD chat** — replayed in sync with playback position.
 
 ### Drops
@@ -438,7 +449,8 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   ad-free with your sub, chat autocomplete and keyboard suggestions). Not
   synced, because they depend on the device: the app language, quality and
   mobile data, notifications and the Live Activity, downloads, the chat's
-  sizes and landscape layout, fill screen, low latency, the player type, the
+  sizes and landscape layout, fill screen, low latency, the chat synced with
+  the video, the player type, the
   image cache and the home list layout. One document per account on the
   Worker (`/api/sync/prefs`), apart from the history backup — the 1.5.0 app
   and the Android app never touch it — in four parts, each with its own

@@ -26,10 +26,36 @@ final class ChatService: NSObject, ObservableObject {
     /// plus anciens messages : ça éviterait de faire « descendre » la vue pendant la lecture.
     var pauseTrim = false
 
-    /// Délai (s) appliqué à l'affichage des messages reçus, pour les recaler sur
-    /// l'image (le chat arrive en temps réel, la vidéo a plusieurs secondes de retard).
-    /// 0 = affichage immédiat. Piloté par la synchro auto du chat.
-    var displayDelay: Double = 0
+    /// Chat du lecteur principal : les messages reçus attendent que l'image les
+    /// rejoigne (ChatSync). Faux en multi-live. Réglés par ChatView, avec
+    /// l'interrupteur et la retouche des réglages.
+    var syncsWithPlayer = false
+    var syncEnabled = true
+    var syncNudge: Double = 0
+
+    /// Message reçu en attente du retard du chat, avec son heure d'arrivée.
+    private struct PendingMessage {
+        let message: ChatMessage
+        let arrivedAt: Date
+    }
+    /// File d'attente, dans l'ordre d'arrivée. Jamais nos messages, ni les
+    /// lignes de l'app (⚠️) : affichés tout de suite.
+    private var pending: [PendingMessage] = []
+    /// Au-delà (chat très rapide retardé d'une minute), les plus anciens
+    /// partent : ils n'auraient fait que défiler.
+    private let maxPending = 1500
+    /// Sortie de la file au fil du temps ; nil quand elle est vide (une file
+    /// vide ne fait tourner aucun minuteur).
+    private var releaseTask: Task<Void, Never>?
+    /// Retard appliqué à la file (lissé), sa dernière mise à jour, et la
+    /// vitesse du rattrapage en cours (s regagnées par seconde ; 0 : aucun).
+    private var appliedDelay: Double = 0
+    private var appliedAt = Date.distantPast
+    private var catchUpRate: Double = 0
+    /// Une baisse du retard se rattrape en `catchUpTime` s environ, et jamais
+    /// à moins de `minCatchUpRate` s par seconde.
+    private static let catchUpTime: Double = 4
+    private static let minCatchUpRate: Double = 2
 
     /// Incrémenté à chaque (re)connexion : les tâches d'une session précédente
     /// (lecture, délai, reconnexion) s'arrêtent.
@@ -80,16 +106,70 @@ final class ChatService: NSObject, ObservableObject {
         if messages.count > cap { messages = Array(messages.prefix(cap)) }
     }
 
-    /// Insère un message reçu, immédiatement ou après le délai de synchro.
+    /// Insère un message reçu, tout de suite ou une fois rejoint par l'image.
     private func publish(_ message: ChatMessage) {
-        let delay = displayDelay
-        guard delay >= 0.5 else { insert(message); return }
-        let gen = publishGeneration
-        Task { [weak self] in
-            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
-            guard let self, !Task.isCancelled, self.publishGeneration == gen else { return }
-            self.insert(message)
+        let now = Date()
+        // Sans retard et rien en attente : affiché tout de suite. Sinon il
+        // passe par la file, derrière ceux qui y sont déjà.
+        guard currentDelay(now) >= 0.5 || !pending.isEmpty else { insert(message); return }
+        pending.append(PendingMessage(message: message, arrivedAt: now))
+        if pending.count > maxPending { pending.removeFirst(pending.count - maxPending) }
+        startRelease()
+    }
+
+    /// Retard voulu : celui de l'image (ChatSync), moins la marge de réaction,
+    /// plus la retouche ; 0 si la synchro est coupée ou le retard inconnu.
+    private func syncTarget(_ now: Date) -> Double {
+        guard syncsWithPlayer, syncEnabled,
+              let player = ChatSync.shared.playerDelay(at: now) else { return 0 }
+        return ChatSync.chatDelay(player: player, nudge: syncNudge)
+    }
+
+    /// Retard appliqué à la file. Une hausse (calage, recul) est suivie tout de
+    /// suite : les messages attendent un peu plus, rien ne bouge à l'écran.
+    /// Une baisse (« Direct », glissé, rattrapage, synchro coupée) l'est en
+    /// quelques secondes : les messages en attente sortent dans l'ordre, en
+    /// accéléré, sans tout lâcher d'un coup. File vide : rien à lisser.
+    private func currentDelay(_ now: Date) -> Double {
+        let target = syncTarget(now)
+        let elapsed = min(max(0, now.timeIntervalSince(appliedAt)), 1)
+        appliedAt = now
+        if pending.isEmpty || target >= appliedDelay {
+            appliedDelay = target
+            catchUpRate = 0
+        } else {
+            // Vitesse fixée au début du rattrapage : régulier plutôt qu'une
+            // rafale au départ. Une nouvelle baisse en route l'accélère.
+            catchUpRate = max(catchUpRate, Self.minCatchUpRate, (appliedDelay - target) / Self.catchUpTime)
+            appliedDelay = max(target, appliedDelay - catchUpRate * elapsed)
         }
+        return appliedDelay
+    }
+
+    /// Fait sortir la file au fil du temps, et s'arrête dès qu'elle est vide.
+    private func startRelease() {
+        guard releaseTask == nil, !pending.isEmpty else { return }
+        let gen = publishGeneration
+        releaseTask = Task { [weak self] in
+            while true {
+                try? await Task.sleep(nanoseconds: 150_000_000)
+                guard let self, !Task.isCancelled, self.publishGeneration == gen else { return }
+                self.releaseDue()
+                guard !self.pending.isEmpty else { self.releaseTask = nil; return }
+            }
+        }
+    }
+
+    /// Rend, dans leur ordre d'arrivée, les messages dont l'heure est venue :
+    /// arrivée + retard appliqué.
+    private func releaseDue() {
+        let now = Date()
+        let horizon = now.addingTimeInterval(-currentDelay(now))
+        let count = pending.firstIndex(where: { $0.arrivedAt > horizon }) ?? pending.count
+        guard count > 0 else { return }
+        let due = pending.prefix(count).map(\.message)
+        pending.removeFirst(count)
+        insert(due)
     }
 
     /// Modération arrivée pendant que des messages attendaient le délai de
@@ -106,26 +186,33 @@ final class ChatService: NSObject, ObservableObject {
         store[key] = now
     }
 
-    private func insert(_ message: ChatMessage) {
-        // Déjà affiché (historique rejoué, puis le même message sorti du délai
-        // de synchro) : pas deux fois.
-        guard !messages.prefix(300).contains(where: { $0.id == message.id }) else { return }
-        var message = message
-        if let purgedAt, message.timestamp <= purgedAt { return }
-        if deletedIds[message.id] != nil
-            || bannedUsers[message.userName].map({ message.timestamp <= $0 }) == true {
-            guard keepDeleted else { return }
-            message.isDeleted = true
+    private func insert(_ message: ChatMessage) { insert([message]) }
+
+    /// Ajoute des messages en tête de liste (le plus récent en premier), en un
+    /// seul changement : une seule mise à jour de l'affichage, même quand la
+    /// file de la synchro en rend une rafale.
+    private func insert(_ batch: [ChatMessage]) {
+        var list = messages
+        var added = false
+        for var message in batch {
+            // Déjà affiché (historique rejoué, puis le même message sorti de la
+            // file de synchro) : pas deux fois.
+            guard !list.prefix(300).contains(where: { $0.id == message.id }) else { continue }
+            if let purgedAt, message.timestamp <= purgedAt { continue }
+            if deletedIds[message.id] != nil
+                || bannedUsers[message.userName].map({ message.timestamp <= $0 }) == true {
+                guard keepDeleted else { continue }
+                message.isDeleted = true
+            }
+            // Toujours en tête : la file rend les messages dans leur ordre
+            // d'arrivée. Sorti après un message à nous (jamais retardé), un
+            // message s'affiche dessous, quand l'image le rejoint ; rangé à son
+            // heure d'envoi, il se glissait au-dessus, hors de vue.
+            list.insert(message, at: 0)
+            added = true
         }
-        // La liste est rangée du plus récent au plus ancien. Si le délai de synchro
-        // vient de baisser, un message peut arriver après un plus récent : on le
-        // replace alors à sa position chronologique au lieu de le coller en haut.
-        if let first = messages.first, message.timestamp < first.timestamp {
-            let idx = messages.firstIndex { $0.timestamp <= message.timestamp } ?? messages.count
-            messages.insert(message, at: idx)
-        } else {
-            messages.insert(message, at: 0)
-        }
+        guard added else { return }
+        messages = list
         trimIfNeeded()
     }
 
@@ -283,6 +370,8 @@ final class ChatService: NSObject, ObservableObject {
         generation &+= 1
         if !keepPending {
             publishGeneration &+= 1   // abandonne les messages encore en attente de synchro
+            pending.removeAll()
+            releaseTask?.cancel(); releaseTask = nil
             deletedIds = [:]; bannedUsers = [:]; purgedAt = nil
         }
         reconnectTask?.cancel(); reconnectTask = nil
@@ -872,8 +961,10 @@ final class ChatService: NSObject, ObservableObject {
             }
         } else {
             // Purge complète du canal : même avec le réglage, garder l'écran
-            // barré de bout en bout n'aurait aucun intérêt.
+            // barré de bout en bout n'aurait aucun intérêt. Les messages qui
+            // attendaient l'image partent avec.
             messages.removeAll()
+            pending.removeAll()
             purgedAt = Date()
             logger.warn("CHAT", "Chat effacé par un modérateur")
         }

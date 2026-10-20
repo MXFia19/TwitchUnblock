@@ -446,6 +446,7 @@ enum LogTranslator {
         "Suivi local @": ["Local follow @", "Seguimiento local @", "Локальная подписка @"],
         "Suivi local retiré @": ["Local follow removed @", "Seguimiento local quitado @", "Локальная подписка удалена @"],
         "supprimés": ["deleted", "eliminados", "удалено"],
+        "Synchro du chat": ["Chat sync", "Sincronía del chat", "Синхронизация чата"],
         "Téléchargement interrompu": ["Download interrupted", "Descarga interrumpida", "Загрузка прервана"],
         "Téléchargement par l'app": ["Download by the app", "Descarga por la app", "Загрузка приложением"],
         "Téléchargement terminé": ["Download finished", "Descarga terminada", "Загрузка завершена"],

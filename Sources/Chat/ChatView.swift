@@ -6,8 +6,9 @@ struct ChatView: View {
     let channelId: String?
     let token: String?
     let login: String?
-    /// Décalage (s) appliqué aux messages reçus pour les recaler sur l'image.
-    var chatDelay: Double = 0
+    /// Chat du lecteur principal : les messages reçus attendent que l'image
+    /// les rejoigne (ChatSync). Faux en multi-live.
+    var syncsWithPlayer = false
     /// Mode « chat seul » : la vidéo est masquée, le parent en a besoin.
     @Binding var chatOnly: Bool
     /// Présentation : plein cadre, colonne étroite, ou calque sur l'image.
@@ -120,40 +121,11 @@ struct ChatView: View {
                     .accessibilityLabel(chat.readOnly ? store.t("chat_ban_banner")
                                         : chat.isConnected ? store.t("chat_connected") : store.t("chat_connecting"))
                 Spacer(minLength: 4)
-                // Synchro auto : décalage appliqué au chat. Un appui le retouche
-                // d'une seconde : le bon réglage dépend aussi du retard des
-                // autres spectateurs, qu'on ne peut qu'estimer.
-                if store.autoChatDelay, chatDelay >= 0.5 || store.chatSyncNudge != 0 {
-                    Menu {
-                        Section(store.t("chat_sync_hint")) {
-                            Button { nudgeChatSync(1) } label: {
-                                Label(store.t("chat_sync_later"), systemImage: "plus.circle")
-                            }
-                            Button { nudgeChatSync(-1) } label: {
-                                Label(store.t("chat_sync_earlier"), systemImage: "minus.circle")
-                            }
-                            if store.chatSyncNudge != 0 {
-                                Button { nudgeChatSync(0) } label: {
-                                    Label(store.t("chat_sync_reset"), systemImage: "arrow.counterclockwise")
-                                }
-                            }
-                        }
-                    } label: {
-                        HStack(spacing: 2) {
-                            Image(systemName: "clock.arrow.2.circlepath").font(.system(size: 9))
-                            Text(String(format: "%.0fs", chatDelay))
-                                .font(.system(size: 10, weight: .bold).monospacedDigit())
-                            if store.chatSyncNudge != 0 {
-                                Text(String(format: "(%+.0f)", store.chatSyncNudge))
-                                    .font(.system(size: 9, weight: .semibold).monospacedDigit())
-                                    .opacity(0.75)
-                            }
-                        }
-                        .foregroundColor(.tOutplayer)
-                        .fixedSize()
-                        .padding(.horizontal, 6).padding(.vertical, 3)
-                        .background(Color.tOutplayer.opacity(0.15)).cornerRadius(6)
-                    }
+                // Synchro avec la vidéo : retard appliqué au chat. Un toucher
+                // la coupe ou la rallume, un appui long la retouche d'une
+                // seconde. Vue à part : elle seule se redessine avec la mesure.
+                if syncsWithPlayer {
+                    ChatSyncBadge()
                 }
                 // Série de visionnage
                 if store.showWatchStreak, events.watchStreak > 0 {
@@ -729,7 +701,8 @@ struct ChatView: View {
             chat.connect(channel: channelName, token: tok, login: login)
         }
         .onChange(of: store.autoClaimChest) { pointsService.autoClaim = $0 }
-        .onChange(of: chatDelay) { chat.displayDelay = $0 }
+        .onChange(of: store.chatSync) { chat.syncEnabled = $0 }
+        .onChange(of: store.chatSyncNudge) { chat.syncNudge = $0 }
         .onChange(of: raidService.joinTarget) { target in
             // Raid parti → on suit automatiquement vers la chaîne raidée.
             guard let target = target, store.enableRaids, let join = onJoinChannel else { return }
@@ -804,7 +777,9 @@ struct ChatView: View {
         guard setupWanted else { return }
         pointsService.autoClaim = store.autoClaimChest
         chat.channelId = channelId
-        chat.displayDelay = chatDelay
+        chat.syncsWithPlayer = syncsWithPlayer
+        chat.syncEnabled = store.chatSync
+        chat.syncNudge = store.chatSyncNudge
         // Réglés AVANT la connexion : c'est elle qui déclenche le rejeu de
         // l'historique, et la modération peut frapper dès les premières secondes.
         chat.loadRecent  = store.chatLoadRecent
@@ -1253,14 +1228,6 @@ struct ChatView: View {
     private func insertEmote(_ emote: TwitchEmote) {
         messageText += (messageText.isEmpty || messageText.hasSuffix(" ") ? "" : " ")
             + emote.name + " "
-    }
-
-    /// Retouche de la synchro auto (pastille de la barre de statut) : ±1 s,
-    /// ou 0 pour revenir à l'estimation seule.
-    private func nudgeChatSync(_ step: Double) {
-        let v = step == 0 ? 0 : min(20, max(-20, store.chatSyncNudge + step))
-        store.chatSyncNudge = v
-        logger.settingChanged("Retouche de la synchro du chat", value: String(format: "%+.0f s", v))
     }
 
     /// Transforme les URLs d'un texte en liens tappables (message épinglé).

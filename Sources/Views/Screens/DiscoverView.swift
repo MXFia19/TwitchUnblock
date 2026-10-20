@@ -342,6 +342,14 @@ struct DiscoverView: View {
         }
         .onChange(of: feed.clipIndex) { _ in refresh() }
         .onChange(of: canPlay) { _ in refresh() }
+        // Onglet touché à nouveau dans la barre : retour à la première page
+        // du mode affiché.
+        .onReceive(NotificationCenter.default.publisher(for: .tuTabReselected)) { note in
+            guard (note.object as? MainTabView.TabName) == .discover else { return }
+            withAnimation {
+                if feed.mode == .live { feed.liveIndex = 0 } else { feed.clipIndex = 0 }
+            }
+        }
         // Chaîne ou catégorie masquée (menu ⋯ d'une page) : elle quitte le
         // fil tout de suite, la page suivante prend sa place.
         .onChange(of: store.hidden) { _ in

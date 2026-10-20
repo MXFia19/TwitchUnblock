@@ -369,6 +369,9 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   categories, lives and clips, or a short note says so.
 * 📍 **Pinned streamers** — long-press a followed channel (live or offline) →
   **Pin to the top of Following**: pinned ones come first, with a small pin.
+  Their live streams are sorted by viewers among themselves (or in the order
+  you pinned them: Settings → General → Customize → **Pinned sorted by
+  viewers**).
 * 🙈 **Hide channels and categories** — long-press a stream in Top or in a
   category → **Hide this channel** or **Hide the "…" category** (or
   long-press a category card). They leave Top, the category grid and category
@@ -471,7 +474,9 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
 * 🧩 **Customize the app** (Settings → General) — show, hide and reorder the
   tabs (and pick the one the app opens on), Home's live tabs and cards
   (Followed / Top / Offline, announcements, sign-in and web session cards,
-  Continue watching, the Categories view), the player's bottom bar buttons (mute, PiP, reload,
+  Continue watching, the Categories view), a channel page's tabs (VODs,
+  Highlights, Playlists, Clips, Schedule, About — the page opens on the first
+  one shown), the player's bottom bar buttons (mute, PiP, reload,
   chat layout, rotation, and optionally sleep timer, multi-live and rewind;
   AirPlay too) and the chat banners (pinned message, drops, polls,
   predictions, hype train, raids, watch streak, Follow button). Drag ≡ to
@@ -491,6 +496,9 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   **Merge Entitlements** option that fixes the signature.
 * 🫧 **Liquid Glass** — optional on iOS 26: a floating tab bar and glass buttons
   over the picture.
+* ⬆️ **Back to the top** — tap the tab you're already on to scroll Home (any
+  live tab), Search or My VODs back to the top, or Discover back to its first
+  page.
 
 ### The rest
 

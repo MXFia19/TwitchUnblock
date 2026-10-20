@@ -31,7 +31,8 @@ struct LibraryView: View {
                     Spacer()
                 }
             } else {
-                ScrollView {
+                // Onglet touché à nouveau : retour en haut de la liste.
+                TabScrollView(tab: .library) {
                     LazyVStack(spacing: TSpace.md) {
                         if !downloads.items.isEmpty {
                             TSectionHeader("\(store.t("dl_section")) · \(ByteCountFormatter.string(fromByteCount: downloads.totalBytes, countStyle: .file))",

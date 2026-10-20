@@ -67,7 +67,8 @@ struct SearchView: View {
     @State private var showHidden = false
 
     // Onglets de la chaîne : 0 VODs, 1 Highlights, 2 Playlists, 3 Clips,
-    // 4 À propos, 5 Planning (seulement si la chaîne en a un)
+    // 4 À propos, 5 Planning (seulement si la chaîne en a un), dans l'ordre
+    // choisi (Réglages → Personnaliser) ; la page ouvre le premier affiché.
     @State private var channelTab   = 0
     /// Planning de la chaîne : onglet « Planning » et ligne « Prochain live »
     /// du bandeau. nil : pas encore lu, ou Twitch n'a pas répondu.
@@ -280,7 +281,8 @@ struct SearchView: View {
             .zIndex(10)
             }
 
-            ScrollView {
+            // Onglet Recherche touché à nouveau : retour en haut.
+            TabScrollView(tab: .search) {
                 LazyVStack(alignment: .leading, spacing: TSpace.lg) {
 
                     // ── Suggestions de chaînes ──────────────────────
@@ -600,7 +602,7 @@ struct SearchView: View {
                 onWatchLive: live.error == nil ? { leaveRecovery(); onPlayLive(channelName) } : nil,
                 nextLive: headline?.text,
                 nextLiveIcon: headline?.icon ?? "calendar",
-                onNextLive: hasSchedule ? { channelTab = 5 } : nil
+                onNextLive: channelTabs.contains(5) ? { channelTab = 5 } : nil
             )
             .padding(.horizontal, TSpace.lg)
 
@@ -689,11 +691,11 @@ struct SearchView: View {
 
         if liveData != nil {
             TSegmented(items: channelTabs, selection: $channelTab) { channelTabLabel($0) }
-                .onChange(of: channelTab) { tab in
-                    if tab == 1 { Task { await loadHighlights() } }
-                    if tab == 2 { Task { await loadPlaylists() } }
-                    if tab == 3 { Task { await loadClips() } }
-                    if tab == 4 { Task { await loadAbout() } }
+                .onChange(of: channelTab) { loadChannelTab($0) }
+                // Onglet masqué pendant qu'il est affiché (Réglages →
+                // Personnaliser) : le premier qui reste.
+                .onChange(of: channelTabs) { tabs in
+                    if !tabs.contains(channelTab), let first = tabs.first { channelTab = first }
                 }
         }
 
@@ -1002,9 +1004,31 @@ struct SearchView: View {
     /// La chaîne a quelque chose de prévu (créneau à venir, vacances).
     private var hasSchedule: Bool { !(schedule?.isEmpty() ?? true) }
 
-    /// Onglets de la chaîne ; « Planning » (5) seulement si elle en a un, une
+    /// Onglets de la chaîne affichés, dans l'ordre choisi (Réglages →
+    /// Personnaliser) ; « Planning » (5) seulement si elle en a un, une
     /// chaîne sans planning n'affichant rien de plus.
-    private var channelTabs: [Int] { hasSchedule ? [0, 1, 2, 3, 5, 4] : [0, 1, 2, 3, 4] }
+    private var channelTabs: [Int] {
+        store.customization.visibleChannelTabs.compactMap { key -> Int? in
+            if key == "schedule" && !hasSchedule { return nil }
+            return Self.channelTabIDs[key]
+        }
+    }
+
+    /// Clés de la personnalisation (UICustomization.defaultChannelTabs).
+    private static let channelTabIDs: [String: Int] = [
+        "vods": 0, "highlights": 1, "playlists": 2, "clips": 3, "about": 4, "schedule": 5]
+
+    /// Contenu d'un onglet, chargé quand il s'affiche (les VODs et le
+    /// planning viennent avec la page).
+    private func loadChannelTab(_ tab: Int) {
+        switch tab {
+        case 1:  Task { await loadHighlights() }
+        case 2:  Task { await loadPlaylists() }
+        case 3:  Task { await loadClips() }
+        case 4:  Task { await loadAbout() }
+        default: break
+        }
+    }
 
     private func channelTabLabel(_ tab: Int) -> String {
         switch tab {
@@ -1031,7 +1055,14 @@ struct SearchView: View {
         let result = await getChannelSchedule(login: login, channelId: channelId, token: store.twitchToken)
         // Autre chaîne ouverte pendant l'attente : pas son planning.
         guard login == searchedName else { return }
+        // Page encore sur l'onglet qu'elle a ouvert : le planning, placé en
+        // tête (Réglages → Personnaliser), prend sa place.
+        let untouched = channelTab == channelTabs.first
         schedule = result
+        if untouched, !(result?.isEmpty() ?? true),
+           store.customization.visibleChannelTabs.first == "schedule" {
+            channelTab = 5
+        }
     }
 
     // MARK: – À propos
@@ -1183,9 +1214,12 @@ struct SearchView: View {
         // Le suivi de la chaîne précédente ne doit ni s'afficher ni se modifier ici.
         follow.reset(); confirmUnfollow = false
         filterText = ""; searchedName = login; suggestions = []
-        channelTab = 0; clips = []; clipsFor = ""; loadingClips = false
+        clips = []; clipsFor = ""; loadingClips = false
         clipsLocked = false; clipsCursor = nil; loadingMoreClips = false
         about = nil; aboutFor = ""; loadingAbout = false; schedule = nil
+        // Le premier onglet affiché ; le planning, lu après la page, n'y
+        // est pas encore (loadSchedule y passe s'il est en tête).
+        channelTab = channelTabs.first(where: { $0 != 5 }) ?? 0
         // Reconstruction de la chaîne précédente : abandonnée.
         recoverTask?.cancel(); recoverTask = nil
         resolvingID = nil; goneIDs = []
@@ -1241,6 +1275,8 @@ struct SearchView: View {
             hasMoreVods = ch.cursor != nil
             // VODs non listées : en arrière-plan, la grille s'affiche sans attendre.
             Task { await recovery.load(channel: login) }
+            // Page ouverte sur un autre onglet que les VODs : son contenu.
+            loadChannelTab(channelTab)
         }
         loading = false
     }

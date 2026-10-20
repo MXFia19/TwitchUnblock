@@ -169,19 +169,22 @@ struct HomeView: View {
     // MARK: – Accueil (avec ou sans compte)
     /// Suivis du compte Twitch et de cet appareil, sans doublon, mêlés et
     /// triés par audience comme sur Twitch (pas relégués en bas) ; les
-    /// streamers épinglés passent devant, dans l'ordre d'épinglage.
+    /// streamers épinglés passent devant, triés entre eux par audience ou
+    /// dans l'ordre d'épinglage (Réglages → Personnaliser).
     private var allFollowedLive: [TwitchStream] {
         let known = Set(followedStreams.map { $0.userLogin.lowercased() })
+        let byRank = !store.customization.pinnedByViewers
         return (followedStreams + localLive.filter { !known.contains($0.userLogin.lowercased()) })
             .sorted { a, b in
-                pinnedFirst(a.userLogin, b.userLogin) ?? (a.viewerCount > b.viewerCount)
+                pinnedFirst(a.userLogin, b.userLogin, byRank: byRank) ?? (a.viewerCount > b.viewerCount)
             }
     }
 
-    /// Ordre imposé par l'épinglage (nil : aucun des deux n'est épinglé).
-    private func pinnedFirst(_ a: String, _ b: String) -> Bool? {
+    /// Ordre imposé par l'épinglage (nil : aucun des deux n'est épinglé, ou
+    /// les deux le sont et `byRank` est faux : l'audience tranche).
+    private func pinnedFirst(_ a: String, _ b: String, byRank: Bool = true) -> Bool? {
         switch (store.pinRank(a), store.pinRank(b)) {
-        case let (x?, y?): return x < y
+        case let (x?, y?): return byRank ? (x < y) : nil
         case (.some, nil): return true
         case (nil, .some): return false
         case (nil, nil): return nil
@@ -300,7 +303,9 @@ struct HomeView: View {
 
     // MARK: – Lives
     @ViewBuilder private var liveSection: some View {
-        ScrollView {
+        // Onglet Accueil touché à nouveau : retour en haut du fil, quel que
+        // soit l'onglet des lives.
+        TabScrollView(tab: .home) {
             LazyVStack(alignment: .leading, spacing: TSpace.lg) {
 
                 // ── Annonce du développeur (si une est en cours) ────

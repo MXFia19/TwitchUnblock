@@ -2,9 +2,10 @@ import SwiftUI
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  Réglages → Personnaliser : ce que l'app montre, et dans quel ordre.
-//  Onglets, accueil, boutons du lecteur et bandeaux du chat. La liste reste
-//  en mode édition : l'ordre se change en faisant glisser ≡, chaque élément
-//  s'affiche ou se masque d'un interrupteur. Modèle : Customization.swift.
+//  Onglets, accueil, page d'une chaîne, boutons du lecteur et bandeaux du
+//  chat. La liste reste en mode édition : l'ordre se change en faisant
+//  glisser ≡, chaque élément s'affiche ou se masque d'un interrupteur.
+//  Modèle : Customization.swift.
 // ═══════════════════════════════════════════════════════════════════════════
 
 struct CustomizeView: View {
@@ -51,8 +52,13 @@ struct CustomizeView: View {
                                       locked: c.visibleHomeChips == [key] && c.shows(home: key))
                     }
                     .onMove { move(\.homeOrder, c.homeChips, from: $0, to: $1) }
+                    // Directs des chaînes épinglées, en tête des Suivies.
+                    toggle(store.t("cust_pinned_viewers"), icon: "pin.fill",
+                           $store.customization.pinnedByViewers, log: "Épinglées triées par spectateurs")
                 } header: {
                     Text(store.t("cust_home_tabs"))
+                } footer: {
+                    Text(store.t("cust_pinned_viewers_foot"))
                 }
 
                 Section {
@@ -63,6 +69,18 @@ struct CustomizeView: View {
                     Text(store.t("cust_home_cards"))
                 } footer: {
                     Text(store.t("cust_home_foot"))
+                }
+
+                // ── Page d'une chaîne : ses onglets ─────────────────
+                Section {
+                    ForEach(c.channelTabs, id: \.self) { key in
+                        visibilityRow(key, in: \.hiddenChannelTabs, locked: lastChannelTab(key))
+                    }
+                    .onMove { move(\.channelTabOrder, c.channelTabs, from: $0, to: $1) }
+                } header: {
+                    Text(store.t("cust_channel_tabs"))
+                } footer: {
+                    Text(store.t("cust_channel_tabs_foot"))
                 }
 
                 // ── Lecteur : barre du bas, AirPlay en haut ─────────
@@ -141,7 +159,7 @@ struct CustomizeView: View {
     // MARK: – Lignes
 
     /// Affiché ou masqué. `locked` : le dernier affiché d'une liste qui en
-    /// garde toujours un (onglets, onglets des lives).
+    /// garde toujours un (onglets, onglets des lives, d'une chaîne).
     private func visibilityRow(_ key: String, in list: WritableKeyPath<UICustomization, [String]>,
                                locked: Bool = false) -> some View {
         let it = item(key)
@@ -156,6 +174,13 @@ struct CustomizeView: View {
         .tint(.tPrimary)
         .disabled(locked)
         .listRowBackground(Color.tCard)
+    }
+
+    /// Dernier onglet affiché de la page d'une chaîne, sans compter le
+    /// planning (seulement pour les chaînes qui en ont un) : il reste.
+    private func lastChannelTab(_ key: String) -> Bool {
+        let c = store.customization
+        return c.visibleChannelTabs.filter { $0 != "schedule" } == [key] && !c.hiddenChannelTabs.contains(key)
     }
 
     private func toggle(_ title: String, icon: String, _ value: Binding<Bool>, log: String) -> some View {
@@ -202,6 +227,13 @@ struct CustomizeView: View {
         case "web":          return (store.t("cust_web_banner"), "globe")
         case "continue":     return (store.t("continue_watching"), "play.circle.fill")
         case "categories":   return (store.t("cust_categories"), "square.grid.2x2.fill")
+        // Page d'une chaîne
+        case "vods":         return (store.t("vods"), "film")
+        case "highlights":   return (store.t("highlights"), "star")
+        case "playlists":    return (store.t("playlists"), "list.bullet.rectangle")
+        case "clips":        return (store.t("clips"), "scissors")
+        case "schedule":     return (store.t("sched_tab"), "calendar")
+        case "about":        return (store.t("about"), "info.circle")
         // Lecteur
         case "mute":         return (store.t("pb_mute"), "speaker.wave.2.fill")
         case "pip":          return (store.t("pb_pip"), "pip.enter")

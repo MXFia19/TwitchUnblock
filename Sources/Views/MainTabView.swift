@@ -2153,6 +2153,12 @@ struct CustomTabBar: View {
             ForEach(MainTabView.TabName.visible(store, all: !onboardingDone), id: \.self) { tab in
                 let isActive = activeTab == tab
                 Button {
+                    // Onglet déjà affiché : sa liste remonte en haut, comme
+                    // dans les apps d'iOS (TabScrollView, Découvrir).
+                    guard activeTab != tab else {
+                        NotificationCenter.default.post(name: .tuTabReselected, object: tab)
+                        return
+                    }
                     withAnimation(.easeOut(duration: 0.15)) { activeTab = tab }
                 } label: {
                     VStack(spacing: 4) {
@@ -2169,6 +2175,35 @@ struct CustomTabBar: View {
                 }
                 .buttonStyle(.plain)
                 .tourAnchor(tab.tourTarget)
+            }
+        }
+    }
+}
+
+extension Notification.Name {
+    /// Onglet de la barre touché alors qu'il est déjà affiché (objet : son
+    /// MainTabView.TabName) : l'écran remonte en haut de sa liste.
+    static let tuTabReselected = Notification.Name("TUTabReselected")
+}
+
+/// Liste défilante d'un onglet de la barre : l'onglet touché à nouveau la
+/// ramène en haut, en douceur. Le contenu est posé sous un repère sans
+/// hauteur, que vise le ScrollViewReader.
+struct TabScrollView<Content: View>: View {
+    let tab: MainTabView.TabName
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(spacing: 0) {
+                    Color.clear.frame(height: 0).id("tab_top")
+                    content()
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .tuTabReselected)) { note in
+                guard (note.object as? MainTabView.TabName) == tab else { return }
+                withAnimation(.easeInOut(duration: 0.35)) { proxy.scrollTo("tab_top", anchor: .top) }
             }
         }
     }

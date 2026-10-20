@@ -760,6 +760,11 @@ struct VideoPlayerView: View {
     var onPlaying: (Bool) -> Void = { _ in }
     /// Annonce brève au lancement (direct servi par le compte, sans pub).
     var notice: String? = nil
+    /// Glissé vers le bas sur l'image : la vidéo et le chat descendent
+    /// ensemble, puis passent en mini-lecteur (distance, puis distance et
+    /// fin prévue du geste, au doigt levé).
+    var onPull: (CGFloat) -> Void = { _ in }
+    var onPullEnd: (CGFloat, CGFloat) -> Void = { _, _ in }
     // Actions affichees a cote du bouton Source (nil = bouton masque).
     var onChat: (() -> Void)? = nil
     var onRewind: (() -> Void)? = nil
@@ -791,6 +796,7 @@ struct VideoPlayerView: View {
             // ── Player ──────────────────────────────────────────────
             if let url = currentURL {
                 nativePlayer(url: url)
+                    .modifier(PlayerPullGesture(onPull: onPull, onPullEnd: onPullEnd))
             }
 
             // En mode compact (chat ouvert) on n'affiche que le lecteur.

@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.5.16",
+          "buildVersion": "340",
+          "date": "2026-10-20",
+          "localizedDescription": "- Live chat now waits for the video: messages show up when the picture catches up, following stalls and jumps back to live (tap the ⏱ badge above the chat for real-time chat)\n- Other improvements and fixes",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-340/TwitchUnblock.ipa",
+          "size": 4251784,
+          "commit": "acfecbb08414ef3672dffef0e28445fd15c8e4f9"
+        },
+        {
           "version": "1.5.14",
           "buildVersion": "339",
           "date": "2026-10-20",
@@ -280,25 +289,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-309/TwitchUnblock.ipa",
           "size": 3716551,
           "commit": "fd5015e425cac43a5f78e783b3dfefdbf4da2d1f"
-        },
-        {
-          "version": "1.4.9",
-          "buildVersion": "308",
-          "date": "2026-10-18",
-          "localizedDescription": "- The immersive player's controls now show and hide right away when you tap the video (in landscape they took up to a second); double-tap still skips 10 s on VODs and shows or hides the chat in landscape",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-308/TwitchUnblock.ipa",
-          "size": 3705045,
-          "commit": "6964fac2ba4aed71767d33d384238b95447a5070"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.5.14",
+      "version": "1.5.16",
       "versionDate": "2026-10-20",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-339/TwitchUnblock.ipa",
-      "size": 4244347
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-340/TwitchUnblock.ipa",
+      "size": 4251784
     }
   ],
   "news": []

@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.6.0",
+          "buildVersion": "351",
+          "date": "2026-10-20",
+          "localizedDescription": "- Improvements and fixes",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-351/TwitchUnblock.ipa",
+          "size": 4381506,
+          "commit": "5375594f5890d36c97355010bc4290dea28d58e6"
+        },
+        {
           "version": "1.5.35",
           "buildVersion": "350",
           "date": "2026-10-20",
@@ -280,25 +289,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-319/TwitchUnblock.ipa",
           "size": 3797716,
           "commit": "4f936e2de844d8cb8ccb55150665fd381b6d7c1d"
-        },
-        {
-          "version": "1.4.18",
-          "buildVersion": "318",
-          "date": "2026-10-18",
-          "localizedDescription": "- On mobile data, lives and VODs now start in Auto quality, which follows your connection speed (new setting: Quality on mobile data), so the picture no longer freezes while the chat keeps going\n- After a stall, the live keeps more margin from the edge instead of jumping straight back (which froze it again), and repeated stalls switch the player to Auto quality (or one step down) automatically\n- Logs show the connection type (Wi-Fi, mobile data, Low Data Mode) and when the quality is lowered because of stalls",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-318/TwitchUnblock.ipa",
-          "size": 3782156,
-          "commit": "af85c66bafc2e6cfd062a6ef2519fa546795f663"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.5.35",
+      "version": "1.6.0",
       "versionDate": "2026-10-20",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-350/TwitchUnblock.ipa",
-      "size": 4381511
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-351/TwitchUnblock.ipa",
+      "size": 4381506
     }
   ],
   "news": []

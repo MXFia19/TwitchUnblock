@@ -278,6 +278,7 @@ let kItalianStrings: [String: String] = [
     "credits_contributors": "Contributori",
     "credits_contrib_it": "Traduzione italiana",
     "credits_contrib_ja": "Traduzione giapponese",
+    "credits_contrib_zhHant": "Traduzione in cinese tradizionale",
     "credits_contrib_swipe": "Scorrimento verso il basso del lettore più reattivo",
     "update_title": "Aggiornamento disponibile",
     "update_msg": "È disponibile la versione {v} (hai la {c}). Aggiorna tramite Feather, SideStore o AltStore.",

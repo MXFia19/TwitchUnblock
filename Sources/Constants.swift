@@ -237,21 +237,25 @@ extension Color {
 // MARK: – Language
 enum Lang: String, CaseIterable, Identifiable {
     case fr, en, es, ru, it, ja
+    /// Code de locale explicite : `rawValue` sert d'identifiant à
+    /// `Locale(identifier:)` (formats de date) et au site (« zh-Hant »).
+    case zhHant = "zh-Hant"
     var id: String { rawValue }
     var flag: String {
         switch self {
         case .fr: "🇫🇷"; case .en: "🇬🇧"; case .es: "🇪🇸"; case .ru: "🇷🇺"; case .it: "🇮🇹"; case .ja: "🇯🇵"
+        case .zhHant: "🇹🇼"
         }
     }
     var label: String {
         switch self {
         case .fr: "Français"; case .en: "English"; case .es: "Español"; case .ru: "Русский"
-        case .it: "Italiano"; case .ja: "日本語"
+        case .it: "Italiano"; case .ja: "日本語"; case .zhHant: "繁體中文"
         }
     }
     /// Traduite avec l'IA, sans relecture : on le dit à côté du choix de
     /// langue, avec un lien pour signaler les erreurs.
-    var machineTranslated: Bool { self == .ru || self == .it || self == .ja }
+    var machineTranslated: Bool { self == .ru || self == .it || self == .ja || self == .zhHant }
 }
 
 // ✨ NOUVEAU : Les sources se traduisent automatiquement !
@@ -2418,6 +2422,8 @@ private let translations: [Lang: [String: String]] = [
     .it: kItalianStrings,
     // Japonais : dans son propre fichier (Localization/JapaneseStrings.swift).
     .ja: kJapaneseStrings,
+    // Chinois traditionnel (Taïwan) : Localization/TraditionalChineseStrings.swift.
+    .zhHant: kTraditionalChineseStrings,
 ]
 
 /// Une clé absente d'une langue retombe sur l'anglais, puis sur la clé

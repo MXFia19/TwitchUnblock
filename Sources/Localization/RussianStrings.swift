@@ -43,6 +43,8 @@ let kRussianStrings: [String: String] = [
     "cust_live_events": "События трансляции",
     "cust_polls": "Опросы",
     "cust_predictions": "Прогнозы",
+    "cust_special_events": "Special Events",
+    "cust_special_events_foot": "Special Events — собственные кампании наград Twitch («1 Month of Apple TV» и т. п.), которые показываются карточкой, как дропсы, на многих каналах. Если их скрыть, дропсы канала останутся.",
     "cust_reset": "Вернуть исходный вид",
     "cust_reset_confirm": "Вкладки, главная, кнопки плеера и баннеры чата вернутся к виду первого запуска.",
     "cust_channel_tabs": "Страница канала · вкладки",

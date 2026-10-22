@@ -44,6 +44,8 @@ let kItalianStrings: [String: String] = [
     "cust_live_events": "Eventi della diretta",
     "cust_polls": "Sondaggi",
     "cust_predictions": "Pronostici",
+    "cust_special_events": "Special Events",
+    "cust_special_events_foot": "Special Events: le campagne di ricompense di Twitch stessa («1 Month of Apple TV»…), mostrate in una scheda come i drop su molti canali. Se le nascondi, i drop del canale restano.",
     "cust_reset": "Ripristina la disposizione predefinita",
     "cust_reset_confirm": "Schede, home, pulsanti del lettore e banner della chat tornano come al primo avvio.",
     "cust_channel_tabs": "Pagina del canale · schede",

@@ -154,6 +154,7 @@ enum LogTranslator {
         "canal sans custom rewards": ["channel without custom rewards", "canal sin recompensas personalizadas", "канал без пользовательских наград"],
         "canal:": ["channel:", "canal:", "канал:"],
         "Carte des drops": ["Drops card", "Tarjeta de drops", "Карточка дропсов"],
+        "Cartes Special Events": ["Special Events cards", "Tarjetas de Special Events", "Карточки Special Events"],
         "Catégorie masquée": ["Category hidden", "Categoría oculta", "Категория скрыта"],
         "Catégorie pas retirée des suivis Twitch": ["Category not removed from Twitch follows", "Categoría no quitada de los seguidos de Twitch", "Категория не удалена из подписок Twitch"],
         "Catégorie retirée des suivis Twitch": ["Category removed from Twitch follows", "Categoría quitada de los seguidos de Twitch", "Категория удалена из подписок Twitch"],

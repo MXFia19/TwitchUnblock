@@ -75,7 +75,11 @@ enum SettingsSync {
                           "ios_showLiveEvents", "ios_showPolls", "ios_showPredictions",
                           "ios_showHypeTrain", "ios_enableRaids", "ios_subAdFree",
                           "ios_chatAutocomplete", "ios_chatKeyboardSuggestions",
-                          "ios_chatShowInput"]
+                          "ios_chatShowInput", "ios_showSpecialEvents"]
+
+    /// Réglages de l'app ajoutés après coup, affichés (vrai) par défaut :
+    /// hors de l'empreinte tant qu'ils le restent (voir digestible).
+    static let iosLateDefaultOn = ["ios_chatShowInput", "ios_showSpecialEvents"]
 
     /// Délai entre le dernier changement et l'envoi.
     static let delay: TimeInterval = 4
@@ -149,7 +153,9 @@ enum SettingsSync {
     static func digestible(_ name: String, _ data: Any) -> Any {
         guard var dict = data as? [String: Any] else { return data }
         if name == "common", (dict["hiddenEmotes"] as? [Any])?.isEmpty == true { dict["hiddenEmotes"] = nil }
-        if name == "ios", dict["ios_chatShowInput"] as? Bool == true { dict["ios_chatShowInput"] = nil }
+        if name == "ios" {
+            for key in iosLateDefaultOn where dict[key] as? Bool == true { dict[key] = nil }
+        }
         // Pareil dans la personnalisation (« ios_customization ») : catégories
         // suivies en jaquettes normales, par spectateurs.
         if name == "ios", var c = dict["ios_customization"] as? [String: Any] {
@@ -425,9 +431,9 @@ extension AppStore {
         case "hidden": return hidden.isEmpty
         case "ios":
             return customization == UICustomization() && autoClaimChest && showPinnedMessages
-                && showDropsNotice && showFollowButton && showWatchStreak && showLiveEvents
-                && showPolls && showPredictions && showHypeTrain && enableRaids && subAdFree
-                && chatAutocomplete && chatKeyboardSuggestions && chatShowInput
+                && showDropsNotice && showSpecialEvents && showFollowButton && showWatchStreak
+                && showLiveEvents && showPolls && showPredictions && showHypeTrain && enableRaids
+                && subAdFree && chatAutocomplete && chatKeyboardSuggestions && chatShowInput
         default:
             return topLang == nil && showRecentChannels && chatTimestamps && timeFormat == "auto"
                 && !chatShowDeleted && chatLoadRecent && !chatHideBots && !chatHideCommands

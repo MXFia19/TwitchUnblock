@@ -17,11 +17,30 @@ struct DropsCampaignNotice: Equatable, Identifiable {
     let minutes: Int
     /// Récompenses suivantes de la même campagne.
     let more: Int
+    /// Campagne de Twitch rangée dans la catégorie « Special Events »
+    /// (« 1 Month of Apple TV »…, sur beaucoup de chaînes à la fois), et non
+    /// drops du jeu de la chaîne : masquable à part (Réglages → Personnaliser).
+    let specialEvent: Bool
+
+    /// Catégorie « Special Events » de Twitch : son id, ou son nom (en
+    /// anglais, comme Twitch le rend), au cas où l'id ne serait pas celui-là.
+    static func isSpecialEvents(_ game: [String: Any]?) -> Bool {
+        guard let game else { return false }
+        if game["id"] as? String == "509663" { return true }
+        return [game["name"], game["displayName"]].contains {
+            ($0 as? String)?.trimmingCharacters(in: .whitespaces)
+                .caseInsensitiveCompare("Special Events") == .orderedSame
+        }
+    }
 }
 
 @MainActor
 final class ChannelDropsNotice: ObservableObject {
-    @Published private(set) var campaign: DropsCampaignNotice?
+    /// Campagnes en cours sur la chaîne, dans l'ordre de Twitch, sans celles
+    /// dont la carte a été fermée. Le chat montre la première que ses
+    /// réglages laissent passer (drops de la chaîne, Special Events) : une
+    /// campagne masquée ne cache plus celle d'après.
+    @Published private(set) var campaigns: [DropsCampaignNotice] = []
 
     private var channelId = ""
     private var task: Task<Void, Never>?
@@ -44,21 +63,21 @@ final class ChannelDropsNotice: ObservableObject {
 
     func stop() {
         task?.cancel(); task = nil
-        campaign = nil
+        campaigns = []
     }
 
     func dismiss(_ c: DropsCampaignNotice) {
         var ids = UserDefaults.standard.stringArray(forKey: Self.dismissedKey) ?? []
         if !ids.contains(c.id) { ids.append(c.id) }
         UserDefaults.standard.set(Array(ids.suffix(100)), forKey: Self.dismissedKey)
-        campaign = nil
+        campaigns.removeAll { $0.id == c.id }
     }
 
     private func fetch() async {
         let cid = channelId
         let q = """
         query { user(id: "\(gqlStr(cid))") { channel { viewerDropCampaigns {
-          id name endAt detailsURL game { displayName }
+          id name endAt detailsURL game { id name displayName }
           timeBasedDrops { name requiredMinutesWatched benefitEdges { benefit { name imageAssetURL } } }
         } } } }
         """
@@ -79,19 +98,20 @@ final class ChannelDropsNotice: ObservableObject {
                 .sorted { ($0["requiredMinutesWatched"] as? Int ?? 0) < ($1["requiredMinutesWatched"] as? Int ?? 0) }
             let first = drops.first
             let benefit = ((first?["benefitEdges"] as? [[String: Any]])?.first?["benefit"]) as? [String: Any]
-            let game = (c["game"] as? [String: Any])?["displayName"] as? String ?? ""
+            let game = c["game"] as? [String: Any]
             return DropsCampaignNotice(
                 id: id,
                 name: c["name"] as? String ?? "",
-                game: game,
+                game: game?["displayName"] as? String ?? "",
                 endsAt: end,
                 detailsURL: (c["detailsURL"] as? String).flatMap { $0.hasPrefix("https://") ? URL(string: $0) : nil },
                 rewardName: (benefit?["name"] as? String) ?? (first?["name"] as? String) ?? "",
                 rewardImage: benefit?["imageAssetURL"] as? String,
                 minutes: first?["requiredMinutesWatched"] as? Int ?? 0,
-                more: max(0, drops.count - 1))
+                more: max(0, drops.count - 1),
+                specialEvent: DropsCampaignNotice.isSpecialEvents(game))
         }
-        if campaign != found.first { campaign = found.first }
+        if campaigns != found { campaigns = found }
     }
 }
 

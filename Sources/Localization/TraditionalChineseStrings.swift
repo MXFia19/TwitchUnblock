@@ -45,6 +45,8 @@ let kTraditionalChineseStrings: [String: String] = [
     "cust_live_events": "直播活動",
     "cust_polls": "投票",
     "cust_predictions": "預測",
+    "cust_special_events": "Special Events",
+    "cust_special_events_foot": "Special Events：Twitch 本身的獎勵活動（例如「1 Month of Apple TV」），會在許多頻道以掉寶卡片的形式出現。隱藏後，頻道的掉寶仍會顯示。",
     "cust_reset": "恢復預設版面",
     "cust_reset_confirm": "分頁、首頁、播放器按鈕與聊天室橫幅都會回到首次啟動時的狀態。",
     "cust_channel_tabs": "頻道頁 · 分頁",

@@ -45,6 +45,8 @@ let kJapaneseStrings: [String: String] = [
     "cust_live_events": "ライブイベント",
     "cust_polls": "投票",
     "cust_predictions": "予想",
+    "cust_special_events": "Special Events",
+    "cust_special_events_foot": "Special Events：Twitch 自身の報酬キャンペーン（「1 Month of Apple TV」など）で、多くのチャンネルでドロップと同じカードで表示されます。非表示にしても、チャンネルのドロップは表示されたままです。",
     "cust_reset": "既定のレイアウトに戻す",
     "cust_reset_confirm": "タブ、ホーム、プレーヤーのボタン、チャットのバナーが初回起動時の状態に戻ります。",
     "cust_channel_tabs": "チャンネルページ · タブ",

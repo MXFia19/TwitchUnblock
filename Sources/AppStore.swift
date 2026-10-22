@@ -171,6 +171,12 @@ final class AppStore: ObservableObject {
     @Published var showDropsNotice: Bool = true {
         didSet { UserDefaults.standard.set(showDropsNotice, forKey: "cfg_drops_notice") }
     }
+    /// Sous la carte des drops : celles des campagnes de Twitch rangées dans
+    /// la catégorie « Special Events » (« 1 Month of Apple TV »…), masquables
+    /// sans perdre les drops de la chaîne. Coupées avec eux.
+    @Published var showSpecialEvents: Bool = true {
+        didSet { UserDefaults.standard.set(showSpecialEvents, forKey: "cfg_special_events") }
+    }
     /// Afficher le bouton Suivre / Ne plus suivre.
     @Published var showFollowButton: Bool = true {
         didSet { UserDefaults.standard.set(showFollowButton, forKey: "cfg_follow") }
@@ -676,7 +682,7 @@ final class AppStore: ObservableObject {
     /// comme au premier lancement.
     func resetCustomization() {
         customization = UICustomization()
-        showPinnedMessages = true; showDropsNotice = true
+        showPinnedMessages = true; showDropsNotice = true; showSpecialEvents = true
         showLiveEvents = true; showPolls = true; showPredictions = true; showHypeTrain = true
         enableRaids = true; showWatchStreak = true; showFollowButton = true
     }
@@ -877,6 +883,7 @@ final class AppStore: ObservableObject {
         autoClaimChest = ud.object(forKey: "auto_claim_chest") as? Bool ?? true
         showPinnedMessages = ud.object(forKey: "cfg_pinned") as? Bool ?? true
         showDropsNotice    = ud.object(forKey: "cfg_drops_notice") as? Bool ?? true
+        showSpecialEvents  = ud.object(forKey: "cfg_special_events") as? Bool ?? true
         showFollowButton   = ud.object(forKey: "cfg_follow") as? Bool ?? true
         showWatchStreak    = ud.object(forKey: "cfg_streak") as? Bool ?? true
         showLiveEvents     = ud.object(forKey: "cfg_events") as? Bool ?? true

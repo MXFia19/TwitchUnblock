@@ -249,7 +249,7 @@ struct ChatView: View {
             }
 
             // ── Drops de la chaîne (carte à fermer) ─────────────────
-            if store.showDropsNotice, let campaign = dropsNotice.campaign {
+            if let campaign = dropsCampaign {
                 DropsNoticeCard(campaign: campaign) {
                     withAnimation(.easeInOut(duration: 0.18)) { dropsNotice.dismiss(campaign) }
                 }
@@ -303,11 +303,19 @@ struct ChatView: View {
         }
     }
 
+    /// Carte des drops à montrer (Réglages → Personnaliser) : aucune sans les
+    /// drops de la chaîne ; sans « Special Events », pas celles des campagnes
+    /// de Twitch rangées dans cette catégorie — la suivante passe alors.
+    private var dropsCampaign: DropsCampaignNotice? {
+        guard store.showDropsNotice else { return nil }
+        return dropsNotice.campaigns.first { store.showSpecialEvents || !$0.specialEvent }
+    }
+
     /// Bandeaux présents, dans l'ordre d'affichage (épingle réduite comprise).
     private var activeNotices: [ChatNoticeKind] {
         var kinds: [ChatNoticeKind] = []
         if store.showPinnedMessages, pubsub.pinned != nil { kinds.append(.pinned) }
-        if store.showDropsNotice, dropsNotice.campaign != nil { kinds.append(.drops) }
+        if dropsCampaign != nil { kinds.append(.drops) }
         if store.showLiveEvents {
             if store.showPolls, events.poll != nil { kinds.append(.poll) }
             if store.showPredictions, events.prediction != nil { kinds.append(.prediction) }

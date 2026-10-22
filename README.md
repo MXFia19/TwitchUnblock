@@ -342,6 +342,9 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   of the chat shows the reward, the watch time it takes, the end date and a
   link to the details, like in the Twitch app; dismissed, it stays away for
   that campaign (Settings → Chat → Customization → Channel drops).
+* 🎟 **Special Events** — Twitch's own reward campaigns (category Special
+  Events, e.g. "1 Month of Apple TV") hide on their own, the channel's drops
+  stay (Settings → General → Customize the app → Chat · banners).
 * 📊 **Polls, predictions, hype train** — vote, bet channel points on a
   prediction, see the countdown, the results and the winning outcome. Each
   outcome shows, like the Twitch app, the points bet on it, its return ratio

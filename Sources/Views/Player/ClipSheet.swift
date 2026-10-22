@@ -104,7 +104,7 @@ struct ClipSheet: View {
                         }
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
-                        .frame(height: 44)
+                        .frame(minHeight: 44)
                         .tGlass(in: RoundedRectangle(cornerRadius: TRadius.control, style: .continuous),
                                 fallback: .tPrimary, tint: .tPrimary)
                     }

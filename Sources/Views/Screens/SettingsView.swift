@@ -1389,7 +1389,8 @@ struct SettingsView: View {
                     Text("\(index + 1)")
                         .font(.tBadge)
                         .foregroundColor(.tPrimary)
-                        .frame(width: 22, height: 22)
+                        // Grandit avec le texte (réglage d'iOS).
+                        .frame(width: 22 * TType.ratio(11), height: 22 * TType.ratio(11))
                         .background(Color.tPrimary.opacity(0.15))
                         .clipShape(Circle())
                     Text(store.t("src_\(id)"))
@@ -2524,7 +2525,8 @@ struct SettingsView: View {
             // Même pastille que dans le menu : les deux niveaux se répondent.
             RoundedRectangle(cornerRadius: 7)
                 .fill(Color.tPrimary.opacity(0.16))
-                .frame(width: 26, height: 26)
+                // Grandit avec le titre (taille du texte d'iOS).
+                .frame(width: 26 * TType.ratio(13), height: 26 * TType.ratio(13))
                 .overlay {
                     Image(systemName: icon)
                         .font(.tSystem(size: 13, weight: .semibold))

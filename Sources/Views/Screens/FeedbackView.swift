@@ -101,7 +101,7 @@ struct FeedbackSheet: View {
                             }
                         }
                         .foregroundColor(.tPrimary)
-                        .padding(.horizontal, 10).frame(height: 32)
+                        .padding(.horizontal, 10).frame(minHeight: 32)
                         .background(Color.tPrimary.opacity(0.12))
                         .clipShape(Capsule())
                     }
@@ -146,7 +146,7 @@ struct FeedbackSheet: View {
                         .autocorrectionDisabled()
                         .textInputAutocapitalization(.never)
                         .padding(.horizontal, TSpace.md)
-                        .frame(height: 44)
+                        .frame(minHeight: 44)
                         .background(Color.tSurface)
                         .cornerRadius(TRadius.control)
                         .onChange(of: contact) { v in
@@ -178,7 +178,7 @@ struct FeedbackSheet: View {
                             }
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
-                            .frame(height: 44)
+                            .frame(minHeight: 44)
                             .background(trimmed.count >= 5 ? Color.tPrimary : Color.tMuted.opacity(0.5))
                             .cornerRadius(TRadius.control)
                         }

@@ -43,7 +43,7 @@ struct FeedbackPhotoPicker: View {
                 PhotosPicker(selection: $items, maxSelectionCount: 3 - images.count, matching: .images) {
                     Label(store.t("fb_add_photos"), systemImage: "photo.on.rectangle.angled")
                         .font(.tLabel).foregroundColor(.tPrimary)
-                        .padding(.horizontal, TSpace.md).frame(height: 34)
+                        .padding(.horizontal, TSpace.md).frame(minHeight: 34)
                         .background(Color.tPrimary.opacity(0.12))
                         .clipShape(Capsule())
                 }

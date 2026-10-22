@@ -263,7 +263,7 @@ struct UsernameColorSheet: View {
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.horizontal, TSpace.md)
-                            .frame(height: 38)
+                            .frame(minHeight: 38)
                             .background(Color.tSurface)
                             .cornerRadius(TRadius.chip)
                         }

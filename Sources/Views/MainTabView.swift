@@ -887,7 +887,7 @@ struct MainTabView: View {
                             .font(.tLabel).foregroundColor(.white)
                     }
                     .padding(.horizontal, TSpace.md)
-                    .frame(height: 34)
+                    .frame(minHeight: 34)
                     .background(Color.black.opacity(0.65))
                     .clipShape(Capsule())
                     .padding(.top, TSpace.lg)

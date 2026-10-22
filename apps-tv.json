@@ -25,6 +25,15 @@
       },
       "versions": [
         {
+          "version": "0.1.35",
+          "buildVersion": "35",
+          "date": "2026-10-22",
+          "localizedDescription": "- Account → About shows the app's version and build number\n- Choose where the \"Continue watching\" row goes in Following (above the live channels, below them, or hidden) in Account → Settings; a \"Live\" title now heads the live channels\n- Press and hold a \"Continue watching\" video to resume it or remove it from the list\n- A channel's page now has Videos, Clips and Collections tabs, like the iPhone; a clip plays with its broadcast's chat\n- Menu on a channel's page always goes back to the list, even on an offline channel without videos (it used to quit the app)",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-test-35/TwitchUnblockTV.ipa",
+          "size": 2660282,
+          "commit": "4040bba54215de59a78c4f897ab193ed8fc63d32"
+        },
+        {
           "version": "0.1.33",
           "buildVersion": "33",
           "date": "2026-10-20",
@@ -194,21 +203,12 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-test-14/TwitchUnblockTV.ipa",
           "size": 2327050,
           "commit": "b3af975cfe7f313f986080298b834c5f03299fd2"
-        },
-        {
-          "version": "0.1.13",
-          "buildVersion": "13",
-          "date": "2026-10-17",
-          "localizedDescription": "- The channel page opened from the player now has its own background instead of showing the Following tab through it",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-test-13/TwitchUnblockTV.ipa",
-          "size": 2324379,
-          "commit": "9528b3bd88332de8f57ae95c3dd95d5078756422"
         }
       ],
-      "version": "0.1.33",
-      "versionDate": "2026-10-20",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-test-33/TwitchUnblockTV.ipa",
-      "size": 2589185
+      "version": "0.1.35",
+      "versionDate": "2026-10-22",
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-test-35/TwitchUnblockTV.ipa",
+      "size": 2660282
     }
   ]
 }

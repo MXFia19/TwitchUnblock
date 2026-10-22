@@ -14,6 +14,9 @@ struct TwitchUnblockApp: App {
                 .inAppNoticeHost()
                 .environmentObject(store)
                 .preferredColorScheme(.dark)
+                // Taille du texte d'iOS suivie jusqu'à « Accessibilité 2 » :
+                // au-delà, cartes et lignes ne tiennent plus (voir TType).
+                .dynamicTypeSize(...TType.maxSize)
                 .task { await UsageService.shared.ping(enabled: store.shareUsage) }
                 // À chaque lancement : nouvelle version disponible ?
                 .task { await UpdateChecker.shared.checkIfDue(atLaunch: true) }

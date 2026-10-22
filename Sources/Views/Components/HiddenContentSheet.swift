@@ -16,7 +16,7 @@ struct HiddenFooter: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 6) {
-                Image(systemName: "eye.slash").font(.system(size: 11, weight: .semibold))
+                Image(systemName: "eye.slash").font(.tSystem(size: 11, weight: .semibold))
                 Text(store.t("hidden_footer").replacingOccurrences(of: "{n}", with: "\(count)"))
                     .font(.tMeta)
                     .lineLimit(1)
@@ -115,7 +115,7 @@ struct HiddenContentSheet: View {
             }
             VStack(alignment: .leading, spacing: 1) {
                 Text(title)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.tSystem(size: 15, weight: .semibold))
                     .foregroundColor(.tText)
                     .lineLimit(1)
                 if let subtitle {
@@ -125,7 +125,7 @@ struct HiddenContentSheet: View {
             Spacer(minLength: 0)
             Button { withAnimation { unhide() } } label: {
                 Text(store.t("unhide"))
-                    .font(.system(size: 13, weight: .bold))
+                    .font(.tSystem(size: 13, weight: .bold))
                     .foregroundColor(.tPrimary)
                     .padding(.horizontal, 10).padding(.vertical, 5)
                     .background(Color.tPrimary.opacity(0.14))

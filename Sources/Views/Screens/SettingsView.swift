@@ -147,6 +147,7 @@ struct SettingsView: View {
                           context: feedbackContext)
                 .environmentObject(store)
                 .presentationDetents([.large])
+                .tTypeRoot()
         }
         // ── Minuteur de veille (préréglages + durée personnalisée) ───
         .sheet(isPresented: $showSleepSheet) {
@@ -158,11 +159,13 @@ struct SettingsView: View {
         .sheet(isPresented: $showHidden) {
             HiddenContentSheet().environmentObject(store)
                 .inAppNoticeHost()
+                .tTypeRoot()
         }
         // ── Personnaliser : onglets, accueil, lecteur, chat ──────────
         .sheet(isPresented: $showCustomize) {
             CustomizeView().environmentObject(store)
                 .inAppNoticeHost()
+                .tTypeRoot()
         }
         // ── Logs sheet ───────────────────────────────────────────────
         .sheet(isPresented: $showLogs) {
@@ -396,7 +399,7 @@ struct SettingsView: View {
                 Spacer(minLength: 0)
                 if admin.awaitingCount > 0 {
                     Text("\(admin.awaitingCount)")
-                        .font(.system(size: 11, weight: .heavy))
+                        .font(.tSystem(size: 11, weight: .heavy))
                         .foregroundColor(.black)
                         .padding(.horizontal, 6)
                         .frame(minWidth: 18, minHeight: 18)
@@ -404,7 +407,7 @@ struct SettingsView: View {
                         .clipShape(Capsule())
                 }
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.tSystem(size: 13, weight: .semibold))
                     .foregroundColor(.tMuted.opacity(0.7))
             }
             .padding(.horizontal, TSpace.lg)
@@ -438,7 +441,7 @@ struct SettingsView: View {
                 Spacer(minLength: 0)
                 FeedbackUnreadBadge()
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.tSystem(size: 13, weight: .semibold))
                     .foregroundColor(.tMuted.opacity(0.7))
             }
             .padding(.horizontal, TSpace.lg)
@@ -477,11 +480,13 @@ struct SettingsView: View {
                         .font(.tCardTitle).foregroundColor(.tText)
                     Text(store.t(section.subtitleKey))
                         .font(.tMeta).foregroundColor(.tMuted)
-                        .lineLimit(1)
+                        // Grand texte (réglage d'iOS) : sur plusieurs lignes
+                        // plutôt que coupé au bout de quelques mots.
+                        .lineLimit(TType.isAccessibility ? nil : 1)
                 }
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.tSystem(size: 13, weight: .semibold))
                     .foregroundColor(.tMuted.opacity(0.7))
             }
             .padding(.horizontal, TSpace.lg)
@@ -726,7 +731,7 @@ struct SettingsView: View {
                             .lineLimit(1)
                         Spacer(minLength: 0)
                         Image(systemName: "chevron.right")
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(.tSystem(size: 12, weight: .semibold))
                             .foregroundColor(.tMuted)
                     }
                     .padding(12)
@@ -762,7 +767,7 @@ struct SettingsView: View {
                                 .lineLimit(1)
                             Spacer(minLength: 0)
                             Image(systemName: "chevron.right")
-                                .font(.system(size: 12, weight: .semibold))
+                                .font(.tSystem(size: 12, weight: .semibold))
                                 .foregroundColor(.tMuted)
                         }
                         .padding(12)
@@ -937,7 +942,7 @@ struct SettingsView: View {
                     HStack(spacing: 4) {
                         Text(store.topLang.map { TopLanguage.name($0, in: store.lang) } ?? store.t("lang_auto"))
                             .font(.tCardTitle)
-                        Image(systemName: "chevron.up.chevron.down").font(.system(size: 11, weight: .semibold))
+                        Image(systemName: "chevron.up.chevron.down").font(.tSystem(size: 11, weight: .semibold))
                     }
                     .foregroundColor(.tPrimary)
                     .padding(.horizontal, 12).padding(.vertical, 8)
@@ -1016,8 +1021,8 @@ struct SettingsView: View {
                 }
             } label: {
                 HStack(spacing: 8) {
-                    Image(systemName: "bell.badge.fill").font(.system(size: 13, weight: .semibold))
-                    Text(store.t("notif_test")).font(.system(size: 14, weight: .semibold))
+                    Image(systemName: "bell.badge.fill").font(.tSystem(size: 13, weight: .semibold))
+                    Text(store.t("notif_test")).font(.tSystem(size: 14, weight: .semibold))
                 }
                 .foregroundColor(.tPrimary)
                 .padding(.horizontal, 12).padding(.vertical, 8)
@@ -1085,14 +1090,14 @@ struct SettingsView: View {
                 Divider().background(Color.tBorder)
                 VStack(alignment: .leading, spacing: 6) {
                     Text(store.t("muted_words"))
-                        .font(.system(size: 14, weight: .semibold)).foregroundColor(.tText)
+                        .font(.tSystem(size: 14, weight: .semibold)).foregroundColor(.tText)
                     Text(store.t("muted_words_sub"))
-                        .font(.system(size: 12)).foregroundColor(.tMuted)
+                        .font(.tSystem(size: 12)).foregroundColor(.tMuted)
                         .fixedSize(horizontal: false, vertical: true)
                     TextField("spoiler", text: $mutedDraft)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
-                        .font(.system(size: 14))
+                        .font(.tSystem(size: 14))
                         .padding(.horizontal, 10).padding(.vertical, 8)
                         .background(Color.tSurface).cornerRadius(8)
                         .onAppear { mutedDraft = store.chatMutedWords.joined(separator: ", ") }
@@ -1108,27 +1113,27 @@ struct SettingsView: View {
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(store.t("hidden_users").replacingOccurrences(of: "{n}", with: "\(store.chatBlockedUsers.count)"))
-                                .font(.system(size: 14, weight: .semibold)).foregroundColor(.tText)
+                                .font(.tSystem(size: 14, weight: .semibold)).foregroundColor(.tText)
                             Text(store.chatBlockedUsers.suffix(6).joined(separator: ", "))
-                                .font(.system(size: 12)).foregroundColor(.tMuted).lineLimit(1)
+                                .font(.tSystem(size: 12)).foregroundColor(.tMuted).lineLimit(1)
                         }
                         Spacer()
                         Button(store.t("clear")) { store.chatBlockedUsers = [] }
-                            .font(.system(size: 13, weight: .bold)).foregroundColor(.tPrimary)
+                            .font(.tSystem(size: 13, weight: .bold)).foregroundColor(.tPrimary)
                     }
                 }
                 Divider().background(Color.tBorder)
                 // Mots surlignés : en plus des mentions, séparés par des virgules.
                 VStack(alignment: .leading, spacing: 6) {
                     Text(store.t("highlight_words"))
-                        .font(.system(size: 14, weight: .semibold)).foregroundColor(.tText)
+                        .font(.tSystem(size: 14, weight: .semibold)).foregroundColor(.tText)
                     Text(store.t("highlight_words_sub"))
-                        .font(.system(size: 12)).foregroundColor(.tMuted)
+                        .font(.tSystem(size: 12)).foregroundColor(.tMuted)
                         .fixedSize(horizontal: false, vertical: true)
                     TextField("giveaway, tournoi", text: $highlightDraft)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
-                        .font(.system(size: 14))
+                        .font(.tSystem(size: 14))
                         .padding(.horizontal, 10).padding(.vertical, 8)
                         .background(Color.tSurface).cornerRadius(8)
                         .onAppear { highlightDraft = store.chatHighlightWords.joined(separator: ", ") }
@@ -1548,7 +1553,7 @@ struct SettingsView: View {
                     Button { Task { await switchAccount() } } label: {
                         HStack(spacing: 8) {
                             Image(systemName: "arrow.left.arrow.right.circle.fill")
-                                .font(.system(size: 16))
+                                .font(.tSystem(size: 16))
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(store.t("switch_account")).font(.tLabel)
                                 Text(store.t("switch_account_sub"))
@@ -1777,6 +1782,7 @@ struct SettingsView: View {
         }
         .sheet(isPresented: $showNotifChannels) {
             NotifChannelsView().environmentObject(store)
+                .tTypeRoot()
         }
     }
 
@@ -1795,7 +1801,7 @@ struct SettingsView: View {
                 }
                 Spacer()
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.tSystem(size: 13, weight: .semibold))
                     .foregroundColor(.tMuted)
             }
             .contentShape(Rectangle())
@@ -1816,7 +1822,7 @@ struct SettingsView: View {
                 .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 8) {
                 Text(NtfyNotifier.topic)
-                    .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                    .font(.tSystem(size: 14, weight: .semibold, design: .monospaced))
                     .foregroundColor(.tText)
                     .lineLimit(1).minimumScaleFactor(0.6)
                     .textSelection(.enabled)
@@ -1827,7 +1833,7 @@ struct SettingsView: View {
                 } label: {
                     Label(store.t(ntfyCopied ? "ntfy_copied" : "ntfy_copy"),
                           systemImage: ntfyCopied ? "checkmark" : "doc.on.doc")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.tSystem(size: 13, weight: .semibold))
                         .foregroundColor(.tPrimary)
                 }
                 .buttonStyle(.plain)
@@ -1871,8 +1877,8 @@ struct SettingsView: View {
 
     private func ntfyPill(_ title: String, icon: String) -> some View {
         HStack(spacing: 8) {
-            Image(systemName: icon).font(.system(size: 13, weight: .semibold))
-            Text(title).font(.system(size: 14, weight: .semibold)).lineLimit(1)
+            Image(systemName: icon).font(.tSystem(size: 13, weight: .semibold))
+            Text(title).font(.tSystem(size: 14, weight: .semibold)).lineLimit(1)
         }
         .foregroundColor(.tPrimary)
         .padding(.horizontal, 12).padding(.vertical, 8)
@@ -1889,14 +1895,14 @@ struct SettingsView: View {
     private func creditLink(icon: String, title: String, url: String) -> some View {
         Link(destination: URL(string: url)!) {
             HStack(spacing: TSpace.sm) {
-                Image(systemName: icon).font(.system(size: 13, weight: .semibold))
+                Image(systemName: icon).font(.tSystem(size: 13, weight: .semibold))
                 Text(title).font(.tLabel)
                 Spacer()
-                Image(systemName: "arrow.up.right").font(.system(size: 12, weight: .semibold))
+                Image(systemName: "arrow.up.right").font(.tSystem(size: 12, weight: .semibold))
             }
             .foregroundColor(.tText)
             .padding(.horizontal, TSpace.md)
-            .frame(height: 44)
+            .frame(minHeight: 44)
             .background(Color.tSurface)
             .cornerRadius(TRadius.control)
         }
@@ -1910,7 +1916,7 @@ struct SettingsView: View {
             Link(destination: url) {
                 HStack(spacing: TSpace.sm) {
                     Image(systemName: "person.crop.circle")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.tSystem(size: 13, weight: .semibold))
                     VStack(alignment: .leading, spacing: 1) {
                         Text(contributor.login)
                             .font(.tLabel)
@@ -1920,7 +1926,7 @@ struct SettingsView: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer()
-                    Image(systemName: "arrow.up.right").font(.system(size: 12, weight: .semibold))
+                    Image(systemName: "arrow.up.right").font(.tSystem(size: 12, weight: .semibold))
                 }
                 .foregroundColor(.tText)
                 .padding(.horizontal, TSpace.md)
@@ -1958,15 +1964,15 @@ struct SettingsView: View {
                     Button { UpdateChecker.openSource() } label: {
                         HStack(spacing: TSpace.sm) {
                             Image(systemName: "arrow.down.circle.fill")
-                                .font(.system(size: 14, weight: .semibold))
+                                .font(.tSystem(size: 14, weight: .semibold))
                             Text(store.t("update_available").replacingOccurrences(of: "{v}", with: up.version))
                                 .font(.tLabel)
                             Spacer()
-                            Image(systemName: "arrow.up.right").font(.system(size: 12, weight: .semibold))
+                            Image(systemName: "arrow.up.right").font(.tSystem(size: 12, weight: .semibold))
                         }
                         .foregroundColor(.white)
                         .padding(.horizontal, TSpace.md)
-                        .frame(height: 44)
+                        .frame(minHeight: 44)
                         .background(Color.tPrimary)
                         .cornerRadius(TRadius.control)
                     }
@@ -1986,14 +1992,14 @@ struct SettingsView: View {
                         HStack(spacing: TSpace.sm) {
                             Image(systemName: upToDate ? "checkmark.circle.fill"
                                   : updateCheckFailed ? "exclamationmark.triangle" : "arrow.triangle.2.circlepath")
-                                .font(.system(size: 13, weight: .semibold))
+                                .font(.tSystem(size: 13, weight: .semibold))
                             Text(store.t(upToDate ? "update_none" : updateCheckFailed ? "update_check_failed" : "update_check")).font(.tLabel)
                             Spacer()
                             if checkingUpdate { ProgressView().scaleEffect(0.8) }
                         }
                         .foregroundColor(.tText)
                         .padding(.horizontal, TSpace.md)
-                        .frame(height: 44)
+                        .frame(minHeight: 44)
                         .background(Color.tSurface)
                         .cornerRadius(TRadius.control)
                     }
@@ -2011,12 +2017,12 @@ struct SettingsView: View {
                     Link("MXFia19", destination: URL(string: "https://github.com/MXFia19")!)
                         .foregroundColor(.tPrimary)
                 }
-                .font(.system(size: 14, weight: .semibold))
+                .font(.tSystem(size: 14, weight: .semibold))
 
                 // Projet vibecodé : dit franchement.
                 HStack(alignment: .top, spacing: 8) {
                     Image(systemName: "sparkles")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.tSystem(size: 13, weight: .semibold))
                         .foregroundColor(.tPrimary)
                     Text(store.t("vibecoded"))
                         .font(.tMeta)
@@ -2056,13 +2062,13 @@ struct SettingsView: View {
                 Button { showFeedback = true } label: {
                     HStack(spacing: TSpace.sm) {
                         Image(systemName: "ladybug.fill")
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(.tSystem(size: 13, weight: .semibold))
                         Text(store.t("feedback")).font(.tLabel)
                         Spacer()
                     }
                     .foregroundColor(.tPrimary)
                     .padding(.horizontal, TSpace.md)
-                    .frame(height: 44)
+                    .frame(minHeight: 44)
                     .background(Color.tPrimary.opacity(0.12))
                     .cornerRadius(12)
                 }
@@ -2075,13 +2081,13 @@ struct SettingsView: View {
                 } label: {
                     HStack(spacing: TSpace.sm) {
                         Image(systemName: "graduationcap.fill")
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(.tSystem(size: 13, weight: .semibold))
                         Text(store.t("ob_replay")).font(.tLabel)
                         Spacer()
                     }
                     .foregroundColor(.tPrimary)
                     .padding(.horizontal, TSpace.md)
-                    .frame(height: 44)
+                    .frame(minHeight: 44)
                     .background(Color.tPrimary.opacity(0.12))
                     .cornerRadius(12)
                 }
@@ -2092,7 +2098,7 @@ struct SettingsView: View {
                 } label: {
                     HStack(spacing: TSpace.sm) {
                         Image(systemName: "terminal")
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(.tSystem(size: 13, weight: .semibold))
                         Text(store.t("show_logs")).font(.tLabel)
                         Spacer()
                         // Erreurs du journal : visibles avant même de l'ouvrir.
@@ -2114,7 +2120,7 @@ struct SettingsView: View {
                     }
                     .foregroundColor(.tPrimary)
                     .padding(.horizontal, TSpace.md)
-                    .frame(height: 44)
+                    .frame(minHeight: 44)
                     .background(Color.tPrimary.opacity(0.12))
                     .cornerRadius(TRadius.control)
                 }
@@ -2269,8 +2275,9 @@ struct SettingsView: View {
         }
         // Hauteur tenue à la main : un GeometryReader n'en propose aucune. Large
         // de quatre lignes, pour le cas où les deux messages passent à la ligne
-        // aux plus grosses tailles ; `clipped` évite tout débordement.
-        .frame(height: store.chatFontSize * 4 + store.chatSpacing * 2 + 20)
+        // aux plus grosses tailles ; `clipped` évite tout débordement. Taille du
+        // style, qui suit aussi la taille du texte d'iOS.
+        .frame(height: style.fontSize * 4 + store.chatSpacing * 2 + 20)
         .clipped()
         .padding(TSpace.sm)
         .background(Color.tDark)
@@ -2315,7 +2322,7 @@ struct SettingsView: View {
             }
             Spacer(minLength: 8)
             Text(store.chatSyncNudge == 0 ? "0 s" : String(format: "%+.0f s", store.chatSyncNudge))
-                .font(.system(size: 14, weight: .bold).monospacedDigit())
+                .font(.tSystem(size: 14, weight: .bold).monospacedDigit())
                 .foregroundColor(store.chatSyncNudge == 0 ? .tMuted : .tPrimary)
             Stepper("", value: $store.chatSyncNudge, in: -20...20, step: 1)
                 .labelsHidden()
@@ -2354,7 +2361,7 @@ struct SettingsView: View {
                            actionLabel: String, action: @escaping () -> Void) -> some View {
         HStack(spacing: 12) {
             Image(systemName: connected ? "checkmark.circle.fill" : "circle")
-                .font(.system(size: 17))
+                .font(.tSystem(size: 17))
                 .foregroundColor(connected ? .tSuccess : .tMuted)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
@@ -2395,7 +2402,7 @@ struct SettingsView: View {
                 .frame(width: 26, height: 26)
                 .overlay {
                     Image(systemName: icon)
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.tSystem(size: 13, weight: .semibold))
                         .foregroundColor(.tPrimary)
                 }
             Text(text)
@@ -2414,7 +2421,7 @@ struct SettingsView: View {
             store.lang = lang
         } label: {
             HStack(spacing: 12) {
-                Text(lang.flag).font(.system(size: 22))
+                Text(lang.flag).font(.tSystem(size: 22))
                 VStack(alignment: .leading, spacing: 1) {
                     Text(lang.label)
                         .font(.tCardTitle)
@@ -2429,7 +2436,7 @@ struct SettingsView: View {
                 if isSelected {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundColor(.tPrimary)
-                        .font(.system(size: 18))
+                        .font(.tSystem(size: 18))
                 }
             }
             .padding(.horizontal, 14).padding(.vertical, 12)
@@ -2444,10 +2451,10 @@ struct SettingsView: View {
     private func statBox(value: Int, label: String, icon: String) -> some View {
         VStack(spacing: TSpace.xs) {
             Image(systemName: icon)
-                .font(.system(size: 16))
+                .font(.tSystem(size: 16))
                 .foregroundColor(.tMuted)
             Text("\(value)")
-                .font(.system(size: 26, weight: .bold))
+                .font(.tSystem(size: 26, weight: .bold))
                 .foregroundColor(.tPrimary)
             Text(label)
                 .font(.tMeta)
@@ -2503,7 +2510,7 @@ private struct SleepTimerSettingRow: View {
                     Text(store.t("sleep_remaining"))
                         .font(.tMeta).foregroundColor(.tMuted)
                     Text(sleepTimer.label)
-                        .font(.system(size: 26, weight: .bold).monospacedDigit())
+                        .font(.tSystem(size: 26, weight: .bold).monospacedDigit())
                         .foregroundColor(.tPurple)
                 } else {
                     Text(store.t("sleep_timer_sub"))

@@ -132,8 +132,8 @@ struct SearchResultsSection: View {
 
     @EnvironmentObject private var store: AppStore
 
-    private let columns = [GridItem(.flexible(), alignment: .top),
-                           GridItem(.flexible(), alignment: .top)]
+    /// Deux colonnes ; une seule aux tailles de texte d'accessibilité.
+    private var columns: [GridItem] { TType.cardColumns }
 
     private var shownStreams: [TwitchStream] {
         (results.streams ?? []).filter { store.showsStream($0) }
@@ -226,7 +226,7 @@ struct SearchResultsSection: View {
                         // Masquée des listes : la recherche la montre quand même.
                         if store.hidden.hides(channel: c.login) {
                             Image(systemName: "eye.slash")
-                                .font(.system(size: 11, weight: .semibold))
+                                .font(.tSystem(size: 11, weight: .semibold))
                                 .foregroundColor(.tMuted)
                                 .accessibilityLabel(store.t("hidden_badge"))
                         }
@@ -244,7 +244,7 @@ struct SearchResultsSection: View {
                 }
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.tSystem(size: 11, weight: .semibold))
                     .foregroundColor(.tMuted)
             }
             .padding(.horizontal, TSpace.md)

@@ -155,7 +155,7 @@ struct AnnouncementBanner: View {
                 }
                 if !announcement.message.isEmpty {
                     Text(announcement.message)
-                        .font(.system(size: 13)).foregroundColor(.tMuted)
+                        .font(.tSystem(size: 13)).foregroundColor(.tMuted)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 if let link = announcement.link {
@@ -164,7 +164,7 @@ struct AnnouncementBanner: View {
                             Text(store.t("announcement_open"))
                             Image(systemName: "arrow.up.right")
                         }
-                        .font(.system(size: 14, weight: .bold))
+                        .font(.tSystem(size: 14, weight: .bold))
                         .foregroundColor(.white)
                         .padding(.horizontal, 14).padding(.vertical, 8)
                         .background(Color.tPrimary)
@@ -182,7 +182,7 @@ struct AnnouncementBanner: View {
                             Task { await service.react(announcement, emoji) }
                         } label: {
                             Text(emoji)
-                                .font(.system(size: 16))
+                                .font(.tSystem(size: 16))
                                 .frame(minWidth: 40, minHeight: 32)
                                 .background(on ? Color.tPrimary.opacity(0.25) : Color.tSurface)
                                 .clipShape(Capsule())

@@ -11,22 +11,125 @@ import SwiftUI
 //  il écrit `.font(.tCardTitle)`.
 // ═══════════════════════════════════════════════════════════════════════════
 
+// MARK: – Taille du texte d'iOS (Dynamic Type)
+/// Taille du texte choisie dans iOS (Réglages → Luminosité et affichage →
+/// Taille du texte, ou Accessibilité → Affichage et taille du texte),
+/// appliquée aux polices de l'app.
+///
+/// Les tailles écrites dans l'app sont celles du réglage par défaut
+/// (« Grand ») : `scaled` les fait grossir ou rétrécir comme le style de
+/// texte d'iOS le plus proche, avec les paliers d'Apple. Plafond à
+/// `maxSize` : au-delà, cartes et lignes ne tiennent plus.
+///
+/// SwiftUI ne fait pas suivre la taille du texte à `Font.system(size:)`.
+/// La taille en cours est donc relevée par les racines (MainTabView,
+/// `tTypeRoot()` des feuilles), au début de leur rendu, avant celui de leur
+/// contenu ; quand elle change, elles refont ce contenu (comme pour un
+/// changement de thème). Les commandes posées sur la vidéo et les pastilles
+/// sur les miniatures gardent `Font.system(size:)`, à taille fixe.
+enum TType {
+    /// Plafond : « Accessibilité 2 » (le 9ᵉ cran sur 12).
+    static let maxSize: DynamicTypeSize = .accessibility2
+    /// Taille en cours, plafonnée.
+    private(set) static var size: DynamicTypeSize = .large
+
+    static func capped(_ s: DynamicTypeSize) -> DynamicTypeSize { min(s, maxSize) }
+
+    /// Relevée par une racine : rend la taille plafonnée (clé de son contenu).
+    @discardableResult
+    static func adopt(_ s: DynamicTypeSize) -> DynamicTypeSize {
+        let c = capped(s)
+        if c != size { size = c }
+        return c
+    }
+
+    /// Tailles d'accessibilité (les 5 derniers crans) : les mises en page
+    /// serrées passent sur une colonne.
+    static var isAccessibility: Bool { size.isAccessibilitySize }
+
+    /// Points des styles de texte d'iOS, du plus petit cran (« Très petit »)
+    /// au plus grand (« Accessibilité 5 »), le défaut (« Grand ») en 4ᵉ ;
+    /// `upTo` : plus grande taille par défaut qui suit ce style.
+    private static let curves: [(upTo: CGFloat, points: [CGFloat])] = [
+        (11, [11, 11, 11, 11, 13, 15, 17, 20, 24, 29, 34, 40]),            // caption 2
+        (12, [11, 11, 11, 12, 14, 16, 18, 22, 26, 32, 37, 43]),            // caption 1
+        (13, [12, 12, 12, 13, 15, 17, 19, 23, 27, 33, 38, 44]),            // footnote
+        (15, [12, 13, 14, 15, 17, 19, 21, 25, 30, 36, 42, 49]),            // subheadline
+        (16, [13, 14, 15, 16, 18, 20, 22, 26, 32, 38, 44, 51]),            // callout
+        (19, [14, 15, 16, 17, 19, 21, 23, 28, 33, 40, 47, 53]),            // body
+        (21, [17, 18, 19, 20, 22, 24, 26, 31, 37, 43, 49, 55]),            // title 3
+        (25, [19, 20, 21, 22, 24, 26, 28, 34, 39, 44, 50, 56]),            // title 2
+        (31, [25, 26, 27, 28, 30, 32, 34, 38, 43, 48, 53, 58]),            // title 1
+        (.infinity, [31, 32, 33, 34, 36, 38, 40, 44, 48, 52, 56, 60]),     // large title
+    ]
+
+    /// Crans dans l'ordre, du plus petit au plus grand.
+    private static let order: [DynamicTypeSize] = DynamicTypeSize.allCases
+
+    /// `base` points au réglage par défaut, à la taille du texte en cours.
+    static func scaled(_ base: CGFloat) -> CGFloat {
+        guard size != .large, base > 0,
+              let i = order.firstIndex(of: size), let d = order.firstIndex(of: .large),
+              let curve = curves.first(where: { base <= $0.upTo })?.points,
+              curve.indices.contains(i), curve.indices.contains(d) else { return base }
+        return base * curve[i] / curve[d]
+    }
+
+    /// Facteur de la taille en cours pour un texte de `base` points : de quoi
+    /// agrandir une hauteur réservée à du texte.
+    static func ratio(_ base: CGFloat) -> CGFloat { scaled(base) / base }
+
+    /// Grille de cartes : deux colonnes, une seule aux tailles
+    /// d'accessibilité (titres et pseudos y seraient coupés au bout de
+    /// quelques lettres).
+    static var cardColumns: [GridItem] {
+        let column = GridItem(.flexible(), alignment: .top)
+        return isAccessibility ? [column] : [column, column]
+    }
+}
+
+/// Racine d'une feuille : la taille du texte d'iOS (plafonnée) devient celle
+/// des polices de l'app, et le contenu est refait quand elle change.
+private struct TTypeRoot: ViewModifier {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    func body(content: Content) -> some View {
+        content
+            .id(TType.adopt(dynamicTypeSize))
+            .dynamicTypeSize(...TType.maxSize)
+    }
+}
+
+extension View {
+    /// À poser sur le contenu d'une feuille (voir TType).
+    func tTypeRoot() -> some View { modifier(TTypeRoot()) }
+}
+
 // MARK: – Typographie
+// Tailles du réglage par défaut d'iOS, qui suivent la taille du texte
+// choisie (TType). Calculées à chaque rendu.
 extension Font {
     /// Grand titre d'écran (en-tête de page).
-    static let tScreenTitle = Font.system(size: 26, weight: .bold)
+    static var tScreenTitle: Font { .system(size: TType.scaled(26), weight: .bold) }
     /// Titre de section dans une page.
-    static let tSection     = Font.system(size: 17, weight: .bold)
+    static var tSection: Font     { .system(size: TType.scaled(17), weight: .bold) }
     /// Titre d'une carte / d'une ligne de liste.
-    static let tCardTitle   = Font.system(size: 14, weight: .semibold)
+    static var tCardTitle: Font   { .system(size: TType.scaled(14), weight: .semibold) }
     /// Texte courant.
-    static let tBody        = Font.system(size: 14)
+    static var tBody: Font        { .system(size: TType.scaled(14)) }
     /// Libellé de bouton ou de champ.
-    static let tLabel       = Font.system(size: 13, weight: .semibold)
+    static var tLabel: Font       { .system(size: TType.scaled(13), weight: .semibold) }
     /// Métadonnée secondaire (durée, vues, date…).
-    static let tMeta        = Font.system(size: 12, weight: .medium)
+    static var tMeta: Font        { .system(size: TType.scaled(12), weight: .medium) }
     /// Pastille, badge, compteur.
-    static let tBadge       = Font.system(size: 11, weight: .bold)
+    static var tBadge: Font       { .system(size: TType.scaled(11), weight: .bold) }
+
+    /// `Font.system(size:)` qui suit la taille du texte d'iOS : `size` est la
+    /// taille au réglage par défaut.
+    static func tSystem(size: CGFloat, weight: Font.Weight = .regular,
+                        design: Font.Design = .default) -> Font {
+        .system(size: TType.scaled(size), weight: weight, design: design)
+    }
 }
 
 // MARK: – Espacements
@@ -82,7 +185,7 @@ struct TSectionHeader<Trailing: View>: View {
     var body: some View {
         HStack(spacing: TSpace.sm) {
             Image(systemName: icon)
-                .font(.system(size: 14, weight: .semibold))
+                .font(.tSystem(size: 14, weight: .semibold))
                 .foregroundColor(.tPrimary)
             Text(title)
                 .font(.tSection)
@@ -114,14 +217,17 @@ struct TPrimaryButton: View {
         Button(action: action) {
             HStack(spacing: TSpace.sm) {
                 if let icon {
-                    Image(systemName: icon).font(.system(size: 13, weight: .bold))
+                    Image(systemName: icon).font(.tSystem(size: 13, weight: .bold))
                 }
-                Text(title).font(.tLabel)
+                Text(title).font(.tLabel).multilineTextAlignment(.center)
             }
             .foregroundColor(.white)
             .frame(maxWidth: fullWidth ? .infinity : nil)
             .padding(.horizontal, fullWidth ? 0 : TSpace.lg)
-            .frame(height: 44)
+            // Hauteur minimale : avec un grand texte (réglage d'iOS), le
+            // libellé passe sur deux lignes au lieu de déborder.
+            .padding(.vertical, TSpace.xs)
+            .frame(minHeight: 44)
             .tGlass(in: RoundedRectangle(cornerRadius: TRadius.control, style: .continuous),
                     fallback: .tPrimary, tint: .tPrimary)
         }
@@ -141,14 +247,15 @@ struct TSecondaryButton: View {
         Button(action: action) {
             HStack(spacing: TSpace.sm) {
                 if let icon {
-                    Image(systemName: icon).font(.system(size: 13, weight: .bold))
+                    Image(systemName: icon).font(.tSystem(size: 13, weight: .bold))
                 }
-                Text(title).font(.tLabel)
+                Text(title).font(.tLabel).multilineTextAlignment(.center)
             }
             .foregroundColor(tint)
             .frame(maxWidth: fullWidth ? .infinity : nil)
             .padding(.horizontal, fullWidth ? 0 : TSpace.lg)
-            .frame(height: 44)
+            .padding(.vertical, TSpace.xs)
+            .frame(minHeight: 44)
             .background(tint.opacity(0.15))
             .cornerRadius(TRadius.control)
             .overlay(RoundedRectangle(cornerRadius: TRadius.control)
@@ -188,13 +295,14 @@ struct TChip: View {
         Button(action: action) {
             HStack(spacing: TSpace.xs) {
                 if let icon {
-                    Image(systemName: icon).font(.system(size: 11, weight: .semibold))
+                    Image(systemName: icon).font(.tSystem(size: 11, weight: .semibold))
                 }
                 Text(title).font(.tLabel).lineLimit(1)
             }
             .foregroundColor(isOn ? .white : .tMuted)
             .padding(.horizontal, TSpace.md)
-            .frame(height: 32)
+            .padding(.vertical, TSpace.xs)
+            .frame(minHeight: 32)
             .background(isOn ? Color.tPrimary : Color.tSurface)
             .cornerRadius(TRadius.chip)
         }
@@ -282,7 +390,7 @@ struct TSearchField: View {
                     .frame(width: 15, height: 15)
             } else {
                 Image(systemName: "magnifyingglass")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.tSystem(size: 14, weight: .semibold))
                     .foregroundColor(focused ? .tPrimary : .tMuted)
             }
 
@@ -298,14 +406,15 @@ struct TSearchField: View {
             if !text.isEmpty {
                 Button { text = "" } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 15))
+                        .font(.tSystem(size: 15))
                         .foregroundColor(.tMuted)
                 }
                 .buttonStyle(.plain)
             }
         }
         .padding(.horizontal, TSpace.md)
-        .frame(height: 44)
+        .padding(.vertical, TSpace.xs)
+        .frame(minHeight: 44)
         .tControlSurface(focused: focused)
     }
 }
@@ -381,11 +490,14 @@ struct TMeta: View {
     let icon: String
     let text: String
     var tint: Color = .tMuted
+    /// Posée sur une image (spectateurs sur une miniature) : taille fixe,
+    /// sinon un grand texte (réglage d'iOS) couvrirait l'image.
+    var onImage = false
 
     var body: some View {
         HStack(spacing: 3) {
-            Image(systemName: icon).font(.system(size: 10))
-            Text(text).font(.tMeta)
+            Image(systemName: icon).font(onImage ? .system(size: 10) : .tSystem(size: 10))
+            Text(text).font(onImage ? .system(size: 12, weight: .medium) : .tMeta)
         }
         .foregroundColor(tint)
         .fixedSize()
@@ -410,7 +522,8 @@ struct TLoadMoreButton: View {
                 }
             }
             .frame(maxWidth: .infinity)
-            .frame(height: 44)
+            .padding(.vertical, TSpace.xs)
+            .frame(minHeight: 44)
             .background(Color.tPrimary.opacity(0.12))
             .cornerRadius(TRadius.control)
         }

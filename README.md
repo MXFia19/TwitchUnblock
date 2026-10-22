@@ -538,6 +538,12 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   backup file.
 * 🎨 **Themes** — 7 accent colours and 3 backgrounds (dark, OLED black, slate),
   in Settings → General → Appearance.
+* 🔠 **Text size** — the app follows iOS's text size (Display & Brightness →
+  Text Size, or Accessibility → Larger Text), as soon as you change it, up to
+  Accessibility 2: Home, Discover, search, channel pages, settings and chat
+  messages (on top of the chat's own size). At the accessibility sizes, cards
+  go on one column and list rows put the details under the thumbnail; the
+  player's controls over the video and the badges on thumbnails keep their size.
 * 🖼️ **App icons** — six to pick from in Settings → General → Appearance
   (Classic, Purple, Night, Light, Contrast, Neon); the default one has dark
   and tinted versions, and “Contrast” stays the sharpest with iOS 26's clear

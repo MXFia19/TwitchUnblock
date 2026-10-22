@@ -47,7 +47,7 @@ struct ChangelogList: View {
             HStack(spacing: 8) {
                 // Deux builds de même version (test) : le numéro les distingue.
                 Text(versions.contains { $0.version == v.version && $0.build != v.build } ? "\(v.version) · build \(v.build)" : v.version)
-                    .font(.system(size: 15, weight: .bold).monospacedDigit())
+                    .font(.tSystem(size: 15, weight: .bold).monospacedDigit())
                     .foregroundColor(.tText)
                 // Build local (Xcode) : pas de numéro fiable, donc pas de repère.
                 if installed > 1 && v.build == installed {
@@ -67,7 +67,7 @@ struct ChangelogList: View {
                         .foregroundColor(.tText)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                .font(.system(size: 13))
+                .font(.tSystem(size: 13))
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

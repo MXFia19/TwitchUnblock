@@ -439,10 +439,12 @@ final class AppStore: ObservableObject {
 
     /// Construit la présentation du chat : les réglages de l'utilisateur pour la
     /// taille, la disposition en cours pour le décor et la transparence.
+    /// La taille du texte d'iOS (TType) s'applique par-dessus celle du chat,
+    /// bornée à 30 pt : au-delà, une ligne ne tient plus que deux ou trois mots.
     func chatStyle(chrome: Bool, translucent: Bool) -> ChatStyle {
         ChatStyle(showsChrome: chrome,
                   showsTimestamp: chatTimestamps,
-                  fontSize: CGFloat(chatFontSize),
+                  fontSize: min(max(CGFloat(chatFontSize), TType.scaled(CGFloat(chatFontSize))), 30),
                   rowPadding: CGFloat(chatSpacing) / 2,
                   badgeScale: CGFloat(chatBadgeScale),
                   emoteScale: CGFloat(chatEmoteScale),

@@ -74,6 +74,9 @@ struct MainTabView: View {
     /// se redessine pendant le geste (voir PlayerPull.swift).
     @State private var pull = PlayerPull()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Taille du texte d'iOS (plafonnée par TwitchUnblockApp) : relevée
+    /// avant tout rendu (TType), les onglets sont refaits quand elle change.
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     // ── Minuteur de veille ────────────────────────────────────────────────
     @ObservedObject private var sleepTimer = SleepTimerService.shared
@@ -310,6 +313,9 @@ struct MainTabView: View {
     }
 
     var body: some View {
+        // En premier : les polices de l'app (TType) en dépendent, celles de
+        // ce rendu comprises (mini-barre, chat du lecteur).
+        let typeSize = TType.adopt(dynamicTypeSize)
         ZStack(alignment: .bottom) {
             Color.tDark.ignoresSafeArea()
 
@@ -359,8 +365,10 @@ struct MainTabView: View {
             .ignoresSafeArea()
             // Thème changé dans les réglages : les onglets sont reconstruits,
             // pour qu'aucune vue ne garde les anciennes couleurs. Le lecteur et
-            // la feuille des réglages, hors de ce bloc, restent en place.
-            .id(store.themeID)
+            // la feuille des réglages, hors de ce bloc, restent en place. De
+            // même pour la taille du texte d'iOS, que les polices de l'app ne
+            // suivent pas d'elles-mêmes (TType).
+            .id("\(store.themeID)|\(typeSize)")
             // Onglet masqué pendant qu'il est affiché (Réglages →
             // Personnaliser), ou fin de la visite guidée qui les montrait
             // tous : le premier de la barre.
@@ -462,6 +470,7 @@ struct MainTabView: View {
             )
             .presentationDetents([.medium])
             .inAppNoticeHost()
+            .tTypeRoot()
         }
         // Clip du direct en cours (menu ⋯ du lecteur).
         .sheet(isPresented: $showClipSheet) {
@@ -469,6 +478,7 @@ struct MainTabView: View {
                 .environmentObject(store)
                 .presentationDetents([.medium, .large])
                 .inAppNoticeHost()
+                .tTypeRoot()
         }
         // Multi-live : jusqu'à quatre vidéos côte à côte, directs et VODs.
         .fullScreenCover(isPresented: $showMultiLive) {
@@ -497,6 +507,7 @@ struct MainTabView: View {
                     .inAppNoticeHost()
                     .environmentObject(store)
                     .presentationDetents([.large])
+                    .tTypeRoot()
             }
         }
         // Réglages : ouverts depuis l'avatar de l'en-tête. `.equatable()` :
@@ -506,6 +517,7 @@ struct MainTabView: View {
             SettingsView()
                 .equatable()
                 .inAppNoticeHost()
+                .tTypeRoot()
         }
         // Signaler un bug ou proposer une idée (en-tête, menu du lecteur).
         .sheet(isPresented: $showFeedback) {
@@ -513,6 +525,7 @@ struct MainTabView: View {
                 .inAppNoticeHost()
                 .environmentObject(store)
                 .presentationDetents([.large])
+                .tTypeRoot()
         }
         // Invitation au Discord : à chaque lancement à partir du 2ᵉ, tant
         // qu'on n'a pas choisi « Ne plus afficher » (ou rejoint), et jamais en
@@ -625,6 +638,7 @@ struct MainTabView: View {
                 .inAppNoticeHost()
                 .environmentObject(store)
                 .presentationDragIndicator(.visible)
+                .tTypeRoot()
         }
         .onReceive(NotificationCenter.default.publisher(for: .AVPlayerItemDidPlayToEndTime)) { _ in
             playNextInQueue()
@@ -680,6 +694,7 @@ struct MainTabView: View {
                 .inAppNoticeHost()
                 .environmentObject(store)
                 .preferredColorScheme(.dark)
+                .tTypeRoot()
         }
         // Réglage rapide du minuteur depuis le lecteur.
         .sheet(isPresented: $showSleepSheet) {

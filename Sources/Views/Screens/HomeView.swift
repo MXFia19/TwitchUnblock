@@ -74,8 +74,8 @@ struct HomeView: View {
         }
     }
 
-    private let columns = [GridItem(.flexible(), alignment: .top),
-                           GridItem(.flexible(), alignment: .top)]
+    /// Deux colonnes ; une seule aux tailles de texte d'accessibilité.
+    private var columns: [GridItem] { TType.cardColumns }
 
     var body: some View {
         // Avec ou sans compte : sans, lives et catégories passent par des
@@ -228,7 +228,7 @@ struct HomeView: View {
     @ViewBuilder private var loginCard: some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: "person.crop.circle.badge.plus")
-                .font(.system(size: 26))
+                .font(.tSystem(size: 26))
                 .foregroundColor(.tPrimary)
             VStack(alignment: .leading, spacing: 6) {
                 // Jeton refusé par Twitch (401) : on dit pourquoi on a été
@@ -240,7 +240,7 @@ struct HomeView: View {
                     .fixedSize(horizontal: false, vertical: true)
                 Button { Task { await handleLogin() } } label: {
                     Text(store.t("btn_login_twitch"))
-                        .font(.system(size: 14, weight: .bold))
+                        .font(.tSystem(size: 14, weight: .bold))
                         .foregroundColor(.white)
                         .padding(.horizontal, 14).padding(.vertical, 8)
                         .background(Color.tPrimary)
@@ -276,7 +276,7 @@ struct HomeView: View {
                     .fixedSize(horizontal: false, vertical: true)
                 Button { showWebLogin = true } label: {
                     Text(store.t(expired ? "web_reconnect" : "web_banner_btn"))
-                        .font(.system(size: 14, weight: .bold))
+                        .font(.tSystem(size: 14, weight: .bold))
                         .foregroundColor(.white)
                         .padding(.horizontal, 14).padding(.vertical, 8)
                         .background(Color.tPrimary)
@@ -446,6 +446,9 @@ struct HomeView: View {
     /// Une VOD entamée : image et part déjà vue, titre, chaîne. Un toucher
     /// la reprend à la position enregistrée, comme depuis « Mes VODs ».
     private func continueCard(_ item: HistoryItem) -> some View {
+        // Plus large avec un grand texte (réglage d'iOS) : le titre tient
+        // sur ses deux lignes.
+        let width: CGFloat = TType.isAccessibility ? 264 : 176
         let meta: VodMeta? = metaStore.meta(item.term)
         let total = Double(meta?.lengthSeconds ?? 0)
         let ratio: Double = total > 0 ? min(1, store.getVodProgress(item.term) / total) : 0
@@ -476,7 +479,7 @@ struct HomeView: View {
                     }
                     .frame(height: 3)
                 }
-                .frame(width: 176, height: 99)
+                .frame(width: width, height: width * 9 / 16)
                 .clipped()
                 .cornerRadius(TRadius.chip)
 
@@ -489,7 +492,7 @@ struct HomeView: View {
                         .font(.tMeta).foregroundColor(.tPurple).lineLimit(1)
                 }
             }
-            .frame(width: 176, alignment: .leading)
+            .frame(width: width, alignment: .leading)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -597,7 +600,7 @@ struct HomeView: View {
                     HStack(spacing: 4) {
                         if store.isPinned(ch.login) { PinnedMark() }
                         Text(ch.name)
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(.tSystem(size: 15, weight: .semibold))
                             .foregroundColor(.tText)
                             .lineLimit(1)
                     }
@@ -605,7 +608,7 @@ struct HomeView: View {
                         let label = offlineLabel(since: end, store: store)
                         if !label.isEmpty {
                             Text(label)
-                                .font(.system(size: 12))
+                                .font(.tSystem(size: 12))
                                 .foregroundColor(.tMuted)
                                 .lineLimit(1)
                         }
@@ -613,12 +616,12 @@ struct HomeView: View {
                 }
                 if store.isLocallyFollowed(ch.login) && !twitchFollowLogins.contains(ch.login) {
                     Image(systemName: "iphone")
-                        .font(.system(size: 11))
+                        .font(.tSystem(size: 11))
                         .foregroundColor(.tMuted)
                 }
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.tSystem(size: 12, weight: .semibold))
                     .foregroundColor(.tMuted)
             }
             .padding(.vertical, 6)

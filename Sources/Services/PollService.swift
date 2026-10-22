@@ -183,11 +183,11 @@ struct DevPollCard: View {
                     HStack(spacing: 8) {
                         if poll.multi {
                             Image(systemName: on ? "checkmark.square.fill" : "square")
-                                .font(.system(size: 16))
+                                .font(.tSystem(size: 16))
                                 .foregroundColor(on ? .tPrimary : .tMuted)
                         }
                         Text(option)
-                            .font(.system(size: 14)).foregroundColor(.tText)
+                            .font(.tSystem(size: 14)).foregroundColor(.tText)
                             .multilineTextAlignment(.leading)
                             .fixedSize(horizontal: false, vertical: true)
                         Spacer(minLength: 0)
@@ -209,7 +209,7 @@ struct DevPollCard: View {
             if poll.multi {
                 Button { Task { await send(chosen.sorted()) } } label: {
                     Text(store.t("poll_vote"))
-                        .font(.system(size: 14, weight: .bold))
+                        .font(.tSystem(size: 14, weight: .bold))
                         .foregroundColor(.white)
                         .padding(.horizontal, 16).padding(.vertical, 8)
                         .background(Color.tPrimary)
@@ -231,14 +231,14 @@ struct DevPollCard: View {
                 HStack(spacing: 6) {
                     if chosen {
                         Image(systemName: "checkmark")
-                            .font(.system(size: 11, weight: .bold)).foregroundColor(.tPrimary)
+                            .font(.tSystem(size: 11, weight: .bold)).foregroundColor(.tPrimary)
                     }
                     Text(option)
-                        .font(.system(size: 14)).foregroundColor(.tText)
+                        .font(.tSystem(size: 14)).foregroundColor(.tText)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 6)
                     Text("\(Int((share * 100).rounded()))%")
-                        .font(.system(size: 13, weight: .bold).monospacedDigit()).foregroundColor(.tText)
+                        .font(.tSystem(size: 13, weight: .bold).monospacedDigit()).foregroundColor(.tText)
                 }
                 .padding(.horizontal, 12).padding(.vertical, 7)
                 .frame(minHeight: 34)

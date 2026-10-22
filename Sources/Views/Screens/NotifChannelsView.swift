@@ -56,7 +56,7 @@ struct NotifBellButton: View {
         if (liveNotifOn || ntfyOn), followed, !key.isEmpty {
             Button(action: toggle) {
                 Image(systemName: on ? "bell.fill" : "bell.slash")
-                    .font(.system(size: compact ? 10 : 14, weight: .bold))
+                    .font(.tSystem(size: compact ? 10 : 14, weight: .bold))
                     .foregroundColor(on ? .tPrimary : .tMuted)
                     .padding(.horizontal, compact ? 7 : 12)
                     .padding(.vertical, compact ? 3 : 8)
@@ -121,7 +121,7 @@ struct NotifChannelsView: View {
                             Button(store.t("notif_channels_all_off")) { setAll(notify: false) }
                         }
                         .buttonStyle(.borderless)
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.tSystem(size: 14, weight: .semibold))
                         .foregroundColor(.tPrimary)
                     } footer: {
                         Text(store.t("notif_channels_sub"))

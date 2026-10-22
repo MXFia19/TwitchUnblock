@@ -2060,7 +2060,7 @@ struct SettingsView: View {
                                     .foregroundColor(versionCopied ? .tSuccess : .tMuted)
                                 Image(systemName: versionCopied ? "checkmark" : "doc.on.doc")
                                     .font(.tSystem(size: 10, weight: .semibold))
-                                    .foregroundColor(versionCopied ? .tSuccess : .tMuted.opacity(0.7))
+                                    .foregroundColor(versionCopied ? Color.tSuccess : Color.tMuted.opacity(0.7))
                             }
                             .contentShape(Rectangle())
                         }

@@ -496,8 +496,8 @@ struct TMeta: View {
 
     var body: some View {
         HStack(spacing: 3) {
-            Image(systemName: icon).font(onImage ? .system(size: 10) : .tSystem(size: 10))
-            Text(text).font(onImage ? .system(size: 12, weight: .medium) : .tMeta)
+            Image(systemName: icon).font(onImage ? Font.system(size: 10) : Font.tSystem(size: 10))
+            Text(text).font(onImage ? Font.system(size: 12, weight: .medium) : Font.tMeta)
         }
         .foregroundColor(tint)
         .fixedSize()

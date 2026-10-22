@@ -604,6 +604,7 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   Japanese one by kinboy56 (made with AI), newer texts translated with AI. For
   these three, the iPhone app says so next to the language picker, with a
   button to report a mistake.
+  On the iPhone, Settings → General → **App language** opens the list on its own page, like iOS's settings.
 * 🐞 **Bug reports & ideas** — a form in the header, in Settings and in the
   player menu, screenshots included. **My reports** shows where each one stands
   (received, seen, accepted, in progress, done, declined) and the developer's reply,

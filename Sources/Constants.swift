@@ -380,6 +380,7 @@ private let translations: [Lang: [String: String]] = [
         "proxy_sub": "Désactiver pour économiser le serveur (utile pour VLC)",
         "proxy_enable": "Activer le proxy", "twitch_account": "Compte Twitch",
         "language": "Langue",
+        "app_language": "Langue de l'app",
         "settings_source": "Serveur / Source Vidéo",
         
         // Traductions sources
@@ -1115,6 +1116,7 @@ private let translations: [Lang: [String: String]] = [
         "proxy_sub": "Disable to save server resources (useful for VLC)",
         "proxy_enable": "Enable proxy", "twitch_account": "Twitch Account",
         "language": "Language",
+        "app_language": "App language",
         "settings_source": "Video Server / Source",
         
         // Traductions sources
@@ -1850,6 +1852,7 @@ private let translations: [Lang: [String: String]] = [
         "proxy_sub": "Desactivar para ahorrar el servidor (útil para VLC)",
         "proxy_enable": "Activar proxy", "twitch_account": "Cuenta de Twitch",
         "language": "Idioma",
+        "app_language": "Idioma de la app",
         "settings_source": "Servidor / Fuente de Video",
         
         // Traducciones fuentes

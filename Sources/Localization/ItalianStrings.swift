@@ -146,6 +146,7 @@ let kItalianStrings: [String: String] = [
     "proxy_enable": "Attiva il proxy",
     "twitch_account": "Account Twitch",
     "language": "Lingua",
+    "app_language": "Lingua dell’app",
     "settings_source": "Server video / Sorgente",
     "source_auto": "Automatico",
     "source_auto_sub": "Migliore sorgente disponibile",

@@ -81,17 +81,26 @@ struct SettingsView: View {
             // qui ignore la charte. Ici l'en-tête se transforme : le titre
             // devient celui de la page et la croix cède la place à un chevron.
             // Sans UINavigationController, pas non plus de glissé d'iOS pour
-            // revenir : edgeSwipeBack le rend, et le menu reste sous la page
-            // qui le couvre (décalé, assombri), que le glissé découvre.
+            // revenir : edgeSwipeBack le rend, et chaque niveau reste sous la
+            // page qui le couvre (décalé, assombri), que le glissé découvre.
             ZStack {
                 rootMenu
                     .settingsCovered(page != nil)
-                if let page {
+                // Page du menu (Général…), sous sa sous-page (Langue) s'il y en a une.
+                if let base = page.map({ $0.parent ?? $0 }) {
+                    sectionPage(base)
+                        .edgeSwipeBack(enabled: page == base) { goBack() }
+                        .settingsCovered(page != base)
+                        .id(base)
+                        .transition(.move(edge: .trailing))
+                        .zIndex(1)
+                }
+                if let page, page.parent != nil {
                     sectionPage(page)
                         .edgeSwipeBack { goBack() }
                         .id(page)
                         .transition(.move(edge: .trailing))
-                        .zIndex(1)
+                        .zIndex(2)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -205,9 +214,15 @@ struct SettingsView: View {
 
 
     // MARK: – Pages de réglages
-    /// Les destinations du menu.
+    /// Les destinations du menu, et leurs sous-pages (Général → Langue).
     enum Page: Hashable {
         case account, general, player, chat, drops, points, labs, other, changelog
+        /// Général → Langue : la liste des langues, comme dans les réglages d'iOS.
+        case language
+
+        /// Page d'où l'on vient : le retour (bouton, glissé) y ramène ; nil :
+        /// le menu.
+        var parent: Page? { self == .language ? .general : nil }
 
         var titleKey: String {
             switch self {
@@ -220,6 +235,7 @@ struct SettingsView: View {
             case .labs:      return "debug_section"
             case .other:     return "sec_other"
             case .changelog: return "changelog"
+            case .language:  return "app_language"
             }
         }
         var subtitleKey: String {
@@ -233,6 +249,7 @@ struct SettingsView: View {
             case .labs:      return "sec_labs_sub"
             case .other:     return "sec_other_sub"
             case .changelog: return "changelog_sub"
+            case .language:  return "language"
             }
         }
         var icon: String {
@@ -246,6 +263,7 @@ struct SettingsView: View {
             case .labs:      return "flask.fill"
             case .other:     return "info.circle.fill"
             case .changelog: return "sparkles"
+            case .language:  return "globe"
             }
         }
         /// Une teinte par domaine : on repère la ligne à la couleur avant
@@ -261,13 +279,15 @@ struct SettingsView: View {
             case .labs:      return .tWarning
             case .other:     return .tMuted
             case .changelog: return .tVLC
+            case .language:  return .tPrimary
             }
         }
     }
 
-    /// Retour (chevron, glissé depuis le bord gauche) : le menu.
+    /// Retour (chevron, glissé depuis le bord gauche) : la page parente
+    /// (Langue → Général), sinon le menu.
     private func goBack() {
-        withAnimation(.easeInOut(duration: 0.22)) { page = nil }
+        withAnimation(.easeInOut(duration: 0.22)) { page = page?.parent }
     }
 
     /// En-tête unique, qui suit la navigation.
@@ -552,6 +572,8 @@ struct SettingsView: View {
                     expertCard
                 case .changelog:
                     ChangelogList()
+                case .language:
+                    languageListCard
                 }
                 Spacer(minLength: 32)
             }
@@ -694,11 +716,30 @@ struct SettingsView: View {
         settingCard {
             VStack(alignment: .leading, spacing: 12) {
                 label("globe", store.t("language"))
-                VStack(spacing: 8) {
-                    ForEach(Lang.allCases) { lang in
-                        langButton(lang)
+                // Langue de l'app : une ligne qui ouvre la liste (Page.language),
+                // comme dans les réglages d'iOS ; la liste entière prenait la
+                // moitié de la page.
+                Button {
+                    withAnimation(.easeInOut(duration: 0.22)) { page = .language }
+                } label: {
+                    HStack(spacing: 8) {
+                        Text(store.t("app_language"))
+                            .font(.tCardTitle).foregroundColor(.tText)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 8)
+                        Text("\(store.lang.flag) \(store.lang.label)")
+                            .font(.tCardTitle).foregroundColor(.tMuted)
+                            .lineLimit(1)
+                        Image(systemName: "chevron.right")
+                            .font(.tSystem(size: 12, weight: .semibold))
+                            .foregroundColor(.tMuted)
                     }
+                    .padding(12)
+                    .background(Color.tSurface)
+                    .cornerRadius(10)
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
                 // Langue traduite avec l'IA : on le dit, et on invite à
                 // signaler ce qui sonne faux.
                 if store.lang.machineTranslated {
@@ -727,6 +768,18 @@ struct SettingsView: View {
                 Divider().background(Color.tBorder)
                 toggleRow(store.t("show_recent"), store.t("show_recent_sub"),
                           $store.showRecentChannels, log: "Streamers récents")
+            }
+        }
+    }
+
+    /// Réglages → Général → Langue : toutes les langues de `Lang`, dans son
+    /// ordre (une langue ajoutée à l'énumération y apparaît d'elle-même).
+    @ViewBuilder private var languageListCard: some View {
+        settingCard {
+            VStack(spacing: 8) {
+                ForEach(Lang.allCases) { lang in
+                    langButton(lang)
+                }
             }
         }
     }

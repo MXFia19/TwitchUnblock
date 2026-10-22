@@ -147,6 +147,7 @@ let kJapaneseStrings: [String: String] = [
     "proxy_enable": "プロキシを有効にする",
     "twitch_account": "Twitch アカウント",
     "language": "言語",
+    "app_language": "アプリの言語",
     "settings_source": "動画サーバー / ソース",
     "source_auto": "自動",
     "source_auto_sub": "利用可能な最良のソース",

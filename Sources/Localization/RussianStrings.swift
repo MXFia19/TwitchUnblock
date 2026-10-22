@@ -145,6 +145,7 @@ let kRussianStrings: [String: String] = [
     "proxy_enable": "Включить прокси",
     "twitch_account": "Аккаунт Twitch",
     "language": "Язык",
+    "app_language": "Язык приложения",
     "settings_source": "Видеосервер / источник",
     "source_auto": "Авто",
     "source_auto_sub": "Лучший доступный источник",

@@ -73,7 +73,8 @@ enum SettingsSync {
                           "ios_showDropsNotice", "ios_showFollowButton", "ios_showWatchStreak",
                           "ios_showLiveEvents", "ios_showPolls", "ios_showPredictions",
                           "ios_showHypeTrain", "ios_enableRaids", "ios_subAdFree",
-                          "ios_chatAutocomplete", "ios_chatKeyboardSuggestions"]
+                          "ios_chatAutocomplete", "ios_chatKeyboardSuggestions",
+                          "ios_chatShowInput"]
 
     /// Délai entre le dernier changement et l'envoi.
     static let delay: TimeInterval = 4
@@ -401,7 +402,7 @@ extension AppStore {
             return customization == UICustomization() && autoClaimChest && showPinnedMessages
                 && showDropsNotice && showFollowButton && showWatchStreak && showLiveEvents
                 && showPolls && showPredictions && showHypeTrain && enableRaids && subAdFree
-                && chatAutocomplete && chatKeyboardSuggestions
+                && chatAutocomplete && chatKeyboardSuggestions && chatShowInput
         default:
             return topLang == nil && showRecentChannels && chatTimestamps && timeFormat == "auto"
                 && !chatShowDeleted && chatLoadRecent && !chatHideBots && !chatHideCommands

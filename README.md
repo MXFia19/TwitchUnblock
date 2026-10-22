@@ -402,6 +402,10 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
 * 🔠 **Sizing** — font size, message spacing, badge and emote scale,
   timestamps, with a live preview. The time shows in 12 h or 24 h: Auto
   follows the device, or pick one (Settings → Chat; the log follows it too).
+* 🙈 **Hide the message box** (Settings → Chat → Show the message box, on by
+  default) — for those who only read: the room goes to the messages, in
+  portrait, landscape and multi-live; channel points and the chat's ⋯ menu
+  stay as small buttons at the bottom right of the chat.
 
 ### Finding things
 

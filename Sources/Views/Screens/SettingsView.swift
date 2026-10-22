@@ -1069,6 +1069,9 @@ struct SettingsView: View {
         settingCard {
             VStack(alignment: .leading, spacing: 14) {
                 label("bubble.left.and.bubble.right.fill", store.t("chat_behavior"))
+                toggleRow(store.t("cfg_chat_input"), store.t("cfg_chat_input_sub"),
+                          $store.chatShowInput, log: "Zone d'envoi du chat")
+                Divider().background(Color.tBorder)
                 toggleRow(store.t("cfg_recent"), store.t("cfg_recent_sub"),
                           $store.chatLoadRecent, log: "Messages récents")
                 Divider().background(Color.tBorder)

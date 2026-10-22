@@ -436,6 +436,13 @@ final class AppStore: ObservableObject {
     @Published var chatShowDeleted: Bool = false {
         didSet { UserDefaults.standard.set(chatShowDeleted, forKey: "cfg_chat_deleted") }
     }
+    /// Zone d'envoi du chat (champ, emotes, envoyer, points, menu ⋯). Coupée,
+    /// pour qui ne fait que lire : la place revient aux messages, en portrait
+    /// comme en paysage ; le menu ⋯ (et les points) restent à portée par de
+    /// petits boutons posés sur le bas du chat (ChatView).
+    @Published var chatShowInput: Bool = true {
+        didSet { UserDefaults.standard.set(chatShowInput, forKey: "cfg_chat_input") }
+    }
 
     /// Construit la présentation du chat : les réglages de l'utilisateur pour la
     /// taille, la disposition en cours pour le décor et la transparence.
@@ -868,6 +875,7 @@ final class AppStore: ObservableObject {
         chatKeyboardSuggestions = ud.object(forKey: "cfg_chat_kbd_suggest") as? Bool ?? true
         chatReturnSends = ud.object(forKey: "cfg_chat_return_sends") as? Bool ?? false
         chatShowDeleted    = ud.object(forKey: "cfg_chat_deleted")      as? Bool ?? false
+        chatShowInput      = ud.object(forKey: "cfg_chat_input")        as? Bool ?? true
         shareUsage         = ud.object(forKey: "cfg_share_usage") as? Bool ?? true
         syncSettings       = ud.object(forKey: "cfg_sync_settings") as? Bool ?? true
         // « zh_hk » importé du site par une version d'avant : ramené à « zh-hk ».

@@ -175,6 +175,7 @@ enum Backup {
             "ios_chatAutocomplete": store.chatAutocomplete,
             "ios_chatKeyboardSuggestions": store.chatKeyboardSuggestions,
             "ios_chatReturnSends": store.chatReturnSends,
+            "ios_chatShowInput": store.chatShowInput,
             "ios_chatSync": store.chatSync,
             "ios_chatSyncNudge": store.chatSyncNudge,
             "ios_showLatency": store.showLatency,
@@ -452,6 +453,7 @@ enum Backup {
         bool("ios_chatAutocomplete") { store.chatAutocomplete = $0 }
         bool("ios_chatKeyboardSuggestions") { store.chatKeyboardSuggestions = $0 }
         bool("ios_chatReturnSends") { store.chatReturnSends = $0 }
+        bool("ios_chatShowInput") { store.chatShowInput = $0 }
         bool("ios_chatSync") { store.chatSync = $0 }
         // Bornes du réglage fin de la synchro du chat (ChatSync).
         num("ios_chatSyncNudge", -20...20) { store.chatSyncNudge = $0 }

@@ -516,6 +516,8 @@ let kItalianStrings: [String: String] = [
     "cfg_kbd_suggest_sub": "Parole suggerite sopra la tastiera e correzione automatica di iOS. Disattivali se iOS continua a correggere le emote.",
     "cfg_return_sends": "Invio manda il messaggio",
     "cfg_return_sends_sub": "Altrimenti il tasto Invio nasconde la tastiera e il pulsante ➤ invia.",
+    "cfg_chat_input": "Mostra la casella di invio",
+    "cfg_chat_input_sub": "Campo, emote e pulsante Invia sotto la chat. Nascosta, per chi legge soltanto: lo spazio torna ai messaggi, in diretta e in orizzontale; i punti e il menu ⋯ restano in basso a destra della chat.",
     "cfg_chat_sync": "Chat sincronizzata con il video",
     "cfg_chat_sync_sub": "I messaggi della diretta aspettano che il video li raggiunga: il ritardo segue il lettore (blocchi, ritorno alla diretta). I tuoi compaiono subito. Il badge ⏱ sopra la chat disattiva o riattiva la sincronizzazione.",
     "chat_sync_on": "Chat ritardata di {s} s per allinearsi al video. Tocca per la chat in tempo reale.",

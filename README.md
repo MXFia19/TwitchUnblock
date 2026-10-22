@@ -506,6 +506,14 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   the account first takes what the account has, adding its own lists
   (pinned, hidden, hidden chat words and people); one still on default
   values never sends them. Off, nothing is sent or applied on this device.
+* 💾 **Backup & restore** — Settings → General → Backup: **Export** saves your
+  channels (followed, pinned, hidden), followed categories, every setting
+  (language, qualities, chat, player, appearance, notifications, downloads),
+  the customization and Continue watching to a file — never your Twitch
+  sign-ins, tokens or install ID. **Import** asks **Everything** or **Channels
+  only**, adds without removing anything, then lists what it restored
+  (unknown or invalid settings are skipped). Handy to move between the app
+  and TU Test; older backups and the website's still import.
 * ⬆️ **Update check** — the app tells you when a new version is out on the
   source, with a shortcut to Feather / SideStore / AltStore.
 * 🔢 **Build number** — Settings → About shows the version and its build

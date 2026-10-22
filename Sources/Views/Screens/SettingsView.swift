@@ -56,6 +56,12 @@ struct SettingsView: View {
     @State private var showExporter    = false
     @State private var showImporter    = false
     @State private var backupMessage: String? = nil
+    /// Sauvegarde lue, en attente du choix « Tout » / « Chaînes seulement ».
+    @State private var pendingImport: Backup.File? = nil
+    @State private var showImportChoice = false
+    /// Résumé de l'import (ce qui a été repris), affiché dans une alerte.
+    @State private var importSummary   = ""
+    @State private var showImportSummary = false
     /// Page ouverte, nil = menu racine.
     @State private var page: Page? = nil
 
@@ -1640,29 +1646,103 @@ struct SettingsView: View {
                 if let backupMessage {
                     Text(backupMessage)
                         .font(.tMeta).foregroundColor(.tMuted)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
         .fileExporter(isPresented: $showExporter, document: exportDoc,
                       contentType: .json, defaultFilename: Backup.fileName()) { result in
-            if case .success = result { backupMessage = store.t("export_done") }
+            if case .success = result {
+                backupMessage = store.t("export_done")
+                logger.info("SAUVEGARDE", "Sauvegarde exportée", nil)
+            }
         }
         .fileImporter(isPresented: $showImporter, allowedContentTypes: [.json]) { result in
             guard case .success(let url) = result else { return }
             let scoped = url.startAccessingSecurityScopedResource()
             defer { if scoped { url.stopAccessingSecurityScopedResource() } }
             guard let data = try? Data(contentsOf: url),
-                  let result = try? Backup.importData(data, store: store) else {
+                  let file = try? Backup.read(data) else {
                 backupMessage = store.t("import_bad"); return
             }
-            var message = String(format: store.t("import_done"), result.added)
-            // Au-delà de 300 suivis sur l'appareil, le reste n'est pas pris :
-            // dit, plutôt que compté comme ajouté.
-            if result.skipped > 0 { message += " " + String(format: store.t("import_capped"), result.skipped) }
-            backupMessage = message
-            logger.info("SAUVEGARDE", "Import : \(result.added) chaîne(s) ajoutée(s)",
-                        result.skipped > 0 ? "\(result.skipped) ignorée(s) (limite de 300)" : nil)
+            backupMessage = nil
+            pendingImport = file
+            // Le sélecteur de fichiers se ferme encore : le choix attend un
+            // instant, sinon iOS refuse de l'ouvrir par-dessus.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { showImportChoice = true }
         }
+        // Tout, ou les chaînes seulement (suivies, épinglées, masquées).
+        .confirmationDialog(store.t("import_choice_title"), isPresented: $showImportChoice,
+                            titleVisibility: .visible, presenting: pendingImport) { file in
+            Button(store.t("import_all")) { runImport(file, scope: .all) }
+            Button(store.t("import_channels_only")) { runImport(file, scope: .channelsOnly) }
+            Button(store.t("cancel"), role: .cancel) { pendingImport = nil }
+        } message: { _ in
+            Text(store.t("import_choice_msg"))
+        }
+        .alert(store.t("import_sum_title"), isPresented: $showImportSummary) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(importSummary)
+        }
+    }
+
+    /// Applique la sauvegarde choisie, puis dit ce qui a été repris.
+    private func runImport(_ file: Backup.File, scope: Backup.Scope) {
+        pendingImport = nil
+        let summary = Backup.apply(file, scope: scope, store: store)
+        // Notifications de live de la sauvegarde : l'autorisation d'iOS est
+        // demandée ici, comme depuis l'interrupteur des réglages.
+        if let on = summary.liveNotifications, on != LiveNotifier.isEnabled {
+            liveNotif = on
+            if on {
+                Task {
+                    let ok = await LiveNotifier.enable()
+                    await MainActor.run { liveNotif = ok && LiveNotifier.isEnabled }
+                }
+            } else {
+                LiveNotifier.disable()
+            }
+        }
+        // Chaînes notifiées peut-être changées : ntfy suit (sujet inchangé).
+        if scope == .all, NtfyNotifier.isEnabled {
+            let lang = store.lang
+            Task { _ = await NtfyNotifier.sync(lang: lang) }
+        }
+        // Après l'import : dans la langue qu'il a peut-être changée.
+        importSummary = importSummaryText(summary, scope: scope)
+        backupMessage = importSummary
+        if scope == .all {
+            logger.info("SAUVEGARDE", "Import : \(summary.follows) chaîne(s) ajoutée(s)",
+                        "tout · \(summary.settings) réglage(s) repris, \(summary.settingsIgnored) ignoré(s), \(summary.continueWatching) vidéo(s) à reprendre")
+        } else {
+            logger.info("SAUVEGARDE", "Import : \(summary.follows) chaîne(s) ajoutée(s)", "chaînes seulement")
+        }
+        // La feuille du choix se ferme encore.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { showImportSummary = true }
+    }
+
+    /// Une ligne par sorte de chose reprise.
+    private func importSummaryText(_ s: Backup.Summary, scope: Backup.Scope) -> String {
+        func line(_ key: String, _ n: Int) -> String {
+            store.t(key).replacingOccurrences(of: "{n}", with: "\(n)")
+        }
+        var follows = line("import_sum_follows", s.follows)
+        // Au-delà de 300 suivis sur l'appareil, le reste n'est pas pris :
+        // dit, plutôt que compté comme ajouté.
+        if s.followsSkipped > 0 { follows += " " + String(format: store.t("import_capped"), s.followsSkipped) }
+        var lines = [follows,
+                     line("import_sum_categories", s.categories),
+                     line("import_sum_pinned", s.pinned),
+                     line("import_sum_hidden", s.hidden)]
+        if scope == .all {
+            lines.append(line("import_sum_settings", s.settings))
+            if s.settingsIgnored > 0 { lines.append(line("import_sum_ignored", s.settingsIgnored)) }
+            lines.append(line("import_sum_continue", s.continueWatching))
+        } else {
+            lines.append(store.t("import_sum_channels_only"))
+        }
+        return lines.joined(separator: "\n")
     }
 
     @ViewBuilder private var usageCard: some View {

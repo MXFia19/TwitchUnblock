@@ -190,7 +190,6 @@
  "Icône changée": ["Icon changed", "Icono cambiado", "Значок изменён"],
  "Icône refusée par iOS": ["Icon refused by iOS", "Icono rechazado por iOS", "Значок отклонён iOS"],
  "Icônes au choix indisponibles": ["Alternate icons unavailable", "Iconos alternativos no disponibles", "Сменные значки недоступны"],
- "ignorée(s) (limite de 300)": ["ignored (limit of 300)", "ignorada(s) (límite de 300)", "пропущено (лимит 300)"],
  "image(s) perdue(s) ·": ["image(s) lost ·", "imagen(es) perdida(s) ·", "изображений потеряно ·"],
  "images": ["images", "imágenes", "изображения"],
  "Import :": ["Import:", "Importación:", "Импорт:"],
@@ -527,5 +526,10 @@
  "JoinRaid inconnu de Twitch": ["JoinRaid unknown to Twitch", "JoinRaid desconocido para Twitch", "JoinRaid неизвестен Twitch"],
  "nouvel essai en requête écrite": ["retrying with the written query", "nuevo intento con la consulta escrita", "повтор с обычным запросом"],
  "Ancien build installé sous le numéro de la dernière version": ["Old build installed under the latest version's number", "Compilación antigua instalada con el número de la última versión", "Старая сборка установлена под номером последней версии"],
- ") au lieu du build": [") instead of build", ") en lugar de la compilación", ") вместо сборки"]
+ ") au lieu du build": [") instead of build", ") en lugar de la compilación", ") вместо сборки"],
+ "chaînes seulement": ["channels only", "solo canales", "только каналы"],
+ "ignoré(s),": ["skipped,", "omitido(s),", "пропущено,"],
+ "réglage(s) repris,": ["setting(s) restored,", "ajuste(s) restaurado(s),", "настроек восстановлено,"],
+ "Sauvegarde exportée": ["Backup exported", "Copia exportada", "Резервная копия экспортирована"],
+ "vidéo(s) à reprendre": ["video(s) to resume", "vídeo(s) para seguir viendo", "видео для продолжения"]
 }

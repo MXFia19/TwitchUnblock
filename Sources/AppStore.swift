@@ -1101,6 +1101,42 @@ final class AppStore: ObservableObject {
         progressChanged()
     }
 
+    /// « Continuer à regarder » d'une sauvegarde (Backup) : les VODs absentes
+    /// de l'historique y entrent à leur date (le plus récent d'abord, 50 au
+    /// plus, comme saveToHistory), et la position la plus avancée l'emporte.
+    /// Rend le nombre de VODs ajoutées ou avancées.
+    func importContinueWatching(_ items: [HistoryItem], progress incoming: [String: Double]) -> Int {
+        var changed = Set<String>()
+        var list = history
+        let known = Set(list.map { $0.term.lowercased() })
+        for item in items where !known.contains(item.term.lowercased()) {
+            list.append(item)
+            changed.insert(item.term)
+        }
+        var positions = vodProgress
+        for (id, t) in incoming where t.isFinite && t > (positions[id] ?? 0) + 1 {
+            positions[id] = t
+            changed.insert(id)
+        }
+        guard !changed.isEmpty else { return 0 }
+        let sorted = Array(list.enumerated()
+            .sorted { a, b in
+                a.element.addedAt != b.element.addedAt
+                    ? a.element.addedAt > b.element.addedAt
+                    : a.offset < b.offset
+            }
+            .map(\.element)
+            .prefix(50))
+        if sorted != history { history = sorted }
+        if positions != vodProgress {
+            vodProgress = Self.cappedProgress(positions)
+            progressChanged()
+        }
+        // Celles restées dans l'historique : la rangée de l'accueil en vient.
+        let kept = Set(sorted.map(\.term))
+        return changed.filter { kept.contains($0) }.count
+    }
+
     /// « Continuer à regarder » → Retirer de la liste : la position de
     /// reprise de cette VOD est oubliée (elle reste dans l'historique et
     /// repart du début). Comme une suppression, elle part tout de suite ; la

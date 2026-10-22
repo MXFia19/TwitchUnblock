@@ -1667,13 +1667,14 @@ struct MainTabView: View {
     }
 
     /// Vitesse imposée par le lecteur : retenue pour cette lecture seulement
-    /// (voir `forcedVodSpeed`) ; celle d'un clip, comme un choix.
+    /// (voir `forcedVodSpeed`) ; celle d'un clip, comme un choix. Gardée même
+    /// égale à la préférence : restoreChosenSpeed y lit qu'elle est imposée.
     private func setForcedSpeed(_ v: Double) {
         let speed = VodSpeed.nearest(v)
         if isClipPlaying {
             clipSpeed = speed
         } else {
-            forcedVodSpeed = speed == store.vodSpeed ? nil : speed
+            forcedVodSpeed = speed
         }
     }
 

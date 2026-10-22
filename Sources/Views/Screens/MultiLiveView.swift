@@ -40,6 +40,9 @@ struct MultiLiveView: View {
                             .frame(width: chatWidth - 1)
                     }
                 }
+                // En paysage, comme le lecteur : l'indicateur d'accueil
+                // s'efface au bout de quelques secondes.
+                .persistentSystemOverlays(geo.size.width > geo.size.height ? .hidden : .automatic)
             }
         }
         .background(Color.black.ignoresSafeArea())

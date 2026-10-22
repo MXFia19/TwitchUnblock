@@ -66,6 +66,10 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   itself twice, unless you had paused it). When the connection comes back
   after a drop, a player stopped on **Retry** (or on a loading error) and
   failed multi-live tiles start again on their own, once, two seconds later.
+* 📱 **Home indicator out of the way** — in landscape, with the player full
+  size (app's or Apple's) or in multi-live, the bar at the bottom of the
+  screen fades after a few seconds, like in video apps; touch the screen to
+  bring it back.
 * 🐢 **Playback speed** — 0.25× to 2× on VODs and clips, from the ⋯ menu (or
   Apple's own speed menu in the native player and on Apple TV). The VOD speed
   is remembered from one VOD to the next, shown next to the timer, and synced

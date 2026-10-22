@@ -927,6 +927,15 @@ struct MainTabView: View {
                 }
             }
             .animation(.easeInOut(duration: 0.2), value: switchingSource)
+            // Lecteur en grand en paysage (immersif ou natif, chat seul à
+            // part) : l'indicateur d'accueil s'efface au bout de quelques
+            // secondes et revient au moindre toucher, comme dans les apps
+            // vidéo. Il restait affiché en permanence sur l'image (retour d'un
+            // iPhone XR, iOS 18.7). Préférence lue par le contrôleur de la
+            // fenêtre : posée ici, elle vaut pour toute l'app tant que le
+            // lecteur est affiché ainsi.
+            .persistentSystemOverlays(landscape && playerVisible && !chatOnly && !closingPlayer
+                                      ? .hidden : .automatic)
         }
     }
 

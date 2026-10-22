@@ -229,9 +229,20 @@ struct SearchView: View {
                                     onBack: { openedCategory = nil },
                                     onPlayStream: { login in leaveRecovery(); onPlayLive(login) })
             } else {
+                // Chaîne ouverte depuis les résultats : un glissé depuis le
+                // bord gauche y ramène, comme « ‹ Résultats pour … » (la page
+                // ne suit pas le doigt : les résultats ne sont pas dessous).
                 searchPage
+                    .edgeSwipeBack(enabled: canSwipeBackToResults, follows: false) { closeChannel() }
             }
         }
+    }
+
+    /// Chaîne (ou son erreur) ouverte depuis les résultats d'une recherche,
+    /// avec son bouton « ‹ Résultats pour … ».
+    private var canSwipeBackToResults: Bool {
+        initialChannel == nil && !found.query.isEmpty && !loading
+            && (errorMsg != nil || !searchedName.isEmpty)
     }
 
     private var searchPage: some View {

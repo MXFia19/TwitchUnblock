@@ -165,7 +165,12 @@ struct CategoriesView: View {
     }
 
     var body: some View {
-        Group {
+        // La grille reste dessous quand une catégorie est ouverte : le glissé
+        // retour depuis le bord gauche la découvre, comme sur iOS.
+        ZStack {
+            browser
+                .allowsHitTesting(selected == nil)
+                .accessibilityHidden(selected != nil)
             if let cat = selected {
                 CategoryStreamsView(category: cat,
                                     followedOnTwitch: twitchFollowed.contains { $0.id == cat.id }
@@ -173,8 +178,8 @@ struct CategoriesView: View {
                                     onBack: { selected = nil },
                                     onPlayStream: onPlayStream,
                                     onTwitchUnfollowed: { twitchFollowed.removeAll { $0.id == cat.id } })
-            } else {
-                browser
+                    .transition(.move(edge: .trailing))
+                    .zIndex(1)
             }
         }
         .onAppear {
@@ -619,6 +624,9 @@ struct CategoryStreamsView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.tDark)
+        // Glissé depuis le bord gauche : retour, comme le bouton (la page
+        // suit le doigt et découvre la grille, ou les résultats).
+        .edgeSwipeBack { withAnimation(.easeOut(duration: 0.22)) { onBack() } }
         .onAppear { if streams.isEmpty { Task { await load() } } }
         .sheet(isPresented: $showHidden) {
             HiddenContentSheet().environmentObject(store)

@@ -577,6 +577,7 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
 * ⬆️ **Back to the top** — tap the tab you're already on to scroll Home (any
   live tab), Search or My VODs back to the top, or Discover back to its first
   page.
+* 👈 **Swipe back** — swipe from the left edge to go back, as in iOS apps: in Settings (the page follows your finger), from a category's live channels and from a channel opened from search results.
 
 ### The rest
 

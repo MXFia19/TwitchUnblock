@@ -80,20 +80,22 @@ struct SettingsView: View {
             // juste sous notre en-tête. Deux barres l'une sur l'autre, dont une
             // qui ignore la charte. Ici l'en-tête se transforme : le titre
             // devient celui de la page et la croix cède la place à un chevron.
+            // Sans UINavigationController, pas non plus de glissé d'iOS pour
+            // revenir : edgeSwipeBack le rend, et le menu reste sous la page
+            // qui le couvre (décalé, assombri), que le glissé découvre.
             ZStack {
-                if page == nil {
-                    rootMenu
-                        .transition(.asymmetric(
-                            insertion: .move(edge: .leading).combined(with: .opacity),
-                            removal:   .move(edge: .leading).combined(with: .opacity)))
-                } else if let page {
+                rootMenu
+                    .settingsCovered(page != nil)
+                if let page {
                     sectionPage(page)
-                        .transition(.asymmetric(
-                            insertion: .move(edge: .trailing).combined(with: .opacity),
-                            removal:   .move(edge: .trailing).combined(with: .opacity)))
+                        .edgeSwipeBack { goBack() }
+                        .id(page)
+                        .transition(.move(edge: .trailing))
+                        .zIndex(1)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .clipped()
         }
         .background(Color.tDark)
         .onAppear {
@@ -263,12 +265,17 @@ struct SettingsView: View {
         }
     }
 
+    /// Retour (chevron, glissé depuis le bord gauche) : le menu.
+    private func goBack() {
+        withAnimation(.easeInOut(duration: 0.22)) { page = nil }
+    }
+
     /// En-tête unique, qui suit la navigation.
     @ViewBuilder private var sheetHeader: some View {
         HStack(spacing: TSpace.md) {
             if let page {
                 Button {
-                    withAnimation(.easeInOut(duration: 0.22)) { self.page = nil }
+                    goBack()
                 } label: {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 15, weight: .bold))
@@ -2649,6 +2656,18 @@ struct Contributor: Identifiable, Sendable {
 // et objets observés suffisent à le tenir à jour (`.equatable()` à l'appel).
 extension SettingsView: Equatable {
     nonisolated static func == (lhs: SettingsView, rhs: SettingsView) -> Bool { true }
+}
+
+private extension View {
+    /// Niveau des Réglages couvert par une page : un peu décalé et assombri,
+    /// comme sous une page d'iOS (le glissé retour le découvre), sans
+    /// réagir aux touchers ni à VoiceOver.
+    func settingsCovered(_ covered: Bool) -> some View {
+        self.offset(x: covered ? -72 : 0)
+            .overlay { Color.black.opacity(covered ? 0.3 : 0).allowsHitTesting(false) }
+            .allowsHitTesting(!covered)
+            .accessibilityHidden(covered)
+    }
 }
 
 // MARK: – Minuteur de veille (ligne des Réglages)

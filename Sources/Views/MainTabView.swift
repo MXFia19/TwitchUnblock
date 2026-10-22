@@ -1467,6 +1467,11 @@ struct MainTabView: View {
     /// Il restait en grand, noir (l'image partie dans la fenêtre), et il
     /// fallait le fermer à la main.
     private func pipStarted() {
+        // Paysage du bouton de rotation : la réduction le perd (retour au
+        // portrait), pipRestore le remet. Rien à remettre pour un lecteur
+        // déjà réduit.
+        PlayerOrientation.landscapeBeforePiP = playerVisible && !closingPlayer
+            && PlayerOrientation.forcedLandscape
         guard playerVisible, !closingPlayer else { return }
         reducePlayer()
     }
@@ -1478,9 +1483,20 @@ struct MainTabView: View {
     private func pipRestore() {
         guard playerMode != nil, !closingPlayer else { return }
         if presentationOpen { afterClosingPresentations {} }
+        let landscape = PlayerOrientation.landscapeBeforePiP
+        PlayerOrientation.landscapeBeforePiP = false
         guard !playerVisible else { return }
         pull.y = 0
         withAnimation(.easeInOut(duration: 0.2)) { playerVisible = true }
+        // Regardé en paysage forcé (rotation verrouillée) avant le PiP : il
+        // revient en paysage, une fois l'image rentrée dans le lecteur (la
+        // fenêtre s'y pose en ~0,3 s), et non en portrait.
+        guard landscape else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            guard playerVisible, playerMode != nil, !closingPlayer else { return }
+            OrientationLock.allowLandscape(true)
+            PlayerOrientation.forceLandscape()
+        }
     }
 
     /// Le lecteur suit le doigt ; 0 = relâché trop tôt, il revient en place.

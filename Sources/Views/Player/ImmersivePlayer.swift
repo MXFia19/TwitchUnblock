@@ -2652,6 +2652,21 @@ struct ImmersivePlayer: View {
 /// seulement depuis l'interface (fil principal).
 enum PlayerOrientation {
     static var forcedLandscape = false
+    /// Paysage forcé quand le PiP a réduit le lecteur (réduction qui l'a
+    /// perdu) : remis quand la fenêtre le rouvre (pipRestore de MainTabView).
+    static var landscapeBeforePiP = false
+
+    /// Paysage du bouton de rotation, remis au retour d'un PiP. iPhone
+    /// seulement, une fois le paysage permis (lecteur en grand).
+    static func forceLandscape() {
+        guard UIDevice.current.userInterfaceIdiom == .phone,
+              let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first else { return }
+        forcedLandscape = true
+        scene.requestGeometryUpdate(.iOS(interfaceOrientations: .landscapeRight)) { error in
+            logger.warn("LECTEUR", "Rotation refusée", error.localizedDescription)
+        }
+        UIViewController.attemptRotationToDeviceOrientation()
+    }
 
     static func restorePortraitIfForced() {
         guard forcedLandscape else { return }

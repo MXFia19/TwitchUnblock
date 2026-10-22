@@ -72,8 +72,15 @@ final class TVSession: ObservableObject {
         if let saved = ud.string(forKey: "lang"), let l = Lang(rawValue: saved) {
             lang = l
         } else {
-            let code = String((Locale.preferredLanguages.first ?? "en").prefix(2)).lowercased()
-            lang = Lang(rawValue: code) ?? .en
+            // Langue de l'appareil : « zh-Hant-TW », « zh-TW », « zh-HK »…
+            // donnent le chinois traditionnel (« zh-Hans » et « zh » seul :
+            // l'anglais) ; les autres, leurs deux premières lettres.
+            let tag = (Locale.preferredLanguages.first ?? "en").lowercased()
+            if tag.hasPrefix("zh-hant") || ["zh-tw", "zh-hk", "zh-mo"].contains(where: { tag.hasPrefix($0) }) {
+                lang = .zhHant
+            } else {
+                lang = Lang(rawValue: String(tag.prefix(2))) ?? .en
+            }
         }
         let source = ud.string(forKey: "liveSource") ?? "auto"
         liveSource = kLiveSourceChoices.contains(source) ? source : "auto"

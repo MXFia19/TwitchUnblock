@@ -421,6 +421,10 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   default) — for those who only read: the room goes to the messages, in
   portrait, landscape and multi-live; channel points and the chat's ⋯ menu
   stay as small buttons at the bottom right of the chat.
+* 🔕 **Hide the chat's bell, chat mode and crown** (Settings → General →
+  Customize the app → Chat · banners) — the notification bell stays on the
+  channel page, and channel points move to the chat's ⋯ menu (also there in
+  landscape, where the crown never shows).
 
 ### Finding things
 

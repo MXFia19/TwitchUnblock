@@ -18,6 +18,10 @@ struct ChatMenuSheet: View {
     var onReconnect:    () -> Void
     /// Commande de bot choisie : mise dans le champ du chat (nil = copiée).
     var onUseCommand: ((String) -> Void)? = nil
+    /// Points de la chaîne, quand leur couronne n'est pas sous le champ
+    /// (masquée, chat en colonne) : le chat ouvre leur feuille une fois ce
+    /// menu refermé. nil : pas de ligne.
+    var onOpenPoints: (() -> Void)? = nil
 
     @EnvironmentObject private var store: AppStore
     @Environment(\.dismiss) private var dismiss
@@ -46,14 +50,31 @@ struct ChatMenuSheet: View {
             ScrollView {
                 VStack(spacing: 0) {
 
-                    // Chat seul : coupe la vidéo, garde la conversation.
-                    if allowsChatOnly {
-                        row(icon: chatOnly ? "bubble.left.fill" : "bubble.left",
-                            title: store.t("menu_chat_only"),
-                            subtitle: store.t("menu_chat_only_sub"),
-                            trailing: .toggle($chatOnly))
+                    // Une seule vue pour les deux premières lignes : la VStack
+                    // a déjà dix vues, le maximum d'un ViewBuilder avant iOS 17.
+                    Group {
+                        // Points de la chaîne, sans leur couronne à l'écran.
+                        if let onOpenPoints {
+                            row(icon: "crown.fill",
+                                title: store.t("points_title"),
+                                subtitle: store.t("menu_points_sub"),
+                                trailing: .chevron) {
+                                onOpenPoints()
+                                dismiss()
+                            }
 
-                        divider
+                            divider
+                        }
+
+                        // Chat seul : coupe la vidéo, garde la conversation.
+                        if allowsChatOnly {
+                            row(icon: chatOnly ? "bubble.left.fill" : "bubble.left",
+                                title: store.t("menu_chat_only"),
+                                subtitle: store.t("menu_chat_only_sub"),
+                                trailing: .toggle($chatOnly))
+
+                            divider
+                        }
                     }
 
                     row(icon: "arrow.triangle.2.circlepath",

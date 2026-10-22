@@ -306,12 +306,22 @@ private struct CustomizeChatSection: View {
                    $store.enableRaids, log: "Système de raid")
             toggle(store.t("cfg_streak"), icon: "flame.fill",
                    $store.showWatchStreak, log: "Série de visionnage")
-            toggle(store.t("cfg_follow"), icon: "heart.fill",
-                   $store.showFollowButton, log: "Bouton suivre")
+            // Boutons et pastilles autour des messages : en groupe, la
+            // section reste sous les dix vues d'un ViewBuilder (iOS 16).
+            Group {
+                toggle(store.t("cfg_follow"), icon: "heart.fill",
+                       $store.showFollowButton, log: "Bouton suivre")
+                toggle(store.t("cust_chat_bell"), icon: "bell.fill",
+                       $store.showChatBell, log: "Cloche du chat")
+                toggle(store.t("cust_chat_modes"), icon: "exclamationmark.bubble.fill",
+                       $store.showChatModes, log: "Mode du chat")
+                toggle(store.t("cust_chat_points"), icon: "crown.fill",
+                       $store.showChatPoints, log: "Bouton des points du chat")
+            }
         } header: {
             Text(store.t("cust_chat"))
         } footer: {
-            Text(store.t("cust_special_events_foot"))
+            Text(store.t("cust_special_events_foot") + "\n" + store.t("cust_chat_buttons_foot"))
         }
     }
 

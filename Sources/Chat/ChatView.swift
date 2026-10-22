@@ -40,6 +40,9 @@ struct ChatView: View {
     @State private var showRules        = false
     @State private var pendingMessage: String? = nil
     @State private var showPointsSheet  = false
+    /// Points demandés depuis le menu ⋯ : leur feuille s'ouvre une fois le
+    /// menu refermé (une seule feuille à la fois).
+    @State private var pointsAfterMenu  = false
     @State private var showWebLogin     = false
     @State private var webLoginClear    = false   // true = re-login forcé (token web expiré)
     @State private var threadRoot: ChatMessage? = nil   // fil de discussion ouvert
@@ -78,6 +81,10 @@ struct ChatView: View {
     /// quoi y mettre une emote, une commande ou une mention. Masquée, ces
     /// raccourcis écrivaient dans un champ qu'on ne voit pas.
     private var canType: Bool { canSendMessages && store.chatShowInput }
+    /// Points de la chaîne dans le menu ⋯ quand la couronne n'est pas à
+    /// l'écran : masquée (Réglages → Personnaliser), ou chat en colonne où
+    /// elle cède sa place au champ. Avec un compte qui peut écrire, comme elle.
+    private var pointsInMenu: Bool { canSendMessages && !(style.showsChrome && store.showChatPoints) }
     private var canSend: Bool {
         chat.isConnected && chat.isAuthenticated &&
         !messageText.trimmingCharacters(in: .whitespaces).isEmpty &&
@@ -192,7 +199,11 @@ struct ChatView: View {
                 }
                 // Cloche : notifications de live de cette chaîne seulement
                 // (affichée si elles sont activées et la chaîne suivie).
-                NotifBellButton(login: channelName, followed: channelFollowed, compact: true)
+                // Masquable (Réglages → Personnaliser) : la page de la chaîne
+                // garde la sienne.
+                if store.showChatBell {
+                    NotifBellButton(login: channelName, followed: channelFollowed, compact: true)
+                }
                 // Épingle réduite : une pastille la rouvre.
                 if store.showPinnedMessages, let pin = pubsub.pinned, pin.id == dismissedPinId {
                     Button {
@@ -627,7 +638,12 @@ struct ChatView: View {
                 .environmentObject(store)
                 .inAppNoticeHost()
         }
-        .sheet(isPresented: $showChatMenu) {
+        .sheet(isPresented: $showChatMenu, onDismiss: {
+            guard pointsAfterMenu else { return }
+            pointsAfterMenu = false
+            showEmotePicker = false
+            showPointsSheet = true
+        }) {
             ChatMenuSheet(
                 channelName: channelName,
                 isAuthenticated: chat.isAuthenticated,
@@ -641,7 +657,8 @@ struct ChatView: View {
                 onUseCommand: canType ? { cmd in
                     messageText = cmd + " "
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { isInputFocused = true }
-                } : nil
+                } : nil,
+                onOpenPoints: pointsInMenu ? { pointsAfterMenu = true } : nil
             )
             .presentationDetents([.medium, .large])
             .inAppNoticeHost()
@@ -1023,7 +1040,7 @@ struct ChatView: View {
     /// (chat seul, reconnecter, commandes…).
     @ViewBuilder
     private var hiddenInputButtons: some View {
-        if canSendMessages && style.showsChrome {
+        if canSendMessages && style.showsChrome && store.showChatPoints {
             ChannelPointsButton(service: pointsService) {
                 showEmotePicker = false
                 showPointsSheet = true
@@ -1075,7 +1092,9 @@ struct ChatView: View {
 
                     // 🎁 Points de chaîne — le jeton prend de la place et n'a rien
                     // d'urgent : en colonne étroite il cède le pas au champ texte.
-                    if style.showsChrome {
+                    // Masquable (Réglages → Personnaliser) ; sans lui, les
+                    // points sont dans le menu ⋯ (voir pointsInMenu).
+                    if style.showsChrome && store.showChatPoints {
                         ChannelPointsButton(service: pointsService) {
                             showEmotePicker = false
                             showPointsSheet = true
@@ -1222,10 +1241,11 @@ struct ChatView: View {
     }
 
     /// Modes du salon qui limitent qui peut écrire, au-dessus du champ : on le
-    /// sait avant d'écrire, plutôt qu'en voyant son message refusé.
+    /// sait avant d'écrire, plutôt qu'en voyant son message refusé. Masquables
+    /// (Réglages → Personnaliser) : un refus dit toujours pourquoi dans le chat.
     @ViewBuilder private var roomModesLine: some View {
         let m = chat.roomModes
-        if !m.isEmpty {
+        if store.showChatModes, !m.isEmpty {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) {
                     if let minutes = m.followersMinutes {

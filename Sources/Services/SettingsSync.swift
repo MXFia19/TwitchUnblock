@@ -75,11 +75,13 @@ enum SettingsSync {
                           "ios_showLiveEvents", "ios_showPolls", "ios_showPredictions",
                           "ios_showHypeTrain", "ios_enableRaids", "ios_subAdFree",
                           "ios_chatAutocomplete", "ios_chatKeyboardSuggestions",
-                          "ios_chatShowInput", "ios_showSpecialEvents"]
+                          "ios_chatShowInput", "ios_showSpecialEvents", "ios_showChatBell",
+                          "ios_showChatModes", "ios_showChatPoints"]
 
     /// Réglages de l'app ajoutés après coup, affichés (vrai) par défaut :
     /// hors de l'empreinte tant qu'ils le restent (voir digestible).
-    static let iosLateDefaultOn = ["ios_chatShowInput", "ios_showSpecialEvents"]
+    static let iosLateDefaultOn = ["ios_chatShowInput", "ios_showSpecialEvents", "ios_showChatBell",
+                                   "ios_showChatModes", "ios_showChatPoints"]
 
     /// Délai entre le dernier changement et l'envoi.
     static let delay: TimeInterval = 4
@@ -434,6 +436,7 @@ extension AppStore {
                 && showDropsNotice && showSpecialEvents && showFollowButton && showWatchStreak
                 && showLiveEvents && showPolls && showPredictions && showHypeTrain && enableRaids
                 && subAdFree && chatAutocomplete && chatKeyboardSuggestions && chatShowInput
+                && showChatBell && showChatModes && showChatPoints
         default:
             return topLang == nil && showRecentChannels && chatTimestamps && timeFormat == "auto"
                 && !chatShowDeleted && chatLoadRecent && !chatHideBots && !chatHideCommands

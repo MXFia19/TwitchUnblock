@@ -181,6 +181,21 @@ final class AppStore: ObservableObject {
     @Published var showFollowButton: Bool = true {
         didSet { UserDefaults.standard.set(showFollowButton, forKey: "cfg_follow") }
     }
+    /// Cloche des notifications de live en haut à droite du chat. Masquée,
+    /// celle de la page de la chaîne reste.
+    @Published var showChatBell: Bool = true {
+        didSet { UserDefaults.standard.set(showChatBell, forKey: "cfg_chat_bell") }
+    }
+    /// Pastilles des modes du salon (« Followers depuis 10 h », mode lent…)
+    /// au-dessus du champ. Masquées, un message refusé dit toujours pourquoi.
+    @Published var showChatModes: Bool = true {
+        didSet { UserDefaults.standard.set(showChatModes, forKey: "cfg_chat_modes") }
+    }
+    /// Bouton couronne des points de la chaîne, à gauche du champ. Masqué,
+    /// les points s'ouvrent depuis le menu ⋯ du chat.
+    @Published var showChatPoints: Bool = true {
+        didSet { UserDefaults.standard.set(showChatPoints, forKey: "cfg_chat_points") }
+    }
     /// Afficher le badge de série de visionnage (streak).
     @Published var showWatchStreak: Bool = true {
         didSet { UserDefaults.standard.set(showWatchStreak, forKey: "cfg_streak") }
@@ -685,6 +700,7 @@ final class AppStore: ObservableObject {
         showPinnedMessages = true; showDropsNotice = true; showSpecialEvents = true
         showLiveEvents = true; showPolls = true; showPredictions = true; showHypeTrain = true
         enableRaids = true; showWatchStreak = true; showFollowButton = true
+        showChatBell = true; showChatModes = true; showChatPoints = true
     }
 
     /// Langue du top des lives ; nil = celle de l'appareil.
@@ -885,6 +901,9 @@ final class AppStore: ObservableObject {
         showDropsNotice    = ud.object(forKey: "cfg_drops_notice") as? Bool ?? true
         showSpecialEvents  = ud.object(forKey: "cfg_special_events") as? Bool ?? true
         showFollowButton   = ud.object(forKey: "cfg_follow") as? Bool ?? true
+        showChatBell       = ud.object(forKey: "cfg_chat_bell") as? Bool ?? true
+        showChatModes      = ud.object(forKey: "cfg_chat_modes") as? Bool ?? true
+        showChatPoints     = ud.object(forKey: "cfg_chat_points") as? Bool ?? true
         showWatchStreak    = ud.object(forKey: "cfg_streak") as? Bool ?? true
         showLiveEvents     = ud.object(forKey: "cfg_events") as? Bool ?? true
         enableRaids        = ud.object(forKey: "cfg_raids")  as? Bool ?? true

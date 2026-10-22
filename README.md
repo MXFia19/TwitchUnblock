@@ -363,6 +363,9 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   incoming raids shown with a link to the raider. Each of these can be switched off.
 * 🔦 **Highlights & filters** — messages mentioning you or containing your words
   stand out; hide bots, `!commands`, muted words or someone in particular.
+* 🤖 **Bot commands** — a channel's Nightbot, StreamElements, Fossabot and
+  Moobot commands without typing `!commands`: from the chat's ⋯ menu, or from
+  the channel page, live or offline (tap one to copy it).
 * 🔥 **Watch streak** and a **follow / unfollow** button. Unfollowing, from the
   player or a channel page, asks for confirmation first; from the player, the
   same dialog can hide the button (Settings → Chat → Customization → Follow

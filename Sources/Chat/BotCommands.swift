@@ -97,6 +97,37 @@ enum BotCommandsAPI {
     }
 }
 
+/// Page d'une chaîne : ses commandes de bots, en direct comme hors ligne —
+/// le menu ⋯ du chat, seul accès jusque-là, n'existe que pendant un direct.
+/// Toucher une commande la copie (pas de champ où l'écrire ici).
+struct BotCommandsButton: View {
+    let channelName: String
+
+    @EnvironmentObject private var store: AppStore
+    @State private var showSheet = false
+
+    var body: some View {
+        Button {
+            showSheet = true
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "terminal.fill")
+                Text(store.t("bot_commands")).font(.tSystem(size: 13, weight: .bold))
+            }
+            .foregroundColor(.tMuted)
+            .padding(.horizontal, 14).padding(.vertical, 7)
+            .background(Color.tSurface)
+            .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .sheet(isPresented: $showSheet) {
+            BotCommandsSheet(channelName: channelName)
+                .environmentObject(store)
+                .presentationDetents([.medium, .large])
+        }
+    }
+}
+
 struct BotCommandsSheet: View {
     let channelName: String
     /// Toucher une commande la met dans le champ du chat (si on peut écrire),

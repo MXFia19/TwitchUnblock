@@ -452,6 +452,7 @@
  "réponse inattendue": ["unexpected response", "respuesta inesperada", "неожиданный ответ"],
  "Direct impossible à lire :": ["Live can't be played:", "No se puede reproducir el directo:", "Не удаётся воспроизвести трансляцию:"],
  "VOD impossible à lire :": ["VOD can't be played:", "No se puede reproducir el VOD:", "Не удаётся воспроизвести VOD:"],
+ "Clip impossible à lire :": ["Clip can't be played:", "No se puede reproducir el clip:", "Не удаётся воспроизвести клип:"],
  "Connecté par code": ["Signed in with a code", "Sesión iniciada con un código", "Вход по коду выполнен"],
  "Connexion par code refusée": ["Code sign-in refused", "Inicio de sesión con código rechazado", "Вход по коду отклонён"],
  "━━━ Nouvelle session démarrée ━━━": ["━━━ New session started ━━━", "━━━ Nueva sesión iniciada ━━━", "━━━ Новый сеанс начат ━━━"],

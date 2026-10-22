@@ -62,6 +62,10 @@ private let tvStrings: [Lang: [String: String]] = [
         "tv_offline_channels": "Hors ligne",
         "tv_open_channel": "Voir la chaîne",
         "tv_resume": "Reprendre",
+        "tv_clips": "Clips",
+        "tv_collections": "Collections",
+        "tv_no_clips": "Aucun clip sur cette période.",
+        "tv_no_collections": "Aucune collection.",
     ],
     .en: [
         "tv_following": "Following",
@@ -121,6 +125,10 @@ private let tvStrings: [Lang: [String: String]] = [
         "tv_offline_channels": "Offline",
         "tv_open_channel": "View channel",
         "tv_resume": "Continue watching",
+        "tv_clips": "Clips",
+        "tv_collections": "Collections",
+        "tv_no_clips": "No clips for this period.",
+        "tv_no_collections": "No collections.",
     ],
     .es: [
         "tv_following": "Seguidos",
@@ -180,6 +188,10 @@ private let tvStrings: [Lang: [String: String]] = [
         "tv_offline_channels": "Desconectados",
         "tv_open_channel": "Ver canal",
         "tv_resume": "Seguir viendo",
+        "tv_clips": "Clips",
+        "tv_collections": "Colecciones",
+        "tv_no_clips": "No hay clips en este periodo.",
+        "tv_no_collections": "Ninguna colección.",
     ],
     .ru: [
         "tv_following": "Отслеживаемые",
@@ -239,6 +251,10 @@ private let tvStrings: [Lang: [String: String]] = [
         "tv_offline_channels": "Не в сети",
         "tv_open_channel": "Открыть канал",
         "tv_resume": "Продолжить просмотр",
+        "tv_clips": "Клипы",
+        "tv_collections": "Коллекции",
+        "tv_no_clips": "Нет клипов за этот период.",
+        "tv_no_collections": "Нет коллекций.",
     ],
     .it: [
         "tv_following": "Seguiti",
@@ -298,6 +314,10 @@ private let tvStrings: [Lang: [String: String]] = [
         "tv_offline_channels": "Offline",
         "tv_open_channel": "Vedi il canale",
         "tv_resume": "Continua a guardare",
+        "tv_clips": "Clip",
+        "tv_collections": "Raccolte",
+        "tv_no_clips": "Nessuna clip per questo periodo.",
+        "tv_no_collections": "Nessuna raccolta.",
     ],
     .ja: [
         "tv_following": "フォロー中",
@@ -357,6 +377,10 @@ private let tvStrings: [Lang: [String: String]] = [
         "tv_offline_channels": "オフライン",
         "tv_open_channel": "チャンネルを見る",
         "tv_resume": "続きから見る",
+        "tv_clips": "クリップ",
+        "tv_collections": "コレクション",
+        "tv_no_clips": "この期間のクリップはありません。",
+        "tv_no_collections": "コレクションはありません。",
     ],
 ]
 

@@ -92,7 +92,8 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   one per video.
 * 🏷️ **Full title** — tap the title at the top of the player (often cut off)
   to read it in full, with the category, viewers, uptime and a shortcut to the
-  channel.
+  channel. Closing a channel page opened from the full-size player (name,
+  title or chat) brings the player back full size instead of the mini player.
 * 🎵 **Leaves your music alone** — opening the app no longer stops music
   playing in another app: the sound switches over only when a video starts,
   and goes back to that app when you close the player (not when the sleep

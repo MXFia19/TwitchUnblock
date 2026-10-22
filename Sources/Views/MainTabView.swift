@@ -134,6 +134,10 @@ struct MainTabView: View {
     @State private var showDiscordPrompt = false
     /// Page d'une chaîne ouverte en feuille (sans passer par l'onglet Recherche).
     @State private var channelSheet: ChannelSheetItem? = nil
+    /// Cette page a été ouverte depuis le lecteur affiché en grand (pseudo,
+    /// titre, chat) : fermée sans rien lancer, elle rend le lecteur en grand.
+    /// Il restait réduit en mini-lecteur.
+    @State private var channelReturnsToPlayer = false
     /// Visite guidée du tout premier lancement (revue depuis les réglages).
     @AppStorage("onboarding_done") private var onboardingDone = false
     /// Clip en cours : VOD d'origine et position, pour en rejouer le chat.
@@ -628,19 +632,28 @@ struct MainTabView: View {
         // Notification « en live » touchée : on ouvre le direct.
         // Page d'une chaîne demandée (pseudo dans le lecteur, accueil…) :
         // ouverte dans une feuille par-dessus l'onglet en cours, sans passer
-        // par Recherche ; le lecteur se réduit en mini-barre.
+        // par Recherche ; le lecteur se réduit en mini-barre le temps de la
+        // page (portrait, clavier du chat fermé). Ouverte depuis le lecteur
+        // en grand, sa fermeture le rend en grand (channelSheetDismissed).
         .onChange(of: store.pendingChannel) { login in
             guard let login else { return }
             store.pendingChannel = nil
+            // Une page en remplace une autre : le retour prévu à l'ouverture
+            // de la première tient.
+            if channelSheet == nil {
+                channelReturnsToPlayer = playerMode != nil && playerVisible && !closingPlayer
+            }
             withAnimation(.easeInOut(duration: 0.2)) { playerVisible = false }
             channelSheet = ChannelSheetItem(login: login)
         }
-        .sheet(item: $channelSheet) { item in
-            SearchView(onPlayVod: { id, t, th, s in channelSheet = nil; playVod(id, t, th, s) },
-                       onPlayLive: { l in channelSheet = nil; playLive(l) },
-                       onPlayClip: { slug, t in channelSheet = nil; playClip(slug, t) },
-                       onPlayQueue: { list, s in channelSheet = nil; playQueue(list, s) },
-                       onRecovered: { rec in channelSheet = nil; playRecovered(rec) },
+        // Une vidéo lancée depuis la page s'ouvre elle-même en grand : pas
+        // de retour au lecteur d'avant (closeChannelSheet).
+        .sheet(item: $channelSheet, onDismiss: channelSheetDismissed) { item in
+            SearchView(onPlayVod: { id, t, th, s in closeChannelSheet(); playVod(id, t, th, s) },
+                       onPlayLive: { l in closeChannelSheet(); playLive(l) },
+                       onPlayClip: { slug, t in closeChannelSheet(); playClip(slug, t) },
+                       onPlayQueue: { list, s in closeChannelSheet(); playQueue(list, s) },
+                       onRecovered: { rec in closeChannelSheet(); playRecovered(rec) },
                        initialChannel: item.login,
                        onClose: { channelSheet = nil })
                 .inAppNoticeHost()
@@ -820,9 +833,28 @@ struct MainTabView: View {
         showClipSheet = false
         showDownloadSheet = false
         showSleepSheet = false
-        channelSheet = nil
+        closeChannelSheet()
         showMultiLive = false
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { action() }
+    }
+
+    /// Page d'une chaîne fermée pour autre chose (vidéo lancée depuis elle,
+    /// notification touchée) : le lecteur d'avant ne revient pas en grand.
+    private func closeChannelSheet() {
+        channelReturnsToPlayer = false
+        channelSheet = nil
+    }
+
+    /// Page d'une chaîne fermée (balayée, « Fermer ») : ouverte depuis le
+    /// lecteur en grand, celui-ci revient tel qu'il était, au lieu de rester
+    /// en mini-lecteur. Rien si le lecteur a été fermé entre-temps.
+    private func channelSheetDismissed() {
+        // Remplacée par la page d'une autre chaîne : on attend la dernière.
+        guard channelReturnsToPlayer, channelSheet == nil else { return }
+        channelReturnsToPlayer = false
+        guard playerMode != nil, !playerVisible, !closingPlayer else { return }
+        pull.y = 0
+        withAnimation(.easeInOut(duration: 0.2)) { playerVisible = true }
     }
 
     // MARK: – Lecteur

@@ -415,6 +415,8 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   than 30 s watched, not finished), latest first (up to 10), with their
   progress; a tap resumes where you stopped, as from My VODs. Hide it in
   Settings → General → Customize the app.
+* ✋ **Continue watching menu** — long-press a video there: **Resume**, or
+  **Remove from the list** (its resume point is forgotten; it stays in My VODs).
 * 📜 **Long lists without an account** — a channel's VODs and clips, the
   categories and the live channels in a category keep loading past the first
   100 without logging in (the next pages are asked the way Twitch's Android

@@ -1029,4 +1029,6 @@ let kItalianStrings: [String: String] = [
     "update_stale_msg": "Il tuo strumento di installazione ha messo una build vecchia ({b}) con il numero {v}: in realtà non hai la {v}. Elimina l'app e reinstallala da GitHub. Per conservare canali e impostazioni, esporta prima un backup (Impostazioni → Generali → Backup).",
     "update_stale_download": "Scarica l'IPA",
     "update_stale_short": "Build vecchia installata: reinstalla la {v}",
+    "continue_resume": "Riprendi",
+    "continue_remove": "Rimuovi dall'elenco",
 ]

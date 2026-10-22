@@ -1030,4 +1030,6 @@ let kJapaneseStrings: [String: String] = [
     "update_stale_msg": "インストールツールが古いビルド（{b}）を {v} として入れました。実際には {v} ではありません。アプリを削除して、GitHub から入れ直してください。チャンネルと設定を残すには、先にバックアップを書き出してください（設定 → 全般 → バックアップ）。",
     "update_stale_download": "IPA をダウンロード",
     "update_stale_short": "古いビルドが入っています：{v} を入れ直す",
+    "continue_resume": "続きから再生",
+    "continue_remove": "リストから削除",
 ]

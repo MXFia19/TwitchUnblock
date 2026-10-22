@@ -1101,6 +1101,18 @@ final class AppStore: ObservableObject {
         progressChanged()
     }
 
+    /// « Continuer à regarder » → Retirer de la liste : la position de
+    /// reprise de cette VOD est oubliée (elle reste dans l'historique et
+    /// repart du début). Comme une suppression, elle part tout de suite ; la
+    /// relecture ne la ramène pas tant que le serveur n'a pas bougé
+    /// (mergeProgress).
+    func forgetVodProgress(_ vodId: String) {
+        guard vodProgress[vodId] != nil else { return }
+        vodProgress[vodId] = nil
+        progressChanged()
+        sendDeletion()
+    }
+
     private func progressChanged() {
         persistProgress()
         syncDirty = true

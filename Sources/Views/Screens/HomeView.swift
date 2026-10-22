@@ -496,6 +496,20 @@ struct HomeView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        // Appui long : reprendre, ou retirer la VOD de la rangée (sa
+        // position de reprise est oubliée ; elle reste dans « Mes VODs »).
+        .contextMenu {
+            Button {
+                onPlayVod(item.term, title, thumb.isEmpty ? nil : thumb, streamer)
+            } label: {
+                Label(store.t("continue_resume"), systemImage: "play.fill")
+            }
+            Button(role: .destructive) {
+                withAnimation(.easeInOut(duration: 0.2)) { store.forgetVodProgress(item.term) }
+            } label: {
+                Label(store.t("continue_remove"), systemImage: "minus.circle")
+            }
+        }
     }
 
     // MARK: – Personnalisation (Réglages → Personnaliser)

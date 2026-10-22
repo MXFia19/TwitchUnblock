@@ -1007,6 +1007,8 @@ private let translations: [Lang: [String: String]] = [
         "update_stale_msg": "Ton outil d'installation a installé un ancien build ({b}) sous le numéro {v} : tu n'as pas vraiment la {v}. Supprime l'app et réinstalle-la depuis GitHub. Pour garder tes chaînes et tes réglages, exporte d'abord une sauvegarde (Paramètres → Général → Sauvegarde).",
         "update_stale_download": "Télécharger l'IPA",
         "update_stale_short": "Ancien build installé : réinstaller la {v}",
+        "continue_resume": "Reprendre",
+        "continue_remove": "Retirer de la liste",
     ],
     .en: [
         "title": "Watch Twitch No Sub",
@@ -1720,6 +1722,8 @@ private let translations: [Lang: [String: String]] = [
         "update_stale_msg": "Your install tool put an old build ({b}) under the number {v}: you don't actually have {v}. Delete the app and reinstall it from GitHub. To keep your channels and settings, export a backup first (Settings → General → Backup).",
         "update_stale_download": "Download the IPA",
         "update_stale_short": "Old build installed: reinstall {v}",
+        "continue_resume": "Resume",
+        "continue_remove": "Remove from the list",
     ],
     .es: [
         "title": "Ver Twitch sin Sub",
@@ -2433,6 +2437,8 @@ private let translations: [Lang: [String: String]] = [
         "update_stale_msg": "Tu herramienta de instalación puso una compilación antigua ({b}) con el número {v}: en realidad no tienes la {v}. Borra la app y vuelve a instalarla desde GitHub. Para conservar tus canales y ajustes, exporta antes una copia de seguridad (Ajustes → General → Copia de seguridad).",
         "update_stale_download": "Descargar el IPA",
         "update_stale_short": "Compilación antigua instalada: reinstalar la {v}",
+        "continue_resume": "Reanudar",
+        "continue_remove": "Quitar de la lista",
     ],
     // Russe : dans son propre fichier (Localization/RussianStrings.swift).
     .ru: kRussianStrings,

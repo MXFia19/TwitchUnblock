@@ -84,7 +84,9 @@ struct SettingsView: View {
             // revenir : edgeSwipeBack le rend, et chaque niveau reste sous la
             // page qui le couvre (décalé, assombri), que le glissé découvre.
             ZStack {
-                rootMenu
+                // Effacé lui aussi (voir sectionPage) : le type du ZStack ne
+                // porte plus que des boîtes, décodées chacune à part.
+                AnyView(rootMenu)
                     .settingsCovered(page != nil)
                 // Page du menu (Général…), sous sa sous-page (Langue) s'il y en a une.
                 if let base = page.map({ $0.parent ?? $0 }) {
@@ -534,53 +536,73 @@ struct SettingsView: View {
         .buttonStyle(.plain)
     }
 
-    @ViewBuilder
-    private func sectionPage(_ section: Page) -> some View {
-        ScrollView {
+    /// Page des Réglages, effacée en AnyView (chaque page aussi, voir
+    /// sectionContent). Son type complet, un switch sur toutes les pages dont
+    /// chacune empile ses cartes, était posé deux fois dans le ZStack de
+    /// `body` avec les modificateurs du glissé retour : à l'ouverture des
+    /// Réglages, le runtime de Swift débordait la pile du fil principal en le
+    /// décodant (iOS 18.3.1, iPhone 11 : EXC_BAD_ACCESS sur la garde de pile,
+    /// dans swift_getTypeByMangledName → TypeDecoder::decodeMangledType).
+    /// Effacé, chaque page n'est décodée que seule, et seulement ouverte.
+    private func sectionPage(_ section: Page) -> AnyView {
+        AnyView(ScrollView {
             VStack(spacing: 12) {
-                // Une vue par ligne : dans un ViewBuilder, deux vues séparées
-                // par un point-virgule sur la même ligne ne se composent pas.
-                switch section {
-                case .account:
-                    webSessionCard
-                    compteCard
-                    usageCard
-                case .general:
-                    langueCard
-                    customizeCard
-                    hiddenCard
-                    apparenceCard
-                    autoclaimCard
-                    veilleCard
-                    historiqueCard
-                    backupCard
-                    cacheCard
-                case .player:
-                    lecteurCard
-                case .chat:
-                    chatBehaviorCard
-                    persoCard
-                    tailleChatCard
-                case .drops:
-                    DropsPanel(onLogin: { startWebLogin() })
-                case .points:
-                    PointsTrackerPanel(onLogin: { startWebLogin() })
-                case .labs:
-                    debugCard
-                case .other:
-                    aboutCard
-                    expertCard
-                case .changelog:
-                    ChangelogList()
-                case .language:
-                    languageListCard
-                }
+                sectionContent(section)
                 Spacer(minLength: 32)
             }
             .padding(.horizontal, 12)
             .padding(.top, 12)
         }
-        .background(Color.tDark)
+        .background(Color.tDark))
+    }
+
+    /// Cartes d'une page, une boîte par page (voir sectionPage) : dans le
+    /// switch d'un ViewBuilder, les types de toutes les pages s'emboîtaient
+    /// en un seul. Une VStack par page garde l'espacement d'avant (12).
+    private func sectionContent(_ section: Page) -> AnyView {
+        switch section {
+        case .account:
+            return AnyView(VStack(spacing: 12) {
+                webSessionCard
+                compteCard
+                usageCard
+            })
+        case .general:
+            return AnyView(VStack(spacing: 12) {
+                langueCard
+                customizeCard
+                hiddenCard
+                apparenceCard
+                autoclaimCard
+                veilleCard
+                historiqueCard
+                backupCard
+                cacheCard
+            })
+        case .player:
+            return AnyView(lecteurCard)
+        case .chat:
+            return AnyView(VStack(spacing: 12) {
+                chatBehaviorCard
+                persoCard
+                tailleChatCard
+            })
+        case .drops:
+            return AnyView(DropsPanel(onLogin: { startWebLogin() }))
+        case .points:
+            return AnyView(PointsTrackerPanel(onLogin: { startWebLogin() }))
+        case .labs:
+            return AnyView(debugCard)
+        case .other:
+            return AnyView(VStack(spacing: 12) {
+                aboutCard
+                expertCard
+            })
+        case .changelog:
+            return AnyView(ChangelogList())
+        case .language:
+            return AnyView(languageListCard)
+        }
     }
 
     // ── Réglages experts : Worker personnel ──────────────────────────────

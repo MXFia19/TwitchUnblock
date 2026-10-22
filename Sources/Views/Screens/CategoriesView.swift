@@ -168,7 +168,9 @@ struct CategoriesView: View {
         // La grille reste dessous quand une catégorie est ouverte : le glissé
         // retour depuis le bord gauche la découvre, comme sur iOS.
         ZStack {
-            browser
+            // Effacée : un type de vue trop imbriqué fait déborder la pile au
+            // décodage sur iOS 18 (comme les Réglages, voir sectionPage).
+            AnyView(browser)
                 .allowsHitTesting(selected == nil)
                 .accessibilityHidden(selected != nil)
             if let cat = selected {

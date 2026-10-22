@@ -151,6 +151,7 @@ enum LogTranslator {
         "claim/redeem impossible pour l'instant": ["claim/redeem not possible for now", "reclamar/canjear imposible por ahora", "получение/покупка пока невозможны"],
         "clé NSSupportsLiveActivities absente : plus d'essai avant le prochain lancement": ["NSSupportsLiveActivities key missing: no more tries until the next launch", "falta la clave NSSupportsLiveActivities: no se reintenta hasta el próximo inicio", "нет ключа NSSupportsLiveActivities: новых попыток до следующего запуска не будет"],
         "Clip créé ✓": ["Clip created ✓", "Clip creado ✓", "Клип создан ✓"],
+        "Clip impossible à lire :": ["Clip can't be played:", "No se puede reproducir el clip:", "Не удаётся воспроизвести клип:"],
         "Clip refusé": ["Clip refused", "Clip rechazado", "Клип отклонён"],
         "Clips : pas de réponse (réseau)": ["Clips: no response (network)", "Clips: sin respuesta (red)", "Клипы: нет ответа (сеть)"],
         "clips (suite)": ["clips (more)", "clips (más)", "клипы (продолжение)"],

@@ -176,8 +176,9 @@ struct TVFollowingTab: View {
     /// onglets, ou sur une page ouverte d'ici), et depuis quand aucune.
     @State private var focusedCards = 0
     @State private var unfocusedSince = Date.distantPast
-    /// VODs entamées sur cette Apple TV (TVProgress) : la rangée « Reprendre »,
-    /// en tête, avec ou sans compte.
+    /// VODs entamées sur cette Apple TV (TVProgress) : la rangée « Continuer
+    /// à regarder », avec ou sans compte, au-dessus des directs, en dessous,
+    /// ou masquée (Compte, session.resumePlace).
     @State private var resume: [TVResumeItem] = []
     /// Ce que Twitch dit de chacune (titre, chaîne, image, durée), demandé
     /// une fois par VOD.
@@ -189,18 +190,27 @@ struct TVFollowingTab: View {
     var body: some View {
         NavigationStack(path: $path) {
             ScrollView {
-                if !resume.isEmpty { resumeSection }
+                if resumeShown, session.resumePlace == .top { resumeSection }
                 if session.token == nil {
                     TVMessage(text: session.t("tv_need_login"))
                 } else {
+                    // Avec la rangée, un titre aux directs : ils semblaient en
+                    // faire partie.
+                    if resumeShown {
+                        Text(session.t("tv_live_section")).font(.title3.bold())
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 64)
+                            .padding(.top, 32)
+                    }
                     if streams.isEmpty {
                         TVMessage(text: loading ? session.t("loading")
                                   : (failed ? session.t("tv_error") : session.t("tv_no_live")))
                     } else {
                         TVStreamGrid(streams: streams, play: play)
                     }
-                    if !offline.isEmpty { offlineSection }
                 }
+                if resumeShown, session.resumePlace == .bottom { resumeSection }
+                if session.token != nil, !offline.isEmpty { offlineSection }
             }
             .environment(\.tvCardFocusReport, cardFocus)
             .navigationDestination(for: String.self) { login in
@@ -220,6 +230,11 @@ struct TVFollowingTab: View {
         .onChange(of: scenePhase) { phase in
             if phase == .active, visible, Date().timeIntervalSince(lastLoad) > 60 { Task { await load() } }
         }
+        // Rangée réaffichée dans Compte : ses vidéos, pas chargées tant
+        // qu'elle était masquée.
+        .onChange(of: session.resumePlace) { place in
+            if place != .hidden { Task { await loadResume() } }
+        }
         .task {
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 120 * 1_000_000_000)
@@ -228,8 +243,12 @@ struct TVFollowingTab: View {
         }
     }
 
-    /// « Reprendre » : les VODs entamées, la dernière regardée d'abord ;
-    /// Sélection ou Play la reprend où elle en était (TVProgress).
+    /// La rangée « Continuer à regarder » est affichée : des VODs entamées,
+    /// et pas masquée dans Compte.
+    private var resumeShown: Bool { session.resumePlace != .hidden && !resume.isEmpty }
+
+    /// « Continuer à regarder » : les VODs entamées, la dernière regardée
+    /// d'abord ; Sélection ou Play la reprend où elle en était (TVProgress).
     private var resumeSection: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text(session.t("tv_resume")).font(.title3.bold())
@@ -244,6 +263,27 @@ struct TVFollowingTab: View {
                         }
                         .tvCard()
                         .onPlayPauseCommand { play(r.playback) }
+                        // Bouton central maintenu : la reprendre, ou la
+                        // retirer de la rangée (sa position est oubliée).
+                        .contextMenu {
+                            Button {
+                                // Une fois le menu refermé : présenté pendant
+                                // sa fermeture, le lecteur risquerait de ne
+                                // pas s'afficher.
+                                let item = r.playback
+                                Task { @MainActor in
+                                    try? await Task.sleep(nanoseconds: 400_000_000)
+                                    play(item)
+                                }
+                            } label: {
+                                Label(session.t("tv_resume_play"), systemImage: "play.fill")
+                            }
+                            Button(role: .destructive) {
+                                removeResume(r.id)
+                            } label: {
+                                Label(session.t("tv_resume_remove"), systemImage: "xmark.circle")
+                            }
+                        }
                     }
                 }
                 // Place pour la carte qui grandit avec le focus.
@@ -308,8 +348,9 @@ struct TVFollowingTab: View {
     }
 
     private func load() async {
-        // VODs entamées : sans compte aussi, sans attendre les lives.
-        Task { await loadResume() }
+        // VODs entamées : sans compte aussi, sans attendre les lives ; rien à
+        // demander à Twitch tant que la rangée est masquée.
+        if session.resumePlace != .hidden { Task { await loadResume() } }
         // Compte pas chargé au lancement (Apple TV sortie de veille avant le
         // Wi-Fi) : relu ici. Sinon « Aucun live » restait toute la séance ;
         // toujours absent, c'est une erreur (Réessayer en revenant), pas un vide.
@@ -384,11 +425,20 @@ struct TVFollowingTab: View {
             // veille avant le Wi-Fi), elles sont redemandées au prochain chargement.
             if resumeMetas.isEmpty { for id in missing { resumeAsked[id] = nil } }
         }
-        resume = recent.compactMap { entry -> TVResumeItem? in
+        // Positions relues après l'attente : une vidéo retirée de la rangée
+        // pendant la demande ne revient pas.
+        resume = TVProgress.recent().compactMap { entry -> TVResumeItem? in
             guard let meta = resumeMetas[entry.id] else { return nil }
             if meta.lengthSeconds > 0, Double(meta.lengthSeconds) - entry.seconds < 120 { return nil }
             return TVResumeItem(id: entry.id, seconds: entry.seconds, meta: meta)
         }
+    }
+
+    /// « Retirer de la liste » (appui long dans « Continuer à regarder ») : sa
+    /// position est oubliée sur cette Apple TV, elle repartira du début.
+    private func removeResume(_ id: String) {
+        TVProgress.remove(id)
+        resume.removeAll { $0.id == id }
     }
 }
 
@@ -1026,6 +1076,12 @@ struct TVAccountTab: View {
                                          : pref == "audio" ? session.t("tv_audio") : "\(pref)p")
                                 },
                                 selection: $session.qualityPref)
+                    // Rangée « Continuer à regarder » de Suivies : au-dessus
+                    // des directs, en dessous, ou masquée.
+                    TVChoiceRow(title: session.t("tv_resume_place"),
+                                options: TVResumePlace.allCases.map { ($0.rawValue, session.t("tv_resume_\($0.rawValue)")) },
+                                selection: Binding(get: { session.resumePlace.rawValue },
+                                                   set: { session.resumePlace = TVResumePlace(rawValue: $0) ?? .top }))
                     TVChoiceRow(title: session.t("tv_chat_default"),
                                 options: [("on", session.t("tv_chat_on")), ("off", session.t("tv_chat_off"))],
                                 selection: Binding(get: { session.tvChat ? "on" : "off" },

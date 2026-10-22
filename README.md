@@ -628,10 +628,15 @@ unsigned `tv-test-N` pre-release:
   Following list refreshes on its own (back on the tab or in the app, every
   2 minutes while it's shown, and when you come back down from the tab bar),
   so ended lives don't linger.
-* **Continue watching** at the top of Following, with or without an
-  account: the VODs started on this Apple TV (more than 30 s, not finished),
-  last watched first (up to 10), with their progress; Select or Play resumes
-  where you stopped.
+* **Continue watching** in Following (at the top by default), with or
+  without an account: the VODs started on this Apple TV (more than 30 s, not
+  finished), last watched first (up to 10), with their progress; Select or
+  Play resumes where you stopped.
+* Account → Settings → **“Continue watching” row**: above the live channels,
+  below them, or hidden; when the row is shown, a **Live** title heads the
+  live channels, which looked like part of it.
+* Press and hold the center button on a Continue watching video: **Resume**,
+  or **Remove from list** (its progress on this Apple TV is forgotten).
 * The remote's **Play** button starts the focused live or VOD, like Select; on
   an offline channel (Following, Search) it opens the channel and plays its
   latest broadcast (or its live, if it just started).

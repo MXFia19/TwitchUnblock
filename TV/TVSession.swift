@@ -57,6 +57,11 @@ final class TVSession: ObservableObject {
     @Published var hidden = HiddenContent.load() {
         didSet { if hidden != oldValue { hidden.save() } }
     }
+    /// Place de la rangée « Continuer à regarder » dans Suivies (Compte) :
+    /// au-dessus des directs, en dessous, ou masquée.
+    @Published var resumePlace: TVResumePlace {
+        didSet { UserDefaults.standard.set(resumePlace.rawValue, forKey: "tv_resume_place") }
+    }
 
     private static let scopes = "user:read:follows"
     private static let tokenKey = "tv_token"
@@ -85,6 +90,7 @@ final class TVSession: ObservableObject {
         } else {
             qualityPref = "source"
         }
+        resumePlace = TVResumePlace(rawValue: ud.string(forKey: "tv_resume_place") ?? "") ?? .top
         token = Keychain.loadToken(Self.tokenKey)
     }
 
@@ -359,6 +365,11 @@ func tvQRCode(_ text: String) -> UIImage? {
     return UIImage(cgImage: image)
 }
 
+/// Place de la rangée « Continuer à regarder » dans Suivies.
+enum TVResumePlace: String, CaseIterable {
+    case top, bottom, hidden
+}
+
 // MARK: – Avancement des VODs (sur cet appareil)
 enum TVProgress {
     private static let key = "tv_vod_progress"
@@ -390,6 +401,18 @@ enum TVProgress {
         }
         UserDefaults.standard.set(all, forKey: key)
         UserDefaults.standard.set(watched.filter { all[$0.key] != nil }, forKey: watchedKey)
+    }
+
+    /// « Retirer de la liste » (Continuer à regarder) : position et date du
+    /// dernier visionnage oubliées, la VOD repartira du début.
+    static func remove(_ id: String) {
+        let ud = UserDefaults.standard
+        var all = ud.dictionary(forKey: key) ?? [:]
+        var watched = ud.dictionary(forKey: watchedKey) ?? [:]
+        all.removeValue(forKey: id)
+        watched.removeValue(forKey: id)
+        ud.set(all, forKey: key)
+        ud.set(watched, forKey: watchedKey)
     }
 
     /// VODs entamées (plus de 30 s vues, pas finies), la dernière regardée

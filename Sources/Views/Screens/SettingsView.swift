@@ -12,6 +12,8 @@ struct SettingsView: View {
     @ObservedObject private var updater = UpdateChecker.shared
     @State private var checkingUpdate  = false
     @State private var upToDate        = false
+    /// Version et build copiés (À propos), le temps d'un « Version copiée ».
+    @State private var versionCopied   = false
     @State private var updateCheckFailed = false
     @State private var highlightDraft  = ""
     @State private var mutedDraft      = ""
@@ -1887,8 +1889,26 @@ struct SettingsView: View {
     }
 
     private var versionLabel: String {
-        // Même numéro que la source et les versions GitHub (1.1.4…).
-        "\(store.t("version_label")) \(UpdateChecker.installedVersion)"
+        // Même numéro que la source et les versions GitHub (1.1.4…), et le
+        // build (CFBundleVersion) : un outil d'installation peut poser un
+        // vieil IPA sous un numéro récent, seul le build le montre.
+        store.t("version_build")
+            .replacingOccurrences(of: "{v}", with: UpdateChecker.installedVersion)
+            .replacingOccurrences(of: "{b}", with: UpdateChecker.installedBuildString)
+    }
+
+    /// Ce que copie un appui sur la version : nom de l'app (« TU Test » pour
+    /// les builds de test), version et build, à coller dans un signalement.
+    private func copyVersion() {
+        let name = Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String ?? "TwitchUnblock"
+        UIPasteboard.general.string =
+            "\(name) \(UpdateChecker.installedVersion) (build \(UpdateChecker.installedBuildString))"
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        withAnimation(.easeInOut(duration: 0.2)) { versionCopied = true }
+        Task {
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            withAnimation(.easeInOut(duration: 0.2)) { versionCopied = false }
+        }
     }
 
     /// Lien externe façon bouton (crédits).
@@ -1951,9 +1971,21 @@ struct SettingsView: View {
                         Text("TwitchUnblock")
                             .font(.tSection)
                             .foregroundColor(.tText)
-                        Text(versionLabel)
-                            .font(.tMeta)
-                            .foregroundColor(.tMuted)
+                        // Un appui la copie (version et build).
+                        Button(action: copyVersion) {
+                            HStack(spacing: 4) {
+                                Text(versionCopied ? store.t("version_copied") : versionLabel)
+                                    .font(.tMeta)
+                                    .foregroundColor(versionCopied ? .tSuccess : .tMuted)
+                                Image(systemName: versionCopied ? "checkmark" : "doc.on.doc")
+                                    .font(.tSystem(size: 10, weight: .semibold))
+                                    .foregroundColor(versionCopied ? .tSuccess : .tMuted.opacity(0.7))
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(versionLabel)
+                        .accessibilityHint(store.t("version_copy_hint"))
                     }
                     Spacer()
                     Circle().fill(Color.tPrimary).frame(width: 26, height: 26)
@@ -1961,22 +1993,35 @@ struct SettingsView: View {
 
                 // Mise à jour : disponible → bouton ; sinon, vérification manuelle.
                 if let up = updater.available {
-                    Button { UpdateChecker.openSource() } label: {
+                    // Installation ratée (vieil IPA sous le dernier numéro) :
+                    // l'IPA à réinstaller, et pourquoi.
+                    Button {
+                        if up.mislabeled { UpdateChecker.openDownload(up.downloadURL) }
+                        else { UpdateChecker.openSource() }
+                    } label: {
                         HStack(spacing: TSpace.sm) {
-                            Image(systemName: "arrow.down.circle.fill")
+                            Image(systemName: up.mislabeled ? "exclamationmark.triangle.fill" : "arrow.down.circle.fill")
                                 .font(.tSystem(size: 14, weight: .semibold))
-                            Text(store.t("update_available").replacingOccurrences(of: "{v}", with: up.version))
+                            Text(store.t(up.mislabeled ? "update_stale_short" : "update_available")
+                                    .replacingOccurrences(of: "{v}", with: up.version))
                                 .font(.tLabel)
+                                .multilineTextAlignment(.leading)
                             Spacer()
                             Image(systemName: "arrow.up.right").font(.tSystem(size: 12, weight: .semibold))
                         }
                         .foregroundColor(.white)
                         .padding(.horizontal, TSpace.md)
+                        .padding(.vertical, TSpace.xs)
                         .frame(minHeight: 44)
                         .background(Color.tPrimary)
                         .cornerRadius(TRadius.control)
                     }
                     .buttonStyle(.plain)
+                    if up.mislabeled {
+                        Text(UpdateChecker.staleInstallMessage(store))
+                            .font(.tMeta).foregroundColor(.tMuted)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 } else {
                     Button {
                         checkingUpdate = true

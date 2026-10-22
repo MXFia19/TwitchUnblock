@@ -525,5 +525,7 @@
  "bonus de points →": ["points bonus →", "bonificación de puntos →", "бонус баллов →"],
  "pas de session web, pas de bonus": ["no web session, no bonus", "sin sesión web, sin bonificación", "нет веб-сессии, нет бонуса"],
  "JoinRaid inconnu de Twitch": ["JoinRaid unknown to Twitch", "JoinRaid desconocido para Twitch", "JoinRaid неизвестен Twitch"],
- "nouvel essai en requête écrite": ["retrying with the written query", "nuevo intento con la consulta escrita", "повтор с обычным запросом"]
+ "nouvel essai en requête écrite": ["retrying with the written query", "nuevo intento con la consulta escrita", "повтор с обычным запросом"],
+ "Ancien build installé sous le numéro de la dernière version": ["Old build installed under the latest version's number", "Compilación antigua instalada con el número de la última versión", "Старая сборка установлена под номером последней версии"],
+ ") au lieu du build": [") instead of build", ") en lugar de la compilación", ") вместо сборки"]
 }

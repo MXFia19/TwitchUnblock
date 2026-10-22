@@ -1023,4 +1023,11 @@ let kJapaneseStrings: [String: String] = [
     "sched_local_hint": "日時は端末のタイムゾーンで表示しています。",
     "higher_qualities": "より高い画質（チャンネルが提供している場合）",
     "higher_qualities_sub": "Enhanced Broadcasting を使うチャンネルの 1440p 以上（HEVC や AV1 の場合あり）。Twitch はログイン中のアカウントにしか提供しないため、1440p はあなたのアカウント（Web セッション、上の設定）経由で再生されます。サブスクや Turbo がない場合、Twitch の広告枠の間は広告なしの 1080p に切り替わり、終わると元に戻ります。この端末で再生できる形式：{c}。次に開く配信から適用されます。",
+    "version_build": "バージョン {v}（ビルド {b}）",
+    "version_copied": "バージョンをコピーしました",
+    "version_copy_hint": "タップしてコピー",
+    "update_stale_title": "再インストールが必要です",
+    "update_stale_msg": "インストールツールが古いビルド（{b}）を {v} として入れました。実際には {v} ではありません。アプリを削除して、GitHub から入れ直してください。チャンネルと設定を残すには、先にバックアップを書き出してください（設定 → 全般 → バックアップ）。",
+    "update_stale_download": "IPA をダウンロード",
+    "update_stale_short": "古いビルドが入っています：{v} を入れ直す",
 ]

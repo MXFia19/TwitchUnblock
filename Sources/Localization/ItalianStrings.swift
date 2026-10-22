@@ -1022,4 +1022,11 @@ let kItalianStrings: [String: String] = [
     "sched_vacation_range": "In vacanza dal {a} al {b}",
     "sched_none": "Nessuna diretta programmata per ora",
     "sched_local_hint": "Giorni e orari nel fuso orario del tuo dispositivo.",
+    "version_build": "Versione {v} (build {b})",
+    "version_copied": "Versione copiata",
+    "version_copy_hint": "Tocca per copiare",
+    "update_stale_title": "Reinstallazione necessaria",
+    "update_stale_msg": "Il tuo strumento di installazione ha messo una build vecchia ({b}) con il numero {v}: in realtà non hai la {v}. Elimina l'app e reinstallala da GitHub. Per conservare canali e impostazioni, esporta prima un backup (Impostazioni → Generali → Backup).",
+    "update_stale_download": "Scarica l'IPA",
+    "update_stale_short": "Build vecchia installata: reinstalla la {v}",
 ]

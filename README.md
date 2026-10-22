@@ -506,6 +506,12 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   values never sends them. Off, nothing is sent or applied on this device.
 * ⬆️ **Update check** — the app tells you when a new version is out on the
   source, with a shortcut to Feather / SideStore / AltStore.
+* 🔢 **Build number** — Settings → About shows the version and its build
+  (“Version 1.6.0 (build 352)”); a tap copies them, for a bug report.
+* 🩹 **Botched installs spotted** — when an install tool puts an old build under
+  the latest version's number, the update alert explains it (old build N
+  installed as X: delete the app and reinstall it from GitHub, after exporting
+  a backup) and its button downloads the right IPA.
 * 🔔 **Live notifications** — be told when a followed channel goes live
   (checked in the background, as often as iOS allows). For instant ones, even
   with the app closed, turn on **ntfy** (Settings → Features in testing): the

@@ -543,17 +543,25 @@ struct MainTabView: View {
         // Jamais pendant la visite guidée, qui passe avant tout le reste.
         .overlay {
             if onboardingDone, updater.showAlert, let up = updater.available {
+                // Installation ratée (vieil IPA sous le numéro de la dernière
+                // version) : ce qu'il faut faire, et l'IPA à réinstaller,
+                // plutôt qu'une mise à jour qu'on croit déjà avoir.
                 TPromptCard(
-                    icon: "arrow.down.circle.fill",
-                    title: store.t("update_title"),
-                    message: store.t(up.changes.isEmpty ? "update_msg_short" : "update_whats_new"),
+                    icon: up.mislabeled ? "exclamationmark.triangle.fill" : "arrow.down.circle.fill",
+                    title: store.t(up.mislabeled ? "update_stale_title" : "update_title"),
+                    message: up.mislabeled ? UpdateChecker.staleInstallMessage(store)
+                        : store.t(up.changes.isEmpty ? "update_msg_short" : "update_whats_new"),
                     // Même version (builds de test) : le numéro de build les distingue.
                     detail: UpdateChecker.installedVersion == up.version
                         ? "\(up.version) (\(UpdateChecker.installedBuild))  →  \(up.version) (\(up.build))"
                         : "\(UpdateChecker.installedVersion)  →  \(up.version)",
-                    primary: store.t("update_open"),
+                    primary: store.t(up.mislabeled ? "update_stale_download" : "update_open"),
                     secondary: store.t("later"),
-                    onPrimary: { withAnimation(.spring(response: 0.3)) { updater.dismiss() }; UpdateChecker.openSource() },
+                    onPrimary: {
+                        withAnimation(.spring(response: 0.3)) { updater.dismiss() }
+                        if up.mislabeled { UpdateChecker.openDownload(up.downloadURL) }
+                        else { UpdateChecker.openSource() }
+                    },
                     onSecondary: { withAnimation(.spring(response: 0.3)) { updater.dismiss() } },
                     // Nouveautés de chaque build manquant, du plus récent au plus ancien.
                     sections: up.changes.map { c -> TPromptCard.PromptSection in

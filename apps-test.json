@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.6.7",
+          "buildVersion": "353",
+          "date": "2026-10-22",
+          "localizedDescription": "- The backup now carries everything to move between the app and TU Test: pinned channels, all settings (appearance, notifications, player, downloads…), the customization and Continue watching, never your Twitch sign-ins\n- Importing a backup asks Everything or Channels only, then lists what was restored\n- Long-press a video in Continue watching to resume it or remove it from the list\n- Settings → About shows the build number next to the version (tap to copy)\n- When an install tool put an old build under the latest version's number, the update alert explains how to reinstall and links to the right IPA\n- The app now follows iOS's text size (up to Accessibility 2), live: Home, Discover, search, channel pages, settings and chat messages get bigger\n- Other improvements and fixes",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-353/TwitchUnblock.ipa",
+          "size": 4442091,
+          "commit": "4040bba54215de59a78c4f897ab193ed8fc63d32"
+        },
+        {
           "version": "1.6.0",
           "buildVersion": "351",
           "date": "2026-10-20",
@@ -280,25 +289,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-320/TwitchUnblock.ipa",
           "size": 3803685,
           "commit": "a87a8d04051698137d7fffde5f8e13d2e97836a3"
-        },
-        {
-          "version": "1.4.19",
-          "buildVersion": "319",
-          "date": "2026-10-18",
-          "localizedDescription": "- Multi-live: tiles change quality when you add or remove lives, a tile stuck loading retries by itself then offers Retry, a light spinner shows while a tile buffers, and raids no longer stop being detected\n- Chat: messages waiting for the delay sync are no longer lost when the chat reconnects, your own Twitch emotes show as emotes, highlight words can be several words or emote names, the ⋯ menu is available without an account, and closing the emote picker brings the keyboard back\n- Chat: switching or logging out of your account reconnects the chat correctly, a reply from a thread that couldn't be sent stays in the field with the reason, and chat name colors are translated\n- Polls and predictions keep showing when your web session has expired, a refused vote says why, and the emote picker fills in as emotes finish loading",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-319/TwitchUnblock.ipa",
-          "size": 3797716,
-          "commit": "4f936e2de844d8cb8ccb55150665fd381b6d7c1d"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.6.0",
-      "versionDate": "2026-10-20",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-351/TwitchUnblock.ipa",
-      "size": 4381506
+      "version": "1.6.7",
+      "versionDate": "2026-10-22",
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-353/TwitchUnblock.ipa",
+      "size": 4442091
     }
   ],
   "news": []

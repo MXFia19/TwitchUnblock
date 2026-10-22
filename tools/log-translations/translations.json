@@ -531,5 +531,10 @@
  "ignoré(s),": ["skipped,", "omitido(s),", "пропущено,"],
  "réglage(s) repris,": ["setting(s) restored,", "ajuste(s) restaurado(s),", "настроек восстановлено,"],
  "Sauvegarde exportée": ["Backup exported", "Copia exportada", "Резервная копия экспортирована"],
- "vidéo(s) à reprendre": ["video(s) to resume", "vídeo(s) para seguir viendo", "видео для продолжения"]
+ "vidéo(s) à reprendre": ["video(s) to resume", "vídeo(s) para seguir viendo", "видео для продолжения"],
+ "mesuré": ["measured", "medido", "измерено"],
+ "mesuré pour": ["measured for", "medido para", "измерено при"],
+ "bord de l'enregistrement rattrapé": ["caught up with the edge of the recording", "borde de la grabación alcanzado", "край записи догнан"],
+ "Loin du bord de l'enregistrement : vitesse rendue": ["Away from the edge of the recording: speed given back", "Lejos del borde de la grabación: velocidad devuelta", "Далеко от края записи: скорость возвращена"],
+ "Vitesse non tenue : réappliquée": ["Speed not kept up: applied again", "Velocidad no sostenida: aplicada de nuevo", "Скорость не держится: применена снова"]
 }

@@ -109,6 +109,17 @@ struct PlayerMenuSheet: View {
                                         }
                                         .id(s)
                                     }
+                                    // Au-delà de 2× : expérimental (éprouvette),
+                                    // séparé des crans garantis par un trait.
+                                    Rectangle().fill(Color.tBorder).frame(width: 1, height: 20)
+                                    ForEach(VodSpeed.experimental, id: \.self) { s in
+                                        TChip(title: VodSpeed.label(s, store.lang), icon: "testtube.2",
+                                              isOn: abs(s - speed) < 0.01) {
+                                            onSelectSpeed(s)
+                                        }
+                                        .id(s)
+                                        .accessibilityLabel(VodSpeed.label(s, store.lang) + ", " + store.t("speed_experimental"))
+                                    }
                                 }
                                 .padding(.horizontal, TSpace.lg)
                             }
@@ -116,7 +127,15 @@ struct PlayerMenuSheet: View {
                             // cours (souvent « Normale ») reste en vue.
                             .onAppear { proxy.scrollTo(VodSpeed.nearest(speed), anchor: .center) }
                         }
-                        .padding(.vertical, TSpace.sm)
+                        .padding(.top, TSpace.sm)
+
+                        Text(store.t("speed_experimental_note"))
+                            .font(.tMeta).foregroundColor(.tMuted)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, TSpace.lg)
+                            .padding(.top, TSpace.xs)
+                            .padding(.bottom, TSpace.sm)
 
                         divider
                     }

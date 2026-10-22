@@ -29,8 +29,12 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
     /// Vitesse hors direct, et crans du menu système (vides en direct).
     var speed: Double = 1
     var speedOptions: [AVPlaybackSpeed] = []
-    /// Vitesse choisie dans le menu d'Apple (ou imposée) : retenue par le parent.
+    /// Vitesse choisie dans le menu d'Apple : retenue par le parent.
     var onSpeedChange: (Double) -> Void = { _ in }
+    /// Vitesse imposée (bord d'un enregistrement en cours, AirPlay, vitesse
+    /// non tenue), ou rendue loin de ce bord : pour cette lecture seulement,
+    /// avec l'annonce à afficher (clé de traduction ; nil : la vitesse rendue).
+    var onSpeedForced: (Double, String?) -> Void = { _, _ in }
     /// Pause pub du direct (bandeau du parent) : suit chaque nouvel AVPlayer.
     var adBreaks: AdBreakWatcher? = nil
     /// Lecture en cours ou non (pause, fin, échec), à chaque changement.
@@ -45,6 +49,7 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
         context.coordinator.playerVC = vc
         context.coordinator.adBreaks = adBreaks
         context.coordinator.onSpeedChange = onSpeedChange
+        context.coordinator.onSpeedForced = onSpeedForced
         context.coordinator.onPlaying = onPlaying
         // Reprise : la progression enregistrée (une VOD vue jusqu'au bout
         // repart du début).
@@ -86,7 +91,9 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
     /// d'où `defaultRate` (1× en direct, même après une VOD en accéléré).
     private func applySpeed(_ vc: AVPlayerViewController, player: AVPlayer, context: Context) {
         vc.speeds = isLive ? [] : speedOptions
-        let rate = isLive ? 1 : VodSpeed.nearest(speed)
+        // Le menu d'Apple n'a que les crans jusqu'à 2× : une vitesse
+        // expérimentale (lecteur immersif) n'y passe pas.
+        let rate = isLive ? 1 : VodSpeed.nearestSafe(speed)
         context.coordinator.speed = rate
         player.defaultRate = Float(rate)
         if let option = vc.speeds.first(where: { abs(Double($0.rate) - rate) < 0.01 }) {
@@ -97,6 +104,7 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
     func updateUIViewController(_ vc: AVPlayerViewController, context: Context) {
         let coordinator = context.coordinator
         coordinator.onSpeedChange = onSpeedChange
+        coordinator.onSpeedForced = onSpeedForced
         coordinator.onPlaying = onPlaying
         // Comparée à l'adresse demandée, pas à celle de l'élément : après un
         // repli AirPlay (playlist du CDN), elles différaient toujours, et le
@@ -154,6 +162,15 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
         /// Vitesse retenue hors direct, et qui la reçoit quand elle change.
         var speed: Double = 1
         var onSpeedChange: (Double) -> Void = { _ in }
+        var onSpeedForced: (Double, String?) -> Void = { _, _ in }
+        /// Vitesse d'avant le retour à 1× au bord d'un enregistrement en
+        /// cours : rendue quand la lecture s'en éloigne (retour en arrière).
+        private var edgeHeldSpeed: Double?
+        /// Vitesse réellement tenue (EffectiveRateProbe), comme le lecteur
+        /// immersif : fenêtres manquées de suite, vitesse déjà réappliquée.
+        private var rateProbe = EffectiveRateProbe()
+        private var rateMisses = 0
+        private var rateReapplied = false
         /// Lecture en cours ou non (voir NativeVideoPlayer.onPlaying), et la
         /// dernière annoncée pour le lecteur en cours.
         var onPlaying: (Bool) -> Void = { _ in }
@@ -518,6 +535,7 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
             interruptions?.settle()
             sync.reset()
             activityDuration = 0
+            resetRateCheck()
             // Journaux LIVE et sauts du lecteur : réabonnés à chaque nouvel
             // AVPlayer (changement de qualité).
             diagnostics = LiveDiagnostics(player: player) { [weak self] in self?.isLive ?? false }
@@ -546,6 +564,8 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
                 guard let self, let item = note.object as? AVPlayerItem,
                       item === self.playerRef?.currentItem else { return }
                 self.timeJumped(item)
+                // La vitesse tenue se mesure de nouveau après le saut.
+                self.rateProbe.reset()
                 // Saut (barre, ±15 s, reprise) : la Live Activity repart d'ici.
                 self.updateActivity()
             }
@@ -566,25 +586,42 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
             // Lecture ou pause (commandes d'Apple, écran verrouillé, appel,
             // fin) : la Live Activity la suit, le parent aussi (écran allumé).
             lastPlaying = nil
-            timeControlObs = player.observe(\.timeControlStatus, options: [.new]) { [weak self] _, _ in
+            timeControlObs = player.observe(\.timeControlStatus, options: [.new]) { [weak self] p, _ in
                 DispatchQueue.main.async {
+                    // Pause ou attente : la vitesse tenue ne se mesure que sur
+                    // une lecture continue.
+                    if p.timeControlStatus != .playing { self?.rateProbe.reset() }
                     self?.updateActivity()
                     self?.reportPlaying()
                 }
             }
-            // Vitesse choisie dans le menu d'Apple, ou imposée (AirPlay) : elle
-            // devient la vitesse par défaut (play() la rend après une pause) et
-            // la vitesse retenue. Rien en direct, ni en pause.
+            // Vitesse changée hors de nous : elle devient la vitesse par
+            // défaut (play() la rend après une pause). Choisie dans le menu
+            // d'Apple, elle est retenue par le parent ; imposée (AirPlay, bord
+            // d'un enregistrement en cours), pour cette lecture seulement.
+            // Rien en direct, ni en pause.
             if let rateObserver { NotificationCenter.default.removeObserver(rateObserver) }
             rateObserver = NotificationCenter.default.addObserver(
                 forName: AVPlayer.rateDidChangeNotification, object: player, queue: .main
-            ) { [weak self, weak player] _ in
+            ) { [weak self, weak player] note in
                 guard let self, let player, !self.isLive, player.rate > 0 else { return }
                 let v = VodSpeed.nearest(Double(player.rate))
                 guard abs(v - self.speed) > 0.01 else { return }
+                let raw = note.userInfo?[AVPlayer.rateDidChangeReasonKey]
+                let reason = (raw as? AVPlayer.RateDidChangeReason)?.rawValue ?? (raw as? String)
+                let chosen = reason == nil || reason == AVPlayer.RateDidChangeReason.setRateCalled.rawValue
+                let held = self.speed
                 self.speed = v
                 player.defaultRate = Float(v)
-                self.onSpeedChange(v)
+                self.resetRateCheck()
+                if chosen {
+                    self.edgeHeldSpeed = nil
+                    self.onSpeedChange(v)
+                } else {
+                    let atEdge = v < held && (player.currentItem.map { Coordinator.nearRecordingEdge($0) } ?? false)
+                    self.edgeHeldSpeed = atEdge ? held : nil
+                    self.onSpeedForced(v, atEdge ? "speed_caught_up" : "speed_unavailable")
+                }
                 self.updateActivity()
             }
             // 1 s : assez fin pour synchroniser le chat des VODs.
@@ -625,8 +662,96 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
                         self.updateActivity()
                     }
                 }
+                // Vitesse : bord d'un enregistrement en cours, vitesse tenue.
+                if !self.isLive, let p = player, let item = p.currentItem, self.pendingSeek == nil {
+                    self.checkRecordingEdge(p, item)
+                    self.checkEffectiveRate(p)
+                }
                 self.catchUpIfNeeded()
             }
+        }
+
+        // MARK: Vitesse (hors direct)
+        /// Enregistrement d'un direct en cours (pas de fin déclarée) lu près de
+        /// son bord : en accéléré, on le rattrape.
+        static func nearRecordingEdge(_ item: AVPlayerItem) -> Bool {
+            guard !item.duration.seconds.isFinite,
+                  let range = item.seekableTimeRanges.last?.timeRangeValue else { return false }
+            let end = (range.start + range.duration).seconds, at = item.currentTime().seconds
+            return end.isFinite && at.isFinite && end > 0 && end - at < 20
+        }
+
+        /// Loin du bord d'un enregistrement en cours (retour en arrière), ou
+        /// enregistrement terminé : la vitesse peut revenir. Écart avec
+        /// `nearRecordingEdge` pour ne pas osciller.
+        private static func clearOfRecordingEdge(_ item: AVPlayerItem) -> Bool {
+            if item.duration.seconds.isFinite { return true }
+            guard let range = item.seekableTimeRanges.last?.timeRangeValue else { return false }
+            let end = (range.start + range.duration).seconds, at = item.currentTime().seconds
+            return end.isFinite && at.isFinite && end > 0 && end - at > 45
+        }
+
+        /// Accéléré au bord d'un enregistrement en cours, la lecture ne peut
+        /// pas aller plus vite que la diffusion : 1×, montré dans le menu
+        /// d'Apple (il affichait encore 2×). La vitesse d'avant revient quand
+        /// la lecture s'éloigne du bord (retour en arrière).
+        private func checkRecordingEdge(_ player: AVPlayer, _ item: AVPlayerItem) {
+            if speed > 1, player.rate > 1, Coordinator.nearRecordingEdge(item) {
+                let held = speed
+                impose(1, on: player, notice: "speed_caught_up")
+                edgeHeldSpeed = held
+                logger.info("LECTEUR", "Vitesse ramenée à " + String(format: "×%g", 1.0),
+                            "bord de l'enregistrement rattrapé")
+            } else if let held = edgeHeldSpeed, player.rate > 0, Coordinator.clearOfRecordingEdge(item) {
+                edgeHeldSpeed = nil
+                impose(held, on: player, notice: nil)
+                logger.info("LECTEUR", "Loin du bord de l'enregistrement : vitesse rendue", String(format: "×%g", held))
+            }
+        }
+
+        /// Vitesse réellement tenue (voir EffectiveRateProbe) : d'abord
+        /// réappliquée, puis, si la lecture ne la suit toujours pas, adoptée
+        /// telle qu'elle joue — le menu d'Apple montre ce qui joue.
+        private func checkEffectiveRate(_ player: AVPlayer) {
+            guard speed != 1, UIApplication.shared.applicationState == .active,
+                  let measured = rateProbe.sample(player) else { return }
+            guard abs(measured - speed) > max(0.15, speed * 0.12) else { rateMisses = 0; return }
+            rateMisses += 1
+            guard rateMisses >= 2 else { return }
+            rateMisses = 0
+            guard rateReapplied else {
+                rateReapplied = true
+                logger.warn("LECTEUR", "Vitesse non tenue : réappliquée",
+                            String(format: "×%.2f mesuré pour ×%g", measured, speed))
+                player.playImmediately(atRate: Float(speed))
+                rateProbe.reset()
+                return
+            }
+            let real = VodSpeed.nearestSafe(measured)
+            impose(real, on: player, notice: "speed_unavailable")
+            logger.info("LECTEUR", "Vitesse ramenée à " + String(format: "×%g", real),
+                        String(format: "×%.2f mesuré", measured))
+        }
+
+        private func resetRateCheck() {
+            rateProbe.reset()
+            rateMisses = 0
+            rateReapplied = false
+        }
+
+        /// Vitesse posée par le lecteur lui-même : `speed` d'abord, pour que
+        /// l'observateur de vitesse y reconnaisse la sienne ; le menu d'Apple
+        /// la montre ; le parent la garde pour cette lecture seulement.
+        private func impose(_ v: Double, on player: AVPlayer, notice: String?) {
+            speed = v
+            resetRateCheck()
+            player.defaultRate = Float(v)
+            if let vc = playerVC, let option = vc.speeds.first(where: { abs(Double($0.rate) - v) < 0.01 }) {
+                vc.selectSpeed(option)
+            }
+            if player.rate != 0, abs(Double(player.rate) - v) > 0.01 { player.rate = Float(v) }
+            onSpeedForced(v, notice)
+            updateActivity()
         }
 
         // MARK: Live Activity
@@ -749,6 +874,10 @@ struct VideoPlayerView: View {
     /// reçoit quand on la change dans le menu d'Apple.
     var speed: Double = 1
     var onSpeedChange: (Double) -> Void = { _ in }
+    /// Vitesse imposée par le lecteur (bord d'un enregistrement en cours,
+    /// AirPlay, vitesse non tenue) ou rendue loin de ce bord : pour cette
+    /// lecture seulement, annoncée par-dessus l'image.
+    var onSpeedForced: (Double) -> Void = { _ in }
     /// Position de lecture remontee au parent (utilisee par le chat des VODs).
     var onTime: (Double) -> Void = { _ in }
     /// Latence du direct remontee au parent (affichage).
@@ -969,6 +1098,13 @@ struct VideoPlayerView: View {
                                 localizedName: $0 == 1 ? store.t("speed_normal") : VodSpeed.label($0, store.lang))
             },
             onSpeedChange: onSpeedChange,
+            onSpeedForced: { v, key in
+                onSpeedForced(v)
+                // Vitesse rendue (pas de clé) : « Vitesse 2× », comme le
+                // lecteur immersif.
+                showNotice(key.map { store.t($0) }
+                           ?? store.t("speed") + " " + (v == 1 ? store.t("speed_normal") : VodSpeed.label(v, store.lang)))
+            },
             adBreaks: adBreaks,
             // Audio seul : rien à regarder, l'écran peut s'éteindre.
             onPlaying: { playing in onPlaying(playing && !isAudioQuality(quality)) }

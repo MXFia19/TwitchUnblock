@@ -400,7 +400,7 @@ enum Backup {
         words("blockedUsers", 500) { store.chatBlockedUsers = $0 }
         words("highlightWords", 30) { store.chatHighlightWords = $0 }
         bool("shareUsage") { store.shareUsage = $0 }
-        num("vodSpeed", 0.25...2) { store.vodSpeed = VodSpeed.nearest($0) }
+        num("vodSpeed", 0.25...2) { store.vodSpeed = VodSpeed.nearestSafe($0) }
         // Ordre des sources du direct (nom du site) : sources connues, sans
         // doublon, celles qui manquent à la fin.
         if let v = s["liveSourceOrder"] as? [String] {

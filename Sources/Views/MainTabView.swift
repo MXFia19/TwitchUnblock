@@ -1144,6 +1144,7 @@ struct MainTabView: View {
                 speed: playbackSpeed,
                 // Toujours une vitesse imposée par le lecteur (voir forcedVodSpeed).
                 onSpeedChange: { setForcedSpeed($0) },
+                onSpeedRestore: { restoreChosenSpeed($0) },
                 notice: slowNetworkNotice ?? hqNotice ?? accountNotice,
                 onProgress: { time in
                     // Pendant une bascule, `playerMode` désigne déjà la
@@ -1202,6 +1203,9 @@ struct MainTabView: View {
                 nowPlaying: nowPlayingMeta,
                 speed: playbackSpeed,
                 onSpeedChange: { setPlaybackSpeed($0) },
+                // Imposée (bord d'un enregistrement, AirPlay) : pour cette
+                // lecture seulement, comme dans le lecteur immersif.
+                onSpeedForced: { setForcedSpeed($0) },
                 onTime: { vodPlaybackTime = $0 },
                 onLatency: { updateLatency($0) },
                 onBehind: { updateBehind($0) },
@@ -1640,6 +1644,10 @@ struct MainTabView: View {
         let speed = VodSpeed.nearest(v)
         if isClipPlaying {
             clipSpeed = speed
+        } else if VodSpeed.isExperimental(speed) {
+            // Au-delà de 2× (expérimental) : pour cette lecture seulement. La
+            // préférence, partagée avec le site, reste dans ses crans.
+            forcedVodSpeed = speed
         } else {
             forcedVodSpeed = nil
             if speed != store.vodSpeed {
@@ -1649,8 +1657,8 @@ struct MainTabView: View {
         }
     }
 
-    /// Vitesse imposée par le lecteur immersif : retenue pour cette lecture
-    /// seulement (voir `forcedVodSpeed`) ; celle d'un clip, comme un choix.
+    /// Vitesse imposée par le lecteur : retenue pour cette lecture seulement
+    /// (voir `forcedVodSpeed`) ; celle d'un clip, comme un choix.
     private func setForcedSpeed(_ v: Double) {
         let speed = VodSpeed.nearest(v)
         if isClipPlaying {
@@ -1658,6 +1666,16 @@ struct MainTabView: View {
         } else {
             forcedVodSpeed = speed == store.vodSpeed ? nil : speed
         }
+    }
+
+    /// Lecteur immersif revenu loin du bord d'un enregistrement en cours
+    /// (retour en arrière) : la vitesse d'avant le retour à 1× revient — la
+    /// préférence, ou une vitesse expérimentale choisie pour cette lecture.
+    /// Seulement si celle de la lecture est encore imposée : un choix fait
+    /// entre-temps dans le menu ⋯ l'emporte.
+    private func restoreChosenSpeed(_ held: Double) {
+        guard !isClipPlaying, forcedVodSpeed != nil else { return }
+        forcedVodSpeed = VodSpeed.isExperimental(held) ? VodSpeed.nearest(held) : nil
     }
 
     // MARK: – Mini-barre (lecteur réduit)

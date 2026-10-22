@@ -71,8 +71,15 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   is remembered from one VOD to the next, shown next to the timer, and synced
   with the website through the backup file; clips start at 1×, live streams
   always play at normal speed. Catching up with a live recording drops back to
-  1× near its edge, and a speed the player can't keep (AirPlay, slow motion
-  refused) is announced; in both cases 1× becomes the remembered speed.
+  1× near its edge (Apple's player too, whose menu used to keep showing 2×),
+  and the chosen speed comes back once you rewind away from the edge. A speed
+  the player can't keep (AirPlay, slow motion refused, or measured lower than
+  asked once applied again) is announced and shown as it really plays, for
+  the current video only.
+* 🧪 **Experimental 2.25×, 2.5× and 3×** — in the ⋯ menu of the app's player,
+  marked with a test tube, for the current video only. Twitch publishes no
+  I-frame playlists, so iOS only guarantees up to 2×: as soon as playback
+  can't keep up (speed refused or measured lower, stall), it goes back to 2×.
 * ⏩ **Double-tap to skip ±10 s** — consecutive taps add up, so three taps read
   "+30 s" instead of three separate "+10 s". On a live there's nothing to skip
   ahead to: in landscape, double-tap shows or hides the chat instead, and once

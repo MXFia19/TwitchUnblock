@@ -185,6 +185,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.6.29",
+          "buildVersion": "355",
+          "date": "2026-10-22",
+          "localizedDescription": "- Settings: the app no longer crashes when opening Settings on iOS 18",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-355/TwitchUnblock.ipa",
+          "size": 4522536,
+          "commit": "1663231a6b4a778553e55f1977cd78cc2a92d57e"
+        },
+        {
           "version": "1.6.28",
           "buildVersion": "354",
           "date": "2026-10-22",
@@ -264,25 +273,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-345/TwitchUnblock.ipa",
           "size": 4280124,
           "commit": "14c0754c3f4ac46c356f1eb57e26bf6600ac03aa"
-        },
-        {
-          "version": "1.5.22",
-          "buildVersion": "342",
-          "date": "2026-10-20",
-          "localizedDescription": "- Smoother swipe-down to minimize the player (thanks to dwojc6)\n- Italian interface language (thanks to Domenico-lel)\n- Other improvements and fixes",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-342/TwitchUnblock.ipa",
-          "size": 4274993,
-          "commit": "d28a2794a10e917f6ebdbac57557581c5a762317"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.6.28",
+      "version": "1.6.29",
       "versionDate": "2026-10-22",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-354/TwitchUnblock.ipa",
-      "size": 4570361
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-355/TwitchUnblock.ipa",
+      "size": 4522536
     }
   ],
   "news": []

@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.6.37",
+          "buildVersion": "357",
+          "date": "2026-10-22",
+          "localizedDescription": "- Other improvements and fixes",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-357/TwitchUnblock.ipa",
+          "size": 4547710,
+          "commit": "95e378417e8263868a27a00fac86f44c7a978232"
+        },
+        {
           "version": "1.6.35",
           "buildVersion": "356",
           "date": "2026-10-22",
@@ -280,25 +289,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-324/TwitchUnblock.ipa",
           "size": 3891258,
           "commit": "52a771bbda917fbdab27d9fdbcbf8605c71cfc36"
-        },
-        {
-          "version": "1.4.23",
-          "buildVersion": "323",
-          "date": "2026-10-19",
-          "localizedDescription": "- New Discover tab: one live per screen to swipe through, with a muted preview, plus today's top clips; tap to open the player with sound and chat\n- Discover: follow, share or hide a channel or category right from the feed\n- Settings → Discover tab hides it if you don't want it",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-323/TwitchUnblock.ipa",
-          "size": 3889630,
-          "commit": "cc9a75b1258b9f24e2ca3c3d1c3c56df7daedb80"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.6.35",
+      "version": "1.6.37",
       "versionDate": "2026-10-22",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-356/TwitchUnblock.ipa",
-      "size": 4546453
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-357/TwitchUnblock.ipa",
+      "size": 4547710
     }
   ],
   "news": []

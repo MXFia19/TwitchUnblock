@@ -1119,11 +1119,33 @@ struct TVAccountTab: View {
 
                 hiddenSection
 
+                aboutSection
+
                 logsSection
             }
             .padding(64)
         }
         // L'attente du code n'est plus annulée en quittant l'onglet (TVSession).
+    }
+
+    /// À propos : version et numéro de build de l'app (« Version 0.1.34
+    /// (build 34) » pour un build de la CI), pour décrire un problème ou
+    /// vérifier qu'une mise à jour est bien installée.
+    private var aboutSection: some View {
+        let info = Bundle.main.infoDictionary
+        let version = info?["CFBundleShortVersionString"] as? String ?? "?"
+        let build = info?["CFBundleVersion"] as? String ?? "?"
+        return VStack(alignment: .leading, spacing: 16) {
+            Text(session.t("tv_about")).font(.title3.bold())
+            Text(session.t("tv_version")
+                    .replacingOccurrences(of: "{v}", with: version)
+                    .replacingOccurrences(of: "{b}", with: build))
+                .foregroundColor(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        // Atteignable à la télécommande : sans rien d'autre à focaliser
+        // dessous (aucune erreur), la page ne défilerait pas jusqu'à elle.
+        .focusable()
     }
 
     /// Erreurs et alertes récentes du journal (gardé entre les lancements) :

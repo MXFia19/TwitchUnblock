@@ -665,6 +665,8 @@ unsigned `tv-test-N` pre-release:
   the channels. It waits until the backend counts the Apple TV on its own.
 * Account's settings move one row at a time with the remote, land on the
   ticked option, and always lead back up to the tab bar.
+* Account → **About** shows the app's version and build number (“Version
+  0.1.N (build N)”), to check an update or report a problem.
 * A preferred quality (Account → Settings), same rule as the iPhone: the
   closest one below when the channel doesn't have it; picking a quality in the
   player's bar replaces it.

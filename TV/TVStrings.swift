@@ -73,6 +73,8 @@ private let tvStrings: [Lang: [String: String]] = [
         "tv_resume_hidden": "Masquée",
         "tv_resume_play": "Reprendre",
         "tv_resume_remove": "Retirer de la liste",
+        "tv_about": "À propos",
+        "tv_version": "Version {v} (build {b})",
     ],
     .en: [
         "tv_following": "Following",
@@ -143,6 +145,8 @@ private let tvStrings: [Lang: [String: String]] = [
         "tv_resume_hidden": "Hidden",
         "tv_resume_play": "Resume",
         "tv_resume_remove": "Remove from list",
+        "tv_about": "About",
+        "tv_version": "Version {v} (build {b})",
     ],
     .es: [
         "tv_following": "Seguidos",
@@ -213,6 +217,8 @@ private let tvStrings: [Lang: [String: String]] = [
         "tv_resume_hidden": "Oculta",
         "tv_resume_play": "Reanudar",
         "tv_resume_remove": "Quitar de la lista",
+        "tv_about": "Acerca de",
+        "tv_version": "Versión {v} (build {b})",
     ],
     .ru: [
         "tv_following": "Отслеживаемые",
@@ -283,6 +289,8 @@ private let tvStrings: [Lang: [String: String]] = [
         "tv_resume_hidden": "Скрыт",
         "tv_resume_play": "Продолжить",
         "tv_resume_remove": "Убрать из списка",
+        "tv_about": "О приложении",
+        "tv_version": "Версия {v} (сборка {b})",
     ],
     .it: [
         "tv_following": "Seguiti",
@@ -353,6 +361,8 @@ private let tvStrings: [Lang: [String: String]] = [
         "tv_resume_hidden": "Nascosta",
         "tv_resume_play": "Riprendi",
         "tv_resume_remove": "Rimuovi dall’elenco",
+        "tv_about": "Informazioni",
+        "tv_version": "Versione {v} (build {b})",
     ],
     .ja: [
         "tv_following": "フォロー中",
@@ -423,6 +433,8 @@ private let tvStrings: [Lang: [String: String]] = [
         "tv_resume_hidden": "非表示",
         "tv_resume_play": "再開",
         "tv_resume_remove": "リストから削除",
+        "tv_about": "このアプリについて",
+        "tv_version": "バージョン {v} (ビルド {b})",
     ],
 ]
 

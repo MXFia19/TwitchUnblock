@@ -60,6 +60,8 @@ struct MainTabView: View {
     @State private var showDownloadSheet = false
     /// Multi-live : la sélection, et la mosaïque ouverte.
     @ObservedObject private var multi = MultiLive.shared
+    /// Image dans l'image du lecteur : la mini-barre le dit (voir PlayerPiP).
+    @ObservedObject private var pipState = PlayerPiP.shared
     @State private var showMultiLive = false
     @State private var liveStartedAt: Date? = nil
     @State private var liveUptimeText: String = ""
@@ -774,8 +776,10 @@ struct MainTabView: View {
         // Lecteur réduit (ou fermé) après le bouton de rotation : sur iPhone,
         // le reste de l'app revient au portrait au lieu de rester couché. Le
         // clavier du chat se ferme aussi : il restait par-dessus l'app.
+        // Rouvert en grand (mini-barre, notification…) pendant un PiP :
+        // l'image revient dans le lecteur, qui restait noir sinon.
         .onChange(of: playerVisible) { visible in
-            guard !visible else { return }
+            guard !visible else { PlayerPiP.shared.playerShown(); return }
             PlayerOrientation.restorePortraitIfForced()
             UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder),
                                             to: nil, from: nil, for: nil)
@@ -1171,7 +1175,7 @@ struct MainTabView: View {
                 onPlaying: { playerPlaying = $0 },
                 onPull: { pullPlayer($0) },
                 onPullEnd: { endPull($0, predicted: $1) },
-                onReduce: { reducePlayer() },
+                onReduce: { leavePlayer() },
                 onClose:  { stopPlayer() },
                 onMenu:   { showPlayerMenu = true },
                 onRefresh: { reloadCurrent() },
@@ -1196,7 +1200,9 @@ struct MainTabView: View {
                 // Qualités supérieures sans abonnement : pauses pub et échec
                 // du flux du compte (voir adBreakChanged).
                 onAdBreak: { adBreakChanged($0) },
-                onFailed: { hqStreamFailed() }
+                onFailed: { hqStreamFailed() },
+                onPiPStart: { pipStarted() },
+                onPiPRestore: { pipRestore() }
             )
         } else {
             VideoPlayerView(
@@ -1228,7 +1234,9 @@ struct MainTabView: View {
                 // Qualités supérieures sans abonnement : la qualité du compte au
                 // retour d'une pause pub, et les pauses elles-mêmes.
                 wantedQuality: hqLive?.accountQuality,
-                onAdBreak: { adBreakChanged($0) }
+                onAdBreak: { adBreakChanged($0) },
+                onPiPStart: { pipStarted() },
+                onPiPRestore: { pipRestore() }
             )
         }
     }
@@ -1240,7 +1248,7 @@ struct MainTabView: View {
     @ViewBuilder
     private var playerTopBar: some View {
         HStack(spacing: TSpace.sm) {
-            Button { PlayerPull.guarded { reducePlayer() } } label: {
+            Button { PlayerPull.guarded { leavePlayer() } } label: {
                 Image(systemName: "chevron.down")
                     .font(.system(size: 14, weight: .bold))
                     .foregroundColor(.tPrimary)
@@ -1423,15 +1431,56 @@ struct MainTabView: View {
     }
 
     /// Doigt levé : assez loin (seuil selon la hauteur), ou lancé
-    /// franchement, on réduit ; sinon le lecteur revient à sa place.
+    /// franchement, on quitte le lecteur ; sinon il revient à sa place.
     private func endPull(_ distance: CGFloat, predicted: CGFloat) {
         guard playerVisible, !closingPlayer else { return }
         let threshold = PlayerPull.threshold(for: pull.height)
         if distance >= threshold || (distance > 20 && predicted >= threshold * 1.8) {
-            reducePlayer()
+            leavePlayer()
         } else {
             pullPlayer(0)
         }
+    }
+
+    // MARK: – Image dans l'image (PiP)
+    /// Lecteur quitté (flèche, glissé vers le bas) : avec « PiP en quittant le
+    /// lecteur », la vidéo passe en PiP et le lecteur se réduit à son départ
+    /// (pipStarted) ; sinon, ou si le PiP ne démarre pas, mini-lecteur.
+    private func leavePlayer() {
+        guard playerVisible, !closingPlayer else { return }
+        if pipOnLeaveAllowed, PlayerPiP.shared.startOnLeave(fallback: { reducePlayer() }) { return }
+        reducePlayer()
+    }
+
+    /// « PiP en quittant le lecteur » : lecteur immersif (le natif n'a rien
+    /// de public pour démarrer son PiP), une image à montrer — ni chargement,
+    /// ni erreur, ni chat seul, ni audio seul. Le lecteur dit ensuite s'il
+    /// joue et si AVKit le permet (PlayerPiP.startOnLeave).
+    private var pipOnLeaveAllowed: Bool {
+        guard store.pipOnLeave, store.immersivePlayer, !chatOnly, !loading,
+              errorMsg == nil, let links = qualityLinks else { return false }
+        return !isAudioQuality(currentQuality(links))
+    }
+
+    /// PiP démarré (bouton, app en arrière-plan, lecteur quitté) : le lecteur
+    /// se réduit pour laisser naviguer dans l'app, comme dans les apps vidéo.
+    /// Il restait en grand, noir (l'image partie dans la fenêtre), et il
+    /// fallait le fermer à la main.
+    private func pipStarted() {
+        guard playerVisible, !closingPlayer else { return }
+        reducePlayer()
+    }
+
+    /// Bouton « agrandir » de la fenêtre PiP, ou PiP arrêté pour rouvrir le
+    /// lecteur : il revient en grand sur la même lecture, où AVKit ramène
+    /// l'image. Une feuille ouverte par-dessus (réglages, page d'une chaîne…)
+    /// se ferme : le lecteur serait revenu dessous.
+    private func pipRestore() {
+        guard playerMode != nil, !closingPlayer else { return }
+        if presentationOpen { afterClosingPresentations {} }
+        guard !playerVisible else { return }
+        pull.y = 0
+        withAnimation(.easeInOut(duration: 0.2)) { playerVisible = true }
     }
 
     /// Le lecteur suit le doigt ; 0 = relâché trop tôt, il revient en place.
@@ -1701,7 +1750,9 @@ struct MainTabView: View {
                     .font(.system(size: 13, weight: .bold))
                     .foregroundColor(.tWarning)
             } else {
-                Image(systemName: isLivePlaying ? "dot.radiowaves.left.and.right" : "play.fill")
+                // En PiP, l'image est dans la fenêtre : toucher la barre l'y reprend.
+                Image(systemName: pipState.active ? "pip"
+                      : isLivePlaying ? "dot.radiowaves.left.and.right" : "play.fill")
                     .font(.system(size: 13, weight: .bold))
                     .foregroundColor(isLivePlaying ? .tLive : .tPrimary)
             }

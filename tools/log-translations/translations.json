@@ -664,5 +664,14 @@
  "Emote réaffichée": ["Emote shown again","Emote visible de nuevo","Эмоут снова показан"],
  "Emotes masquées": ["Hidden emotes","Emotes ocultos","Скрытые эмоуты"],
  "toutes réaffichées": ["all shown again","todos visibles de nuevo","все снова показаны"],
- "Zone d'envoi du chat": ["Chat message field","Campo de envío del chat","Поле отправки чата"]
+ "Zone d'envoi du chat": ["Chat message field","Campo de envío del chat","Поле отправки чата"],
+ "PiP démarré": ["PiP started", "PiP iniciado", "PiP запущен"],
+ "PiP arrêté": ["PiP stopped", "PiP detenido", "PiP остановлен"],
+ "PiP impossible": ["PiP couldn't start", "No se pudo iniciar PiP", "Не удалось запустить PiP"],
+ "PiP : retour au lecteur": ["PiP: back to the player", "PiP: vuelta al reproductor", "PiP: возврат в плеер"],
+ "PiP en quittant le lecteur": ["PiP when leaving the player", "PiP al salir del reproductor", "PiP при выходе из плеера"],
+ "PiP demandé en quittant le lecteur": ["PiP requested when leaving the player", "PiP solicitado al salir del reproductor", "PiP запрошен при выходе из плеера"],
+ "PiP pas démarré : mini-lecteur": ["PiP didn't start: mini player", "PiP no se inició: minirreproductor", "PiP не запустился: мини-плеер"],
+ "lecteur natif": ["native player", "reproductor nativo", "нативный плеер"],
+ "lecteur natif ·": ["native player ·", "reproductor nativo ·", "нативный плеер ·"]
 }

@@ -63,6 +63,8 @@ enum SettingsSync {
     ///    ios_chatBadgeScale, ios_chatEmoteScale, ios_chatWidthRatio) :
     ///    apparence, selon l'écran ;
     ///  - ios_immersivePlayer : le lecteur natif sert de repli sur un appareil ;
+    ///  - ios_pipOnLeave : PiP en quittant le lecteur, selon l'écran (téléphone,
+    ///    iPad) ;
     ///  - ios_lowLatency : selon le réseau de l'appareil ;
     ///  - ios_chatSync : le retard du chat suit le lecteur de l'appareil ;
     ///  - ios_autoPurgeCache : stockage de l'appareil ;

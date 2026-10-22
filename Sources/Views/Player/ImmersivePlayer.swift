@@ -186,6 +186,13 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
     /// toujours la fin, B9.1).
     private let pipOwner = "pip " + UUID().uuidString
     private var pipHoldsSession = false
+    /// PiP démarré : le parent réduit le lecteur ; bouton « agrandir » de la
+    /// fenêtre : il le rend en grand (MainTabView, voir PlayerPiP).
+    private let onPiPStart: () -> Void
+    private let onPiPRestore: () -> Void
+    /// Retour au lecteur demandé par la fenêtre PiP, en cours : AVKit arrête
+    /// lui-même le PiP, rien à arrêter de plus (stopPiPForPlayer).
+    private var restoringUI = false
     private var lastCatchUp = Date.distantPast
     private var latency = LiveLatencyController()
     private var sync = LiveSyncEstimator()
@@ -215,11 +222,15 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
     init(url: URL, isLive: Bool, savedTime: Double,
          onProgress: @escaping (Double) -> Void,
          onLatency:  @escaping (Double?) -> Void,
-         onBehind:   @escaping (Double?) -> Void = { _ in }) {
+         onBehind:   @escaping (Double?) -> Void = { _ in },
+         onPiPStart: @escaping () -> Void = {},
+         onPiPRestore: @escaping () -> Void = {}) {
         self.isLive     = isLive
         self.onProgress = onProgress
         self.onLatency  = onLatency
         self.onBehind   = onBehind
+        self.onPiPStart = onPiPStart
+        self.onPiPRestore = onPiPRestore
         super.init()
         // Le son continue écran verrouillé et dans une autre app : sans ça,
         // iOS mettait la vidéo en pause au verrouillage, et les commandes de
@@ -876,6 +887,10 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
         p.delegate = self
         p.canStartPictureInPictureAutomaticallyFromInline = true
         pip = p
+        // Celui que « PiP en quittant le lecteur » et la mini-barre commandent.
+        PlayerPiP.shared.register(self,
+                                  start: { [weak self] in self?.startPiPOnLeave() ?? false },
+                                  stop: { [weak self] in self?.stopPiPForPlayer() })
         // Appelé depuis makeUIView, en pleine mise à jour des vues : publier
         // tout de suite donnait « Publishing changes from within view
         // updates » (bouton PiP absent jusqu'au rendu suivant).
@@ -891,6 +906,25 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
         else { pip.startPictureInPicture() }
     }
 
+    /// Lecteur quitté avec « PiP en quittant le lecteur » (PlayerPiP) : PiP
+    /// seulement pendant une lecture, et si AVKit le permet maintenant (couche
+    /// à l'écran). false sinon : le lecteur se réduit comme avant.
+    func startPiPOnLeave() -> Bool {
+        guard let pip, !tornDown, !failed, isPlaying,
+              !pip.isPictureInPictureActive, pip.isPictureInPicturePossible else { return false }
+        logger.info("LECTEUR", "PiP demandé en quittant le lecteur", nil)
+        pip.startPictureInPicture()
+        return true
+    }
+
+    /// Lecteur rouvert en grand (mini-barre, notification…) pendant un PiP :
+    /// l'image revient dans le lecteur. Rien pendant un retour demandé par la
+    /// fenêtre elle-même : AVKit s'en charge.
+    func stopPiPForPlayer() {
+        guard let pip, pip.isPictureInPictureActive, !restoringUI else { return }
+        pip.stopPictureInPicture()
+    }
+
     /// Session audio prise par le PiP (début) ou rendue (fin, démontage).
     private func holdSessionForPiP(_ on: Bool) {
         guard on != pipHoldsSession else { return }
@@ -901,10 +935,13 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
     /// Fin du PiP, rappelée par AVKit ou faite au démontage (une seule fois) :
     /// le chat peut de nouveau se couper, la session audio est rendue.
     private func pipEnded() {
+        restoringUI = false
         guard pipActive else { return }
         pipActive = false
         PlayerFullscreen.isActive = false
         holdSessionForPiP(false)
+        PlayerPiP.shared.ended(by: self)
+        logger.info("LECTEUR", "PiP arrêté", nil)
     }
 
     /// Vue fermée (croix, mini-barre, autre vidéo, chat seul, autre
@@ -931,6 +968,7 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
         player.replaceCurrentItem(with: nil)
         adBreaks.detach()
         pip = nil
+        PlayerPiP.shared.unregister(self)
         holdSessionForPiP(false)
         if let o = spatialObs { NotificationCenter.default.removeObserver(o); spatialObs = nil }
         if let o = goLiveObs { NotificationCenter.default.removeObserver(o); goLiveObs = nil }
@@ -958,7 +996,12 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
         // entre-temps garde les siens (le lien faible vers celui-ci vaut déjà
         // nil ; vers l'autre, non).
         guard !tornDown else { return }
-        if pipActive { PlayerFullscreen.isActive = false }
+        if pipActive {
+            PlayerFullscreen.isActive = false
+            // Lien faible vers ce lecteur déjà nul : la fenêtre n'est plus à
+            // personne, sauf si un autre lecteur l'a prise entre-temps.
+            PlayerPiP.shared.ended(by: nil)
+        }
         if Self.nowPlayingOwner == nil {
             MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
             PlayerActivity.end()
@@ -1083,9 +1126,38 @@ extension ImmersivePlayerModel: AVPictureInPictureControllerDelegate {
         // montrer, et ne doit rien retenir.
         guard !tornDown else { c.stopPictureInPicture(); return }
         pipActive = true
+        restoringUI = false
         PlayerFullscreen.isActive = true   // garde l'IRC et les points actifs
         holdSessionForPiP(true)
+        logger.info("LECTEUR", "PiP démarré", nil)
+        PlayerPiP.shared.started(by: self)
+        // Le lecteur se réduit (MainTabView) : il restait en grand et noir,
+        // l'image partie dans la fenêtre, et il fallait le fermer à la main.
+        onPiPStart()
     }
+
+    func pictureInPictureController(_ c: AVPictureInPictureController,
+                                    failedToStartPictureInPictureWithError error: Error) {
+        logger.warn("LECTEUR", "PiP impossible", error.localizedDescription)
+        PlayerPiP.shared.failed()
+    }
+
+    /// Bouton « agrandir » de la fenêtre, ou PiP arrêté pour rouvrir le
+    /// lecteur : le lecteur revient en grand (MainTabView), puis AVKit y
+    /// ramène l'image — le même AVPlayer, rien n'est rechargé. Sans ce
+    /// rappel, l'image retournait dans le lecteur réduit, donc invisible : il
+    /// fallait toucher la mini-barre.
+    func pictureInPictureController(_ c: AVPictureInPictureController,
+                                    restoreUserInterfaceForPictureInPictureStopWithCompletionHandler completionHandler: @escaping (Bool) -> Void) {
+        guard !tornDown else { completionHandler(false); return }
+        restoringUI = true
+        logger.info("LECTEUR", "PiP : retour au lecteur", nil)
+        onPiPRestore()
+        // Le temps que le lecteur réapparaisse : AVKit anime alors la fenêtre
+        // jusqu'à sa couche.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { completionHandler(true) }
+    }
+
     func pictureInPictureControllerDidStopPictureInPicture(_ c: AVPictureInPictureController) {
         pipEnded()
     }
@@ -1288,7 +1360,9 @@ struct ImmersivePlayer: View {
          multiLiveFull: Bool = false,
          onRewind: (() -> Void)? = nil,
          onAdBreak: @escaping (Int?) -> Void = { _ in },
-         onFailed: @escaping () -> Void = {}) {
+         onFailed: @escaping () -> Void = {},
+         onPiPStart: @escaping () -> Void = {},
+         onPiPRestore: @escaping () -> Void = {}) {
         self.url = url; self.isLive = isLive; self.dvrEnabled = dvrEnabled
         self.savedTime = savedTime; self.contentID = contentID
         self.info = info; self.onChannel = onChannel
@@ -1311,9 +1385,12 @@ struct ImmersivePlayer: View {
         self.onMultiLive = onMultiLive; self.multiLiveOn = multiLiveOn
         self.multiLiveFull = multiLiveFull; self.onRewind = onRewind
         self.onAdBreak = onAdBreak; self.onFailed = onFailed
+        // PiP : démarré, le parent réduit le lecteur ; agrandi depuis la
+        // fenêtre, il le rend en grand. Rappels du modèle (délégué d'AVKit).
         _model = StateObject(wrappedValue: ImmersivePlayerModel(
             url: url, isLive: isLive, savedTime: savedTime,
-            onProgress: onProgress, onLatency: onLatency, onBehind: onBehind))
+            onProgress: onProgress, onLatency: onLatency, onBehind: onBehind,
+            onPiPStart: onPiPStart, onPiPRestore: onPiPRestore))
     }
 
     /// Un direct sans DVR n'est pas rembobinable : la barre reste décorative.

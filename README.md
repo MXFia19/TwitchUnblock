@@ -269,6 +269,9 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   replayed chat for a VOD) — a button in the mosaic and Settings → Player
   turn it on or off. Each tile plays 1080p alone, 720p with two, 480p
   beyond — or your preferred quality when it is lower.
+* 🔊 **Several sounds in multi-live** — tapping a tile still makes it the
+  only one you hear; tap the speaker on other tiles to hear them too, and
+  long-press it for that tile's volume (100 %, 75 %, 50 %, 25 %).
 
 ### Chat
 

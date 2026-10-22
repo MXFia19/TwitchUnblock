@@ -50,14 +50,21 @@ final class PlayerPiP: ObservableObject {
         immersive = model
         startImmersive = start
         stopImmersive = stop
+        // Nouveau lecteur : la réduction prévue pour le précédent n'a plus
+        // lieu d'être (voir unregister).
+        leaveFallback = nil
     }
 
-    /// Lecteur démonté : plus rien à lui demander (sauf s'il a déjà été remplacé).
+    /// Lecteur démonté : plus rien à lui demander (sauf s'il a déjà été
+    /// remplacé), ni de réduction à faire pour lui. Fermé, ou remplacé par
+    /// une autre vidéo avant la fin des 2 s d'attente du PiP, son repli
+    /// réduisait le lecteur suivant, à peine ouvert en grand.
     func unregister(_ model: AnyObject) {
         guard immersive === model else { return }
         immersive = nil
         startImmersive = nil
         stopImmersive = nil
+        leaveFallback = nil
     }
 
     func started(by player: AnyObject) {

@@ -149,7 +149,11 @@ enum Backup {
             "ios_autoClaimChest": store.autoClaimChest,
             "ios_showPinned": store.showPinnedMessages,
             "ios_showDropsNotice": store.showDropsNotice,
+            "ios_showSpecialEvents": store.showSpecialEvents,
             "ios_showFollowButton": store.showFollowButton,
+            "ios_showChatBell": store.showChatBell,
+            "ios_showChatModes": store.showChatModes,
+            "ios_showChatPoints": store.showChatPoints,
             "ios_showWatchStreak": store.showWatchStreak,
             "ios_showLiveEvents": store.showLiveEvents,
             "ios_showPolls": store.showPolls,
@@ -424,7 +428,11 @@ enum Backup {
         bool("ios_autoClaimChest") { store.autoClaimChest = $0 }
         bool("ios_showPinned") { store.showPinnedMessages = $0 }
         bool("ios_showDropsNotice") { store.showDropsNotice = $0 }
+        bool("ios_showSpecialEvents") { store.showSpecialEvents = $0 }
         bool("ios_showFollowButton") { store.showFollowButton = $0 }
+        bool("ios_showChatBell") { store.showChatBell = $0 }
+        bool("ios_showChatModes") { store.showChatModes = $0 }
+        bool("ios_showChatPoints") { store.showChatPoints = $0 }
         bool("ios_showWatchStreak") { store.showWatchStreak = $0 }
         bool("ios_showLiveEvents") { store.showLiveEvents = $0 }
         bool("ios_showPolls") { store.showPolls = $0 }

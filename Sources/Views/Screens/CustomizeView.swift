@@ -122,33 +122,7 @@ struct CustomizeView: View {
                 }
 
                 // ── Chat : bandeaux au-dessus des messages ──────────
-                Section {
-                    toggle(store.t("cfg_pinned"), icon: "pin.fill",
-                           $store.showPinnedMessages, log: "Messages épinglés")
-                    toggle(store.t("cfg_drops_notice"), icon: "gift.fill",
-                           $store.showDropsNotice, log: "Carte des drops")
-                    toggle(store.t("cust_live_events"), icon: "bolt.fill",
-                           $store.showLiveEvents, log: "Événements live")
-                    // Un par un, sous « Événements du live ».
-                    Group {
-                        toggle(store.t("cust_polls"), icon: "chart.bar.fill",
-                               $store.showPolls, log: "Sondages du chat")
-                        toggle(store.t("cust_predictions"), icon: "sparkles",
-                               $store.showPredictions, log: "Prédictions du chat")
-                        toggle(store.t("hype_train"), icon: "tram.fill",
-                               $store.showHypeTrain, log: "Hype train")
-                    }
-                    .padding(.leading, TSpace.lg)
-                    .disabled(!store.showLiveEvents)
-                    toggle(store.t("cfg_raids"), icon: "person.3.fill",
-                           $store.enableRaids, log: "Système de raid")
-                    toggle(store.t("cfg_streak"), icon: "flame.fill",
-                           $store.showWatchStreak, log: "Série de visionnage")
-                    toggle(store.t("cfg_follow"), icon: "heart.fill",
-                           $store.showFollowButton, log: "Bouton suivre")
-                } header: {
-                    Text(store.t("cust_chat"))
-                }
+                CustomizeChatSection()
 
                 Section {
                     Button(role: .destructive) { confirmReset = true } label: {
@@ -292,5 +266,76 @@ struct CustomizeView: View {
             let tab = MainTabView.TabName(rawValue: key)
             return (tab?.label(store) ?? key, tab?.iconFilled ?? "square")
         }
+    }
+}
+
+// MARK: – Chat
+/// Section « Chat · bandeaux » : bandeaux au-dessus des messages et ce qui
+/// entoure le chat. Struct à part : la liste de CustomizeView porte déjà
+/// toutes les autres sections, et sur iOS 18 un type de vue trop imbriqué
+/// fait déborder la pile à son décodage (voir SettingsView.sectionPage).
+private struct CustomizeChatSection: View {
+    @EnvironmentObject private var store: AppStore
+
+    var body: some View {
+        Section {
+            toggle(store.t("cfg_pinned"), icon: "pin.fill",
+                   $store.showPinnedMessages, log: "Messages épinglés")
+            toggle(store.t("cfg_drops_notice"), icon: "gift.fill",
+                   $store.showDropsNotice, log: "Carte des drops")
+            // Sous les drops de la chaîne : les campagnes de Twitch rangées
+            // dans « Special Events », à masquer à part.
+            toggle(store.t("cust_special_events"), icon: "ticket.fill",
+                   $store.showSpecialEvents, log: "Cartes Special Events")
+                .padding(.leading, TSpace.lg)
+                .disabled(!store.showDropsNotice)
+            toggle(store.t("cust_live_events"), icon: "bolt.fill",
+                   $store.showLiveEvents, log: "Événements live")
+            // Un par un, sous « Événements du live ».
+            Group {
+                toggle(store.t("cust_polls"), icon: "chart.bar.fill",
+                       $store.showPolls, log: "Sondages du chat")
+                toggle(store.t("cust_predictions"), icon: "sparkles",
+                       $store.showPredictions, log: "Prédictions du chat")
+                toggle(store.t("hype_train"), icon: "tram.fill",
+                       $store.showHypeTrain, log: "Hype train")
+            }
+            .padding(.leading, TSpace.lg)
+            .disabled(!store.showLiveEvents)
+            toggle(store.t("cfg_raids"), icon: "person.3.fill",
+                   $store.enableRaids, log: "Système de raid")
+            toggle(store.t("cfg_streak"), icon: "flame.fill",
+                   $store.showWatchStreak, log: "Série de visionnage")
+            // Boutons et pastilles autour des messages : en groupe, la
+            // section reste sous les dix vues d'un ViewBuilder (iOS 16).
+            Group {
+                toggle(store.t("cfg_follow"), icon: "heart.fill",
+                       $store.showFollowButton, log: "Bouton suivre")
+                toggle(store.t("cust_chat_bell"), icon: "bell.fill",
+                       $store.showChatBell, log: "Cloche du chat")
+                toggle(store.t("cust_chat_modes"), icon: "exclamationmark.bubble.fill",
+                       $store.showChatModes, log: "Mode du chat")
+                toggle(store.t("cust_chat_points"), icon: "crown.fill",
+                       $store.showChatPoints, log: "Bouton des points du chat")
+            }
+        } header: {
+            Text(store.t("cust_chat"))
+        } footer: {
+            Text(store.t("cust_special_events_foot") + "\n" + store.t("cust_chat_buttons_foot"))
+        }
+    }
+
+    /// Comme CustomizeView.toggle : la ligne, et le changement au journal.
+    private func toggle(_ title: String, icon: String, _ value: Binding<Bool>, log: String) -> some View {
+        Toggle(isOn: Binding(
+            get: { value.wrappedValue },
+            set: { on in
+                logger.settingChanged(log, value: on ? "activé" : "désactivé")
+                value.wrappedValue = on
+            })) {
+            Label(title, systemImage: icon).foregroundColor(.tText)
+        }
+        .tint(.tPrimary)
+        .listRowBackground(Color.tCard)
     }
 }

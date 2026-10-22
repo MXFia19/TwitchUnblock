@@ -342,6 +342,9 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   of the chat shows the reward, the watch time it takes, the end date and a
   link to the details, like in the Twitch app; dismissed, it stays away for
   that campaign (Settings → Chat → Customization → Channel drops).
+* 🎟 **Special Events** — Twitch's own reward campaigns (category Special
+  Events, e.g. "1 Month of Apple TV") hide on their own, the channel's drops
+  stay (Settings → General → Customize the app → Chat · banners).
 * 📊 **Polls, predictions, hype train** — vote, bet channel points on a
   prediction, see the countdown, the results and the winning outcome. Each
   outcome shows, like the Twitch app, the points bet on it, its return ratio
@@ -360,6 +363,9 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   incoming raids shown with a link to the raider. Each of these can be switched off.
 * 🔦 **Highlights & filters** — messages mentioning you or containing your words
   stand out; hide bots, `!commands`, muted words or someone in particular.
+* 🤖 **Bot commands** — a channel's Nightbot, StreamElements, Fossabot and
+  Moobot commands without typing `!commands`: from the chat's ⋯ menu, or from
+  the channel page, live or offline (tap one to copy it).
 * 🔥 **Watch streak** and a **follow / unfollow** button. Unfollowing, from the
   player or a channel page, asks for confirmation first; from the player, the
   same dialog can hide the button (Settings → Chat → Customization → Follow
@@ -418,6 +424,10 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   default) — for those who only read: the room goes to the messages, in
   portrait, landscape and multi-live; channel points and the chat's ⋯ menu
   stay as small buttons at the bottom right of the chat.
+* 🔕 **Hide the chat's bell, chat mode and crown** (Settings → General →
+  Customize the app → Chat · banners) — the notification bell stays on the
+  channel page, and channel points move to the chat's ⋯ menu (also there in
+  landscape, where the crown never shows).
 
 ### Finding things
 

@@ -683,6 +683,13 @@ struct SearchView: View {
                 }
             }
 
+            // Commandes des bots (Nightbot, StreamElements…) : aussi hors
+            // ligne, quand il n'y a pas de chat pour ouvrir son menu ⋯.
+            if !channelName.isEmpty {
+                BotCommandsButton(channelName: channelName)
+                    .padding(.horizontal, TSpace.lg)
+            }
+
             // Chaîne masquée des listes de découverte : la réafficher d'ici.
             if !channelName.isEmpty, store.hidden.hides(channel: channelName) {
                 Button {

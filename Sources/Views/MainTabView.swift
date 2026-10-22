@@ -60,6 +60,8 @@ struct MainTabView: View {
     @State private var showDownloadSheet = false
     /// Multi-live : la sélection, et la mosaïque ouverte.
     @ObservedObject private var multi = MultiLive.shared
+    /// Image dans l'image du lecteur : la mini-barre le dit (voir PlayerPiP).
+    @ObservedObject private var pipState = PlayerPiP.shared
     @State private var showMultiLive = false
     @State private var liveStartedAt: Date? = nil
     @State private var liveUptimeText: String = ""
@@ -774,8 +776,10 @@ struct MainTabView: View {
         // Lecteur réduit (ou fermé) après le bouton de rotation : sur iPhone,
         // le reste de l'app revient au portrait au lieu de rester couché. Le
         // clavier du chat se ferme aussi : il restait par-dessus l'app.
+        // Rouvert en grand (mini-barre, notification…) pendant un PiP :
+        // l'image revient dans le lecteur, qui restait noir sinon.
         .onChange(of: playerVisible) { visible in
-            guard !visible else { return }
+            guard !visible else { PlayerPiP.shared.playerShown(); return }
             PlayerOrientation.restorePortraitIfForced()
             UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder),
                                             to: nil, from: nil, for: nil)
@@ -1196,7 +1200,9 @@ struct MainTabView: View {
                 // Qualités supérieures sans abonnement : pauses pub et échec
                 // du flux du compte (voir adBreakChanged).
                 onAdBreak: { adBreakChanged($0) },
-                onFailed: { hqStreamFailed() }
+                onFailed: { hqStreamFailed() },
+                onPiPStart: { pipStarted() },
+                onPiPRestore: { pipRestore() }
             )
         } else {
             VideoPlayerView(
@@ -1228,7 +1234,9 @@ struct MainTabView: View {
                 // Qualités supérieures sans abonnement : la qualité du compte au
                 // retour d'une pause pub, et les pauses elles-mêmes.
                 wantedQuality: hqLive?.accountQuality,
-                onAdBreak: { adBreakChanged($0) }
+                onAdBreak: { adBreakChanged($0) },
+                onPiPStart: { pipStarted() },
+                onPiPRestore: { pipRestore() }
             )
         }
     }
@@ -1432,6 +1440,28 @@ struct MainTabView: View {
         } else {
             pullPlayer(0)
         }
+    }
+
+    // MARK: – Image dans l'image (PiP)
+    /// PiP démarré (bouton, app en arrière-plan) : le lecteur se réduit pour
+    /// laisser naviguer dans l'app, comme dans les apps vidéo. Il restait en
+    /// grand, noir (l'image partie dans la fenêtre), et il fallait le fermer
+    /// à la main.
+    private func pipStarted() {
+        guard playerVisible, !closingPlayer else { return }
+        reducePlayer()
+    }
+
+    /// Bouton « agrandir » de la fenêtre PiP, ou PiP arrêté pour rouvrir le
+    /// lecteur : il revient en grand sur la même lecture, où AVKit ramène
+    /// l'image. Une feuille ouverte par-dessus (réglages, page d'une chaîne…)
+    /// se ferme : le lecteur serait revenu dessous.
+    private func pipRestore() {
+        guard playerMode != nil, !closingPlayer else { return }
+        if presentationOpen { afterClosingPresentations {} }
+        guard !playerVisible else { return }
+        pull.y = 0
+        withAnimation(.easeInOut(duration: 0.2)) { playerVisible = true }
     }
 
     /// Le lecteur suit le doigt ; 0 = relâché trop tôt, il revient en place.
@@ -1701,7 +1731,9 @@ struct MainTabView: View {
                     .font(.system(size: 13, weight: .bold))
                     .foregroundColor(.tWarning)
             } else {
-                Image(systemName: isLivePlaying ? "dot.radiowaves.left.and.right" : "play.fill")
+                // En PiP, l'image est dans la fenêtre : toucher la barre l'y reprend.
+                Image(systemName: pipState.active ? "pip"
+                      : isLivePlaying ? "dot.radiowaves.left.and.right" : "play.fill")
                     .font(.system(size: 13, weight: .bold))
                     .foregroundColor(isLivePlaying ? .tLive : .tPrimary)
             }

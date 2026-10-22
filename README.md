@@ -95,6 +95,8 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   rest of the app with the player reduced. Closing the player, opening another
   video or switching to chat only ends it, along with its chat connection and
   lock screen activity.
+  Starting it shrinks the player into the mini player, so you can browse the app right away (no more black full-size player to close).
+  The PiP window's expand button brings the player back full size on the same video, without reloading (with the app's player, tapping the mini player does too).
 * 🔒 **Lock Screen and Dynamic Island** — the live or VOD you're watching
   (channel, title, playback) as a Live Activity; turn it off in Settings →
   Player → Live Activity if you don't need it. When iOS refuses it because the

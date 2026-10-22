@@ -39,6 +39,10 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
     var adBreaks: AdBreakWatcher? = nil
     /// Lecture en cours ou non (pause, fin, échec), à chaque changement.
     var onPlaying: (Bool) -> Void = { _ in }
+    /// PiP démarré : le parent réduit le lecteur ; bouton « agrandir » de la
+    /// fenêtre : il le rend en grand (MainTabView, voir PlayerPiP).
+    var onPiPStart: () -> Void = {}
+    var onPiPRestore: () -> Void = {}
 
     func makeUIViewController(context: Context) -> AVPlayerViewController {
         let vc = AVPlayerViewController()
@@ -51,6 +55,8 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
         context.coordinator.onSpeedChange = onSpeedChange
         context.coordinator.onSpeedForced = onSpeedForced
         context.coordinator.onPlaying = onPlaying
+        context.coordinator.onPiPStart = onPiPStart
+        context.coordinator.onPiPRestore = onPiPRestore
         // Reprise : la progression enregistrée (une VOD vue jusqu'au bout
         // repart du début).
         startPlayer(in: vc, context: context, from: .init(seconds: savedTime, resume: true))
@@ -106,6 +112,8 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
         coordinator.onSpeedChange = onSpeedChange
         coordinator.onSpeedForced = onSpeedForced
         coordinator.onPlaying = onPlaying
+        coordinator.onPiPStart = onPiPStart
+        coordinator.onPiPRestore = onPiPRestore
         // Comparée à l'adresse demandée, pas à celle de l'élément : après un
         // repli AirPlay (playlist du CDN), elles différaient toujours, et le
         // lecteur se recréait à chaque mise à jour — en boucle, jamais lisible.
@@ -175,6 +183,10 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
         /// dernière annoncée pour le lecteur en cours.
         var onPlaying: (Bool) -> Void = { _ in }
         private var lastPlaying: Bool?
+        /// PiP démarré, et bouton « agrandir » de sa fenêtre (voir
+        /// NativeVideoPlayer.onPiPStart).
+        var onPiPStart: () -> Void = {}
+        var onPiPRestore: () -> Void = {}
         private var rateObserver: NSObjectProtocol?
         private var lastCatchUp = Date.distantPast
         private var latency = LiveLatencyController()
@@ -377,16 +389,36 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
             }
         }
         /// PiP : comme dans le lecteur immersif, le chat garde son IRC et ses
-        /// points tant qu'il dure.
+        /// points tant qu'il dure, et le lecteur se réduit (MainTabView) — il
+        /// restait en grand, sur la vignette « lu en PiP » d'Apple.
         func playerViewControllerDidStartPictureInPicture(_ playerViewController: AVPlayerViewController) {
             guard !tornDown else { return }
             pipShown = true
             PlayerFullscreen.isActive = true
+            logger.info("LECTEUR", "PiP démarré", "lecteur natif")
+            PlayerPiP.shared.started(by: self)
+            onPiPStart()
+        }
+        func playerViewController(_ playerViewController: AVPlayerViewController,
+                                  failedToStartPictureInPictureWithError error: Error) {
+            logger.warn("LECTEUR", "PiP impossible", "lecteur natif · \(error.localizedDescription)")
+        }
+        /// Bouton « agrandir » de la fenêtre : le lecteur revient en grand,
+        /// puis AVKit y ramène l'image (même lecture, rien n'est rechargé).
+        func playerViewController(_ playerViewController: AVPlayerViewController,
+                                  restoreUserInterfaceForPictureInPictureStopWithCompletionHandler completionHandler: @escaping (Bool) -> Void) {
+            guard !tornDown else { completionHandler(false); return }
+            logger.info("LECTEUR", "PiP : retour au lecteur", "lecteur natif")
+            onPiPRestore()
+            // Le temps que le lecteur réapparaisse (voir le lecteur immersif).
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { completionHandler(true) }
         }
         func playerViewControllerDidStopPictureInPicture(_ playerViewController: AVPlayerViewController) {
             guard !tornDown else { return }
             pipShown = false
             if !fullscreenShown { PlayerFullscreen.isActive = false }
+            PlayerPiP.shared.ended(by: self)
+            logger.info("LECTEUR", "PiP arrêté", "lecteur natif")
         }
 
         /// Jeton de l'observateur à bloc : `removeObserver(self)` ne le retire
@@ -427,6 +459,7 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
             if let o = timeObserver { playerRef?.removeTimeObserver(o); timeObserver = nil }
             removeObservers()
             artworkTask?.cancel()
+            if pipShown { PlayerPiP.shared.ended(by: self) }
             if fullscreenShown || pipShown {
                 fullscreenShown = false
                 pipShown = false
@@ -905,6 +938,10 @@ struct VideoPlayerView: View {
     var wantedQuality: String? = nil
     /// Pause pub à l'écran (secondes restantes, nil hors pause), pour le parent.
     var onAdBreak: (Int?) -> Void = { _ in }
+    /// PiP démarré : le parent réduit le lecteur ; bouton « agrandir » de la
+    /// fenêtre : il le rend en grand.
+    var onPiPStart: () -> Void = {}
+    var onPiPRestore: () -> Void = {}
 
     @EnvironmentObject private var store: AppStore
     @State private var selectedQuality: String = ""
@@ -1107,7 +1144,9 @@ struct VideoPlayerView: View {
             },
             adBreaks: adBreaks,
             // Audio seul : rien à regarder, l'écran peut s'éteindre.
-            onPlaying: { playing in onPlaying(playing && !isAudioQuality(quality)) }
+            onPlaying: { playing in onPlaying(playing && !isAudioQuality(quality)) },
+            onPiPStart: onPiPStart,
+            onPiPRestore: onPiPRestore
         )
         .aspectRatio(16/9, contentMode: .fit)
         .background(Color.black)

@@ -317,10 +317,11 @@ struct OnboardingTour: View {
         }
     }
 
-    /// Six langues sur deux lignes de trois, même sur un iPhone de 375 pt
-    /// (carte de 291 pt utiles) : la carte ne s'allonge pas et chaque nom
-    /// garde sa taille. Deux colonnes seulement sous 375 pt (zoom de
-    /// l'affichage), pour que les noms restent lisibles.
+    /// Sept langues sur trois colonnes (3, 3, puis 1), même sur un iPhone de
+    /// 375 pt (carte de 291 pt utiles, ~92 pt par nom : « 繁體中文 » et son
+    /// drapeau en prennent ~88) : chaque nom garde sa taille. Deux colonnes
+    /// seulement sous 375 pt (zoom de l'affichage), pour que les noms restent
+    /// lisibles.
     private var languageButtons: some View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 84), spacing: 8)], spacing: 8) {
             ForEach(Lang.allCases) { l in

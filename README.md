@@ -595,12 +595,13 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   first message, like on Twitch; and when Twitch refuses a message, it's
   removed and the reason shown in your language instead of looking sent;
   banned from the chat, it switches to read-only (see above).
-* 🌍 **Six languages** — English (default), French, Spanish, Russian, Italian
-  and Japanese, on the iPhone and the Apple TV. The Russian translation was
-  made with AI; the Italian one was contributed by Domenico-lel and the
-  Japanese one by kinboy56 (made with AI), newer texts translated with AI. For
-  these three, the iPhone app says so next to the language picker, with a
-  button to report a mistake.
+* 🌍 **Seven languages** — English (default), French, Spanish, Russian,
+  Italian, Japanese and Traditional Chinese (Taiwan), on the iPhone and the
+  Apple TV. The Russian translation was made with AI; the Italian one was
+  contributed by Domenico-lel, the Japanese one by kinboy56 and the
+  Traditional Chinese one by trend0522 (both made with AI), newer texts
+  translated with AI. For these four, the iPhone app says so next to the
+  language picker, with a button to report a mistake.
 * 🐞 **Bug reports & ideas** — a form in the header, in Settings and in the
   player menu, screenshots included. **My reports** shows where each one stands
   (received, seen, accepted, in progress, done, declined) and the developer's reply,
@@ -797,6 +798,7 @@ Settings → About):
 
 * [Domenico-lel](https://github.com/Domenico-lel) — Italian translation
 * [kinboy56](https://github.com/kinboy56) — Japanese translation
+* [trend0522](https://github.com/trend0522) — Traditional Chinese translation
 * [dwojc6](https://github.com/dwojc6) — more responsive swipe-down on the player
 
 All contributors on GitHub:

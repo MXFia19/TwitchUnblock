@@ -2597,7 +2597,7 @@ struct SettingsView: View {
 // MARK: – Contributeurs
 /// Personnes qui ont contribué à l'app sur GitHub, dans Réglages → À propos.
 /// Pour en ajouter une : une ligne dans `all`, et la clé de son apport dans
-/// les six langues (Constants.swift et Localization/). Le pseudo GitHub ne se
+/// les sept langues (Constants.swift et Localization/). Le pseudo GitHub ne se
 /// traduit pas ; il donne aussi l'adresse de son profil.
 struct Contributor: Identifiable, Sendable {
     let login: String

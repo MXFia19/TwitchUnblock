@@ -1807,10 +1807,10 @@ enum VodSpeed {
     }
 
     /// « 1,5× » : virgule en français, espagnol, russe et italien, point en
-    /// anglais et en japonais.
+    /// anglais, en japonais et en chinois (Taïwan écrit « 1.5 »).
     static func label(_ v: Double, _ lang: Lang) -> String {
         var s = String(format: "%g", v)
-        if lang != .en && lang != .ja { s = s.replacingOccurrences(of: ".", with: ",") }
+        if lang != .en && lang != .ja && lang != .zhHant { s = s.replacingOccurrences(of: ".", with: ",") }
         return s + "×"
     }
 }

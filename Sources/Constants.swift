@@ -237,21 +237,25 @@ extension Color {
 // MARK: – Language
 enum Lang: String, CaseIterable, Identifiable {
     case fr, en, es, ru, it, ja
+    /// Code de locale explicite : `rawValue` sert d'identifiant à
+    /// `Locale(identifier:)` (formats de date) et au site (« zh-Hant »).
+    case zhHant = "zh-Hant"
     var id: String { rawValue }
     var flag: String {
         switch self {
         case .fr: "🇫🇷"; case .en: "🇬🇧"; case .es: "🇪🇸"; case .ru: "🇷🇺"; case .it: "🇮🇹"; case .ja: "🇯🇵"
+        case .zhHant: "🇹🇼"
         }
     }
     var label: String {
         switch self {
         case .fr: "Français"; case .en: "English"; case .es: "Español"; case .ru: "Русский"
-        case .it: "Italiano"; case .ja: "日本語"
+        case .it: "Italiano"; case .ja: "日本語"; case .zhHant: "繁體中文"
         }
     }
     /// Traduite avec l'IA, sans relecture : on le dit à côté du choix de
     /// langue, avec un lien pour signaler les erreurs.
-    var machineTranslated: Bool { self == .ru || self == .it || self == .ja }
+    var machineTranslated: Bool { self == .ru || self == .it || self == .ja || self == .zhHant }
 }
 
 // ✨ NOUVEAU : Les sources se traduisent automatiquement !
@@ -404,7 +408,7 @@ private let translations: [Lang: [String: String]] = [
         "notif_channels_error": "Impossible de charger tes chaînes suivies. Réessaie dans un instant.",
         "chapters": "Chapitres", "close": "Fermer",
         "made_by": "Fait par", "source_ios": "Code source de l'app", "web_version": "Version web", "credits_thanks": "Merci à BetterTTV, FrankerFaceZ, 7TV, recent-messages et Luminous.", "not_affiliated": "Projet indépendant, non affilié à Twitch.",
-        "credits_contributors": "Contributeurs", "credits_contrib_it": "Traduction italienne", "credits_contrib_ja": "Traduction japonaise", "credits_contrib_swipe": "Glissé vers le bas du lecteur plus réactif",
+        "credits_contributors": "Contributeurs", "credits_contrib_it": "Traduction italienne", "credits_contrib_ja": "Traduction japonaise", "credits_contrib_zhHant": "Traduction en chinois traditionnel", "credits_contrib_swipe": "Glissé vers le bas du lecteur plus réactif",
         "update_title": "Mise à jour disponible", "update_msg": "La version {v} est sortie (tu as la {c}). Mets-la à jour depuis Feather, SideStore ou AltStore.", "update_whats_new": "Voici ce qui a changé depuis ta version :", "update_open": "Mettre à jour", "later": "Plus tard", "update_available": "Mise à jour disponible : {v}", "update_check": "Vérifier les mises à jour", "update_none": "L'app est à jour", "version_label": "Version", "discord_join": "Rejoindre le Discord",
         "discord_title": "Rejoins le Discord", "discord_msg": "Nouveautés, bugs, idées : la communauté TwitchUnblock est sur Discord. Tu peux aussi le retrouver plus tard dans Réglages → À propos.",
         "update_msg_short": "Une nouvelle version de TwitchUnblock est disponible. Installe-la depuis Feather, SideStore ou AltStore.",
@@ -1132,7 +1136,7 @@ private let translations: [Lang: [String: String]] = [
         "notif_channels_error": "Couldn't load the channels you follow. Try again in a moment.",
         "chapters": "Chapters", "close": "Close",
         "made_by": "Made by", "source_ios": "App source code", "web_version": "Web version", "credits_thanks": "Thanks to BetterTTV, FrankerFaceZ, 7TV, recent-messages and Luminous.", "not_affiliated": "Independent project, not affiliated with Twitch.",
-        "credits_contributors": "Contributors", "credits_contrib_it": "Italian translation", "credits_contrib_ja": "Japanese translation", "credits_contrib_swipe": "More responsive swipe-down on the player",
+        "credits_contributors": "Contributors", "credits_contrib_it": "Italian translation", "credits_contrib_ja": "Japanese translation", "credits_contrib_zhHant": "Traditional Chinese translation", "credits_contrib_swipe": "More responsive swipe-down on the player",
         "update_title": "Update available", "update_msg": "Version {v} is out (you have {c}). Update it from Feather, SideStore or AltStore.", "update_whats_new": "Here’s what’s new since your version:", "update_open": "Update", "later": "Later", "update_available": "Update available: {v}", "update_check": "Check for updates", "update_none": "The app is up to date", "version_label": "Version", "discord_join": "Join the Discord",
         "discord_title": "Join the Discord", "discord_msg": "News, bugs, ideas: the TwitchUnblock community is on Discord. You can also find it later in Settings → About.",
         "update_msg_short": "A new version of TwitchUnblock is available. Install it from Feather, SideStore or AltStore.",
@@ -1860,7 +1864,7 @@ private let translations: [Lang: [String: String]] = [
         "notif_channels_error": "No se pudieron cargar los canales que sigues. Vuelve a intentarlo en un momento.",
         "chapters": "Capítulos", "close": "Cerrar",
         "made_by": "Hecho por", "source_ios": "Código fuente de la app", "web_version": "Versión web", "credits_thanks": "Gracias a BetterTTV, FrankerFaceZ, 7TV, recent-messages y Luminous.", "not_affiliated": "Proyecto independiente, no afiliado a Twitch.",
-        "credits_contributors": "Colaboradores", "credits_contrib_it": "Traducción al italiano", "credits_contrib_ja": "Traducción al japonés", "credits_contrib_swipe": "Gesto de deslizar hacia abajo del reproductor más ágil",
+        "credits_contributors": "Colaboradores", "credits_contrib_it": "Traducción al italiano", "credits_contrib_ja": "Traducción al japonés", "credits_contrib_zhHant": "Traducción al chino tradicional", "credits_contrib_swipe": "Gesto de deslizar hacia abajo del reproductor más ágil",
         "update_title": "Actualización disponible", "update_msg": "Ya salió la versión {v} (tienes la {c}). Actualízala desde Feather, SideStore o AltStore.", "update_whats_new": "Esto es lo nuevo desde tu versión:", "update_open": "Actualizar", "later": "Más tarde", "update_available": "Actualización disponible: {v}", "update_check": "Buscar actualizaciones", "update_none": "La app está al día", "version_label": "Versión", "discord_join": "Unirse al Discord",
         "discord_title": "Únete al Discord", "discord_msg": "Novedades, bugs, ideas: la comunidad de TwitchUnblock está en Discord. También lo encontrarás en Ajustes → Acerca de.",
         "update_msg_short": "Hay una nueva versión de TwitchUnblock. Instálala desde Feather, SideStore o AltStore.",
@@ -2484,6 +2488,8 @@ private let translations: [Lang: [String: String]] = [
     .it: kItalianStrings,
     // Japonais : dans son propre fichier (Localization/JapaneseStrings.swift).
     .ja: kJapaneseStrings,
+    // Chinois traditionnel (Taïwan) : Localization/TraditionalChineseStrings.swift.
+    .zhHant: kTraditionalChineseStrings,
 ]
 
 /// Une clé absente d'une langue retombe sur l'anglais, puis sur la clé

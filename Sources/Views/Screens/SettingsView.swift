@@ -2610,6 +2610,7 @@ struct Contributor: Identifiable, Sendable {
     static let all: [Contributor] = [
         Contributor(login: "Domenico-lel", contributionKey: "credits_contrib_it"),
         Contributor(login: "kinboy56", contributionKey: "credits_contrib_ja"),
+        Contributor(login: "trend0522", contributionKey: "credits_contrib_zhHant"),
         Contributor(login: "dwojc6", contributionKey: "credits_contrib_swipe"),
     ]
 }

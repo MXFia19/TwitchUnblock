@@ -279,6 +279,7 @@ let kJapaneseStrings: [String: String] = [
     "credits_contributors": "コントリビューター",
     "credits_contrib_it": "イタリア語翻訳",
     "credits_contrib_ja": "日本語翻訳",
+    "credits_contrib_zhHant": "繁体字中国語の翻訳",
     "credits_contrib_swipe": "プレーヤーの下スワイプをより軽快に",
     "update_title": "アップデートがあります",
     "update_msg": "バージョン {v} が公開されています (現在 {c})。Feather、SideStore、AltStore からアップデートしてください。",

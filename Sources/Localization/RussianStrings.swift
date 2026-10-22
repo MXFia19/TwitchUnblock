@@ -236,6 +236,7 @@ let kRussianStrings: [String: String] = [
     "credits_contributors": "Участники проекта",
     "credits_contrib_it": "Перевод на итальянский",
     "credits_contrib_ja": "Перевод на японский",
+    "credits_contrib_zhHant": "Перевод на традиционный китайский",
     "credits_contrib_swipe": "Более отзывчивый свайп вниз в плеере",
     "update_title": "Доступно обновление",
     "update_msg": "Вышла версия {v} (у вас {c}). Обновите приложение через Feather, SideStore или AltStore.",

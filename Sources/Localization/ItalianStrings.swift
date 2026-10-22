@@ -849,6 +849,7 @@ let kItalianStrings: [String: String] = [
     "app_icon_failed": "iOS ha rifiutato il cambio dell’icona: {e}",
     "app_icon_wildcard": "L’app è stata firmata con l’identificativo generico del certificato (“{id}”): probabilmente è per questo che iOS rifiuta il cambio dell’icona (errore -54). Feather 2.9 non può ancora risolverlo; la prossima versione aggiunge “Merge Entitlements”: attivalo, poi firma e installa di nuovo l’app.",
     "app_icon_unsupported": "Questa installazione non può cambiare icona: il programma di installazione potrebbe aver rimosso le icone alternative.",
+    "app_icon_blocked": "Lo strumento che ha installato l’app (LiveContainer, GBox…) non permette di cambiarne l’icona.",
     "icon_default": "Classica",
     "icon_purple": "Viola",
     "icon_night": "Notte",

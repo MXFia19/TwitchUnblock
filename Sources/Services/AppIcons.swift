@@ -24,8 +24,26 @@ enum AppIconChoice: String, CaseIterable, Identifiable {
     var labelKey: String { "icon_\(rawValue.lowercased())" }
 
     /// Icônes au choix refusées par cette installation (outil de signature
-    /// qui les retire de l'app, par exemple).
+    /// qui les retire de l'app, ou qui empêche iOS de les poser).
     static let unsupported = "unsupported"
+
+    /// Refus d'iOS retenu pour cette installation (UserDefaults) : sa version
+    /// et sa signature. Avec LiveContainer ou GBox, iOS refuse de changer
+    /// l'icône (OSStatus -54) : le choix se cache au lieu d'être reproposé à
+    /// chaque visite. Une autre version, ou une autre signature (app
+    /// réinstallée autrement), le fait revenir.
+    private static let refusedKey = "app_icon_refused"
+    private static var installKey: String {
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?"
+        return "\(build)|\(SigningInfo.applicationIdentifier ?? "?")"
+    }
+
+    /// Choix d'icône impossible avec cette installation : iOS ne le propose
+    /// pas, ou l'a déjà refusé pour de bon.
+    @MainActor static var blocked: Bool {
+        !UIApplication.shared.supportsAlternateIcons
+            || UserDefaults.standard.string(forKey: refusedKey) == installKey
+    }
 
     @MainActor static var current: AppIconChoice {
         guard let name = UIApplication.shared.alternateIconName else { return .standard }
@@ -71,7 +89,21 @@ enum AppIconChoice: String, CaseIterable, Identifiable {
                     apply(retry: false, request: request, done)
                     return
                 }
-                done("\(ns.localizedDescription) (\(ns.domain) \(ns.code))")
+                // iOS occupé même au second essai, ou demande annulée :
+                // passager, rien n'est retenu.
+                let passing = (ns.domain == NSPOSIXErrorDomain && ns.code == 35)
+                    || (ns.domain == NSCocoaErrorDomain && ns.code == NSUserCancelledError)
+                guard !passing else {
+                    done("\(ns.localizedDescription) (\(ns.domain) \(ns.code))")
+                    return
+                }
+                // Tout autre refus (-54 de LiveContainer, de GBox ou d'une
+                // signature générique ; icône absente…) tient à l'installation :
+                // retenu, le choix se cache jusqu'à une autre version ou
+                // signature.
+                UserDefaults.standard.set(Self.installKey, forKey: Self.refusedKey)
+                logger.info("ICON", "Choix d'icône retiré pour cette installation", Self.installKey)
+                done(Self.unsupported)
             }
         }
     }

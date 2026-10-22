@@ -848,6 +848,7 @@ let kJapaneseStrings: [String: String] = [
     "app_icon_failed": "iOS がアイコンの変更を拒否しました: {e}",
     "app_icon_wildcard": "このアプリは、証明書の汎用識別子（「{id}」）で署名されています。iOS がアイコンの変更を拒否する主な原因はこれです（エラー -54）。Feather 2.9 ではまだ修正できません。次のバージョンで「Merge Entitlements」オプションが追加される予定です。その際はこのオプションをオンにして、アプリを署名してインストールし直してください。",
     "app_icon_unsupported": "このインストール方法ではアイコンを変更できません。アプリをインストールしたツールが、代替アイコンを削除した可能性があります。",
+    "app_icon_blocked": "アプリをインストールしたツール（LiveContainer、GBox など）では、アイコンを変更できません。",
     "icon_default": "クラシック",
     "icon_purple": "パープル",
     "icon_night": "ナイト",

@@ -571,6 +571,7 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   generic profile of a purchased certificate), iOS refuses to change the icon:
   the app reads its own signature and says so. Feather's next version adds a
   **Merge Entitlements** option that fixes the signature.
+  When the installing tool doesn't allow it (LiveContainer, GBox…), iOS's refusal is remembered and the picker gives way to a line saying why (it comes back with another version or signature).
 * 🫧 **Liquid Glass** — optional on iOS 26: a floating tab bar and glass buttons
   over the picture.
 * ⬆️ **Back to the top** — tap the tab you're already on to scroll Home (any

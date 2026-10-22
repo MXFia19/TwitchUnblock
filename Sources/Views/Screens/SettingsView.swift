@@ -26,6 +26,9 @@ struct SettingsView: View {
     @State private var ntfySynced      = !NtfyNotifier.isPending
     @State private var appIcon: AppIconChoice = .standard
     @State private var appIconError: String? = nil
+    /// Vrai après un refus d'iOS qui tient à l'installation ; nil : ce
+    /// qu'en sait AppIconChoice.blocked.
+    @State private var appIconBlocked: Bool? = nil
     // Réglages experts : Worker personnel.
     @AppStorage(APIConfig.customKey) private var customWorker = ""
     @AppStorage(APIConfig.allKey) private var customWorkerAll = false
@@ -854,63 +857,89 @@ struct SettingsView: View {
 
     /// Icône de l'app : « Contraste » reste nette en icônes transparentes ou
     /// teintées (iOS 26), toutes ont leurs versions sombre et teintée.
+    /// Impossible avec cette installation (LiveContainer, GBox, icônes
+    /// retirées…) : le choix laisse la place à une ligne qui dit pourquoi.
     @ViewBuilder private var appIconRow: some View {
+        let blocked = appIconBlocked ?? AppIconChoice.blocked
         VStack(alignment: .leading, spacing: 8) {
             Text(store.t("app_icon"))
-                .font(.tCardTitle).foregroundColor(.tText)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
-                    ForEach(AppIconChoice.allCases) { choice in
-                        let on = appIcon == choice
-                        Button {
-                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                            appIconError = nil
-                            choice.apply { error in
-                                guard let error else {
-                                    appIcon = choice
-                                    logger.settingChanged("Icône de l'app", value: choice.rawValue)
-                                    return
+                .font(.tCardTitle).foregroundColor(blocked ? Color.tMuted : Color.tText)
+            if blocked {
+                Text(appIconBlockedReason)
+                    .font(.tMeta).foregroundColor(.tMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 12) {
+                        ForEach(AppIconChoice.allCases) { choice in
+                            let on = appIcon == choice
+                            Button {
+                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                appIconError = nil
+                                choice.apply { error in
+                                    guard let error else {
+                                        appIcon = choice
+                                        logger.settingChanged("Icône de l'app", value: choice.rawValue)
+                                        return
+                                    }
+                                    // Refus qui tient à l'installation (retenu par
+                                    // AppIconChoice) : le choix se cache.
+                                    if error == AppIconChoice.unsupported {
+                                        withAnimation { appIconBlocked = true }
+                                        return
+                                    }
+                                    appIconError = store.t("app_icon_failed").replacingOccurrences(of: "{e}", with: error)
                                 }
-                                appIconError = error == AppIconChoice.unsupported
-                                    ? store.t("app_icon_unsupported")
-                                    : store.t("app_icon_failed").replacingOccurrences(of: "{e}", with: error)
+                            } label: {
+                                VStack(spacing: 6) {
+                                    Image(choice.previewName)
+                                        .resizable()
+                                        .frame(width: 58, height: 58)
+                                        .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+                                        .overlay(RoundedRectangle(cornerRadius: 13, style: .continuous)
+                                            .stroke(on ? Color.tPrimary : Color.tBorder, lineWidth: on ? 3 : 1))
+                                    Text(store.t(choice.labelKey))
+                                        .font(.tMeta)
+                                        .foregroundColor(on ? .tText : .tMuted)
+                                }
                             }
-                        } label: {
-                            VStack(spacing: 6) {
-                                Image(choice.previewName)
-                                    .resizable()
-                                    .frame(width: 58, height: 58)
-                                    .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
-                                    .overlay(RoundedRectangle(cornerRadius: 13, style: .continuous)
-                                        .stroke(on ? Color.tPrimary : Color.tBorder, lineWidth: on ? 3 : 1))
-                                Text(store.t(choice.labelKey))
-                                    .font(.tMeta)
-                                    .foregroundColor(on ? .tText : .tMuted)
-                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel(store.t(choice.labelKey))
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(store.t(choice.labelKey))
                     }
+                    .padding(.vertical, 3)
                 }
-                .padding(.vertical, 3)
-            }
-            if let appIconError {
-                Text(appIconError)
-                    .font(.tMeta).foregroundColor(.orange)
+                if let appIconError {
+                    Text(appIconError)
+                        .font(.tMeta).foregroundColor(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                // Signée avec l'identifiant générique d'un certificat (Feather sans
+                // « Merge Entitlements ») : iOS refuse le changement d'icône.
+                if SigningInfo.signedForOtherIdentifier, let id = SigningInfo.applicationIdentifier {
+                    Text(store.t("app_icon_wildcard").replacingOccurrences(of: "{id}", with: id))
+                        .font(.tMeta).foregroundColor(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Text(store.t("app_icon_sub"))
+                    .font(.tMeta).foregroundColor(.tMuted)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            // Signée avec l'identifiant générique d'un certificat (Feather sans
-            // « Merge Entitlements ») : iOS refuse le changement d'icône.
-            if SigningInfo.signedForOtherIdentifier, let id = SigningInfo.applicationIdentifier {
-                Text(store.t("app_icon_wildcard").replacingOccurrences(of: "{id}", with: id))
-                    .font(.tMeta).foregroundColor(.orange)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Text(store.t("app_icon_sub"))
-                .font(.tMeta).foregroundColor(.tMuted)
-                .fixedSize(horizontal: false, vertical: true)
         }
         .onAppear { appIcon = AppIconChoice.current }
+    }
+
+    /// Pourquoi l'icône ne se change pas avec cette installation.
+    private var appIconBlockedReason: String {
+        // Icônes au choix retirées de l'app par l'outil d'installation.
+        if !UIApplication.shared.supportsAlternateIcons { return store.t("app_icon_unsupported") }
+        // Signée avec l'identifiant générique d'un certificat : la cause
+        // probable, et ce qui la corrige (une autre signature fait revenir
+        // le choix).
+        if SigningInfo.signedForOtherIdentifier, let id = SigningInfo.applicationIdentifier {
+            return store.t("app_icon_wildcard").replacingOccurrences(of: "{id}", with: id)
+        }
+        return store.t("app_icon_blocked")
     }
 
     /// Langue des streamers dans « Top des lives » (appareil par défaut).

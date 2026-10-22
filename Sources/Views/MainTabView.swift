@@ -134,6 +134,10 @@ struct MainTabView: View {
     @State private var showDiscordPrompt = false
     /// Page d'une chaîne ouverte en feuille (sans passer par l'onglet Recherche).
     @State private var channelSheet: ChannelSheetItem? = nil
+    /// Cette page a été ouverte depuis le lecteur affiché en grand (pseudo,
+    /// titre, chat) : fermée sans rien lancer, elle rend le lecteur en grand.
+    /// Il restait réduit en mini-lecteur.
+    @State private var channelReturnsToPlayer = false
     /// Visite guidée du tout premier lancement (revue depuis les réglages).
     @AppStorage("onboarding_done") private var onboardingDone = false
     /// Clip en cours : VOD d'origine et position, pour en rejouer le chat.
@@ -628,19 +632,28 @@ struct MainTabView: View {
         // Notification « en live » touchée : on ouvre le direct.
         // Page d'une chaîne demandée (pseudo dans le lecteur, accueil…) :
         // ouverte dans une feuille par-dessus l'onglet en cours, sans passer
-        // par Recherche ; le lecteur se réduit en mini-barre.
+        // par Recherche ; le lecteur se réduit en mini-barre le temps de la
+        // page (portrait, clavier du chat fermé). Ouverte depuis le lecteur
+        // en grand, sa fermeture le rend en grand (channelSheetDismissed).
         .onChange(of: store.pendingChannel) { login in
             guard let login else { return }
             store.pendingChannel = nil
+            // Une page en remplace une autre : le retour prévu à l'ouverture
+            // de la première tient.
+            if channelSheet == nil {
+                channelReturnsToPlayer = playerMode != nil && playerVisible && !closingPlayer
+            }
             withAnimation(.easeInOut(duration: 0.2)) { playerVisible = false }
             channelSheet = ChannelSheetItem(login: login)
         }
-        .sheet(item: $channelSheet) { item in
-            SearchView(onPlayVod: { id, t, th, s in channelSheet = nil; playVod(id, t, th, s) },
-                       onPlayLive: { l in channelSheet = nil; playLive(l) },
-                       onPlayClip: { slug, t in channelSheet = nil; playClip(slug, t) },
-                       onPlayQueue: { list, s in channelSheet = nil; playQueue(list, s) },
-                       onRecovered: { rec in channelSheet = nil; playRecovered(rec) },
+        // Une vidéo lancée depuis la page s'ouvre elle-même en grand : pas
+        // de retour au lecteur d'avant (closeChannelSheet).
+        .sheet(item: $channelSheet, onDismiss: channelSheetDismissed) { item in
+            SearchView(onPlayVod: { id, t, th, s in closeChannelSheet(); playVod(id, t, th, s) },
+                       onPlayLive: { l in closeChannelSheet(); playLive(l) },
+                       onPlayClip: { slug, t in closeChannelSheet(); playClip(slug, t) },
+                       onPlayQueue: { list, s in closeChannelSheet(); playQueue(list, s) },
+                       onRecovered: { rec in closeChannelSheet(); playRecovered(rec) },
                        initialChannel: item.login,
                        onClose: { channelSheet = nil })
                 .inAppNoticeHost()
@@ -820,9 +833,28 @@ struct MainTabView: View {
         showClipSheet = false
         showDownloadSheet = false
         showSleepSheet = false
-        channelSheet = nil
+        closeChannelSheet()
         showMultiLive = false
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { action() }
+    }
+
+    /// Page d'une chaîne fermée pour autre chose (vidéo lancée depuis elle,
+    /// notification touchée) : le lecteur d'avant ne revient pas en grand.
+    private func closeChannelSheet() {
+        channelReturnsToPlayer = false
+        channelSheet = nil
+    }
+
+    /// Page d'une chaîne fermée (balayée, « Fermer ») : ouverte depuis le
+    /// lecteur en grand, celui-ci revient tel qu'il était, au lieu de rester
+    /// en mini-lecteur. Rien si le lecteur a été fermé entre-temps.
+    private func channelSheetDismissed() {
+        // Remplacée par la page d'une autre chaîne : on attend la dernière.
+        guard channelReturnsToPlayer, channelSheet == nil else { return }
+        channelReturnsToPlayer = false
+        guard playerMode != nil, !playerVisible, !closingPlayer else { return }
+        pull.y = 0
+        withAnimation(.easeInOut(duration: 0.2)) { playerVisible = true }
     }
 
     // MARK: – Lecteur
@@ -895,6 +927,15 @@ struct MainTabView: View {
                 }
             }
             .animation(.easeInOut(duration: 0.2), value: switchingSource)
+            // Lecteur en grand en paysage (immersif ou natif, chat seul à
+            // part) : l'indicateur d'accueil s'efface au bout de quelques
+            // secondes et revient au moindre toucher, comme dans les apps
+            // vidéo. Il restait affiché en permanence sur l'image (retour d'un
+            // iPhone XR, iOS 18.7). Préférence lue par le contrôleur de la
+            // fenêtre : posée ici, elle vaut pour toute l'app tant que le
+            // lecteur est affiché ainsi.
+            .persistentSystemOverlays(landscape && playerVisible && !chatOnly && !closingPlayer
+                                      ? .hidden : .automatic)
         }
     }
 
@@ -1112,6 +1153,7 @@ struct MainTabView: View {
                 speed: playbackSpeed,
                 // Toujours une vitesse imposée par le lecteur (voir forcedVodSpeed).
                 onSpeedChange: { setForcedSpeed($0) },
+                onSpeedRestore: { restoreChosenSpeed($0) },
                 notice: slowNetworkNotice ?? hqNotice ?? accountNotice,
                 onProgress: { time in
                     // Pendant une bascule, `playerMode` désigne déjà la
@@ -1170,6 +1212,9 @@ struct MainTabView: View {
                 nowPlaying: nowPlayingMeta,
                 speed: playbackSpeed,
                 onSpeedChange: { setPlaybackSpeed($0) },
+                // Imposée (bord d'un enregistrement, AirPlay) : pour cette
+                // lecture seulement, comme dans le lecteur immersif.
+                onSpeedForced: { setForcedSpeed($0) },
                 onTime: { vodPlaybackTime = $0 },
                 onLatency: { updateLatency($0) },
                 onBehind: { updateBehind($0) },
@@ -1608,6 +1653,10 @@ struct MainTabView: View {
         let speed = VodSpeed.nearest(v)
         if isClipPlaying {
             clipSpeed = speed
+        } else if VodSpeed.isExperimental(speed) {
+            // Au-delà de 2× (expérimental) : pour cette lecture seulement. La
+            // préférence, partagée avec le site, reste dans ses crans.
+            forcedVodSpeed = speed
         } else {
             forcedVodSpeed = nil
             if speed != store.vodSpeed {
@@ -1617,8 +1666,8 @@ struct MainTabView: View {
         }
     }
 
-    /// Vitesse imposée par le lecteur immersif : retenue pour cette lecture
-    /// seulement (voir `forcedVodSpeed`) ; celle d'un clip, comme un choix.
+    /// Vitesse imposée par le lecteur : retenue pour cette lecture seulement
+    /// (voir `forcedVodSpeed`) ; celle d'un clip, comme un choix.
     private func setForcedSpeed(_ v: Double) {
         let speed = VodSpeed.nearest(v)
         if isClipPlaying {
@@ -1626,6 +1675,16 @@ struct MainTabView: View {
         } else {
             forcedVodSpeed = speed == store.vodSpeed ? nil : speed
         }
+    }
+
+    /// Lecteur immersif revenu loin du bord d'un enregistrement en cours
+    /// (retour en arrière) : la vitesse d'avant le retour à 1× revient — la
+    /// préférence, ou une vitesse expérimentale choisie pour cette lecture.
+    /// Seulement si celle de la lecture est encore imposée : un choix fait
+    /// entre-temps dans le menu ⋯ l'emporte.
+    private func restoreChosenSpeed(_ held: Double) {
+        guard !isClipPlaying, forcedVodSpeed != nil else { return }
+        forcedVodSpeed = VodSpeed.isExperimental(held) ? VodSpeed.nearest(held) : nil
     }
 
     // MARK: – Mini-barre (lecteur réduit)

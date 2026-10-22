@@ -123,6 +123,22 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
     }
     @Published private(set) var forcedSpeed: SpeedChange?
     private var rateObs: NSObjectProtocol?
+    /// Vitesse d'avant le retour à 1× au bord d'un enregistrement en cours
+    /// (fait ici, ou par AVPlayer). Un retour en arrière la laissait à 1× pour
+    /// toute la lecture, et la choisir de nouveau près du bord la faisait
+    /// retomber aussitôt : elle est rendue dès que la lecture s'éloigne du bord.
+    private var edgeHeldSpeed: Double?
+    /// Vitesse d'avant le bord, à rendre : la vue la passe au parent, qui la
+    /// reprend si celle de la lecture est encore imposée (un choix fait
+    /// entre-temps l'emporte).
+    @Published private(set) var edgeRelease: SpeedChange?
+    /// Vitesse réellement tenue (voir checkEffectiveRate) : fenêtres manquées
+    /// de suite, et vitesse déjà réappliquée une fois.
+    private var rateProbe = EffectiveRateProbe()
+    private var rateMisses = 0
+    private var rateReapplied = false
+    /// Saut de position (barre, PiP, reprise) : la mesure de la vitesse repart.
+    private var jumpObs: NSObjectProtocol?
 
     private let onProgress: (Double) -> Void
     private let onLatency:  (Double?) -> Void
@@ -240,6 +256,9 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
         timeControlObs = player.observe(\.timeControlStatus, options: [.new]) { [weak self] p, _ in
             DispatchQueue.main.async {
                 guard let self, self.player.currentItem != nil else { return }
+                // Pause ou attente : la vitesse tenue ne se mesure que sur
+                // une lecture continue.
+                if p.timeControlStatus != .playing { self.rateProbe.reset() }
                 switch p.timeControlStatus {
                 case .paused where self.isPlaying:   self.isPlaying = false
                 case .playing where !self.isPlaying: self.isPlaying = true
@@ -255,6 +274,13 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
         rateObs = NotificationCenter.default.addObserver(
             forName: AVPlayer.rateDidChangeNotification, object: player, queue: .main
         ) { [weak self] note in self?.rateChanged(note) }
+        jumpObs = NotificationCenter.default.addObserver(
+            forName: AVPlayerItem.timeJumpedNotification, object: nil, queue: .main
+        ) { [weak self] note in
+            guard let self, let item = note.object as? AVPlayerItem,
+                  item === self.player.currentItem else { return }
+            self.rateProbe.reset()
+        }
         // AirPlay ne lit pas les playlists réécrites : retour à celle du CDN.
         externalObs = player.observe(\.isExternalPlaybackActive, options: [.new]) { [weak self] _, _ in
             DispatchQueue.main.async { self?.fallBackForAirPlay() }
@@ -333,6 +359,10 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
     /// deux signaux) : MainTabView passe en « Auto » ou un cran en dessous.
     private func stalled() {
         if isLive { latency.noteStall() }
+        // Vitesse expérimentale qui cale : elle n'est pas tenue, retour à 2×.
+        if !isLive, VodSpeed.isExperimental(speed) {
+            force(speed: VodSpeed.maxSafe, notice: "speed_fast_unavailable", why: "calage")
+        }
         let now = Date()
         stallTimes = stallTimes.filter { now.timeIntervalSince($0) < 60 } + [now]
         // Le calage lui-même est noté par PlaybackDiagnostics.
@@ -352,6 +382,10 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
               resume: Bool = false, behind: Double? = nil, exact: Bool = false) {
         if let isLive { self.isLive = isLive }
         stallTimes = []
+        // Nouvel élément : la vitesse tenue se mesure de nouveau. La vitesse
+        // d'avant le bord d'un enregistrement reste à rendre (retour au
+        // direct puis nouveau retour en arrière).
+        resetRateCheck()
         // Repart d'une fenêtre vierge : garder les bornes de la source
         // précédente affichait une barre fantaisiste le temps du chargement.
         startTime = 0; endTime = 0; currentDate = nil
@@ -566,10 +600,18 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
         if isLive { diagnostics?.tick(item: item) }
 
         // Enregistrement d'un direct en cours lu en accéléré : près de son bord,
-        // retour à 1× (rien ne le garantit avant iOS 26.4).
+        // retour à 1× (rien ne le garantit avant iOS 26.4). La vitesse d'avant
+        // revient quand la lecture s'en éloigne (retour en arrière).
         if speed > 1, player.rate > 1, nearRecordingEdge {
+            let held = speed
             force(speed: 1, notice: "speed_caught_up", why: "bord de l'enregistrement rattrapé")
+            edgeHeldSpeed = held
+        } else if let held = edgeHeldSpeed, clearOfRecordingEdge {
+            edgeHeldSpeed = nil
+            logger.info("LECTEUR", "Loin du bord de l'enregistrement : vitesse rendue", String(format: "×%g", held))
+            edgeRelease = SpeedChange(value: held, notice: "", id: (edgeRelease?.id ?? 0) + 1)
         }
+        checkEffectiveRate()
 
         catchUpIfNeeded(item)
     }
@@ -628,6 +670,7 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
                     toleranceBefore: exact ? .zero : .positiveInfinity,
                     toleranceAfter:  .zero)
         position = clamped
+        rateProbe.reset()
         // Recul voulu (barre, −10 s) : la tenue du direct ne doit pas le
         // défaire. Près du bord, elle reprend la main.
         if isLive { latency.hold(ceiling - clamped > 3) }
@@ -694,9 +737,16 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
     /// Vitesse voulue, ramenée au cran le plus proche. `defaultRate` d'abord :
     /// play() le restaure (écran verrouillé, PiP, repli AirPlay). L'état réel
     /// du lecteur (`rate ≠ 0`) plutôt que `isPlaying` pour l'appliquer tout de
-    /// suite, qui peut être en retard d'un événement.
-    func setSpeed(_ value: Double) {
+    /// suite, qui peut être en retard d'un événement. `chosen` faux : la vue
+    /// ne fait que renvoyer une vitesse imposée par le lecteur (echo).
+    func setSpeed(_ value: Double, chosen: Bool = true) {
         let v = VodSpeed.nearest(value)
+        // Choix de l'utilisateur : plus de vitesse d'avant le bord à rendre,
+        // et la vitesse tenue se mesure de nouveau.
+        if chosen {
+            edgeHeldSpeed = nil
+            resetRateCheck()
+        }
         // Sous 1× : un élément prêt peut dire qu'il ne sait pas ralentir. Avant
         // qu'il le soit, la propriété n'a pas de sens : le refus éventuel
         // arrivera alors par rateDidChange.
@@ -711,6 +761,48 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
         if player.rate != 0 { player.rate = Float(v) }
         refreshNowPlaying(force: true)
         updateActivity()
+    }
+
+    /// Mesure de la vitesse tenue remise à zéro (nouvel élément, nouvelle
+    /// vitesse, vitesse imposée).
+    private func resetRateCheck() {
+        rateProbe.reset()
+        rateMisses = 0
+        rateReapplied = false
+    }
+
+    /// Vitesse réellement tenue, hors direct et hors 1× : `player.rate` n'est
+    /// que la vitesse demandée, et un lecteur peut afficher 2× en lisant à 1×.
+    /// Une vitesse expérimentale qui ne tient pas revient à 2× tout de suite.
+    /// Une autre est d'abord réappliquée ; si la lecture ne la suit toujours
+    /// pas, la vitesse réelle devient celle du lecteur : le menu montre ce qui
+    /// joue, pas un « 2× » qui ne joue pas.
+    private func checkEffectiveRate() {
+        guard !isLive, speed != 1, pendingSeek == nil,
+              UIApplication.shared.applicationState == .active,
+              let measured = rateProbe.sample(player) else { return }
+        if abs(measured - speed) <= max(0.15, speed * 0.12) {
+            rateMisses = 0
+            return
+        }
+        if VodSpeed.isExperimental(speed) {
+            force(speed: VodSpeed.maxSafe, notice: "speed_fast_unavailable",
+                  why: String(format: "×%.2f mesuré", measured))
+            return
+        }
+        rateMisses += 1
+        guard rateMisses >= 2 else { return }
+        rateMisses = 0
+        guard rateReapplied else {
+            rateReapplied = true
+            logger.warn("LECTEUR", "Vitesse non tenue : réappliquée",
+                        String(format: "×%.2f mesuré pour ×%g", measured, speed))
+            player.playImmediately(atRate: Float(speed))
+            rateProbe.reset()
+            return
+        }
+        force(speed: VodSpeed.nearestSafe(measured), notice: "speed_unavailable",
+              why: String(format: "×%.2f mesuré", measured))
     }
 
     /// Changement de vitesse venu du lecteur. Les nôtres (setSpeed, play())
@@ -728,10 +820,17 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
         }
         let v = VodSpeed.nearest(rate)
         guard !isLive, player.currentItem != nil, rate > 0, abs(v - speed) > 0.01 else { return }
+        // Ralenti par AVPlayer au bord d'un enregistrement en cours (iOS 26.4
+        // et après) : la vitesse d'avant est rendue loin du bord, comme quand
+        // c'est nous qui ralentissons. Une vitesse expérimentale refusée : 2×.
+        let held = speed
+        let atEdge = nearRecordingEdge && v < held
         force(speed: v,
-              notice: nearRecordingEdge ? "speed_caught_up" : "speed_unavailable",
+              notice: VodSpeed.isExperimental(held) ? "speed_fast_unavailable"
+                  : atEdge ? "speed_caught_up" : "speed_unavailable",
               why: String(format: "×%.2f imposé par le lecteur · ", rate) + reason,
               apply: false)
+        if atEdge { edgeHeldSpeed = held }
     }
 
     /// Enregistrement d'un direct en cours (pas de fin déclarée) lu près de
@@ -742,12 +841,25 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
         return endTime - position < 20
     }
 
+    /// Lecture assez loin du bord d'un enregistrement en cours (retour en
+    /// arrière) pour y reprendre de la vitesse — écart avec `nearRecordingEdge`
+    /// pour ne pas osciller —, ou enregistrement terminé entre-temps. Pas
+    /// pendant un départ en attente : `position` y est encore celle d'avant.
+    private var clearOfRecordingEdge: Bool {
+        guard !isLive, let item = player.currentItem, endTime > 0, pendingSeek == nil else { return false }
+        return item.duration.seconds.isFinite || endTime - position > 45
+    }
+
     /// Vitesse imposée : elle devient la vitesse retenue (la vue la garde
     /// pour la lecture en cours), sinon re-choisir la vitesse affichée dans le
     /// menu ne ferait rien. `apply` faux quand la vitesse vient du lecteur : elle
     /// est adoptée telle quelle, la reposer arrondie au cran relancerait
     /// rateDidChange sans fin s'il maintient la sienne.
     private func force(speed v: Double, notice: String, why: String, apply: Bool = true) {
+        // Plus rien à rendre ni à mesurer de la vitesse d'avant : l'appelant
+        // qui ralentit au bord d'un enregistrement la remet de côté après.
+        edgeHeldSpeed = nil
+        resetRateCheck()
         speed = v
         player.defaultRate = Float(v)
         if apply, player.rate != 0, abs(Double(player.rate) - v) > 0.01 { player.rate = Float(v) }
@@ -823,6 +935,7 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
         if let o = spatialObs { NotificationCenter.default.removeObserver(o); spatialObs = nil }
         if let o = goLiveObs { NotificationCenter.default.removeObserver(o); goLiveObs = nil }
         if let o = rateObs { NotificationCenter.default.removeObserver(o); rateObs = nil }
+        if let o = jumpObs { NotificationCenter.default.removeObserver(o); jumpObs = nil }
         if let o = failObs { NotificationCenter.default.removeObserver(o); failObs = nil }
         if let o = stallObs { NotificationCenter.default.removeObserver(o); stallObs = nil }
         mutedObs = nil
@@ -834,6 +947,7 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
         if let o = spatialObs { NotificationCenter.default.removeObserver(o) }
         if let o = goLiveObs { NotificationCenter.default.removeObserver(o) }
         if let o = rateObs { NotificationCenter.default.removeObserver(o) }
+        if let o = jumpObs { NotificationCenter.default.removeObserver(o) }
         if let o = failObs { NotificationCenter.default.removeObserver(o) }
         for (command, target) in remoteTargets { command.removeTarget(target) }
         // Libéré pendant un PiP (lecteur fermé sans démontage) : la session
@@ -1033,8 +1147,12 @@ struct ImmersivePlayer: View {
     /// ou celle du clip en cours. Ignorée en direct.
     var speed: Double = 1
     /// Vitesse imposée par le lecteur (refus, AirPlay, bord du DVR) : le parent
-    /// la réécrit dans la préférence, seule source de vérité.
+    /// la garde pour la lecture en cours (MainTabView.forcedVodSpeed).
     var onSpeedChange: (Double) -> Void = { _ in }
+    /// Loin du bord d'un enregistrement en cours (retour en arrière) : la
+    /// vitesse d'avant le retour à 1×, que le parent rend si celle de la
+    /// lecture est encore imposée.
+    var onSpeedRestore: (Double) -> Void = { _ in }
     /// Annonce brève au lancement (direct servi par le compte, sans pub).
     var notice: String? = nil
 
@@ -1148,6 +1266,7 @@ struct ImmersivePlayer: View {
          nowPlaying: NowPlayingMeta = NowPlayingMeta(),
          speed: Double = 1,
          onSpeedChange: @escaping (Double) -> Void = { _ in },
+         onSpeedRestore: @escaping (Double) -> Void = { _ in },
          notice: String? = nil,
          onProgress: @escaping (Double) -> Void = { _ in },
          onLatency:  @escaping (Double?) -> Void = { _ in },
@@ -1182,6 +1301,7 @@ struct ImmersivePlayer: View {
         self.streamStartedAt = streamStartedAt; self.archiveAvailable = archiveAvailable
         self.chapters = chapters; self.nowPlaying = nowPlaying
         self.speed = speed; self.onSpeedChange = onSpeedChange; self.notice = notice
+        self.onSpeedRestore = onSpeedRestore
         self.mutedRanges = mutedRanges; self.unmutedCount = unmutedCount
         self.onReduce = onReduce; self.onClose = onClose
         self.onMenu = onMenu; self.onRefresh = onRefresh
@@ -1423,13 +1543,19 @@ struct ImmersivePlayer: View {
         // réécriture d'une vitesse imposée, déjà annoncée.
         .onChange(of: speed) { v in
             let echo = VodSpeed.nearest(v) == model.speed
-            model.setSpeed(v)
+            model.setSpeed(v, chosen: !echo)
             if !echo, !isLive { flash(speedFlash) }
         }
         .onChange(of: model.forcedSpeed) { change in
             guard let change else { return }
             onSpeedChange(change.value)
             flash(store.t(change.notice), duration: 2_500_000_000)
+        }
+        // Retour en arrière loin du bord d'un enregistrement en cours : la
+        // vitesse d'avant revient (annoncée par le changement de `speed`).
+        .onChange(of: model.edgeRelease) { release in
+            guard let release else { return }
+            onSpeedRestore(release.value)
         }
         .onChange(of: nowPlaying) { model.setNowPlaying($0) }
         // Son rétabli sur des passages coupés : on le signale une fois.

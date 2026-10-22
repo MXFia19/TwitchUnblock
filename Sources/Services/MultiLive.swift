@@ -6,8 +6,9 @@ import SwiftUI
 //
 //  MultiLive garde la sélection (sur l'appareil) ; MultiLiveSession tient un
 //  lecteur par vidéo le temps de la mosaïque — hors des vues, pour qu'une
-//  rotation (côte à côte ↔ les uns sous les autres) ne relance rien. Le son
-//  ne vient que d'une vidéo à la fois.
+//  rotation (côte à côte ↔ les uns sous les autres) ne relance rien. Par
+//  défaut, le son ne vient que d'une vidéo à la fois (celle qu'on touche) ;
+//  le haut-parleur d'une tuile en ajoute d'autres, chacune à son volume.
 // ═══════════════════════════════════════════════════════════════════════════
 
 struct MultiLiveEntry: Codable, Equatable, Identifiable {
@@ -611,8 +612,19 @@ final class MultiTileModel: ObservableObject {
 final class MultiLiveSession: ObservableObject {
     /// Un lecteur par entrée, indexé par `MultiLiveEntry.id`.
     @Published private(set) var tiles: [String: MultiTileModel] = [:]
-    /// Entrée (`MultiLiveEntry.id`) qui a le son.
-    @Published var audible: String? { didSet { applyAudio() } }
+    /// Tuile principale (`MultiLiveEntry.id`) : son cadre, ses commandes de
+    /// VOD, son chat (iPad). Celle qu'on touche ; elle a le son.
+    @Published private(set) var audible: String?
+    /// Tuiles qui ont le son. Par défaut la seule principale, comme avant ;
+    /// le haut-parleur d'une tuile l'ajoute au mélange ou l'en retire. Les
+    /// lecteurs d'une même app se mélangent d'eux-mêmes (session `.playback`,
+    /// PlaybackAudio) : rien à changer à la session audio.
+    @Published private(set) var soundOn: Set<String> = [] { didSet { applyAudio() } }
+    /// Volume de chaque tuile (1 sans réglage), pour doser plusieurs sons.
+    @Published private(set) var volumes: [String: Float] = [:] { didSet { applyAudio() } }
+    /// Son déjà posé sur chaque tuile : reposé seulement s'il change (voir
+    /// applyAudio).
+    private var appliedSound: [String: Bool] = [:]
     /// Au moins une tuile en lecture (ou en route) : l'écran reste allumé
     /// (MultiLiveView). Toutes en pause, hors ligne, en échec ou finies, il
     /// peut s'éteindre, comme pour le lecteur.
@@ -656,6 +668,14 @@ final class MultiLiveSession: ObservableObject {
             model.start(count: entries.count)
         }
         if audible.map({ !wanted.contains($0) }) ?? true { audible = entries.first?.id }
+        // Tuiles retirées : leur son et leur volume partent avec elles. Plus
+        // aucune tuile avec le son (la principale retirée, seule à l'avoir) :
+        // la nouvelle principale l'a, comme avant.
+        var sound = soundOn.intersection(wanted)
+        if sound.isEmpty, let main = audible { sound = [main] }
+        if sound != soundOn { soundOn = sound }
+        let kept = volumes.filter { wanted.contains($0.key) }
+        if kept != volumes { volumes = kept }
         applyAudio()
         refreshScreen()
         if interruptions == nil, !tiles.isEmpty {
@@ -674,6 +694,7 @@ final class MultiLiveSession: ObservableObject {
         networkRetry = nil
         tiles.values.forEach { $0.stop() }
         tiles = [:]
+        appliedSound = [:]
         refreshScreen()
     }
 
@@ -724,11 +745,40 @@ final class MultiLiveSession: ObservableObject {
         }
     }
 
+    /// Toucher une tuile : elle devient la principale, et la seule à avoir le
+    /// son — le comportement d'avant les sons multiples.
+    func select(_ id: String) {
+        audible = id
+        soundOn = [id]
+    }
+
+    /// Haut-parleur d'une tuile : son ajouté aux autres, ou coupé.
+    func toggleSound(_ id: String) {
+        var sound = soundOn
+        if sound.contains(id) { sound.remove(id) } else { sound.insert(id) }
+        soundOn = sound
+    }
+
+    /// Volume d'une tuile (0 à 1) ; le choisir lui rend le son.
+    func setVolume(_ id: String, _ value: Float) {
+        volumes[id] = min(1, max(0, value))
+        if !soundOn.contains(id) { soundOn.insert(id) }
+    }
+
+    /// Son et volume de chaque tuile. Le son n'est reposé que là où il
+    /// change : sinon un volume réglé pendant une pause pub rendait la pub
+    /// audible le temps que son bandeau la recoupe.
     private func applyAudio() {
         for (id, model) in tiles {
-            model.player.isMuted = id != audible
+            let volume = volumes[id] ?? 1
+            if model.player.volume != volume { model.player.volume = volume }
+            let on = soundOn.contains(id)
+            guard appliedSound[id] != on else { continue }
+            appliedSound[id] = on
+            model.player.isMuted = !on
             // En pause pub, la tuile qui a le son est recoupée au tour suivant.
             model.adBreaks.audioTakenOver()
         }
+        appliedSound = appliedSound.filter { tiles[$0.key] != nil }
     }
 }

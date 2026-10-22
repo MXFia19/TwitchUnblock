@@ -137,6 +137,7 @@ enum Backup {
             "mutedWords": store.chatMutedWords,
             "blockedUsers": store.chatBlockedUsers,
             "highlightWords": store.chatHighlightWords,
+            "hiddenEmotes": store.hiddenEmotes,
             "shareUsage": store.shareUsage,
             "vodSpeed": store.vodSpeed,
             "qualityPref": store.preferredQuality,
@@ -175,6 +176,7 @@ enum Backup {
             "ios_chatAutocomplete": store.chatAutocomplete,
             "ios_chatKeyboardSuggestions": store.chatKeyboardSuggestions,
             "ios_chatReturnSends": store.chatReturnSends,
+            "ios_chatShowInput": store.chatShowInput,
             "ios_chatSync": store.chatSync,
             "ios_chatSyncNudge": store.chatSyncNudge,
             "ios_showLatency": store.showLatency,
@@ -399,8 +401,14 @@ enum Backup {
         words("mutedWords", 50) { store.chatMutedWords = $0 }
         words("blockedUsers", 500) { store.chatBlockedUsers = $0 }
         words("highlightWords", 30) { store.chatHighlightWords = $0 }
+        // Emotes masquées (nom du site) : codes exacts, la casse compte —
+        // pas de mise en minuscules comme les mots.
+        if let v = s["hiddenEmotes"] as? [String] {
+            store.hiddenEmotes = AppStore.emoteCodes(v)
+            ok("hiddenEmotes")
+        }
         bool("shareUsage") { store.shareUsage = $0 }
-        num("vodSpeed", 0.25...2) { store.vodSpeed = VodSpeed.nearest($0) }
+        num("vodSpeed", 0.25...2) { store.vodSpeed = VodSpeed.nearestSafe($0) }
         // Ordre des sources du direct (nom du site) : sources connues, sans
         // doublon, celles qui manquent à la fin.
         if let v = s["liveSourceOrder"] as? [String] {
@@ -452,6 +460,7 @@ enum Backup {
         bool("ios_chatAutocomplete") { store.chatAutocomplete = $0 }
         bool("ios_chatKeyboardSuggestions") { store.chatKeyboardSuggestions = $0 }
         bool("ios_chatReturnSends") { store.chatReturnSends = $0 }
+        bool("ios_chatShowInput") { store.chatShowInput = $0 }
         bool("ios_chatSync") { store.chatSync = $0 }
         // Bornes du réglage fin de la synchro du chat (ChatSync).
         num("ios_chatSyncNudge", -20...20) { store.chatSyncNudge = $0 }

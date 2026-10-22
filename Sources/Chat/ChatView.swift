@@ -74,6 +74,10 @@ struct ChatView: View {
     /// Faux aussi en lecture seule (compte banni de ce chat) : plus de champ,
     /// de sélecteur d'emotes, de réponse ni de commandes.
     private var canSendMessages: Bool { token != nil && login != nil && !chat.readOnly }
+    /// Zone d'envoi affichée (Réglages → Chat) et compte qui peut écrire : de
+    /// quoi y mettre une emote, une commande ou une mention. Masquée, ces
+    /// raccourcis écrivaient dans un champ qu'on ne voit pas.
+    private var canType: Bool { canSendMessages && store.chatShowInput }
     private var canSend: Bool {
         chat.isConnected && chat.isAuthenticated &&
         !messageText.trimmingCharacters(in: .whitespaces).isEmpty &&
@@ -410,7 +414,7 @@ struct ChatView: View {
             }
             .sheet(item: $infoItem) { item in
                 ChatInfoSheet(item: item, channelId: channelId,
-                              onInsert: canSendMessages ? { (e: TwitchEmote) in insertEmote(e); infoItem = nil } : nil,
+                              onInsert: canType ? { (e: TwitchEmote) in insertEmote(e); infoItem = nil } : nil,
                               onOpenChannel: opensChannelPages ? { (login: String) in
                                   // Une seule feuille à la fois : la fiche se ferme
                                   // avant que la page s'ouvre (le lecteur se réduit).
@@ -436,7 +440,7 @@ struct ChatView: View {
             noticesArea
 
             // ── Zone principale ─────────────────────────────────────
-            if showEmotePicker && canSendMessages {
+            if showEmotePicker && canType {
                 // Appui long sur une emote : sa fiche (le sélecteur est dans la
                 // vue, pas dans une feuille : aucun conflit).
                 EmotePickerView(channelId: channelId,
@@ -532,20 +536,28 @@ struct ChatView: View {
                                 DispatchQueue.main.async { proxy.scrollTo(bottomAnchor, anchor: .bottom) }
                             }
 
-                            if !autoScroll {
-                                Button {
-                                    autoScroll = true
-                                    isDragging = false
-                                    proxy.scrollTo(bottomAnchor, anchor: .bottom)
-                                } label: {
-                                    HStack(spacing: 4) {
-                                        Image(systemName: "arrow.down")
-                                        Text(store.t("chat_follow")).font(.system(size: 11, weight: .bold))
+                            // « Suivre » quand on a remonté le chat ; zone
+                            // d'envoi masquée : les points et le menu ⋯, posés
+                            // sur le chat sans lui prendre de place.
+                            if !autoScroll || !store.chatShowInput {
+                                HStack(spacing: 8) {
+                                    if !autoScroll {
+                                        Button {
+                                            autoScroll = true
+                                            isDragging = false
+                                            proxy.scrollTo(bottomAnchor, anchor: .bottom)
+                                        } label: {
+                                            HStack(spacing: 4) {
+                                                Image(systemName: "arrow.down")
+                                                Text(store.t("chat_follow")).font(.system(size: 11, weight: .bold))
+                                            }
+                                            .foregroundColor(.white)
+                                            .padding(.horizontal, 10).padding(.vertical, 6)
+                                            .background(Color.tPrimary)
+                                            .cornerRadius(20)
+                                        }
                                     }
-                                    .foregroundColor(.white)
-                                    .padding(.horizontal, 10).padding(.vertical, 6)
-                                    .background(Color.tPrimary)
-                                    .cornerRadius(20)
+                                    if !store.chatShowInput { hiddenInputButtons }
                                 }
                                 .padding(10)
                             }
@@ -560,9 +572,19 @@ struct ChatView: View {
 
             // ── Barre d'envoi ───────────────────────────────────────
             // Compte banni de ce chat : un bandeau à la place du champ.
-            if chat.readOnly { readOnlyBar } else if canSendMessages { inputBar } else { anonymousBar }
+            // Masquée (Réglages → Chat) : rien, la place va aux messages.
+            if store.chatShowInput {
+                if chat.readOnly { readOnlyBar } else if canSendMessages { inputBar } else { anonymousBar }
+            }
         }
         .task(id: messageText) { await refreshEmoteSuggestions() }
+        // Zone d'envoi masquée pendant le direct : clavier et sélecteur
+        // d'emotes se ferment avec elle.
+        .onChange(of: store.chatShowInput) { shown in
+            guard !shown else { return }
+            isInputFocused = false
+            showEmotePicker = false
+        }
         // Superposé à l'image : pas de fond opaque, mais un dégradé qui assombrit
         // le bas de l'image, là où les messages s'accumulent. Sans lui, du texte
         // blanc sur une scène claire devient illisible.
@@ -579,6 +601,7 @@ struct ChatView: View {
         .sheet(item: $threadRoot) { root in
             MessageSheet(message: root, chat: chat,
                          canSend: canSendMessages,
+                         canMention: canType,
                          style: store.chatStyle(chrome: false, translucent: false),
                          onMention: { name in
                              messageText += (messageText.isEmpty || messageText.hasSuffix(" ")
@@ -607,7 +630,7 @@ struct ChatView: View {
                 onReconnect: {
                     chat.reconnect(token: token, login: login)
                 },
-                onUseCommand: canSendMessages ? { cmd in
+                onUseCommand: canType ? { cmd in
                     messageText = cmd + " "
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { isInputFocused = true }
                 } : nil
@@ -986,6 +1009,33 @@ struct ChatView: View {
     }
 
     // MARK: – Input bar
+    /// Zone d'envoi masquée (Réglages → Chat) : ce qui ne doit pas disparaître
+    /// avec elle, en petits boutons posés en bas à droite du chat — les points
+    /// de la chaîne (plein cadre seulement, comme dans la barre), et le menu ⋯
+    /// (chat seul, reconnecter, commandes…).
+    @ViewBuilder
+    private var hiddenInputButtons: some View {
+        if canSendMessages && style.showsChrome {
+            ChannelPointsButton(service: pointsService) {
+                showEmotePicker = false
+                showPointsSheet = true
+            }
+        }
+        Button {
+            showChatMenu = true
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 15, weight: .bold))
+                .foregroundColor(.white)
+                .frame(width: 36, height: 36)
+                .background(Circle().fill(Color.black.opacity(0.55)))
+                .overlay(Circle().stroke(Color.white.opacity(0.15), lineWidth: 1))
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
     @ViewBuilder
     /// Sans compte : une fine barre avec le menu ⋯ (chat seul, recharger les
     /// emotes, reconnecter, commandes) — il n'existait qu'avec un compte.
@@ -1445,6 +1495,8 @@ struct WrappingHStack: View {
     var style: ChatStyle = .standard
     /// Fiche d'une emote ou d'un badge touché (fournie par le chat).
     @Environment(\.chatInfoAction) private var infoAction
+    /// Emotes masquées (Réglages → Chat) : affichées comme le mot tapé.
+    @EnvironmentObject private var store: AppStore
 
     var body: some View {
         let blocks = message.tokens.enumerated().map { i, t in TokenBlock(id: i, content: t) }
@@ -1475,8 +1527,19 @@ struct WrappingHStack: View {
                     Text(t).font(.system(size: size))
                         .foregroundColor(message.isAction ? message.color : .tText)
                 case .emote(let e):
-                    CachedEmoteImage(url: e.url, name: e.name, height: emoteHeight)
-                        .chatInfoTap(infoAction, .emote(e))
+                    // Masquée : le mot tapé, comme un texte ; un toucher ouvre
+                    // toujours sa fiche (de quoi la réafficher), un appui long
+                    // la masque ou la réaffiche.
+                    if store.hidesEmote(e.name) {
+                        Text(e.name).font(.system(size: size))
+                            .foregroundColor(message.isAction ? message.color : .tText)
+                            .chatInfoTap(infoAction, .emote(e))
+                            .modifier(EmoteHideMenu(code: e.name))
+                    } else {
+                        CachedEmoteImage(url: e.url, name: e.name, height: emoteHeight)
+                            .chatInfoTap(infoAction, .emote(e))
+                            .modifier(EmoteHideMenu(code: e.name))
+                    }
                 case .mention(let m):
                     Text("@\(m)").font(.system(size: size, weight: .semibold)).foregroundColor(.tPrimary)
                 case .link(let l):

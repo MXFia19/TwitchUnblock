@@ -436,6 +436,13 @@ final class AppStore: ObservableObject {
     @Published var chatShowDeleted: Bool = false {
         didSet { UserDefaults.standard.set(chatShowDeleted, forKey: "cfg_chat_deleted") }
     }
+    /// Zone d'envoi du chat (champ, emotes, envoyer, points, menu ⋯). Coupée,
+    /// pour qui ne fait que lire : la place revient aux messages, en portrait
+    /// comme en paysage ; le menu ⋯ (et les points) restent à portée par de
+    /// petits boutons posés sur le bas du chat (ChatView).
+    @Published var chatShowInput: Bool = true {
+        didSet { UserDefaults.standard.set(chatShowInput, forKey: "cfg_chat_input") }
+    }
 
     /// Construit la présentation du chat : les réglages de l'utilisateur pour la
     /// taille, la disposition en cours pour le décor et la transparence.
@@ -808,10 +815,55 @@ final class AppStore: ObservableObject {
         didSet { UserDefaults.standard.set(chatHighlightWords, forKey: "chat_highlight_words") }
     }
 
+    /// Emotes masquées, par leur code exact (la casse compte : « KEKW » et
+    /// « kekw » sont deux emotes), 200 au plus, la plus récente à la fin :
+    /// dans le chat, elles s'affichent comme le mot tapé. Toutes sources
+    /// (Twitch, BTTV, FFZ, 7TV), direct, VODs et multi-live. Même clé que le
+    /// site (« hiddenEmotes »), dans la synchro des réglages et la sauvegarde.
+    @Published var hiddenEmotes: [String] = [] {
+        didSet {
+            UserDefaults.standard.set(hiddenEmotes, forKey: "chat_hidden_emotes")
+            hiddenEmoteSet = Set(hiddenEmotes)
+        }
+    }
+    /// Les mêmes, pour la recherche faite à chaque emote affichée.
+    private(set) var hiddenEmoteSet: Set<String> = []
+    static let maxHiddenEmotes = 200
+
+    func hidesEmote(_ code: String) -> Bool { hiddenEmoteSet.contains(code) }
+
+    /// Masque l'emote, ou la réaffiche si elle l'était déjà. Au-delà de 200,
+    /// les plus anciennes repartent.
+    func toggleHiddenEmote(_ code: String) {
+        guard let c = Self.emoteCodes([code]).first else { return }
+        if let i = hiddenEmotes.firstIndex(of: c) {
+            hiddenEmotes.remove(at: i)
+            logger.settingChanged("Emote réaffichée", value: c)
+        } else {
+            hiddenEmotes = Array((hiddenEmotes + [c]).suffix(Self.maxHiddenEmotes))
+            logger.settingChanged("Emote masquée", value: c)
+        }
+    }
+
+    /// Codes d'emotes valides (sauvegarde, synchro, site) : sans espace ni
+    /// retour à la ligne, 100 caractères au plus, sans doublon, 200 au plus
+    /// (les derniers, les plus récents).
+    static func emoteCodes(_ list: [String]) -> [String] {
+        var seen = Set<String>()
+        let valid = list
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty && $0.count <= 100 && !$0.contains(where: \.isWhitespace) }
+            .filter { seen.insert($0).inserted }
+        return Array(valid.suffix(maxHiddenEmotes))
+    }
+
     // MARK: – Init
     init() {
         let ud = UserDefaults.standard
         chatHighlightWords = ud.stringArray(forKey: "chat_highlight_words") ?? []
+        // Assignations de l'init : didSet n'y est pas appelé, l'ensemble suit à la main.
+        hiddenEmotes       = Self.emoteCodes(ud.stringArray(forKey: "chat_hidden_emotes") ?? [])
+        hiddenEmoteSet     = Set(hiddenEmotes)
         chatHideBots       = ud.bool(forKey: "chat_hide_bots")
         chatHideCommands   = ud.bool(forKey: "chat_hide_commands")
         chatMutedWords     = ud.stringArray(forKey: "chat_muted_words") ?? []
@@ -837,7 +889,7 @@ final class AppStore: ObservableObject {
         // Actif par défaut depuis la 1.2.21 (direct à quelques secondes au lieu
         // d'une vingtaine) ; qui l'a coupé à la main le garde coupé.
         lowLatency         = ud.object(forKey: "cfg_low_latency") as? Bool ?? true
-        vodSpeed           = VodSpeed.nearest(ud.object(forKey: "cfg_vod_speed") as? Double ?? 1)
+        vodSpeed           = VodSpeed.nearestSafe(ud.object(forKey: "cfg_vod_speed") as? Double ?? 1)
         multiLiveChat      = ud.object(forKey: "cfg_multi_chat") as? Bool ?? true
         immersivePlayer    = ud.object(forKey: "cfg_immersive")   as? Bool ?? true
         liveActivity       = PlayerActivity.enabled
@@ -868,6 +920,7 @@ final class AppStore: ObservableObject {
         chatKeyboardSuggestions = ud.object(forKey: "cfg_chat_kbd_suggest") as? Bool ?? true
         chatReturnSends = ud.object(forKey: "cfg_chat_return_sends") as? Bool ?? false
         chatShowDeleted    = ud.object(forKey: "cfg_chat_deleted")      as? Bool ?? false
+        chatShowInput      = ud.object(forKey: "cfg_chat_input")        as? Bool ?? true
         shareUsage         = ud.object(forKey: "cfg_share_usage") as? Bool ?? true
         syncSettings       = ud.object(forKey: "cfg_sync_settings") as? Bool ?? true
         // « zh_hk » importé du site par une version d'avant : ramené à « zh-hk ».
@@ -1795,15 +1848,33 @@ final class BackgroundTaskBox {
 }
 
 /// Vitesses de lecture proposées pour les VODs : la même liste que le site.
-/// Plafond à 2× : sans playlist I-frame (Twitch n'en publie pas), AVPlayer ne
-/// garantit pas mieux.
+/// Plafond à 2× : sans playlist I-frame (Twitch n'en publie pas),
+/// `canPlayFastForward` est faux et AVPlayer ne garantit que 1× à 2×
+/// (AVPlayerItem.h). Au-delà, `experimental` : proposées à part dans le menu
+/// ⋯ du lecteur immersif, pour la lecture en cours seulement (jamais dans la
+/// préférence, la sauvegarde ni la synchro), et ramenées à 2× dès que la
+/// vitesse n'est pas tenue (ImmersivePlayerModel).
 enum VodSpeed {
     static let all: [Double] = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2]
+    static let experimental: [Double] = [2.25, 2.5, 3]
+    /// Plus haute vitesse garantie par AVPlayer sans playlist I-frame.
+    static let maxSafe: Double = 2
 
-    /// Cran le plus proche (valeur venue d'une sauvegarde, d'AirPlay…).
+    /// Au-delà de 2× : une vitesse expérimentale.
+    static func isExperimental(_ v: Double) -> Bool { v > maxSafe + 0.01 }
+
+    /// Cran le plus proche (valeur venue d'une sauvegarde, d'AirPlay…),
+    /// vitesses expérimentales comprises : une vitesse de 3× tenue par le
+    /// lecteur ne doit pas passer pour un 2× imposé.
     static func nearest(_ v: Double) -> Double {
         guard v.isFinite, v > 0 else { return 1 }
-        return all.min { abs($0 - v) < abs($1 - v) } ?? 1
+        return (all + experimental).min { abs($0 - v) < abs($1 - v) } ?? 1
+    }
+
+    /// Cran le plus proche jusqu'à 2× : la préférence retenue, et le lecteur
+    /// natif, dont le menu d'Apple n'a que ces crans.
+    static func nearestSafe(_ v: Double) -> Double {
+        min(maxSafe, nearest(v))
     }
 
     /// « 1,5× » : virgule en français, espagnol, russe et italien, point en

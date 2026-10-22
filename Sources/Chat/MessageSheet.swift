@@ -14,6 +14,10 @@ struct MessageSheet: View {
     let message: ChatMessage
     @ObservedObject var chat: ChatService
     let canSend: Bool
+    /// « Mentionner » : faux quand la zone d'envoi du chat est masquée
+    /// (Réglages → Chat), la mention irait dans un champ invisible. Répondre
+    /// reste possible, le champ est dans cette feuille.
+    var canMention = true
     var style: ChatStyle = .standard
     /// Insère « @pseudo » dans la barre d'envoi du chat et referme.
     var onMention: (String) -> Void = { _ in }
@@ -168,7 +172,7 @@ struct MessageSheet: View {
             // Mentionner, masquer (dans ce chat, sur cet appareil), sa chaîne.
             if !message.userName.isEmpty {
                 HStack(spacing: TSpace.sm) {
-                    if canSend {
+                    if canSend, canMention {
                         cardButton(icon: "at", title: store.t("mention_user")) {
                             onMention(message.displayName.lowercased() == message.userName.lowercased()
                                       ? message.displayName : message.userName)

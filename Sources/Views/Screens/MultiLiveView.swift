@@ -40,6 +40,9 @@ struct MultiLiveView: View {
                             .frame(width: chatWidth - 1)
                     }
                 }
+                // En paysage, comme le lecteur : l'indicateur d'accueil
+                // s'efface au bout de quelques secondes.
+                .persistentSystemOverlays(geo.size.width > geo.size.height ? .hidden : .automatic)
             }
         }
         .background(Color.black.ignoresSafeArea())
@@ -200,8 +203,12 @@ struct MultiLiveView: View {
         if let model = session.tiles[entry.id] {
             MultiLiveTile(entry: entry, model: model,
                           audible: session.audible == entry.id,
+                          soundOn: session.soundOn.contains(entry.id),
+                          volume: session.volumes[entry.id] ?? 1,
                           others: multi.entries.filter { $0.id != entry.id },
-                          onTap: { session.audible = entry.id },
+                          onTap: { session.select(entry.id) },
+                          onToggleSound: { session.toggleSound(entry.id) },
+                          onVolume: { session.setVolume(entry.id, $0) },
                           onResume: { session.resumeStopped() },
                           onRemove: { multi.remove(id: entry.id) },
                           onSwap: { other in withAnimation(.easeInOut(duration: 0.2)) { multi.swap(entry.id, other) } },
@@ -245,10 +252,20 @@ private struct MultiLiveChatPane: View {
 struct MultiLiveTile: View {
     let entry: MultiLiveEntry
     @ObservedObject var model: MultiTileModel
+    /// Tuile principale (cadre, commandes de VOD, chat sur iPad).
     let audible: Bool
+    /// A le son (la principale par défaut ; d'autres par leur haut-parleur),
+    /// et à quel volume.
+    let soundOn: Bool
+    let volume: Float
     /// Les autres vidéos de la mosaïque : de quoi changer de place avec l'une d'elles.
     let others: [MultiLiveEntry]
+    /// Toucher la tuile : la principale, seule à avoir le son.
     let onTap: () -> Void
+    /// Haut-parleur : son ajouté aux autres ou coupé (toucher), volume
+    /// (appui long).
+    let onToggleSound: () -> Void
+    let onVolume: (Float) -> Void
     /// « Lecture » sur une tuile arrêtée par iOS (voir `heldBySystem`).
     let onResume: () -> Void
     let onRemove: () -> Void
@@ -351,10 +368,41 @@ struct MultiLiveTile: View {
         .buttonStyle(.plain)
     }
 
+    /// Haut-parleur : coupé, ou ondes selon le volume.
+    private var soundIcon: String {
+        guard soundOn else { return "speaker.slash.fill" }
+        if volume >= 0.99 { return "speaker.wave.2.fill" }
+        return volume >= 0.5 ? "speaker.wave.1.fill" : "speaker.fill"
+    }
+
+    /// Toucher : entendre aussi cette vidéo, ou la couper — plusieurs sons à
+    /// la fois. Appui long : son volume. Toucher la tuile, elle, la rend seule
+    /// à avoir le son (comme avant).
+    private var soundButton: some View {
+        Menu {
+            Section(store.t("multi_volume")) {
+                ForEach([1, 0.75, 0.5, 0.25] as [Float], id: \.self) { level in
+                    Button { onVolume(level) } label: {
+                        let title = Double(level).formatted(.percent.locale(Locale(identifier: store.lang.rawValue)))
+                        if soundOn && abs(volume - level) < 0.01 {
+                            Label(title, systemImage: "checkmark")
+                        } else {
+                            Text(title)
+                        }
+                    }
+                }
+            }
+        } label: {
+            tileIcon(soundIcon)
+        } primaryAction: {
+            onToggleSound()
+        }
+        .accessibilityLabel(store.t(soundOn ? "multi_sound_off" : "multi_sound_on"))
+    }
+
     private var bar: some View {
         HStack(spacing: 8) {
-            Image(systemName: audible ? "speaker.wave.2.fill" : "speaker.slash.fill")
-                .font(.system(size: 12, weight: .bold))
+            soundButton
             if entry.isVod {
                 Text("VOD")
                     .font(.system(size: 10, weight: .heavy))

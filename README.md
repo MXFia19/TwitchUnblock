@@ -66,13 +66,24 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   itself twice, unless you had paused it). When the connection comes back
   after a drop, a player stopped on **Retry** (or on a loading error) and
   failed multi-live tiles start again on their own, once, two seconds later.
+* 📱 **Home indicator out of the way** — in landscape, with the player full
+  size (app's or Apple's) or in multi-live, the bar at the bottom of the
+  screen fades after a few seconds, like in video apps; touch the screen to
+  bring it back.
 * 🐢 **Playback speed** — 0.25× to 2× on VODs and clips, from the ⋯ menu (or
   Apple's own speed menu in the native player and on Apple TV). The VOD speed
   is remembered from one VOD to the next, shown next to the timer, and synced
   with the website through the backup file; clips start at 1×, live streams
   always play at normal speed. Catching up with a live recording drops back to
-  1× near its edge, and a speed the player can't keep (AirPlay, slow motion
-  refused) is announced; in both cases 1× becomes the remembered speed.
+  1× near its edge (Apple's player too, whose menu used to keep showing 2×),
+  and the chosen speed comes back once you rewind away from the edge. A speed
+  the player can't keep (AirPlay, slow motion refused, or measured lower than
+  asked once applied again) is announced and shown as it really plays, for
+  the current video only.
+* 🧪 **Experimental 2.25×, 2.5× and 3×** — in the ⋯ menu of the app's player,
+  marked with a test tube, for the current video only. Twitch publishes no
+  I-frame playlists, so iOS only guarantees up to 2×: as soon as playback
+  can't keep up (speed refused or measured lower, stall), it goes back to 2×.
 * ⏩ **Double-tap to skip ±10 s** — consecutive taps add up, so three taps read
   "+30 s" instead of three separate "+10 s". On a live there's nothing to skip
   ahead to: in landscape, double-tap shows or hides the chat instead, and once
@@ -92,7 +103,8 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   one per video.
 * 🏷️ **Full title** — tap the title at the top of the player (often cut off)
   to read it in full, with the category, viewers, uptime and a shortcut to the
-  channel.
+  channel. Closing a channel page opened from the full-size player (name,
+  title or chat) brings the player back full size instead of the mini player.
 * 🎵 **Leaves your music alone** — opening the app no longer stops music
   playing in another app: the sound switches over only when a video starts,
   and goes back to that app when you close the player (not when the sleep
@@ -261,6 +273,9 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   replayed chat for a VOD) — a button in the mosaic and Settings → Player
   turn it on or off. Each tile plays 1080p alone, 720p with two, 480p
   beyond — or your preferred quality when it is lower.
+* 🔊 **Several sounds in multi-live** — tapping a tile still makes it the
+  only one you hear; tap the speaker on other tiles to hear them too, and
+  long-press it for that tile's volume (100 %, 75 %, 50 %, 25 %).
 
 ### Chat
 
@@ -296,6 +311,11 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   A badge shows its title ("3-Month Subscriber"…) in high resolution. In the
   live chat, the multistream, the pinned message, a message thread and the
   VOD and clip chat; VoiceOver can open it too.
+* 🙅 **Hide an emote** — long-press it in the chat, or **Hide this emote** on
+  its card: it then shows as the typed word, from any source (Twitch, BTTV,
+  FFZ, 7TV), in the live, VOD and multi-live chat. Settings → Chat → Hidden
+  emotes lists them (up to 200) to show them again; the list follows your
+  account, shared with the website (`hiddenEmotes`).
 * 🏅 **Badges** — global and channel-specific, resolved through Helix.
 * 🕘 **Recent messages** — Twitch sends nothing from before you join, so the
   last messages are fetched from `recent-messages.robotty.de` (third party) and
@@ -394,6 +414,10 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
 * 🔠 **Sizing** — font size, message spacing, badge and emote scale,
   timestamps, with a live preview. The time shows in 12 h or 24 h: Auto
   follows the device, or pick one (Settings → Chat; the log follows it too).
+* 🙈 **Hide the message box** (Settings → Chat → Show the message box, on by
+  default) — for those who only read: the room goes to the messages, in
+  portrait, landscape and multi-live; channel points and the chat's ⋯ menu
+  stay as small buttons at the bottom right of the chat.
 
 ### Finding things
 

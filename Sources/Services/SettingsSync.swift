@@ -150,6 +150,15 @@ enum SettingsSync {
         guard var dict = data as? [String: Any] else { return data }
         if name == "common", (dict["hiddenEmotes"] as? [Any])?.isEmpty == true { dict["hiddenEmotes"] = nil }
         if name == "ios", dict["ios_chatShowInput"] as? Bool == true { dict["ios_chatShowInput"] = nil }
+        // Pareil dans la personnalisation (« ios_customization ») : catégories
+        // suivies en jaquettes normales, par spectateurs.
+        if name == "ios", var c = dict["ios_customization"] as? [String: Any] {
+            if c["compactFollowedCategories"] as? Bool == false { c["compactFollowedCategories"] = nil }
+            if c["followedCategoriesSort"] as? String == FollowedCategorySort.viewers.rawValue {
+                c["followedCategoriesSort"] = nil
+            }
+            dict["ios_customization"] = c
+        }
         return dict
     }
 

@@ -639,6 +639,7 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   app's language (written in French, translated when shown: numbers and names
   stay as they are). Share them as text or export them as a `.txt` file
   (Files, AirDrop, Mail…).
+  Categories (PLAYER, NETWORK…), settings changes and details built on the fly are translated too; only iOS's own error messages stay in iOS's language.
 
 ---
 

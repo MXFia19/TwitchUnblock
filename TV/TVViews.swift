@@ -1159,7 +1159,7 @@ struct TVAccountTab: View {
             } else {
                 ForEach(recent) { e in
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("\(e.timestamp) · \(e.category)\(e.repeats > 1 ? " ×\(e.repeats)" : "")")
+                        Text("\(e.timestamp) · \(LogTranslator.category(e.category, session.lang))\(e.repeats > 1 ? " ×\(e.repeats)" : "")")
                             .font(.caption)
                             .foregroundColor(e.level == .error ? .red : .orange)
                         Text(LogTranslator.translate(e.message, session.lang)).font(.callout)

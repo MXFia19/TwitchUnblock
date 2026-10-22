@@ -465,6 +465,7 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   art. A category you follow on Twitch shows as followed on its page, and
   unfollowing it there removes it from your Twitch account (web session).
   Errors and empty lists have **Retry** / pull to refresh.
+* 🗂️ **Followed categories your way** — Settings → General → Customize the app → Followed categories: **Compact** covers (3 per row, 4 on iPad) and the order (most watched first, as before, or A → Z).
 * 🏷 **Stream tags** — language, DropsEnabled… under each live stream, like on
   Twitch.
 * 🔍 **Search** — type anything and the results come in tabs, like Twitch's
@@ -594,11 +595,13 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   generic profile of a purchased certificate), iOS refuses to change the icon:
   the app reads its own signature and says so. Feather's next version adds a
   **Merge Entitlements** option that fixes the signature.
+  When the installing tool doesn't allow it (LiveContainer, GBox…), iOS's refusal is remembered and the picker gives way to a line saying why (it comes back with another version or signature).
 * 🫧 **Liquid Glass** — optional on iOS 26: a floating tab bar and glass buttons
   over the picture.
 * ⬆️ **Back to the top** — tap the tab you're already on to scroll Home (any
   live tab), Search or My VODs back to the top, or Discover back to its first
   page.
+* 👈 **Swipe back** — swipe from the left edge to go back, as in iOS apps: in Settings (the page follows your finger), from a category's live channels and from a channel opened from search results.
 
 ### The rest
 
@@ -626,6 +629,7 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   Traditional Chinese one by trend0522 (both made with AI), newer texts
   translated with AI. For these four, the iPhone app says so next to the
   language picker, with a button to report a mistake.
+  On the iPhone, Settings → General → **App language** opens the list on its own page, like iOS's settings.
 * 🐞 **Bug reports & ideas** — a form in the header, in Settings and in the
   player menu, screenshots included. **My reports** shows where each one stands
   (received, seen, accepted, in progress, done, declined) and the developer's reply,
@@ -660,6 +664,7 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   app's language (written in French, translated when shown: numbers and names
   stay as they are). Share them as text or export them as a `.txt` file
   (Files, AirDrop, Mail…).
+  Categories (PLAYER, NETWORK…), settings changes and details built on the fly are translated too; only iOS's own error messages stay in iOS's language.
 
 ---
 

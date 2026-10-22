@@ -697,3 +697,67 @@ struct TPromptCard: View {
         }
     }
 }
+
+// MARK: – Retour en glissant depuis le bord gauche
+/// Nos navigations maison (pages des Réglages, catégorie ouverte, chaîne
+/// ouverte depuis une recherche) ne passent pas par un UINavigationController :
+/// pas de glissé d'iOS depuis le bord gauche, il fallait toucher Retour. Ce
+/// geste le rend. Il ne part qu'à moins de 24 pt du bord gauche de la vue,
+/// vers la droite et plus à l'horizontale qu'à la verticale ; simultané, il
+/// laisse défiler les listes, et les gestes du lecteur, de Découvrir ou des
+/// feuilles, posés sur d'autres vues, ne le reçoivent pas.
+private struct EdgeSwipeBack: ViewModifier {
+    let enabled: Bool
+    /// La vue suit le doigt (une page posée sur ce qu'elle découvre).
+    let follows: Bool
+    let onBack: () -> Void
+
+    struct Drag: Equatable {
+        var dx: CGFloat = 0
+        /// Sens décidé au premier mouvement : un défilement vertical ne
+        /// devient pas un retour en cours de route.
+        var decided = false
+        var back = false
+    }
+    /// Remis à zéro, en douceur, quand le doigt se lève ou que le geste est
+    /// interrompu (la vue revient en place).
+    @GestureState(resetTransaction: Transaction(animation: .easeOut(duration: 0.2)))
+    private var drag = Drag()
+
+    func body(content: Content) -> some View {
+        content
+            .offset(x: follows ? drag.dx : 0)
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 12)
+                    .updating($drag) { value, state, _ in
+                        if !state.decided {
+                            state.decided = true
+                            state.back = isEdgeBackSwipe(value)
+                        }
+                        if state.back { state.dx = max(0, value.translation.width) }
+                    }
+                    .onEnded { value in
+                        // Assez loin, ou lancé : retour ; sinon la vue revient.
+                        guard isEdgeBackSwipe(value),
+                              value.translation.width > 100 || value.predictedEndTranslation.width > 240
+                        else { return }
+                        onBack()
+                    },
+                including: enabled ? GestureMask.all : GestureMask.subviews)
+    }
+}
+
+/// Parti du bord gauche de la vue, vers la droite, plus à l'horizontale qu'à
+/// la verticale.
+private func isEdgeBackSwipe(_ value: DragGesture.Value) -> Bool {
+    value.startLocation.x <= 24 && value.translation.width > abs(value.translation.height)
+}
+
+extension View {
+    /// Retour par un glissé depuis le bord gauche (voir EdgeSwipeBack).
+    /// `follows` : la vue suit le doigt ; `enabled` faux : pas de geste.
+    func edgeSwipeBack(enabled: Bool = true, follows: Bool = true,
+                       onBack: @escaping () -> Void) -> some View {
+        modifier(EdgeSwipeBack(enabled: enabled, follows: follows, onBack: onBack))
+    }
+}

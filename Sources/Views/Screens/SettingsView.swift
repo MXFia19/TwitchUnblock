@@ -26,6 +26,9 @@ struct SettingsView: View {
     @State private var ntfySynced      = !NtfyNotifier.isPending
     @State private var appIcon: AppIconChoice = .standard
     @State private var appIconError: String? = nil
+    /// Vrai après un refus d'iOS qui tient à l'installation ; nil : ce
+    /// qu'en sait AppIconChoice.blocked.
+    @State private var appIconBlocked: Bool? = nil
     // Réglages experts : Worker personnel.
     @AppStorage(APIConfig.customKey) private var customWorker = ""
     @AppStorage(APIConfig.allKey) private var customWorkerAll = false
@@ -77,20 +80,31 @@ struct SettingsView: View {
             // juste sous notre en-tête. Deux barres l'une sur l'autre, dont une
             // qui ignore la charte. Ici l'en-tête se transforme : le titre
             // devient celui de la page et la croix cède la place à un chevron.
+            // Sans UINavigationController, pas non plus de glissé d'iOS pour
+            // revenir : edgeSwipeBack le rend, et chaque niveau reste sous la
+            // page qui le couvre (décalé, assombri), que le glissé découvre.
             ZStack {
-                if page == nil {
-                    rootMenu
-                        .transition(.asymmetric(
-                            insertion: .move(edge: .leading).combined(with: .opacity),
-                            removal:   .move(edge: .leading).combined(with: .opacity)))
-                } else if let page {
+                rootMenu
+                    .settingsCovered(page != nil)
+                // Page du menu (Général…), sous sa sous-page (Langue) s'il y en a une.
+                if let base = page.map({ $0.parent ?? $0 }) {
+                    sectionPage(base)
+                        .edgeSwipeBack(enabled: page == base) { goBack() }
+                        .settingsCovered(page != base)
+                        .id(base)
+                        .transition(.move(edge: .trailing))
+                        .zIndex(1)
+                }
+                if let page, page.parent != nil {
                     sectionPage(page)
-                        .transition(.asymmetric(
-                            insertion: .move(edge: .trailing).combined(with: .opacity),
-                            removal:   .move(edge: .trailing).combined(with: .opacity)))
+                        .edgeSwipeBack { goBack() }
+                        .id(page)
+                        .transition(.move(edge: .trailing))
+                        .zIndex(2)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .clipped()
         }
         .background(Color.tDark)
         .onAppear {
@@ -200,9 +214,15 @@ struct SettingsView: View {
 
 
     // MARK: – Pages de réglages
-    /// Les destinations du menu.
+    /// Les destinations du menu, et leurs sous-pages (Général → Langue).
     enum Page: Hashable {
         case account, general, player, chat, drops, points, labs, other, changelog
+        /// Général → Langue : la liste des langues, comme dans les réglages d'iOS.
+        case language
+
+        /// Page d'où l'on vient : le retour (bouton, glissé) y ramène ; nil :
+        /// le menu.
+        var parent: Page? { self == .language ? .general : nil }
 
         var titleKey: String {
             switch self {
@@ -215,6 +235,7 @@ struct SettingsView: View {
             case .labs:      return "debug_section"
             case .other:     return "sec_other"
             case .changelog: return "changelog"
+            case .language:  return "app_language"
             }
         }
         var subtitleKey: String {
@@ -228,6 +249,7 @@ struct SettingsView: View {
             case .labs:      return "sec_labs_sub"
             case .other:     return "sec_other_sub"
             case .changelog: return "changelog_sub"
+            case .language:  return "language"
             }
         }
         var icon: String {
@@ -241,6 +263,7 @@ struct SettingsView: View {
             case .labs:      return "flask.fill"
             case .other:     return "info.circle.fill"
             case .changelog: return "sparkles"
+            case .language:  return "globe"
             }
         }
         /// Une teinte par domaine : on repère la ligne à la couleur avant
@@ -256,8 +279,15 @@ struct SettingsView: View {
             case .labs:      return .tWarning
             case .other:     return .tMuted
             case .changelog: return .tVLC
+            case .language:  return .tPrimary
             }
         }
+    }
+
+    /// Retour (chevron, glissé depuis le bord gauche) : la page parente
+    /// (Langue → Général), sinon le menu.
+    private func goBack() {
+        withAnimation(.easeInOut(duration: 0.22)) { page = page?.parent }
     }
 
     /// En-tête unique, qui suit la navigation.
@@ -265,7 +295,7 @@ struct SettingsView: View {
         HStack(spacing: TSpace.md) {
             if let page {
                 Button {
-                    withAnimation(.easeInOut(duration: 0.22)) { self.page = nil }
+                    goBack()
                 } label: {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 15, weight: .bold))
@@ -542,6 +572,8 @@ struct SettingsView: View {
                     expertCard
                 case .changelog:
                     ChangelogList()
+                case .language:
+                    languageListCard
                 }
                 Spacer(minLength: 32)
             }
@@ -684,11 +716,30 @@ struct SettingsView: View {
         settingCard {
             VStack(alignment: .leading, spacing: 12) {
                 label("globe", store.t("language"))
-                VStack(spacing: 8) {
-                    ForEach(Lang.allCases) { lang in
-                        langButton(lang)
+                // Langue de l'app : une ligne qui ouvre la liste (Page.language),
+                // comme dans les réglages d'iOS ; la liste entière prenait la
+                // moitié de la page.
+                Button {
+                    withAnimation(.easeInOut(duration: 0.22)) { page = .language }
+                } label: {
+                    HStack(spacing: 8) {
+                        Text(store.t("app_language"))
+                            .font(.tCardTitle).foregroundColor(.tText)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 8)
+                        Text("\(store.lang.flag) \(store.lang.label)")
+                            .font(.tCardTitle).foregroundColor(.tMuted)
+                            .lineLimit(1)
+                        Image(systemName: "chevron.right")
+                            .font(.tSystem(size: 12, weight: .semibold))
+                            .foregroundColor(.tMuted)
                     }
+                    .padding(12)
+                    .background(Color.tSurface)
+                    .cornerRadius(10)
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
                 // Langue traduite avec l'IA : on le dit, et on invite à
                 // signaler ce qui sonne faux.
                 if store.lang.machineTranslated {
@@ -717,6 +768,18 @@ struct SettingsView: View {
                 Divider().background(Color.tBorder)
                 toggleRow(store.t("show_recent"), store.t("show_recent_sub"),
                           $store.showRecentChannels, log: "Streamers récents")
+            }
+        }
+    }
+
+    /// Réglages → Général → Langue : toutes les langues de `Lang`, dans son
+    /// ordre (une langue ajoutée à l'énumération y apparaît d'elle-même).
+    @ViewBuilder private var languageListCard: some View {
+        settingCard {
+            VStack(spacing: 8) {
+                ForEach(Lang.allCases) { lang in
+                    langButton(lang)
+                }
             }
         }
     }
@@ -854,63 +917,89 @@ struct SettingsView: View {
 
     /// Icône de l'app : « Contraste » reste nette en icônes transparentes ou
     /// teintées (iOS 26), toutes ont leurs versions sombre et teintée.
+    /// Impossible avec cette installation (LiveContainer, GBox, icônes
+    /// retirées…) : le choix laisse la place à une ligne qui dit pourquoi.
     @ViewBuilder private var appIconRow: some View {
+        let blocked = appIconBlocked ?? AppIconChoice.blocked
         VStack(alignment: .leading, spacing: 8) {
             Text(store.t("app_icon"))
-                .font(.tCardTitle).foregroundColor(.tText)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
-                    ForEach(AppIconChoice.allCases) { choice in
-                        let on = appIcon == choice
-                        Button {
-                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                            appIconError = nil
-                            choice.apply { error in
-                                guard let error else {
-                                    appIcon = choice
-                                    logger.settingChanged("Icône de l'app", value: choice.rawValue)
-                                    return
+                .font(.tCardTitle).foregroundColor(blocked ? Color.tMuted : Color.tText)
+            if blocked {
+                Text(appIconBlockedReason)
+                    .font(.tMeta).foregroundColor(.tMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 12) {
+                        ForEach(AppIconChoice.allCases) { choice in
+                            let on = appIcon == choice
+                            Button {
+                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                appIconError = nil
+                                choice.apply { error in
+                                    guard let error else {
+                                        appIcon = choice
+                                        logger.settingChanged("Icône de l'app", value: choice.rawValue)
+                                        return
+                                    }
+                                    // Refus qui tient à l'installation (retenu par
+                                    // AppIconChoice) : le choix se cache.
+                                    if error == AppIconChoice.unsupported {
+                                        withAnimation { appIconBlocked = true }
+                                        return
+                                    }
+                                    appIconError = store.t("app_icon_failed").replacingOccurrences(of: "{e}", with: error)
                                 }
-                                appIconError = error == AppIconChoice.unsupported
-                                    ? store.t("app_icon_unsupported")
-                                    : store.t("app_icon_failed").replacingOccurrences(of: "{e}", with: error)
+                            } label: {
+                                VStack(spacing: 6) {
+                                    Image(choice.previewName)
+                                        .resizable()
+                                        .frame(width: 58, height: 58)
+                                        .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+                                        .overlay(RoundedRectangle(cornerRadius: 13, style: .continuous)
+                                            .stroke(on ? Color.tPrimary : Color.tBorder, lineWidth: on ? 3 : 1))
+                                    Text(store.t(choice.labelKey))
+                                        .font(.tMeta)
+                                        .foregroundColor(on ? .tText : .tMuted)
+                                }
                             }
-                        } label: {
-                            VStack(spacing: 6) {
-                                Image(choice.previewName)
-                                    .resizable()
-                                    .frame(width: 58, height: 58)
-                                    .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
-                                    .overlay(RoundedRectangle(cornerRadius: 13, style: .continuous)
-                                        .stroke(on ? Color.tPrimary : Color.tBorder, lineWidth: on ? 3 : 1))
-                                Text(store.t(choice.labelKey))
-                                    .font(.tMeta)
-                                    .foregroundColor(on ? .tText : .tMuted)
-                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel(store.t(choice.labelKey))
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(store.t(choice.labelKey))
                     }
+                    .padding(.vertical, 3)
                 }
-                .padding(.vertical, 3)
-            }
-            if let appIconError {
-                Text(appIconError)
-                    .font(.tMeta).foregroundColor(.orange)
+                if let appIconError {
+                    Text(appIconError)
+                        .font(.tMeta).foregroundColor(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                // Signée avec l'identifiant générique d'un certificat (Feather sans
+                // « Merge Entitlements ») : iOS refuse le changement d'icône.
+                if SigningInfo.signedForOtherIdentifier, let id = SigningInfo.applicationIdentifier {
+                    Text(store.t("app_icon_wildcard").replacingOccurrences(of: "{id}", with: id))
+                        .font(.tMeta).foregroundColor(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Text(store.t("app_icon_sub"))
+                    .font(.tMeta).foregroundColor(.tMuted)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            // Signée avec l'identifiant générique d'un certificat (Feather sans
-            // « Merge Entitlements ») : iOS refuse le changement d'icône.
-            if SigningInfo.signedForOtherIdentifier, let id = SigningInfo.applicationIdentifier {
-                Text(store.t("app_icon_wildcard").replacingOccurrences(of: "{id}", with: id))
-                    .font(.tMeta).foregroundColor(.orange)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Text(store.t("app_icon_sub"))
-                .font(.tMeta).foregroundColor(.tMuted)
-                .fixedSize(horizontal: false, vertical: true)
         }
         .onAppear { appIcon = AppIconChoice.current }
+    }
+
+    /// Pourquoi l'icône ne se change pas avec cette installation.
+    private var appIconBlockedReason: String {
+        // Icônes au choix retirées de l'app par l'outil d'installation.
+        if !UIApplication.shared.supportsAlternateIcons { return store.t("app_icon_unsupported") }
+        // Signée avec l'identifiant générique d'un certificat : la cause
+        // probable, et ce qui la corrige (une autre signature fait revenir
+        // le choix).
+        if SigningInfo.signedForOtherIdentifier, let id = SigningInfo.applicationIdentifier {
+            return store.t("app_icon_wildcard").replacingOccurrences(of: "{id}", with: id)
+        }
+        return store.t("app_icon_blocked")
     }
 
     /// Langue des streamers dans « Top des lives » (appareil par défaut).
@@ -2627,6 +2716,18 @@ struct Contributor: Identifiable, Sendable {
 // et objets observés suffisent à le tenir à jour (`.equatable()` à l'appel).
 extension SettingsView: Equatable {
     nonisolated static func == (lhs: SettingsView, rhs: SettingsView) -> Bool { true }
+}
+
+private extension View {
+    /// Niveau des Réglages couvert par une page : un peu décalé et assombri,
+    /// comme sous une page d'iOS (le glissé retour le découvre), sans
+    /// réagir aux touchers ni à VoiceOver.
+    func settingsCovered(_ covered: Bool) -> some View {
+        self.offset(x: covered ? -72 : 0)
+            .overlay { Color.black.opacity(covered ? 0.3 : 0).allowsHitTesting(false) }
+            .allowsHitTesting(!covered)
+            .accessibilityHidden(covered)
+    }
 }
 
 // MARK: – Minuteur de veille (ligne des Réglages)

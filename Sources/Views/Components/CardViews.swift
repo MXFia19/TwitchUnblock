@@ -491,6 +491,9 @@ struct CategoryCardView: View {
     /// de la réafficher), et une catégorie masquée montrée par la recherche
     /// est atténuée.
     var hideable = false
+    /// Grille compacte des suivies (Réglages → Personnaliser) : 3 ou 4 par
+    /// ligne, nom et audience plus petits.
+    var compact = false
     let onPress: () -> Void
     @EnvironmentObject private var store: AppStore
 
@@ -506,7 +509,7 @@ struct CategoryCardView: View {
                 } placeholder: {
                     Rectangle().fill(Color.tSurface).aspectRatio(3/4, contentMode: .fill)
                         .overlay(Image(systemName: "gamecontroller")
-                            .font(.system(size: 20)).foregroundColor(.tMuted.opacity(0.5)))
+                            .font(.system(size: compact ? 16 : 20)).foregroundColor(.tMuted.opacity(0.5)))
                 }
                 .clipped()
                 .overlay(alignment: .topLeading) {
@@ -516,26 +519,28 @@ struct CategoryCardView: View {
                 // Nom puis audience, sous la jaquette : l'affiche reste lisible.
                 // L'audience arrive après la grille (requête séparée) : sa
                 // ligne garde sa place pour que les cartes ne sautent pas.
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: compact ? 2 : 4) {
                     Text(category.name)
-                        .font(.tCardTitle)
+                        .font(compact ? Font.tSystem(size: 12, weight: .semibold) : Font.tCardTitle)
                         .foregroundColor(.tText)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
-                        .frame(height: 36 * TType.ratio(14), alignment: .top)
-                    HStack(spacing: 4) {
-                        Circle().fill(Color.tLive).frame(width: 6, height: 6)
+                        .frame(height: compact ? 31 * TType.ratio(12) : 36 * TType.ratio(14), alignment: .top)
+                    HStack(spacing: compact ? 3 : 4) {
+                        Circle().fill(Color.tLive).frame(width: compact ? 5 : 6, height: compact ? 5 : 6)
                         Text(category.viewers.map { formatViewers($0) } ?? " ")
-                            .font(.tMeta).foregroundColor(.tMuted)
+                            .font(compact ? Font.tSystem(size: 10, weight: .medium) : Font.tMeta)
+                            .foregroundColor(.tMuted)
+                            .lineLimit(1)
                     }
                     .opacity(category.viewers == nil ? 0 : 1)
                     .animation(.easeOut(duration: 0.2), value: category.viewers)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(TSpace.md)
+                .padding(compact ? TSpace.sm : TSpace.md)
             }
             .background(Color.tCard)
-            .cornerRadius(TRadius.card)
+            .cornerRadius(compact ? TRadius.control : TRadius.card)
             .opacity(isHidden ? 0.5 : 1)
         }
         .buttonStyle(.plain)

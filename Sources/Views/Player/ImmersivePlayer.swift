@@ -888,7 +888,9 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
         p.canStartPictureInPictureAutomaticallyFromInline = true
         pip = p
         // Celui que « PiP en quittant le lecteur » et la mini-barre commandent.
-        PlayerPiP.shared.register(self)
+        PlayerPiP.shared.register(self,
+                                  start: { [weak self] in self?.startPiPOnLeave() ?? false },
+                                  stop: { [weak self] in self?.stopPiPForPlayer() })
         // Appelé depuis makeUIView, en pleine mise à jour des vues : publier
         // tout de suite donnait « Publishing changes from within view
         // updates » (bouton PiP absent jusqu'au rendu suivant).

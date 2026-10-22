@@ -31,19 +31,33 @@ final class PlayerPiP: ObservableObject {
     @Published private(set) var active = false
     /// Lecteur qui a la fenêtre : la fin tardive d'un autre ne l'efface pas.
     private weak var owner: AnyObject?
-    /// Lecteur immersif en place : celui qu'on fait passer en PiP, ou revenir.
-    private weak var immersive: ImmersivePlayerModel?
+    /// Lecteur immersif en place, et de quoi le faire passer en PiP (true si
+    /// c'est parti) ou en faire revenir l'image. Des fermetures données par le
+    /// lecteur plutôt que ses méthodes appelées d'ici : elles gardent son
+    /// isolement d'acteur, quel que soit celui qu'AVKit lui fait hériter.
+    private weak var immersive: AnyObject?
+    private var startImmersive: (() -> Bool)?
+    private var stopImmersive: (() -> Void)?
     /// Lecteur quitté avec « PiP en quittant le lecteur », PiP pas encore
     /// démarré : la réduction ordinaire, faite si le PiP échoue ou tarde.
     private var leaveFallback: (() -> Void)?
     private var leaveRequest = 0
 
     // MARK: Lecteurs
-    /// Lecteur immersif dont le PiP est prêt (attachPiP), ou démonté.
-    func register(_ model: ImmersivePlayerModel) { immersive = model }
+    /// Lecteur immersif dont le PiP est prêt (attachPiP). Les fermetures le
+    /// tiennent en lien faible : rien ne le retient d'ici.
+    func register(_ model: AnyObject, start: @escaping () -> Bool, stop: @escaping () -> Void) {
+        immersive = model
+        startImmersive = start
+        stopImmersive = stop
+    }
 
-    func unregister(_ model: ImmersivePlayerModel) {
-        if immersive === model { immersive = nil }
+    /// Lecteur démonté : plus rien à lui demander (sauf s'il a déjà été remplacé).
+    func unregister(_ model: AnyObject) {
+        guard immersive === model else { return }
+        immersive = nil
+        startImmersive = nil
+        stopImmersive = nil
     }
 
     func started(by player: AnyObject) {
@@ -77,12 +91,12 @@ final class PlayerPiP: ObservableObject {
     /// comme avant. `fallback` : cette réduction, si le PiP échoue ou n'a pas
     /// démarré au bout de 2 s.
     func startOnLeave(fallback: @escaping () -> Void) -> Bool {
-        guard !active, let model = immersive else { return false }
+        guard !active, immersive != nil, let start = startImmersive else { return false }
         leaveRequest += 1
         let request = leaveRequest
         // Posé avant la demande : un refus annoncé tout de suite le trouve.
         leaveFallback = fallback
-        guard model.startPiPOnLeave() else {
+        guard start() else {
             leaveFallback = nil
             return false
         }
@@ -96,7 +110,8 @@ final class PlayerPiP: ObservableObject {
     /// Lecteur rouvert en grand (mini-barre, notification…) : l'image quitte
     /// la fenêtre PiP et revient dans le lecteur, qui restait noir sinon.
     func playerShown() {
-        immersive?.stopPiPForPlayer()
+        guard immersive != nil else { return }
+        stopImmersive?()
     }
 
     private func fallBack() {

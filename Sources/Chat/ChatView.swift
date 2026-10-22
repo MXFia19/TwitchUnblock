@@ -1495,6 +1495,8 @@ struct WrappingHStack: View {
     var style: ChatStyle = .standard
     /// Fiche d'une emote ou d'un badge touché (fournie par le chat).
     @Environment(\.chatInfoAction) private var infoAction
+    /// Emotes masquées (Réglages → Chat) : affichées comme le mot tapé.
+    @EnvironmentObject private var store: AppStore
 
     var body: some View {
         let blocks = message.tokens.enumerated().map { i, t in TokenBlock(id: i, content: t) }
@@ -1525,8 +1527,19 @@ struct WrappingHStack: View {
                     Text(t).font(.system(size: size))
                         .foregroundColor(message.isAction ? message.color : .tText)
                 case .emote(let e):
-                    CachedEmoteImage(url: e.url, name: e.name, height: emoteHeight)
-                        .chatInfoTap(infoAction, .emote(e))
+                    // Masquée : le mot tapé, comme un texte ; un toucher ouvre
+                    // toujours sa fiche (de quoi la réafficher), un appui long
+                    // la masque ou la réaffiche.
+                    if store.hidesEmote(e.name) {
+                        Text(e.name).font(.system(size: size))
+                            .foregroundColor(message.isAction ? message.color : .tText)
+                            .chatInfoTap(infoAction, .emote(e))
+                            .modifier(EmoteHideMenu(code: e.name))
+                    } else {
+                        CachedEmoteImage(url: e.url, name: e.name, height: emoteHeight)
+                            .chatInfoTap(infoAction, .emote(e))
+                            .modifier(EmoteHideMenu(code: e.name))
+                    }
                 case .mention(let m):
                     Text("@\(m)").font(.system(size: size, weight: .semibold)).foregroundColor(.tPrimary)
                 case .link(let l):

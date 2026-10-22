@@ -304,6 +304,11 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   A badge shows its title ("3-Month Subscriber"…) in high resolution. In the
   live chat, the multistream, the pinned message, a message thread and the
   VOD and clip chat; VoiceOver can open it too.
+* 🙅 **Hide an emote** — long-press it in the chat, or **Hide this emote** on
+  its card: it then shows as the typed word, from any source (Twitch, BTTV,
+  FFZ, 7TV), in the live, VOD and multi-live chat. Settings → Chat → Hidden
+  emotes lists them (up to 200) to show them again; the list follows your
+  account, shared with the website (`hiddenEmotes`).
 * 🏅 **Badges** — global and channel-specific, resolved through Helix.
 * 🕘 **Recent messages** — Twitch sends nothing from before you join, so the
   last messages are fetched from `recent-messages.robotty.de` (third party) and

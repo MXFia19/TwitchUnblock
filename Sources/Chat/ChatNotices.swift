@@ -505,6 +505,9 @@ struct ChatInfoSheet: View {
             }
         }
         .font(.system(size: 14, weight: .semibold))
+        // Masquée : affichée dans le chat comme le mot tapé (Réglages → Chat).
+        // Le sélecteur d'emotes la garde : on peut toujours l'envoyer.
+        EmoteHideButton(code: e.name)
     }
 
     /// Chaîne propriétaire d'une emote Twitch : avatar, nom, en direct ou non.

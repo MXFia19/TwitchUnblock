@@ -137,6 +137,7 @@ enum Backup {
             "mutedWords": store.chatMutedWords,
             "blockedUsers": store.chatBlockedUsers,
             "highlightWords": store.chatHighlightWords,
+            "hiddenEmotes": store.hiddenEmotes,
             "shareUsage": store.shareUsage,
             "vodSpeed": store.vodSpeed,
             "qualityPref": store.preferredQuality,
@@ -400,6 +401,12 @@ enum Backup {
         words("mutedWords", 50) { store.chatMutedWords = $0 }
         words("blockedUsers", 500) { store.chatBlockedUsers = $0 }
         words("highlightWords", 30) { store.chatHighlightWords = $0 }
+        // Emotes masquées (nom du site) : codes exacts, la casse compte —
+        // pas de mise en minuscules comme les mots.
+        if let v = s["hiddenEmotes"] as? [String] {
+            store.hiddenEmotes = AppStore.emoteCodes(v)
+            ok("hiddenEmotes")
+        }
         bool("shareUsage") { store.shareUsage = $0 }
         num("vodSpeed", 0.25...2) { store.vodSpeed = VodSpeed.nearestSafe($0) }
         // Ordre des sources du direct (nom du site) : sources connues, sans

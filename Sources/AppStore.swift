@@ -815,10 +815,55 @@ final class AppStore: ObservableObject {
         didSet { UserDefaults.standard.set(chatHighlightWords, forKey: "chat_highlight_words") }
     }
 
+    /// Emotes masquées, par leur code exact (la casse compte : « KEKW » et
+    /// « kekw » sont deux emotes), 200 au plus, la plus récente à la fin :
+    /// dans le chat, elles s'affichent comme le mot tapé. Toutes sources
+    /// (Twitch, BTTV, FFZ, 7TV), direct, VODs et multi-live. Même clé que le
+    /// site (« hiddenEmotes »), dans la synchro des réglages et la sauvegarde.
+    @Published var hiddenEmotes: [String] = [] {
+        didSet {
+            UserDefaults.standard.set(hiddenEmotes, forKey: "chat_hidden_emotes")
+            hiddenEmoteSet = Set(hiddenEmotes)
+        }
+    }
+    /// Les mêmes, pour la recherche faite à chaque emote affichée.
+    private(set) var hiddenEmoteSet: Set<String> = []
+    static let maxHiddenEmotes = 200
+
+    func hidesEmote(_ code: String) -> Bool { hiddenEmoteSet.contains(code) }
+
+    /// Masque l'emote, ou la réaffiche si elle l'était déjà. Au-delà de 200,
+    /// les plus anciennes repartent.
+    func toggleHiddenEmote(_ code: String) {
+        guard let c = Self.emoteCodes([code]).first else { return }
+        if let i = hiddenEmotes.firstIndex(of: c) {
+            hiddenEmotes.remove(at: i)
+            logger.settingChanged("Emote réaffichée", value: c)
+        } else {
+            hiddenEmotes = Array((hiddenEmotes + [c]).suffix(Self.maxHiddenEmotes))
+            logger.settingChanged("Emote masquée", value: c)
+        }
+    }
+
+    /// Codes d'emotes valides (sauvegarde, synchro, site) : sans espace ni
+    /// retour à la ligne, 100 caractères au plus, sans doublon, 200 au plus
+    /// (les derniers, les plus récents).
+    static func emoteCodes(_ list: [String]) -> [String] {
+        var seen = Set<String>()
+        let valid = list
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty && $0.count <= 100 && !$0.contains(where: \.isWhitespace) }
+            .filter { seen.insert($0).inserted }
+        return Array(valid.suffix(maxHiddenEmotes))
+    }
+
     // MARK: – Init
     init() {
         let ud = UserDefaults.standard
         chatHighlightWords = ud.stringArray(forKey: "chat_highlight_words") ?? []
+        // Assignations de l'init : didSet n'y est pas appelé, l'ensemble suit à la main.
+        hiddenEmotes       = Self.emoteCodes(ud.stringArray(forKey: "chat_hidden_emotes") ?? [])
+        hiddenEmoteSet     = Set(hiddenEmotes)
         chatHideBots       = ud.bool(forKey: "chat_hide_bots")
         chatHideCommands   = ud.bool(forKey: "chat_hide_commands")
         chatMutedWords     = ud.stringArray(forKey: "chat_muted_words") ?? []

@@ -1134,6 +1134,9 @@ struct SettingsView: View {
                     }
                 }
                 Divider().background(Color.tBorder)
+                // Emotes masquées : affichées comme le mot tapé (HiddenEmotes.swift).
+                HiddenEmotesRow()
+                Divider().background(Color.tBorder)
                 // Mots surlignés : en plus des mentions, séparés par des virgules.
                 VStack(alignment: .leading, spacing: 6) {
                     Text(store.t("highlight_words"))

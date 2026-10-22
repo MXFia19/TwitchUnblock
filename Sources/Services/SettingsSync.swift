@@ -45,9 +45,10 @@ enum SettingsSync {
     ///  - qualityPref : qualité, selon l'écran et la connexion ;
     ///  - shareUsage : comptage anonyme, consentement donné sur chaque appareil ;
     ///  - homeList : accueil en grille ou en liste, selon la taille de l'écran.
+    /// « hiddenEmotes » : emotes masquées, codes exacts (200 au plus).
     static let commonKeys = ["topLang", "showRecent", "timestamps", "timeFormat", "keepDeleted",
                              "loadHistory", "hideBots", "hideCommands", "mutedWords", "blockedUsers",
-                             "highlightWords", "vodSpeed"]
+                             "highlightWords", "vodSpeed", "hiddenEmotes"]
 
     /// Propres à l'app : la personnalisation (onglets, accueil, boutons du
     /// lecteur, bandeaux du chat) et ce qui suit le compte plutôt que
@@ -169,10 +170,12 @@ enum SettingsSync {
     }
 
     /// Première rencontre, section commune : celle du serveur, plus les
-    /// listes du chat d'ici (mots et personnes masqués, mots surlignés).
+    /// listes du chat d'ici (mots et personnes masqués, mots surlignés,
+    /// emotes masquées).
     static func firstCommon(here: [String: Any], there: Any) -> [String: Any] {
         var out = there as? [String: Any] ?? [:]
-        for (key, max) in [("mutedWords", 50), ("highlightWords", 30), ("blockedUsers", 500)] {
+        for (key, max) in [("mutedWords", 50), ("highlightWords", 30), ("blockedUsers", 500),
+                           ("hiddenEmotes", AppStore.maxHiddenEmotes)] {
             var seen = Set<String>()
             let theirs: [String] = ((out[key] as? [Any]) ?? []).compactMap { $0 as? String }
             let mine: [String] = (here[key] as? [String]) ?? []
@@ -407,7 +410,7 @@ extension AppStore {
             return topLang == nil && showRecentChannels && chatTimestamps && timeFormat == "auto"
                 && !chatShowDeleted && chatLoadRecent && !chatHideBots && !chatHideCommands
                 && chatMutedWords.isEmpty && chatBlockedUsers.isEmpty && chatHighlightWords.isEmpty
-                && vodSpeed == 1
+                && vodSpeed == 1 && hiddenEmotes.isEmpty
         }
     }
 

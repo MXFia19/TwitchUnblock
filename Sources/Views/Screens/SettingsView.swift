@@ -1347,6 +1347,10 @@ struct SettingsView: View {
                 toggleRow(store.t("immersive_player"), store.t("immersive_player_sub"),
                           $store.immersivePlayer, log: "Lecteur immersif")
                 Divider().background(Color.tBorder)
+                // Lecteur immersif seulement : le natif ne sait pas lancer son PiP.
+                toggleRow(store.t("pip_on_leave"), store.t("pip_on_leave_sub"),
+                          $store.pipOnLeave, log: "PiP en quittant le lecteur")
+                Divider().background(Color.tBorder)
                 toggleRow(store.t("low_latency"), store.t("low_latency_sub"),
                           $store.lowLatency, log: "Mode faible latence")
                 Divider().background(Color.tBorder)

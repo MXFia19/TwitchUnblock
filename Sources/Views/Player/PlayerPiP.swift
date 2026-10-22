@@ -11,13 +11,15 @@ import Combine
 //  ou arrêter son PiP. Le multi-live n'a pas de PiP.
 //
 //  Ce que MainTabView en fait :
-//   - PiP démarré (bouton, app en arrière-plan) : le lecteur se réduit. Il
-//     restait en grand, noir, par-dessus l'app (l'image était partie dans la
-//     fenêtre), et il fallait le fermer à la main ;
+//   - PiP démarré (bouton, app en arrière-plan, lecteur quitté) : le lecteur
+//     se réduit. Il restait en grand, noir, par-dessus l'app (l'image était
+//     partie dans la fenêtre), et il fallait le fermer à la main ;
 //   - bouton « agrandir » de la fenêtre : le lecteur revient en grand, sur la
 //     même lecture (rappels onPiPStart / onPiPRestore des lecteurs) ;
 //   - lecteur rouvert en grand pendant un PiP (mini-barre…) : le PiP
-//     s'arrête et l'image revient dans le lecteur.
+//     s'arrête et l'image revient dans le lecteur ;
+//   - « PiP en quittant le lecteur » (Réglages → Lecteur) : PiP au lieu du
+//     mini-lecteur.
 //  Fil principal seulement.
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -29,8 +31,12 @@ final class PlayerPiP: ObservableObject {
     @Published private(set) var active = false
     /// Lecteur qui a la fenêtre : la fin tardive d'un autre ne l'efface pas.
     private weak var owner: AnyObject?
-    /// Lecteur immersif en place : celui dont l'image revient de la fenêtre.
+    /// Lecteur immersif en place : celui qu'on fait passer en PiP, ou revenir.
     private weak var immersive: ImmersivePlayerModel?
+    /// Lecteur quitté avec « PiP en quittant le lecteur », PiP pas encore
+    /// démarré : la réduction ordinaire, faite si le PiP échoue ou tarde.
+    private var leaveFallback: (() -> Void)?
+    private var leaveRequest = 0
 
     // MARK: Lecteurs
     /// Lecteur immersif dont le PiP est prêt (attachPiP), ou démonté.
@@ -43,6 +49,8 @@ final class PlayerPiP: ObservableObject {
     func started(by player: AnyObject) {
         owner = player
         if !active { active = true }
+        // Démarré : plus de repli à faire.
+        leaveFallback = nil
     }
 
     /// `player` nil : lecteur libéré sans démontage (le lien faible vers lui
@@ -58,10 +66,43 @@ final class PlayerPiP: ObservableObject {
         }
     }
 
+    /// Démarrage refusé par AVKit : le lecteur quitté se réduit tout de suite.
+    func failed() { fallBack() }
+
     // MARK: MainTabView
+    /// Lecteur quitté (glissé vers le bas, flèche) avec « PiP en quittant le
+    /// lecteur » : le PiP démarre à la place du mini-lecteur, et le lecteur se
+    /// réduit à son départ (onPiPStart). false s'il ne peut pas démarrer
+    /// (lecteur natif, pause, échec, AVKit qui refuse) : l'appelant réduit
+    /// comme avant. `fallback` : cette réduction, si le PiP échoue ou n'a pas
+    /// démarré au bout de 2 s.
+    func startOnLeave(fallback: @escaping () -> Void) -> Bool {
+        guard !active, let model = immersive else { return false }
+        leaveRequest += 1
+        let request = leaveRequest
+        // Posé avant la demande : un refus annoncé tout de suite le trouve.
+        leaveFallback = fallback
+        guard model.startPiPOnLeave() else {
+            leaveFallback = nil
+            return false
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
+            guard let self, self.leaveRequest == request else { return }
+            self.fallBack()
+        }
+        return true
+    }
+
     /// Lecteur rouvert en grand (mini-barre, notification…) : l'image quitte
     /// la fenêtre PiP et revient dans le lecteur, qui restait noir sinon.
     func playerShown() {
         immersive?.stopPiPForPlayer()
+    }
+
+    private func fallBack() {
+        guard let fallback = leaveFallback else { return }
+        leaveFallback = nil
+        logger.warn("LECTEUR", "PiP pas démarré : mini-lecteur", nil)
+        fallback()
     }
 }

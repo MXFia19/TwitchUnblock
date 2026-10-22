@@ -887,7 +887,7 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
         p.delegate = self
         p.canStartPictureInPictureAutomaticallyFromInline = true
         pip = p
-        // Celui que la mini-barre fait revenir de la fenêtre (PlayerPiP).
+        // Celui que « PiP en quittant le lecteur » et la mini-barre commandent.
         PlayerPiP.shared.register(self)
         // Appelé depuis makeUIView, en pleine mise à jour des vues : publier
         // tout de suite donnait « Publishing changes from within view
@@ -902,6 +902,17 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
         guard let pip else { return }
         if pip.isPictureInPictureActive { pip.stopPictureInPicture() }
         else { pip.startPictureInPicture() }
+    }
+
+    /// Lecteur quitté avec « PiP en quittant le lecteur » (PlayerPiP) : PiP
+    /// seulement pendant une lecture, et si AVKit le permet maintenant (couche
+    /// à l'écran). false sinon : le lecteur se réduit comme avant.
+    func startPiPOnLeave() -> Bool {
+        guard let pip, !tornDown, !failed, isPlaying,
+              !pip.isPictureInPictureActive, pip.isPictureInPicturePossible else { return false }
+        logger.info("LECTEUR", "PiP demandé en quittant le lecteur", nil)
+        pip.startPictureInPicture()
+        return true
     }
 
     /// Lecteur rouvert en grand (mini-barre, notification…) pendant un PiP :
@@ -1126,6 +1137,7 @@ extension ImmersivePlayerModel: AVPictureInPictureControllerDelegate {
     func pictureInPictureController(_ c: AVPictureInPictureController,
                                     failedToStartPictureInPictureWithError error: Error) {
         logger.warn("LECTEUR", "PiP impossible", error.localizedDescription)
+        PlayerPiP.shared.failed()
     }
 
     /// Bouton « agrandir » de la fenêtre, ou PiP arrêté pour rouvrir le

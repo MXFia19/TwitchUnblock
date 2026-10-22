@@ -1175,7 +1175,7 @@ struct MainTabView: View {
                 onPlaying: { playerPlaying = $0 },
                 onPull: { pullPlayer($0) },
                 onPullEnd: { endPull($0, predicted: $1) },
-                onReduce: { reducePlayer() },
+                onReduce: { leavePlayer() },
                 onClose:  { stopPlayer() },
                 onMenu:   { showPlayerMenu = true },
                 onRefresh: { reloadCurrent() },
@@ -1248,7 +1248,7 @@ struct MainTabView: View {
     @ViewBuilder
     private var playerTopBar: some View {
         HStack(spacing: TSpace.sm) {
-            Button { PlayerPull.guarded { reducePlayer() } } label: {
+            Button { PlayerPull.guarded { leavePlayer() } } label: {
                 Image(systemName: "chevron.down")
                     .font(.system(size: 14, weight: .bold))
                     .foregroundColor(.tPrimary)
@@ -1431,22 +1431,41 @@ struct MainTabView: View {
     }
 
     /// Doigt levé : assez loin (seuil selon la hauteur), ou lancé
-    /// franchement, on réduit ; sinon le lecteur revient à sa place.
+    /// franchement, on quitte le lecteur ; sinon il revient à sa place.
     private func endPull(_ distance: CGFloat, predicted: CGFloat) {
         guard playerVisible, !closingPlayer else { return }
         let threshold = PlayerPull.threshold(for: pull.height)
         if distance >= threshold || (distance > 20 && predicted >= threshold * 1.8) {
-            reducePlayer()
+            leavePlayer()
         } else {
             pullPlayer(0)
         }
     }
 
     // MARK: – Image dans l'image (PiP)
-    /// PiP démarré (bouton, app en arrière-plan) : le lecteur se réduit pour
-    /// laisser naviguer dans l'app, comme dans les apps vidéo. Il restait en
-    /// grand, noir (l'image partie dans la fenêtre), et il fallait le fermer
-    /// à la main.
+    /// Lecteur quitté (flèche, glissé vers le bas) : avec « PiP en quittant le
+    /// lecteur », la vidéo passe en PiP et le lecteur se réduit à son départ
+    /// (pipStarted) ; sinon, ou si le PiP ne démarre pas, mini-lecteur.
+    private func leavePlayer() {
+        guard playerVisible, !closingPlayer else { return }
+        if pipOnLeaveAllowed, PlayerPiP.shared.startOnLeave(fallback: { reducePlayer() }) { return }
+        reducePlayer()
+    }
+
+    /// « PiP en quittant le lecteur » : lecteur immersif (le natif n'a rien
+    /// de public pour démarrer son PiP), une image à montrer — ni chargement,
+    /// ni erreur, ni chat seul, ni audio seul. Le lecteur dit ensuite s'il
+    /// joue et si AVKit le permet (PlayerPiP.startOnLeave).
+    private var pipOnLeaveAllowed: Bool {
+        guard store.pipOnLeave, store.immersivePlayer, !chatOnly, !loading,
+              errorMsg == nil, let links = qualityLinks else { return false }
+        return !isAudioQuality(currentQuality(links))
+    }
+
+    /// PiP démarré (bouton, app en arrière-plan, lecteur quitté) : le lecteur
+    /// se réduit pour laisser naviguer dans l'app, comme dans les apps vidéo.
+    /// Il restait en grand, noir (l'image partie dans la fenêtre), et il
+    /// fallait le fermer à la main.
     private func pipStarted() {
         guard playerVisible, !closingPlayer else { return }
         reducePlayer()

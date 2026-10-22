@@ -422,6 +422,8 @@ let kTraditionalChineseStrings: [String: String] = [
     "ob_tip_more": "子母畫面、睡眠計時器，以及帶有小奇點的聊天室。",
     "switching_source": "正在切換來源…",
     "loading_source": "嘗試中：{s}…",
+    "pip_on_leave": "離開播放器時進入子母畫面",
+    "pip_on_leave_sub": "縮小直播或 VOD（向下滑動、返回箭頭）時，若影片正在播放，會改以子母畫面顯示，而不是迷你播放器。僅限沉浸式播放器。",
     "fill_screen": "填滿畫面（橫向）",
     "fill_screen_sub": "橫向時把畫面放大到邊緣，代價是上下會被裁掉。關閉時完整畫面會顯示，兩側留等寬黑邊。直向無效。",
     "web_expired": "網頁工作階段已過期",

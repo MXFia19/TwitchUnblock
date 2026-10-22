@@ -435,6 +435,8 @@ let kItalianStrings: [String: String] = [
     "ob_tip_more": "Picture in Picture, timer di spegnimento e chat con punti canale.",
     "switching_source": "Cambio della sorgente…",
     "loading_source": "Tentativo con: {s}…",
+    "pip_on_leave": "PiP all’uscita dal lettore",
+    "pip_on_leave_sub": "Riducendo una diretta o un VOD (scorri verso il basso, freccia indietro) si apre in Picture in Picture invece del mini lettore, se il video è in riproduzione. Solo con il lettore immersivo.",
     "fill_screen": "Riempi lo schermo (orizzontale)",
     "fill_screen_sub": "Ingrandisce il video fino ai bordi in orizzontale, tagliando le parti superiore e inferiore. Se disattivato, mostra l’immagine intera con barre laterali uguali. Nessun effetto in verticale.",
     "web_expired": "Sessione web scaduta",

@@ -165,6 +165,7 @@ enum Backup {
             "ios_cellularQuality": store.cellularQuality,
             "ios_higherQualities": store.higherQualities,
             "ios_fillScreen": store.fillScreen,
+            "ios_pipOnLeave": store.pipOnLeave,
             "ios_landscapeChat": store.landscapeChat.rawValue,
             "ios_spatialAudio": store.spatialAudio,
             "ios_restoreMuted": store.restoreMutedAudio,
@@ -443,6 +444,7 @@ enum Backup {
         }
         bool("ios_higherQualities") { store.higherQualities = $0 }
         bool("ios_fillScreen") { store.fillScreen = $0 }
+        bool("ios_pipOnLeave") { store.pipOnLeave = $0 }
         if let v = s["ios_landscapeChat"] as? String, let lc = LandscapeChat(rawValue: v) {
             store.landscapeChat = lc
             ok("ios_landscapeChat")

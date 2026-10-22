@@ -97,6 +97,7 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   lock screen activity.
   Starting it shrinks the player into the mini player, so you can browse the app right away (no more black full-size player to close).
   The PiP window's expand button brings the player back full size on the same video, without reloading (with the app's player, tapping the mini player does too).
+* 🪟 **PiP when leaving the player** — optional, off by default (Settings → Player): swiping a live or VOD down, or the back arrow, opens it in Picture-in-Picture instead of the mini player while it plays (app's player; Apple's player keeps the mini player).
 * 🔒 **Lock Screen and Dynamic Island** — the live or VOD you're watching
   (channel, title, playback) as a Live Activity; turn it off in Settings →
   Player → Live Activity if you don't need it. When iOS refuses it because the

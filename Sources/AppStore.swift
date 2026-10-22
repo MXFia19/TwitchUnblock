@@ -350,6 +350,14 @@ final class AppStore: ObservableObject {
         didSet { UserDefaults.standard.set(fillScreen, forKey: "cfg_fill_screen") }
     }
 
+    /// Quitter le lecteur (glissé vers le bas, flèche) ouvre l'image dans
+    /// l'image au lieu du mini-lecteur, quand c'est possible (lecteur
+    /// immersif, vidéo en lecture). Coupé par défaut : le mini-lecteur reste
+    /// la règle. Propre à l'appareil (pas synchronisé, voir SettingsSync).
+    @Published var pipOnLeave: Bool = false {
+        didSet { UserDefaults.standard.set(pipOnLeave, forKey: "cfg_pip_on_leave") }
+    }
+
     /// Place du chat en paysage : colonne, superposé à l'image, ou replié.
     /// Mémorisé, parce qu'on choisit ça une fois puis on n'y revient plus.
     @Published var landscapeChat: LandscapeChat = .column {
@@ -903,6 +911,7 @@ final class AppStore: ObservableObject {
         autoClaimDrops     = ud.object(forKey: "cfg_drops_autoclaim") as? Bool ?? true
         dropsNotify        = ud.object(forKey: "cfg_drops_notify")    as? Bool ?? true
         fillScreen         = ud.object(forKey: "cfg_fill_screen") as? Bool ?? false
+        pipOnLeave         = ud.object(forKey: "cfg_pip_on_leave") as? Bool ?? false
         landscapeChat      = LandscapeChat(rawValue: ud.string(forKey: "cfg_landscape_chat") ?? "")
                              ?? .column
         if landscapeChat != .hidden { lastShownLandscapeChat = landscapeChat }

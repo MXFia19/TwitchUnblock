@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.6.29",
+          "buildVersion": "355",
+          "date": "2026-10-22",
+          "localizedDescription": "- Settings: the app no longer crashes when opening Settings on iOS 18",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-355/TwitchUnblock.ipa",
+          "size": 4522536,
+          "commit": "1663231a6b4a778553e55f1977cd78cc2a92d57e"
+        },
+        {
           "version": "1.6.28",
           "buildVersion": "354",
           "date": "2026-10-22",
@@ -280,25 +289,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-322/TwitchUnblock.ipa",
           "size": 3814718,
           "commit": "994eade39442c29826c603a463cf09ae5de17f4f"
-        },
-        {
-          "version": "1.4.21",
-          "buildVersion": "321",
-          "date": "2026-10-18",
-          "localizedDescription": "- The header margin now follows rotation (no title under the notch, no extra gap after turning the iPhone).\n- Counts agree with their word: 1 viewer, 1 vote, 1 file… (and the three Russian plural forms).\n- TU Test has its own link scheme: tapping a ntfy notification opens the right app when both are installed.",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-321/TwitchUnblock.ipa",
-          "size": 3807544,
-          "commit": "0a489cf8d3f3c0c6f69a735dcfa2aef854bec7ad"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.6.28",
+      "version": "1.6.29",
       "versionDate": "2026-10-22",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-354/TwitchUnblock.ipa",
-      "size": 4570361
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-355/TwitchUnblock.ipa",
+      "size": 4522536
     }
   ],
   "news": []

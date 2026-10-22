@@ -21,6 +21,11 @@ struct UICustomization: Codable, Equatable {
     var hiddenPlayer: [String] = ["sleep", "multi", "rewind"]
     var channelTabOrder: [String] = UICustomization.defaultChannelTabs
     var hiddenChannelTabs: [String] = []
+    /// Catégories suivies (Accueil → Catégories → Suivies) : jaquettes plus
+    /// petites, 3 par ligne (4 sur iPad) ; sinon 2, comme les autres grilles.
+    var compactFollowedCategories: Bool = false
+    /// Leur ordre : les plus regardées d'abord (comme Twitch), ou de A à Z.
+    var followedCategoriesSort: FollowedCategorySort = .viewers
 
     static let defaultTabs = ["home", "discover", "search", "library"]
     /// Onglets des lives de l'accueil (Suivies, Top, Hors ligne).
@@ -55,6 +60,9 @@ struct UICustomization: Codable, Equatable {
         hiddenPlayer = (try? c.decodeIfPresent([String].self, forKey: .hiddenPlayer)) ?? ["sleep", "multi", "rewind"]
         channelTabOrder   = (try? c.decodeIfPresent([String].self, forKey: .channelTabOrder)) ?? Self.defaultChannelTabs
         hiddenChannelTabs = (try? c.decodeIfPresent([String].self, forKey: .hiddenChannelTabs)) ?? []
+        compactFollowedCategories = (try? c.decodeIfPresent(Bool.self, forKey: .compactFollowedCategories)) ?? false
+        // Ordre inconnu (version plus récente) : celui par défaut.
+        followedCategoriesSort = (try? c.decodeIfPresent(FollowedCategorySort.self, forKey: .followedCategoriesSort)) ?? .viewers
     }
 
     /// L'ordre choisi (éléments connus, sans doublon), puis les nouveaux.
@@ -100,5 +108,24 @@ struct UICustomization: Codable, Equatable {
     mutating func set(_ key: String, hidden: Bool, in list: WritableKeyPath<UICustomization, [String]>) {
         self[keyPath: list].removeAll { $0 == key }
         if hidden { self[keyPath: list].append(key) }
+    }
+}
+
+/// Ordre des catégories suivies (Réglages → Personnaliser).
+enum FollowedCategorySort: String, Codable, CaseIterable, Identifiable {
+    /// Les plus regardées d'abord, comme Twitch (l'ordre de toujours).
+    case viewers
+    /// Alphabétique, de A à Z.
+    case name
+
+    var id: String { rawValue }
+    /// Mêmes libellés que les tris des lives d'une catégorie.
+    var labelKey: String { self == .viewers ? "sort_viewers_desc" : "sort_name" }
+
+    func apply(_ list: [TwitchCategory]) -> [TwitchCategory] {
+        switch self {
+        case .viewers: return list.sorted { ($0.viewers ?? 0) > ($1.viewers ?? 0) }
+        case .name:    return list.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        }
     }
 }

@@ -441,6 +441,7 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   art. A category you follow on Twitch shows as followed on its page, and
   unfollowing it there removes it from your Twitch account (web session).
   Errors and empty lists have **Retry** / pull to refresh.
+* 🗂️ **Followed categories your way** — Settings → General → Customize the app → Followed categories: **Compact** covers (3 per row, 4 on iPad) and the order (most watched first, as before, or A → Z).
 * 🏷 **Stream tags** — language, DropsEnabled… under each live stream, like on
   Twitch.
 * 🔍 **Search** — type anything and the results come in tabs, like Twitch's

@@ -71,6 +71,31 @@ struct CustomizeView: View {
                     Text(store.t("cust_home_foot"))
                 }
 
+                // ── Catégories suivies : taille des jaquettes, ordre ─
+                Section {
+                    Picker(selection: compactCategories) {
+                        Text(store.t("cust_cat_normal")).tag(false)
+                        Text(store.t("cust_cat_compact")).tag(true)
+                    } label: {
+                        Label(store.t("cust_cat_size"), systemImage: "square.grid.3x3.fill").foregroundColor(.tText)
+                    }
+                    .tint(.tPrimary)
+                    .listRowBackground(Color.tCard)
+                    Picker(selection: categorySort) {
+                        ForEach(FollowedCategorySort.allCases) { sort in
+                            Text(store.t(sort.labelKey)).tag(sort)
+                        }
+                    } label: {
+                        Label(store.t("cust_cat_sort"), systemImage: "arrow.up.arrow.down").foregroundColor(.tText)
+                    }
+                    .tint(.tPrimary)
+                    .listRowBackground(Color.tCard)
+                } header: {
+                    Text(store.t("cust_followed_cats"))
+                } footer: {
+                    Text(store.t("cust_followed_cats_foot"))
+                }
+
                 // ── Page d'une chaîne : ses onglets ─────────────────
                 Section {
                     ForEach(c.channelTabs, id: \.self) { key in
@@ -211,6 +236,24 @@ struct CustomizeView: View {
                 set: { tab in
                     logger.settingChanged("Onglet au lancement", value: tab)
                     store.customization.launchTab = tab
+                })
+    }
+
+    /// Catégories suivies en jaquettes compactes (3 par ligne, 4 sur iPad).
+    private var compactCategories: Binding<Bool> {
+        Binding(get: { store.customization.compactFollowedCategories },
+                set: { on in
+                    logger.settingChanged("Catégories suivies · taille", value: on ? "compacte" : "normale")
+                    store.customization.compactFollowedCategories = on
+                })
+    }
+
+    /// Ordre des catégories suivies : les plus regardées d'abord, ou A → Z.
+    private var categorySort: Binding<FollowedCategorySort> {
+        Binding(get: { store.customization.followedCategoriesSort },
+                set: { sort in
+                    logger.settingChanged("Catégories suivies · ordre", value: sort == .name ? "alphabétique" : "spectateurs")
+                    store.customization.followedCategoriesSort = sort
                 })
     }
 

@@ -143,16 +143,26 @@ struct CategoriesView: View {
     /// Feuille des chaînes et catégories masquées (ligne « N masqués · Gérer »).
     @State private var showHidden = false
 
-    /// Suivies : Twitch puis appareil, sans doublon.
+    /// Suivies : Twitch puis appareil, sans doublon, dans l'ordre choisi
+    /// (Réglages → Personnaliser : les plus regardées d'abord, ou A → Z).
     private var followedList: [TwitchCategory] {
         var seen = Set<String>()
-        return (twitchFollowed + store.followedCategories)
+        let list = (twitchFollowed + store.followedCategories)
             .filter { seen.insert($0.id).inserted }
             .map { c in var c = c; c.viewers = c.viewers ?? followedViewers[c.id]; return c }
-            .sorted { ($0.viewers ?? 0) > ($1.viewers ?? 0) }
+        return store.customization.followedCategoriesSort.apply(list)
     }
 
     private let columns = [GridItem(.flexible()), GridItem(.flexible())]
+    @Environment(\.horizontalSizeClass) private var sizeClass
+
+    /// Suivies en compact (réglage) : 3 jaquettes par ligne, 4 sur iPad ;
+    /// 2 aux tailles de texte d'accessibilité.
+    private var followedColumns: [GridItem] {
+        guard store.customization.compactFollowedCategories else { return columns }
+        let count = TType.isAccessibility ? 2 : (sizeClass == .regular ? 4 : 3)
+        return Array(repeating: GridItem(.flexible(), spacing: TSpace.sm), count: count)
+    }
 
     var body: some View {
         Group {
@@ -219,10 +229,11 @@ struct CategoriesView: View {
                             message: store.t(store.twitchWebToken == nil ? "cat_followed_empty_msg_local" : "cat_followed_empty_msg"))
             }
         } else {
+            let compact = store.customization.compactFollowedCategories
             ScrollView {
-                LazyVGrid(columns: columns, spacing: TSpace.md) {
+                LazyVGrid(columns: followedColumns, spacing: compact ? TSpace.sm : TSpace.md) {
                     ForEach(list) { cat in
-                        CategoryCardView(category: cat) { selected = cat }
+                        CategoryCardView(category: cat, compact: compact) { selected = cat }
                     }
                 }
                 .padding(.horizontal, TSpace.lg)

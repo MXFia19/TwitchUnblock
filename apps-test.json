@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.6.35",
+          "buildVersion": "356",
+          "date": "2026-10-22",
+          "localizedDescription": "- New setting \"PiP when leaving the player\" (Settings → Player, off by default): swiping a live stream or VOD down, or tapping back, opens it in Picture in Picture instead of the mini player\n- Picture in Picture: starting it now shrinks the player so you can keep using the app, instead of leaving a black full-screen player to close\n- Picture in Picture: the window's expand button now brings the player back full size, on the same video\n- A channel's bot commands (Nightbot, StreamElements, Fossabot, Moobot) are now on its channel page too, so they can be checked while the channel is offline.\n- New settings in Settings → General → Customize the app → Chat · banners (all on by default): hide the chat's notification bell, the chat mode badge (\"Followers for 10h\"…) and the channel points crown; the bell stays on the channel page and channel points open from the chat's ⋯ menu.\n- Channel points can be opened from the chat's ⋯ menu whenever the crown isn't shown, landscape included.\n- New setting Settings → General → Customize the app → Chat · banners → Special Events (on by default): hide Twitch's own reward campaigns such as \"1 Month of Apple TV\" while keeping the channel's drops card.\n- Other improvements and fixes",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-356/TwitchUnblock.ipa",
+          "size": 4546453,
+          "commit": "153d416e8aa8cac62c7d1a396f08ebaf815d5a8e"
+        },
+        {
           "version": "1.6.29",
           "buildVersion": "355",
           "date": "2026-10-22",
@@ -280,25 +289,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-323/TwitchUnblock.ipa",
           "size": 3889630,
           "commit": "cc9a75b1258b9f24e2ca3c3d1c3c56df7daedb80"
-        },
-        {
-          "version": "1.4.22",
-          "buildVersion": "322",
-          "date": "2026-10-18",
-          "localizedDescription": "- My reports: a conversation closed by the developer, or one that reached 100 messages, says so instead of showing the reply box and then failing.",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-322/TwitchUnblock.ipa",
-          "size": 3814718,
-          "commit": "994eade39442c29826c603a463cf09ae5de17f4f"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.6.29",
+      "version": "1.6.35",
       "versionDate": "2026-10-22",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-355/TwitchUnblock.ipa",
-      "size": 4522536
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-356/TwitchUnblock.ipa",
+      "size": 4546453
     }
   ],
   "news": []

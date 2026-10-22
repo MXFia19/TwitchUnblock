@@ -185,6 +185,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.6.7",
+          "buildVersion": "353",
+          "date": "2026-10-22",
+          "localizedDescription": "- The backup now carries everything to move between the app and TU Test: pinned channels, all settings (appearance, notifications, player, downloads…), the customization and Continue watching, never your Twitch sign-ins\n- Importing a backup asks Everything or Channels only, then lists what was restored\n- Long-press a video in Continue watching to resume it or remove it from the list\n- Settings → About shows the build number next to the version (tap to copy)\n- When an install tool put an old build under the latest version's number, the update alert explains how to reinstall and links to the right IPA\n- The app now follows iOS's text size (up to Accessibility 2), live: Home, Discover, search, channel pages, settings and chat messages get bigger\n- Other improvements and fixes",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-353/TwitchUnblock.ipa",
+          "size": 4442091,
+          "commit": "4040bba54215de59a78c4f897ab193ed8fc63d32"
+        },
+        {
           "version": "1.6.0",
           "buildVersion": "351",
           "date": "2026-10-20",
@@ -264,25 +273,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-341/TwitchUnblock.ipa",
           "size": 4252146,
           "commit": "5ff465d6696e0a634fe3051d25e6e6239b52569b"
-        },
-        {
-          "version": "1.5.16",
-          "buildVersion": "340",
-          "date": "2026-10-20",
-          "localizedDescription": "- Live chat now waits for the video: messages show up when the picture catches up, following stalls and jumps back to live (tap the ⏱ badge above the chat for real-time chat)\n- Other improvements and fixes",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-340/TwitchUnblock.ipa",
-          "size": 4251784,
-          "commit": "acfecbb08414ef3672dffef0e28445fd15c8e4f9"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.6.0",
-      "versionDate": "2026-10-20",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-351/TwitchUnblock.ipa",
-      "size": 4381506
+      "version": "1.6.7",
+      "versionDate": "2026-10-22",
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-353/TwitchUnblock.ipa",
+      "size": 4442091
     }
   ],
   "news": []

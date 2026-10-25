@@ -129,6 +129,23 @@ final class PlaybackAudio {
         }
     }
 
+    /// Lecture en pause depuis longtemps en arrière-plan (PlaybackYield,
+    /// iPhone) : la session est rendue sans réveiller la musique des autres
+    /// apps, si seul le lecteur la tient (ni PiP, ni multi-live, ni aperçu).
+    /// Il en reste le détenteur : en repartant, AVPlayer la redemande.
+    func relinquishIfIdle() {
+        queue.async { [self] in
+            guard owners.subtracting(["player"]).isEmpty else { return }
+            do {
+                try AVAudioSession.sharedInstance().setActive(false, options: [])
+                logger.info("LECTEUR", "Session audio relâchée",
+                            "lecture en pause en arrière-plan, sans réveiller les autres apps")
+            } catch {
+                logger.warn("LECTEUR", "Session audio : relâche refusée", error.localizedDescription)
+            }
+        }
+    }
+
     /// Active la session ; `done(true)` sur le fil principal si iOS la donne
     /// (refusée pendant un appel téléphonique, par exemple).
     func activate(_ done: @escaping (Bool) -> Void) {

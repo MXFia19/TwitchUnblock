@@ -104,6 +104,16 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   installer rewrote the app's Info.plist (missing `NSSupportsLiveActivities`),
   the app stops asking until its next launch: one line in the log instead of
   one per video.
+  It steps aside for other apps: when another app takes the sound (Spotify, a
+  video…), the Live Activity ends and the app stops showing as Now Playing, so
+  tapping the Dynamic Island opens the app that's actually playing. A video
+  left paused in the background ends its Live Activity about 20 seconds later,
+  just before iOS suspends the app (the lock screen controls stay, to resume;
+  a Picture-in-Picture window keeps the app running, so not then); after 3
+  minutes paused, Now Playing goes too if the app is still running.
+  Everything comes back when playback resumes (the Live Activity as soon as
+  you're back in the app if it resumed from the lock screen). Calls and Siri
+  don't count: the video picks up after them, Live Activity included.
 * 🏷️ **Full title** — tap the title at the top of the player (often cut off)
   to read it in full, with the category, viewers, uptime and a shortcut to the
   channel. Closing a channel page opened from the full-size player (name,

@@ -1082,6 +1082,9 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
     /// contrôle (audio spatial compris) ne la règle pas.
     private func refreshNowPlaying(force: Bool = false) {
         guard player.currentItem != nil else { return }
+        // Place laissée à une autre app (PlaybackYield) : rien n'est
+        // republié tant que la lecture ne reprend pas.
+        guard isPlaying || !PlaybackYield.nowPlayingYielded else { return }
         guard force || Date().timeIntervalSince(lastNowPlayingUpdate) > 5 else { return }
         lastNowPlayingUpdate = Date()
         Self.nowPlayingOwner = self

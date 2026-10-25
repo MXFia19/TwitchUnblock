@@ -685,5 +685,14 @@
  "Envoi direct rétabli": ["Direct sending restored", "Envío directo restablecido", "Прямая отправка восстановлена"],
  "Minutes envoyées par le Worker": ["Minutes sent via the Worker", "Minutos enviados a través del Worker", "Минуты отправляются через Worker"],
  "Relais du Worker injoignable": ["Worker relay unreachable", "Reenvío del Worker inaccesible", "Ретрансляция через Worker недоступна"],
- "Relais du Worker refusé": ["Worker relay refused", "Reenvío del Worker rechazado", "Ретрансляция через Worker отклонена"]
+ "Relais du Worker refusé": ["Worker relay refused", "Reenvío del Worker rechazado", "Ретрансляция через Worker отклонена"],
+ "« À l'écoute » effacé : place laissée": ["“Now Playing” cleared: stepping aside", "«Reproduciendo» borrado: se cede el sitio", "«Сейчас играет» очищено: место уступлено"],
+ "délai d'arrière-plan écoulé": ["background time ran out", "tiempo en segundo plano agotado", "фоновое время истекло"],
+ "en pause depuis plus de 3 min en arrière-plan": ["paused for more than 3 min in the background", "en pausa más de 3 min en segundo plano", "на паузе больше 3 мин в фоне"],
+ "lecture en pause en arrière-plan": ["playback paused in the background", "reproducción en pausa en segundo plano", "воспроизведение на паузе в фоне"],
+ "lecture en pause en arrière-plan, sans réveiller les autres apps": ["playback paused in the background, without waking other apps", "reproducción en pausa en segundo plano, sin despertar otras apps", "воспроизведение на паузе в фоне, без пробуждения других приложений"],
+ "Lecture reprise : l'app reprend sa place": ["Playback resumed: the app takes its place back", "Reproducción reanudada: la app recupera su sitio", "Воспроизведение возобновлено: приложение возвращает своё место"],
+ "Live Activity terminée : place laissée": ["Live Activity ended: stepping aside", "Live Activity terminada: se cede el sitio", "Live Activity завершена: место уступлено"],
+ "une autre app joue du son": ["another app is playing sound", "otra app reproduce sonido", "другое приложение играет звук"],
+ "son toujours pris par une autre app": ["sound still taken by another app", "sonido aún tomado por otra app", "звук всё ещё занят другим приложением"]
 }

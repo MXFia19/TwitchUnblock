@@ -299,7 +299,10 @@ final class VodDownloads: ObservableObject {
             // Une VOD supprimée retrouvée n'a plus de chat.
             new.withChat = withChat && Self.hasChat(ctx.vodId)
             new.height = ctx.variants[quality]?.height
-            new.fps = ctx.variants[quality]?.fps
+            // Finie seulement : JSONEncoder refuse NaN et l'infini (« FRAME-RATE=nan »
+            // se lit avec Double(…)), et la liste des téléchargements ne
+            // s'enregistrait plus du tout tant que celui-ci y restait.
+            if let fps = ctx.variants[quality]?.fps, fps.isFinite { new.fps = fps }
             items.insert(new, at: 0)
         }
         resume(id)

@@ -1854,7 +1854,10 @@ func qualityText(_ key: String, _ lang: Lang, variants: [String: VariantInfo] = 
     if isSourceQuality(key) {
         guard let v = variants[key], v.height > 0 else { return "Source" }
         // La cadence au-delà de 30 i/s, comme le nom des autres qualités.
-        let rate = v.fps.isFinite ? Int(v.fps.rounded()) : 0
+        // Bornée avant Int(…) : une valeur aberrante de la liste maîtresse ou
+        // du Worker (FRAME-RATE=1e30) faisait planter l'app (Int hors
+        // bornes) à chaque affichage du menu, iPhone et Apple TV.
+        let rate = v.fps.isFinite && v.fps > 30 && v.fps < 1000 ? Int(v.fps.rounded()) : 0
         return "\(v.height)p" + (rate > 30 ? "\(rate)" : "") + " (Source)"
     }
     if isAudioQuality(key) { return translate("q_audio", lang) }

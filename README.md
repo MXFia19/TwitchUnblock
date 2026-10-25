@@ -730,6 +730,12 @@ unsigned `tv-test-N` pre-release:
   the channels. It waits until the backend counts the Apple TV on its own.
 * Account's settings move one row at a time with the remote, land on the
   ticked option, and always lead back up to the tab bar.
+* In Following, moving down from the tab bar lands on the first card of the
+  first row (top left), not on the one that happens to sit under the tab.
+  Each row (Continue watching, Live, Offline) is a focus section: up and
+  down always reach the neighbouring row, on its nearest card, even when it
+  has fewer cards than the row you leave. Back from the player or a channel
+  page, the focus returns to the card you opened.
 * Account → **About** shows the app's version and build number (“Version
   0.1.N (build N)”), to check an update or report a problem.
 * A preferred quality (Account → Settings), same rule as the iPhone: the

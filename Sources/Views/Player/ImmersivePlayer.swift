@@ -75,6 +75,35 @@ struct PlayerLayerView: UIViewRepresentable {
     }
 }
 
+/// Surface vidéo du lecteur immersif : agrandie et déplacée par le zoom à deux
+/// doigts, rognée à sa boîte, avec derrière elle le repère du pincement
+/// (PinchFocusAnchor : la boîte elle-même, jamais agrandie). Une vue à part :
+/// le corps du lecteur est déjà très imbriqué (iOS 18 plante sur les types
+/// trop profonds, voir SettingsView.sectionPage).
+private struct ZoomedVideoSurface: View {
+    let player: AVPlayer
+    let fill: Bool
+    let zoom: CGFloat
+    let pan: CGSize
+    let pinch: PinchFocus
+    let onLayer: (AVPlayerLayer) -> Void
+    /// Taille de la boîte, à l'apparition et à chaque changement.
+    let onSize: (CGSize) -> Void
+
+    var body: some View {
+        GeometryReader { geo in
+            PlayerLayerView(player: player, fill: fill, onLayer: onLayer)
+                .scaleEffect(zoom)
+                .offset(pan)
+                .frame(width: geo.size.width, height: geo.size.height)
+                .clipped()
+                .background(PinchFocusAnchor(focus: pinch))
+                .onAppear { onSize(geo.size) }
+                .onChange(of: geo.size) { onSize($0) }
+        }
+    }
+}
+
 // MARK: – Modèle (lecture, fenêtre seekable, PiP)
 final class ImmersivePlayerModel: NSObject, ObservableObject {
     let player = AVPlayer()
@@ -1301,13 +1330,15 @@ struct ImmersivePlayer: View {
     /// près des bords.
     @State private var bubbleWidth: CGFloat = 0
     /// Zoom à deux doigts sur l'image (1 = taille normale) et décalage de
-    /// l'image agrandie. Les valeurs « base » sont celles d'avant le geste en
+    /// l'image agrandie. `panBase` : décalage d'avant le glissé à un doigt en
     /// cours, qui s'y ajoute.
     @State private var zoom: CGFloat = 1
-    @State private var zoomBase: CGFloat = 1
     @State private var pan: CGSize = .zero
     @State private var panBase: CGSize = .zero
     @State private var surfaceSize: CGSize = .zero
+    /// Doigts posés sur l'image et pincement en cours (voir PinchFocus) :
+    /// le zoom part du point entre les doigts.
+    @State private var pinch = PinchFocus()
     /// Glissé vers le bas pour réduire le lecteur : décidé au début du geste
     /// (nil tant qu'on ne sait pas si le doigt descend ou va de côté).
     @State private var pulling: Bool? = nil
@@ -1463,21 +1494,14 @@ struct ImmersivePlayer: View {
             // Rognée à sa propre boîte : agrandie, l'image débordait sinon sur
             // le chat en portrait. Cette boîte ignore déjà la zone sûre en
             // paysage (plus bas) : « remplir l'écran » n'y perd rien.
-            GeometryReader { geo in
-                PlayerLayerView(player: model.player, fill: croppingFill) { layer in
-                    model.attachPiP(layer: layer)
-                }
-                .scaleEffect(zoom)
-                .offset(pan)
-                .frame(width: geo.size.width, height: geo.size.height)
-                .clipped()
-                .onAppear { surfaceSize = geo.size }
-                .onChange(of: geo.size) { size in
-                    surfaceSize = size
-                    pan = clampedPan(pan)
-                    panBase = pan
-                }
-            }
+            ZoomedVideoSurface(player: model.player, fill: croppingFill, zoom: zoom, pan: pan,
+                               pinch: pinch,
+                               onLayer: { model.attachPiP(layer: $0) },
+                               onSize: { size in
+                                   surfaceSize = size
+                                   pan = clampedPan(pan)
+                                   panBase = pan
+                               })
             // En paysage la surface va jusqu'en haut et en bas de l'écran
             // (indicateur d'accueil compris) : l'image reste centrée sur l'écran
             // réel. Sur les côtés, elle s'arrête à la zone sûre : jusqu'au bord
@@ -1553,9 +1577,10 @@ struct ImmersivePlayer: View {
         // image à ses propres limites, y compris en `resizeAspectFill`.
         .contentShape(Rectangle())
         .onTapGesture { tap(.plain) }
-        // Zoom à deux doigts, comme sur l'app Twitch ; une fois agrandie,
-        // l'image se déplace au doigt. À taille normale, glisser vers le bas
-        // réduit le lecteur, comme la flèche en haut à gauche.
+        // Zoom à deux doigts, comme sur l'app Twitch : il part du point entre
+        // les doigts, qui déplacent aussi l'image ; une fois agrandie, elle
+        // se déplace au doigt. À taille normale, glisser vers le bas réduit
+        // le lecteur, comme la flèche en haut à gauche.
         .simultaneousGesture(zoomGesture)
         // Simultané : le glissé suit le doigt dès le premier point, sans
         // attendre que le toucher (commandes, ±10 s) renonce.
@@ -1566,6 +1591,10 @@ struct ImmersivePlayer: View {
                 if pulling == true { onPull(0) }
                 pulling = nil
                 PlayerPull.noteEnd()
+                pinch.drag = .zero
+                // Pincement interrompu avec lui (Centre de contrôle, appel) :
+                // sans onEnded, il se termine ici.
+                if pinch.start != nil, !pinching { finishPinch(showScale: false) }
             }
         }
         // Changement de source (direct ↔ enregistrement) : la position voulue
@@ -2464,23 +2493,52 @@ struct ImmersivePlayer: View {
     }
 
     // MARK: – Zoom à deux doigts
+    /// Comme sur l'app Twitch : le zoom part du point entre les doigts, et
+    /// les déplacer pendant le pincement déplace l'image. Le point de l'image
+    /// pris entre les doigts au départ reste sous eux, autant que les bords le
+    /// permettent. Doigts pas relevés (PinchFocus) : zoom depuis le milieu,
+    /// comme avant.
     private var zoomGesture: some Gesture {
         MagnificationGesture()
-            .updating($pinching) { _, active, _ in active = true }
+            .updating($pinching) { _, active, _ in
+                // Nouveau pincement : le départ d'un précédent, interrompu
+                // sans fin (Centre de contrôle, appel), ne compte plus.
+                if !active { pinch.start = nil }
+                active = true
+            }
             .onChanged { value in
-                zoom = min(max(zoomBase * value, 1), 4)
-                pan = clampedPan(pan)
-            }
-            .onEnded { _ in
-                // Rapetissée jusqu'au bout, l'image reprend sa place.
-                if zoom < 1.05 {
-                    resetZoom()
-                } else {
-                    zoomBase = zoom
-                    panBase = pan
-                    flash(String(format: "%.1f×", Double(zoom)))
+                if pinch.start == nil { pinch.start = (focus: pinch.point, zoom: zoom, pan: pan) }
+                guard let start = pinch.start else { return }
+                let z = min(max(start.zoom * value, 1), 4)
+                zoom = z
+                guard let f0 = start.focus, let f = pinch.point else {
+                    pan = clampedPan(pan, zoom: z)
+                    return
                 }
+                // Sous les doigts au départ : le point de l'image f0, décalé
+                // de start.pan et agrandi start.zoom fois autour du milieu c.
+                // Il doit arriver en f, agrandi z fois.
+                let c = CGPoint(x: surfaceSize.width / 2, y: surfaceSize.height / 2)
+                let k = z / start.zoom
+                pan = clampedPan(CGSize(width:  f.x - c.x - (f0.x - c.x - start.pan.width)  * k,
+                                        height: f.y - c.y - (f0.y - c.y - start.pan.height) * k),
+                                 zoom: z)
             }
+            .onEnded { _ in finishPinch(showScale: true) }
+    }
+
+    /// Fin du pincement, ou geste interrompu : rapetissée jusqu'au bout,
+    /// l'image reprend sa place ; sinon son décalage devient la base du glissé
+    /// à un doigt — celui d'un doigt resté posé compte depuis son départ,
+    /// avant le pincement, d'où le retrait de son déplacement.
+    private func finishPinch(showScale: Bool) {
+        pinch.start = nil
+        if zoom < 1.05 {
+            resetZoom()
+        } else {
+            panBase = CGSize(width: pan.width - pinch.drag.width, height: pan.height - pinch.drag.height)
+            if showScale { flash(String(format: "%.1f×", Double(zoom))) }
+        }
     }
 
     /// Repère global : pendant le glissé vers le bas, le lecteur descend avec
@@ -2490,10 +2548,19 @@ struct ImmersivePlayer: View {
         DragGesture(minimumDistance: 1, coordinateSpace: CoordinateSpace.global)
             .updating($panActive) { _, active, _ in active = true }
             .onChanged { value in
+                // Gardé pour la fin d'un pincement (voir finishPinch).
+                pinch.drag = value.translation
                 // Un glissement sur la barre de lecture ne déplace rien. Le
                 // geste partant dès le premier point, il a pu commencer avant
                 // que la barre ne prenne la main : le lecteur reprend sa place.
                 guard !dragging else {
+                    if pulling == true { onPull(0) }
+                    pulling = false
+                    return
+                }
+                // Deux doigts : c'est un zoom, le lecteur reste en place, et
+                // l'image suit le point entre les doigts (zoomGesture).
+                if pinching {
                     if pulling == true { onPull(0) }
                     pulling = false
                     return
@@ -2505,12 +2572,6 @@ struct ImmersivePlayer: View {
                     if pulling == true { onPull(0); pulling = false }
                     pan = clampedPan(CGSize(width: panBase.width + value.translation.width,
                                             height: panBase.height + value.translation.height))
-                    return
-                }
-                // Deux doigts : c'est un zoom, le lecteur reste en place.
-                if pinching {
-                    if pulling == true { onPull(0) }
-                    pulling = false
                     return
                 }
                 // Taille normale : seul un geste qui part vers le bas compte ;
@@ -2530,6 +2591,7 @@ struct ImmersivePlayer: View {
                     pulling = nil
                     PlayerPull.noteEnd()
                 }
+                pinch.drag = .zero
                 if zoom > 1 {
                     if pulling == true { onPull(0) }
                     panBase = pan
@@ -2543,10 +2605,12 @@ struct ImmersivePlayer: View {
     }
 
     /// L'image agrandie ne laisse jamais apparaître de vide : le décalage est
-    /// borné à ce qui dépasse de la boîte.
-    private func clampedPan(_ p: CGSize) -> CGSize {
-        let maxX = surfaceSize.width  * (zoom - 1) / 2
-        let maxY = surfaceSize.height * (zoom - 1) / 2
+    /// borné à ce qui dépasse de la boîte. `zoom` : celui qui va s'appliquer
+    /// (pincement en cours), sinon l'actuel.
+    private func clampedPan(_ p: CGSize, zoom z: CGFloat? = nil) -> CGSize {
+        let scale = z ?? zoom
+        let maxX = max(0, surfaceSize.width  * (scale - 1) / 2)
+        let maxY = max(0, surfaceSize.height * (scale - 1) / 2)
         return CGSize(width:  min(max(p.width,  -maxX), maxX),
                       height: min(max(p.height, -maxY), maxY))
     }
@@ -2556,8 +2620,8 @@ struct ImmersivePlayer: View {
             zoom = 1
             pan = .zero
         }
-        zoomBase = 1
         panBase = .zero
+        pinch.start = nil
     }
 
     /// Retard sur le direct, à côté de « Direct » : « · −45 s », « · −2:05 » ;

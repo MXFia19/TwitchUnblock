@@ -221,6 +221,11 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   landscape. Cuts off the top and bottom: 16:9 in a phone screen can't do both.
   Otherwise the picture never goes under the Dynamic Island or the notch in
   landscape, even when the chat takes a column next to it.
+* 🔍 **Pinch to zoom** — in the app's player, like the Twitch app: the zoom
+  (up to 4×) starts right where you pinch, and moving both fingers while
+  pinching moves the picture around; once zoomed, one finger is enough to
+  look around. The picture never leaves its frame; pinch back out, or rotate
+  the phone, to see it whole again. Works on every iOS version.
 * 🌙 **Sleep timer** — presets or a custom duration, with the countdown shown
   right in the player. It stops multi-live too. The screen only stays awake
   while a video plays on screen: paused, minimized or in audio only, it

@@ -84,6 +84,9 @@ final class PlayerPiP: ObservableObject {
         DispatchQueue.main.async { [weak self] in
             guard let self, self.owner == nil, self.active else { return }
             self.active = false
+            // Pause en arrière-plan commencée sous la fenêtre : plus rien ne
+            // garde l'app en marche (voir PlaybackYield.pipClosed).
+            PlaybackYield.pipClosed()
         }
     }
 

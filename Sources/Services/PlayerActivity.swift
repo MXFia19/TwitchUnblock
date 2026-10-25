@@ -249,11 +249,11 @@ private final class PlayerActivityController {
 ///     fin du son, et plus rien ne pourrait alors retirer l'activité quand
 ///     une autre app se met à jouer. Un délai est demandé à iOS, et elle est
 ///     terminée juste avant la suspension (≈ 20 s ; pas sous un PiP, qui
-///     garde l'app en marche). « À l'écoute » reste, pour reprendre depuis
-///     l'écran verrouillé ; avec l'activité, il s'efface (session audio
-///     rendue sans bruit) après 3 min de pause, si l'app tourne alors —
-///     réveillée après coup, elle laisse d'abord passer ce qui l'a réveillée
-///     (« lecture » de l'écran verrouillé).
+///     garde l'app en marche ; sa fenêtre fermée, ≈ 20 s après). « À
+///     l'écoute » reste, pour reprendre depuis l'écran verrouillé ; avec
+///     l'activité, il s'efface (session audio rendue sans bruit) après 3 min
+///     de pause, si l'app tourne alors — réveillée après coup, elle laisse
+///     d'abord passer ce qui l'a réveillée (« lecture » de l'écran verrouillé).
 /// Jamais pendant un appel, ni pendant une interruption qui n'est pas finie
 /// (Siri, alarme) : la lecture repart à sa fin (PlaybackInterruptions),
 /// activité comprise. Rien ne change au premier plan, ni d'un direct à
@@ -316,6 +316,18 @@ enum PlaybackYield {
         }
         if UIApplication.shared.applicationState != .active { armPause() }
         return !activityYielded
+    }
+
+    /// Fenêtre PiP fermée (PlayerPiP.ended). Une pause en arrière-plan
+    /// commencée sous la fenêtre n'avait pas de fin d'activité prévue (l'app
+    /// tournait) ; fermée — souvent après la pause, la croix arrêtant la
+    /// lecture —, l'app va être suspendue avec l'activité : elle est prévue
+    /// d'ici, comme sans PiP.
+    static func pipClosed() {
+        guard playing == false, pausedAt != nil, !activityYielded,
+              UIApplication.shared.applicationState != .active else { return }
+        disarmPause()
+        armPause()
     }
 
     /// Lecteur fermé : tout repart de zéro pour le suivant.

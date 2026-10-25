@@ -368,7 +368,12 @@ struct MainTabView: View {
                     CustomTabBar(activeTab: $activeTab)
                 }
             }
-            .ignoresSafeArea()
+            // Haut et bas : l'en-tête et la barre posent eux-mêmes leurs
+            // marges (encoche, indicateur d'accueil). Gauche et droite : celles
+            // d'iOS, sinon la colonne d'état de l'iPhone Duo (écran extérieur,
+            // écran intérieur en paysage) recouvrait l'avatar et les cartes.
+            // Les fonds (barre d'onglets, en-tête) vont jusqu'au bord.
+            .ignoresSafeArea(edges: .vertical)
             // Thème changé dans les réglages : les onglets sont reconstruits,
             // pour qu'aucune vue ne garde les anciennes couleurs. Le lecteur et
             // la feuille des réglages, hors de ce bloc, restent en place. De
@@ -615,6 +620,7 @@ struct MainTabView: View {
                     GeometryReader { proxy in
                         OnboardingTour(rects: anchors.mapValues { proxy[$0] },
                                        size: proxy.size,
+                                       insets: proxy.safeAreaInsets,
                                        activeTab: $activeTab) {
                             withAnimation(.easeInOut(duration: 0.3)) { onboardingDone = true }
                         }

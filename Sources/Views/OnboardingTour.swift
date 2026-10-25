@@ -62,6 +62,9 @@ struct OnboardingTour: View {
     /// Position de chaque élément signalé, en plein écran.
     let rects: [TourTarget: CGRect]
     let size: CGSize
+    /// Marges de sécurité de l'écran : bulles et cartes restent hors de la
+    /// colonne d'état de l'iPhone Duo (sur le côté). Le voile, lui, couvre tout.
+    var insets = EdgeInsets()
     @Binding var activeTab: MainTabView.TabName
     let onFinish: () -> Void
 
@@ -181,6 +184,8 @@ struct OnboardingTour: View {
                 Color.clear.frame(height: max(0, size.height - hole.minY + 12))
             }
         }
+        .padding(.leading, insets.leading)
+        .padding(.trailing, insets.trailing)
         .frame(width: size.width, height: size.height)
     }
 
@@ -190,6 +195,8 @@ struct OnboardingTour: View {
             content()
             Spacer(minLength: 0)
         }
+        .padding(.leading, insets.leading)
+        .padding(.trailing, insets.trailing)
         .frame(width: size.width, height: size.height)
     }
 

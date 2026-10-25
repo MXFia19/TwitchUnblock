@@ -678,5 +678,12 @@
  "lecteur natif ·": ["native player ·", "reproductor nativo ·", "нативный плеер ·"],
  "Onglets en colonne à gauche": ["Tabs in a column on the left", "Pestañas en una columna a la izquierda", "Вкладки в колонке слева"],
  "Onglets en bas": ["Tabs at the bottom", "Pestañas abajo", "Вкладки внизу"],
- "pt · marges": ["pt · margins", "pt · márgenes", "pt · отступы"]
+ "pt · marges": ["pt · margins", "pt · márgenes", "pt · отступы"],
+ "· hôte:": ["· host:", "· servidor:", "· хост:"],
+ "· par le Worker": ["· via the Worker", "· a través del Worker", "· через Worker"],
+ "envoi direct impossible · nouvel essai direct toutes les 15 min": ["direct sending impossible · new direct attempt every 15 min", "envío directo imposible · nuevo intento directo cada 15 min", "прямая отправка невозможна · новая прямая попытка каждые 15 мин"],
+ "Envoi direct rétabli": ["Direct sending restored", "Envío directo restablecido", "Прямая отправка восстановлена"],
+ "Minutes envoyées par le Worker": ["Minutes sent via the Worker", "Minutos enviados a través del Worker", "Минуты отправляются через Worker"],
+ "Relais du Worker injoignable": ["Worker relay unreachable", "Reenvío del Worker inaccesible", "Ретрансляция через Worker недоступна"],
+ "Relais du Worker refusé": ["Worker relay refused", "Reenvío del Worker rechazado", "Ретрансляция через Worker отклонена"]
 }

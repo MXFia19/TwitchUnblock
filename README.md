@@ -391,6 +391,12 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   Settings → Channel points tracks, like drops, the time watched and the points
   earned by watching (passive points, streaks, chests; not prediction
   winnings): right now, in total and per channel, on this device.
+  Passive points need the "minute watched" sent to Twitch's statistics address
+  every minute; when an ad blocker or a filtering DNS cuts that address off,
+  the minute goes through the TwitchUnblock server instead (your own Worker
+  first, if set), so it still counts. After two failures in a row the server
+  is used first, and the direct route is tried again every 15 minutes. The
+  log keeps the exact error once per session instead of a line every minute.
 * ⏱ **Chat synced with the video** (Settings → Chat, on by default) — live
   messages arrive almost instantly while the picture is seconds behind, so
   each one waits until the video catches up: your delay behind live as the

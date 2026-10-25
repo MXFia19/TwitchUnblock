@@ -202,17 +202,26 @@ final class PinchFocus {
     /// Surface vidéo : repère des points rendus.
     fileprivate weak var anchor: UIView?
     fileprivate var touches: [UITouch] = []
-    /// Départ du pincement en cours : point entre les doigts (nil s'ils
-    /// n'ont pas été relevés), zoom et décalage de l'image.
-    var start: (focus: CGPoint?, zoom: CGFloat, pan: CGSize)?
+    /// Départ du pincement en cours, repris quand les doigts changent : point
+    /// entre les doigts (nil s'ils n'ont pas été relevés) et ces doigts, zoom
+    /// et décalage de l'image, échelle du geste à cet instant.
+    var start: (focus: CGPoint?, fingers: [UITouch], zoom: CGFloat, pan: CGSize, scale: CGFloat)?
     /// Déplacement du glissé à un doigt en cours (zéro sans glissé) : un
     /// doigt resté posé après le pincement continue de déplacer l'image.
     var drag: CGSize = .zero
 
+    /// Doigts posés sur la surface, pas encore levés.
+    var fingers: [UITouch] { touches.filter { $0.phase != .ended && $0.phase != .cancelled } }
+
+    /// Autres doigts que `old` (un levé, un reposé) : leur milieu a sauté.
+    func fingersChanged(since old: [UITouch]) -> Bool {
+        !fingers.elementsEqual(old) { $0 === $1 }
+    }
+
     /// Milieu des doigts posés sur la surface (deux au moins), dans son repère.
     var point: CGPoint? {
         guard let anchor else { return nil }
-        let live = touches.filter { $0.phase != .ended && $0.phase != .cancelled }
+        let live = fingers
         guard live.count >= 2 else { return nil }
         let points = live.map { $0.location(in: anchor) }
         let n = CGFloat(points.count)

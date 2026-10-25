@@ -153,15 +153,25 @@ struct CategoriesView: View {
         return store.customization.followedCategoriesSort.apply(list)
     }
 
-    private let columns = [GridItem(.flexible()), GridItem(.flexible())]
-    @Environment(\.horizontalSizeClass) private var sizeClass
+    /// Largeur de l'onglet (MainTabView) : nombre de colonnes des jaquettes.
+    @Environment(\.tContentWidth) private var contentWidth
 
-    /// Suivies en compact (réglage) : 3 jaquettes par ligne, 4 sur iPad ;
-    /// 2 aux tailles de texte d'accessibilité.
+    /// Deux jaquettes par ligne sur iPhone (aux tailles d'accessibilité
+    /// aussi), davantage sur un écran plus large.
+    private var columns: [GridItem] {
+        TGrid.columns(width: contentWidth, minWidth: TGrid.cardMinWidth, base: 2)
+    }
+
+    /// Suivies en compact (réglage) : 3 jaquettes par ligne sur iPhone,
+    /// davantage sur un écran plus large (écran intérieur de l'iPhone Duo,
+    /// iPad) ; 2 aux tailles de texte d'accessibilité.
     private var followedColumns: [GridItem] {
         guard store.customization.compactFollowedCategories else { return columns }
-        let count = TType.isAccessibility ? 2 : (sizeClass == .regular ? 4 : 3)
-        return Array(repeating: GridItem(.flexible(), spacing: TSpace.sm), count: count)
+        let large = TType.isAccessibility
+        return TGrid.columns(width: contentWidth,
+                             minWidth: large ? TGrid.cardMinWidth : TGrid.compactMinWidth,
+                             base: large ? 2 : 3, limit: large ? 5 : 8,
+                             spacing: TSpace.sm)
     }
 
     var body: some View {
@@ -515,7 +525,14 @@ struct CategoryStreamsView: View {
     /// Twitch a refusé de la retirer (ou la session web manque).
     @State private var unfollowFailed = false
 
-    private let columns = [GridItem(.flexible()), GridItem(.flexible())]
+    /// Largeur de l'onglet ou de la feuille : nombre de colonnes des cartes.
+    @Environment(\.tContentWidth) private var contentWidth
+
+    /// Deux cartes par ligne sur iPhone (aux tailles d'accessibilité aussi),
+    /// davantage sur un écran plus large.
+    private var columns: [GridItem] {
+        TGrid.columns(width: contentWidth, minWidth: TGrid.cardMinWidth, base: 2)
+    }
 
     /// Chaînes masquées écartées ; la catégorie, elle, reste consultable
     /// même masquée (on l'a ouverte exprès).

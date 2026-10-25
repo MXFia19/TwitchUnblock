@@ -74,8 +74,11 @@ struct HomeView: View {
         }
     }
 
-    /// Deux colonnes ; une seule aux tailles de texte d'accessibilité.
-    private var columns: [GridItem] { TType.cardColumns }
+    /// Largeur de l'onglet (MainTabView) : nombre de colonnes des cartes.
+    @Environment(\.tContentWidth) private var contentWidth
+    /// Deux colonnes sur iPhone, davantage sur un écran plus large ; une
+    /// seule aux tailles de texte d'accessibilité.
+    private var columns: [GridItem] { TType.cardColumns(width: contentWidth) }
 
     var body: some View {
         // Avec ou sans compte : sans, lives et catégories passent par des

@@ -7,6 +7,10 @@ struct MainTabView: View {
     private static let launchTab = TabName(rawValue: UICustomization.saved()?.startTab ?? "home") ?? .home
     @State private var activeTab: TabName = MainTabView.launchTab
     @State private var headerSafeTop = HeaderView.windowSafeTop
+    /// Onglets en colonne à gauche (fenêtre large, voir TabScaffold) : la
+    /// mini-barre et la barre du multi-live se posent alors à sa droite, au
+    /// bas de l'écran.
+    @State private var sideTabs = SideTabRail.windowFits
 
     // ── Player state ─────────────────────────────────────────────────────
     @State private var playerMode: PlayerMode? = nil
@@ -325,50 +329,16 @@ struct MainTabView: View {
         ZStack(alignment: .bottom) {
             Color.tDark.ignoresSafeArea()
 
-            VStack(spacing: 0) {
-                HeaderView(title: activeTab.label(store),
-                           onOpenSettings: { showSettings = true },
-                           onFeedback: { feedbackContext = nil; showFeedback = true },
-                           safeTop: headerSafeTop)
-                    .zIndex(10)
-
-                Group {
-                    switch activeTab {
-                    // Les fermetures sont explicites : Swift n'applique pas les
-                    // valeurs par défaut (`soft:`) quand une méthode est passée
-                    // comme valeur, donc `playLive` vaudrait ici
-                    // `(String, Bool) -> Void` et ne collerait pas au callback.
-                    case .home:    HomeView(onPlayStream: { playLive($0) },
-                                            onPlayVod: { playVod($0, $1, $2, $3) })
-                    // Aperçus seulement sans lecteur ouvert (ni réduit, ni
-                    // multi-live) et sans feuille par-dessus.
-                    case .discover: DiscoverView(active: playerMode == nil && !presentationOpen,
-                                                 bottomInset: floatingBarsInset,
-                                                 onPlayLive: { playLive($0) },
-                                                 onPlayClip: { playClip($0, $1) })
-                    case .search:  SearchView(onPlayVod: { playVod($0, $1, $2, $3) },
-                                              onPlayLive: { playLive($0) },
-                                              onPlayClip: { playClip($0, $1) },
-                                              onPlayQueue: { playQueue($0, $1) },
-                                              onRecovered: { playRecovered($0) })
-                    case .library: LibraryView(onPlayVod: { playVod($0, $1, $2, $3) },
-                                               onPlayOffline: { playRecovered($0) })
-                    }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                // Verre liquide (iOS 26) : la barre d'onglets flotte sur le
-                // contenu, qui défile dessous et transparaît à travers.
-                .safeAreaInset(edge: .bottom, spacing: 0) {
-                    if store.liquidGlass && Theme.glassSupported {
-                        CustomTabBar(activeTab: $activeTab, floating: true)
-                    }
-                }
-
-                if !(store.liquidGlass && Theme.glassSupported) {
-                    CustomTabBar(activeTab: $activeTab)
-                }
-            }
-            .ignoresSafeArea()
+            // En-tête, écran de l'onglet, et barre d'onglets en bas ou en
+            // colonne à gauche (fenêtre large) : voir TabScaffold.
+            TabScaffold(activeTab: $activeTab,
+                        sideTabs: $sideTabs,
+                        safeTop: headerSafeTop,
+                        header: AnyView(HeaderView(title: activeTab.label(store),
+                                                   onOpenSettings: { showSettings = true },
+                                                   onFeedback: { feedbackContext = nil; showFeedback = true },
+                                                   safeTop: headerSafeTop)),
+                        content: AnyView(tabContent))
             // Thème changé dans les réglages : les onglets sont reconstruits,
             // pour qu'aucune vue ne garde les anciennes couleurs. Le lecteur et
             // la feuille des réglages, hors de ce bloc, restent en place. De
@@ -615,6 +585,7 @@ struct MainTabView: View {
                     GeometryReader { proxy in
                         OnboardingTour(rects: anchors.mapValues { proxy[$0] },
                                        size: proxy.size,
+                                       insets: proxy.safeAreaInsets,
                                        activeTab: $activeTab) {
                             withAnimation(.easeInOut(duration: 0.3)) { onboardingDone = true }
                         }
@@ -658,6 +629,9 @@ struct MainTabView: View {
                        onRecovered: { rec in closeChannelSheet(); playRecovered(rec) },
                        initialChannel: item.login,
                        onClose: { channelSheet = nil })
+                // Grilles de la page (VODs, clips) : colonnes d'après la
+                // largeur de la feuille.
+                .tMeasuresContentWidth()
                 .inAppNoticeHost()
                 .environmentObject(store)
                 .presentationDragIndicator(.visible)
@@ -802,6 +776,31 @@ struct MainTabView: View {
         }
     }
 
+    /// Écran de l'onglet affiché (sous l'en-tête, voir TabScaffold).
+    @ViewBuilder private var tabContent: some View {
+        switch activeTab {
+        // Les fermetures sont explicites : Swift n'applique pas les
+        // valeurs par défaut (`soft:`) quand une méthode est passée
+        // comme valeur, donc `playLive` vaudrait ici
+        // `(String, Bool) -> Void` et ne collerait pas au callback.
+        case .home:    HomeView(onPlayStream: { playLive($0) },
+                                onPlayVod: { playVod($0, $1, $2, $3) })
+        // Aperçus seulement sans lecteur ouvert (ni réduit, ni
+        // multi-live) et sans feuille par-dessus.
+        case .discover: DiscoverView(active: playerMode == nil && !presentationOpen,
+                                     bottomInset: floatingBarsInset,
+                                     onPlayLive: { playLive($0) },
+                                     onPlayClip: { playClip($0, $1) })
+        case .search:  SearchView(onPlayVod: { playVod($0, $1, $2, $3) },
+                                  onPlayLive: { playLive($0) },
+                                  onPlayClip: { playClip($0, $1) },
+                                  onPlayQueue: { playQueue($0, $1) },
+                                  onRecovered: { playRecovered($0) })
+        case .library: LibraryView(onPlayVod: { playVod($0, $1, $2, $3) },
+                                   onPlayOffline: { playRecovered($0) })
+        }
+    }
+
     private func updateHeaderSafeTop(_ top: CGFloat) {
         let value = top > 0 ? top : HeaderView.windowSafeTop
         if abs(value - headerSafeTop) > 0.5 { headerSafeTop = value }
@@ -817,10 +816,13 @@ struct MainTabView: View {
 
     /// Hauteur que la mini-barre et la barre du multi-live, posées par-dessus
     /// le bas des onglets, cachent à Découvrir (voir DiscoverView.bottomInset).
+    /// Onglets en colonne : les barres descendent au bas de l'écran, sans
+    /// barre d'onglets dessous (voir miniBar).
     private var floatingBarsInset: CGFloat {
         guard !playerVisible, !closingPlayer else { return 0 }
         let bars = (playerMode != nil ? 1 : 0) + (multi.entries.isEmpty ? 0 : 1)
-        return bars == 0 ? 0 : CGFloat(20 + 65 * bars)
+        guard bars > 0 else { return 0 }
+        return CGFloat((sideTabs ? 0 : 20) + 65 * bars)
     }
 
     /// Feuilles et mosaïque attachées à cet écran : une notification touchée
@@ -1796,9 +1798,16 @@ struct MainTabView: View {
             pull.y = 0
             withAnimation { playerVisible = true }
         }
+        // Onglets en colonne à gauche : la barre se pose à sa droite, au bas
+        // de l'écran (plus de barre d'onglets dessous).
+        .padding(.leading, sideTabs ? SideTabRail.width : 0)
         .padding(.horizontal, TSpace.md)
-        .padding(.bottom, 92)
+        .padding(.bottom, sideTabs ? Self.sideBarsBottom : 92)
     }
+
+    /// Bas de la mini-barre quand les onglets sont en colonne : juste
+    /// au-dessus de l'indicateur d'accueil.
+    private static let sideBarsBottom: CGFloat = TSpace.md
 
     /// Multi-live en préparation : les vidéos choisies, et « Regarder ».
     /// Au-dessus du mini-lecteur quand il est là.
@@ -1832,8 +1841,9 @@ struct MainTabView: View {
         .overlay(RoundedRectangle(cornerRadius: TRadius.card, style: .continuous)
             .stroke(Color.tPurple.opacity(0.35), lineWidth: 1))
         .contentShape(Rectangle())
+        .padding(.leading, sideTabs ? SideTabRail.width : 0)
         .padding(.horizontal, TSpace.md)
-        .padding(.bottom, miniShown ? 152 : 92)
+        .padding(.bottom, (sideTabs ? Self.sideBarsBottom : 92) + (miniShown ? 60 : 0))
     }
 
     /// Un seul son à la fois : le lecteur se ferme.
@@ -2643,6 +2653,17 @@ struct CustomTabBar: View {
             .first?.windows.first(where: { $0.isKeyWindow })?.safeAreaInsets.bottom ?? 34
     }
 
+    /// Onglet touché, dans cette barre ou dans la colonne (SideTabRail).
+    /// Déjà affiché : sa liste remonte en haut, comme dans les apps d'iOS
+    /// (TabScrollView, Découvrir).
+    static func select(_ tab: MainTabView.TabName, in activeTab: Binding<MainTabView.TabName>) {
+        guard activeTab.wrappedValue != tab else {
+            NotificationCenter.default.post(name: .tuTabReselected, object: tab)
+            return
+        }
+        withAnimation(.easeOut(duration: 0.15)) { activeTab.wrappedValue = tab }
+    }
+
     var body: some View {
         if floating {
             tabs
@@ -2666,13 +2687,7 @@ struct CustomTabBar: View {
             ForEach(MainTabView.TabName.visible(store, all: !onboardingDone), id: \.self) { tab in
                 let isActive = activeTab == tab
                 Button {
-                    // Onglet déjà affiché : sa liste remonte en haut, comme
-                    // dans les apps d'iOS (TabScrollView, Découvrir).
-                    guard activeTab != tab else {
-                        NotificationCenter.default.post(name: .tuTabReselected, object: tab)
-                        return
-                    }
-                    withAnimation(.easeOut(duration: 0.15)) { activeTab = tab }
+                    Self.select(tab, in: $activeTab)
                 } label: {
                     VStack(spacing: 4) {
                         Image(systemName: isActive ? tab.iconFilled : tab.icon)

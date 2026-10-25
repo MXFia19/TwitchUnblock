@@ -132,8 +132,11 @@ struct SearchResultsSection: View {
 
     @EnvironmentObject private var store: AppStore
 
-    /// Deux colonnes ; une seule aux tailles de texte d'accessibilité.
-    private var columns: [GridItem] { TType.cardColumns }
+    /// Largeur de l'onglet ou de la feuille : nombre de colonnes des cartes.
+    @Environment(\.tContentWidth) private var contentWidth
+    /// Deux colonnes sur iPhone, davantage sur un écran plus large ; une
+    /// seule aux tailles de texte d'accessibilité.
+    private var columns: [GridItem] { TType.cardColumns(width: contentWidth) }
 
     private var shownStreams: [TwitchStream] {
         (results.streams ?? []).filter { store.showsStream($0) }

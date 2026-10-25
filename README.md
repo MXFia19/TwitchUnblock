@@ -490,7 +490,7 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   art. A category you follow on Twitch shows as followed on its page, and
   unfollowing it there removes it from your Twitch account (web session).
   Errors and empty lists have **Retry** / pull to refresh.
-* 🗂️ **Followed categories your way** — Settings → General → Customize the app → Followed categories: **Compact** covers (3 per row, 4 on iPad) and the order (most watched first, as before, or A → Z).
+* 🗂️ **Followed categories your way** — Settings → General → Customize the app → Followed categories: **Compact** covers (3 per row on iPhone, more on a wider screen) and the order (most watched first, as before, or A → Z).
 * 🏷 **Stream tags** — language, DropsEnabled… under each live stream, like on
   Twitch.
 * 🔍 **Search** — type anything and the results come in tabs, like Twitch's
@@ -604,11 +604,23 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   backup file.
 * 🎨 **Themes** — 7 accent colours and 3 backgrounds (dark, OLED black, slate),
   in Settings → General → Appearance.
+* 📐 **Large screens** — on the iPhone Duo's inner display and on iPad, grids
+  of lives, VODs, clips and categories show more, smaller tiles instead of two
+  giant ones: the number of columns follows the available width (2 on any
+  iPhone, 3 in portrait and 4 in landscape on the iPhone Duo's inner display,
+  up to 5 on iPad), live through rotation, folding and Split View. Each grid
+  keeps its proportions (16:9 previews, 3:4 box art). When the window is wide
+  (700 pt and more: the inner display in landscape, iPad), the tab bar becomes
+  a **column of tabs on the left**, leaving the whole height to the content;
+  it follows Customize the app (order, hidden tabs) and goes back to the
+  bottom as soon as the window narrows. The header, grids, tab bar and mini
+  player stay clear of iOS's status column on the side of the iPhone Duo's
+  displays.
 * 🔠 **Text size** — the app follows iOS's text size (Display & Brightness →
   Text Size, or Accessibility → Larger Text), as soon as you change it, up to
   Accessibility 2: Home, Discover, search, channel pages, settings and chat
   messages (on top of the chat's own size). At the accessibility sizes, cards
-  go on one column and list rows put the details under the thumbnail; the
+  get twice as wide (one column on iPhone) and list rows put the details under the thumbnail; the
   player's controls over the video and the badges on thumbnails keep their size.
 * 🖼️ **App icons** — six to pick from in Settings → General → Appearance
   (Classic, Purple, Night, Light, Contrast, Neon); the default one has dark

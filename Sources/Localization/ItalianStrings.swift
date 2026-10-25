@@ -62,7 +62,7 @@ let kItalianStrings: [String: String] = [
     "cust_cat_normal": "Normale",
     "cust_cat_compact": "Compatta",
     "cust_cat_sort": "Ordine",
-    "cust_followed_cats_foot": "Home → Categorie → Seguite. Compatta: 3 copertine per riga, 4 su iPad.",
+    "cust_followed_cats_foot": "Home → Categorie → Seguite. Compatta: 3 copertine per riga su iPhone, di più su uno schermo più largo.",
     "multi_added": "Aggiunto alle dirette multiple",
     "multi_removed": "Rimosso dalle dirette multiple",
     "tab_direct": "Link / ID",

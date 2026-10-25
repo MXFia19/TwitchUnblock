@@ -675,5 +675,8 @@
  "PiP demandé en quittant le lecteur": ["PiP requested when leaving the player", "PiP solicitado al salir del reproductor", "PiP запрошен при выходе из плеера"],
  "PiP pas démarré : mini-lecteur": ["PiP didn't start: mini player", "PiP no se inició: minirreproductor", "PiP не запустился: мини-плеер"],
  "lecteur natif": ["native player", "reproductor nativo", "нативный плеер"],
- "lecteur natif ·": ["native player ·", "reproductor nativo ·", "нативный плеер ·"]
+ "lecteur natif ·": ["native player ·", "reproductor nativo ·", "нативный плеер ·"],
+ "Onglets en colonne à gauche": ["Tabs in a column on the left", "Pestañas en una columna a la izquierda", "Вкладки в колонке слева"],
+ "Onglets en bas": ["Tabs at the bottom", "Pestañas abajo", "Вкладки внизу"],
+ "pt · marges": ["pt · margins", "pt · márgenes", "pt · отступы"]
 }

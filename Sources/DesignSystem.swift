@@ -79,13 +79,88 @@ enum TType {
     /// agrandir une hauteur réservée à du texte.
     static func ratio(_ base: CGFloat) -> CGFloat { scaled(base) / base }
 
-    /// Grille de cartes : deux colonnes, une seule aux tailles
+    /// Grille de cartes : deux colonnes sur iPhone, une seule aux tailles
     /// d'accessibilité (titres et pseudos y seraient coupés au bout de
-    /// quelques lettres).
-    static var cardColumns: [GridItem] {
-        let column = GridItem(.flexible(), alignment: .top)
-        return isAccessibility ? [column] : [column, column]
+    /// quelques lettres) ; davantage quand la largeur en tient plus (TGrid).
+    /// `width` : largeur du contenu (`tContentWidth`), 0 si inconnue.
+    static func cardColumns(width: CGFloat) -> [GridItem] {
+        TGrid.columns(width: width,
+                      minWidth: isAccessibility ? 2 * TGrid.cardMinWidth : TGrid.cardMinWidth,
+                      base: isAccessibility ? 1 : 2,
+                      alignment: .top)
     }
+}
+
+// MARK: – Grilles
+/// Colonnes des grilles de cartes d'après la largeur du contenu
+/// (`tContentWidth`) : celles d'un iPhone (`base`) jusqu'à ~440 pt, puis
+/// autant que la largeur en tient. Sur l'écran intérieur de l'iPhone Duo ou
+/// sur iPad, les cartes gardent à peu près leur taille d'iPhone au lieu de
+/// grossir (deux colonnes de tuiles géantes).
+enum TGrid {
+    /// Largeur minimale d'une carte (aperçu 16:9, jaquette 3:4) : 2 par
+    /// ligne sur tout iPhone, 3 sur l'écran intérieur de l'iPhone Duo en
+    /// portrait (~670 pt), 4 en paysage.
+    static let cardMinWidth: CGFloat = 165
+    /// Jaquettes compactes des catégories suivies : 3 par ligne sur iPhone.
+    static let compactMinWidth: CGFloat = 115
+    /// Espace entre deux colonnes : celui d'un GridItem sans `spacing`.
+    static let columnSpacing: CGFloat = 8
+
+    /// Colonnes pour `width` points de contenu, marges de la page
+    /// (TSpace.lg de chaque côté) comprises : au moins `base`, au plus
+    /// `limit` (au-delà, les cartes grandissent). Largeur inconnue : `base`.
+    static func count(width: CGFloat, minWidth: CGFloat, base: Int, limit: Int = 5) -> Int {
+        let usable = width - 2 * TSpace.lg
+        guard usable > 0, usable.isFinite, minWidth > 0 else { return base }
+        let fit = Int((usable + columnSpacing) / (minWidth + columnSpacing))
+        return min(max(base, fit), max(base, limit))
+    }
+
+    /// Autant de colonnes souples, toutes pareilles (`spacing` et
+    /// `alignment` : ceux de la grille, nil pour ceux d'iOS).
+    static func columns(width: CGFloat, minWidth: CGFloat, base: Int, limit: Int = 5,
+                        spacing: CGFloat? = nil, alignment: Alignment? = nil) -> [GridItem] {
+        let n = count(width: width, minWidth: minWidth, base: base, limit: limit)
+        return Array(repeating: GridItem(.flexible(), spacing: spacing, alignment: alignment), count: n)
+    }
+}
+
+// MARK: – Largeur du contenu
+private struct TContentWidthKey: EnvironmentKey {
+    static let defaultValue: CGFloat = 0
+}
+
+extension EnvironmentValues {
+    /// Largeur offerte au contenu d'un onglet ou d'une feuille, marges de
+    /// sécurité et colonne d'onglets déduites (0 : pas encore mesurée).
+    /// Les grilles en tirent leur nombre de colonnes (TGrid).
+    var tContentWidth: CGFloat {
+        get { self[TContentWidthKey.self] }
+        set { self[TContentWidthKey.self] = newValue }
+    }
+}
+
+/// Mesure la largeur de la vue et la donne à son contenu (tContentWidth).
+private struct TContentWidthReader: ViewModifier {
+    @State private var width: CGFloat = 0
+
+    func body(content: Content) -> some View {
+        content
+            .environment(\.tContentWidth, width)
+            .background(GeometryReader { geo in
+                Color.clear
+                    .onAppear { width = geo.size.width }
+                    .onChange(of: geo.size.width) { width = $0 }
+            })
+    }
+}
+
+extension View {
+    /// À poser sur la racine d'un onglet ou d'une feuille qui montre des
+    /// grilles de cartes : leur nombre de colonnes suit sa largeur
+    /// (rotation, pliage, Split View de l'iPad).
+    func tMeasuresContentWidth() -> some View { modifier(TContentWidthReader()) }
 }
 
 /// Racine d'une feuille : la taille du texte d'iOS (plafonnée) devient celle

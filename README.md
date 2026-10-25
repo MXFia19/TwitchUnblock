@@ -104,6 +104,16 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   installer rewrote the app's Info.plist (missing `NSSupportsLiveActivities`),
   the app stops asking until its next launch: one line in the log instead of
   one per video.
+  It steps aside for other apps: when another app takes the sound (Spotify, a
+  video…), the Live Activity ends and the app stops showing as Now Playing, so
+  tapping the Dynamic Island opens the app that's actually playing. A video
+  left paused in the background ends its Live Activity about 20 seconds later,
+  just before iOS suspends the app (the lock screen controls stay, to resume;
+  a Picture-in-Picture window keeps the app running, so not then); after 3
+  minutes paused, Now Playing goes too if the app is still running.
+  Everything comes back when playback resumes (the Live Activity as soon as
+  you're back in the app if it resumed from the lock screen). Calls and Siri
+  don't count: the video picks up after them, Live Activity included.
 * 🏷️ **Full title** — tap the title at the top of the player (often cut off)
   to read it in full, with the category, viewers, uptime and a shortcut to the
   channel. Closing a channel page opened from the full-size player (name,
@@ -125,10 +135,13 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   paused stays paused, and unplugging headphones pauses without resuming.
   Multi-live and Apple TV too, their live streams always back at the edge.
 * ⚙️ **Quality selector and preferred quality** — every resolution the channel
-  broadcasts, Source included, sorted by height then frame rate. Pick a
-  preferred quality once (Settings → Player: Source, 1080p, 720p, 480p, 360p,
-  160p or audio only): lives, VODs and clips start in it, or in the closest
-  one below when the channel doesn't have it. The real height of each quality
+  broadcasts, Source included, sorted by height then frame rate. Source shows
+  its own resolution when the stream gives it — “1440p (Source)”, “1080p60
+  (Source)” — in the player's menus, the download picker, My VODs and on
+  Apple TV (plain “Source” otherwise). Pick a preferred quality once
+  (Settings → Player: Source, 1080p, 720p, 480p, 360p, 160p or audio only):
+  lives, VODs and clips start in it, or in the closest one below when the
+  channel doesn't have it. The real height of each quality
   is read from the playlist, so “720p” also finds a channel whose Source is
   720p60. Picking a quality in the player replaces the preference (as on the
   website); backups carry it under the website's name (`qualityPref`).
@@ -211,6 +224,11 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   landscape. Cuts off the top and bottom: 16:9 in a phone screen can't do both.
   Otherwise the picture never goes under the Dynamic Island or the notch in
   landscape, even when the chat takes a column next to it.
+* 🔍 **Pinch to zoom** — in the app's player, like the Twitch app: the zoom
+  (up to 4×) starts right where you pinch, and moving both fingers while
+  pinching moves the picture around; once zoomed, one finger is enough to
+  look around. The picture never leaves its frame; pinch back out, or rotate
+  the phone, to see it whole again. Works on every iOS version.
 * 🌙 **Sleep timer** — presets or a custom duration, with the countdown shown
   right in the player. It stops multi-live too. The screen only stays awake
   while a video plays on screen: paused, minimized or in audio only, it
@@ -391,6 +409,12 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   Settings → Channel points tracks, like drops, the time watched and the points
   earned by watching (passive points, streaks, chests; not prediction
   winnings): right now, in total and per channel, on this device.
+  Passive points need the "minute watched" sent to Twitch's statistics address
+  every minute; when an ad blocker or a filtering DNS cuts that address off,
+  the minute goes through the TwitchUnblock server instead (your own Worker
+  first, if set), so it still counts. After two failures in a row the server
+  is used first, and the direct route is tried again every 15 minutes. The
+  log keeps the exact error once per session instead of a line every minute.
 * ⏱ **Chat synced with the video** (Settings → Chat, on by default) — live
   messages arrive almost instantly while the picture is seconds behind, so
   each one waits until the video catches up: your delay behind live as the

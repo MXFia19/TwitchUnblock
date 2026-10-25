@@ -388,6 +388,7 @@ struct MainTabView: View {
                 selected: currentQuality(qualityLinks ?? [:]),
                 canRewind: liveDvrVideoId != nil,
                 isDvr: dvrSourceChannel != nil,
+                variants: qualityVariants,
                 onSelectQuality: { q in
                     // Toucher la qualité déjà cochée ne change pas la préférence.
                     if q != currentQuality(qualityLinks ?? [:]) {

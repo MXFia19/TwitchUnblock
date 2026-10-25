@@ -1844,11 +1844,19 @@ func qualityPreference(for key: String, among keys: [String], variants: [String:
 }
 
 /// Nom d'une qualité dans les menus (iPhone et Apple TV) : « Source »
-/// (chunked compris), « Audio seul » traduit, « 720p » pour « 720p30 » (la
-/// cadence ordinaire), « 1080p » pour « 1920x1080 ». Les noms de fichiers
-/// des téléchargements gardent la clé brute.
-func qualityText(_ key: String, _ lang: Lang) -> String {
-    if isSourceQuality(key) { return "Source" }
+/// (chunked compris) avec sa résolution quand la liste maîtresse ou le
+/// Worker la donnent (`variants` : « 1440p (Source) », « 1080p60 (Source) »),
+/// « Audio seul » traduit, « 720p » pour « 720p30 » (la cadence ordinaire),
+/// « 1080p » pour « 1920x1080 ». Seul l'affichage change : la clé reste
+/// « Source » (qualité préférée, liens, synchro). Les noms de fichiers des
+/// téléchargements gardent la clé brute.
+func qualityText(_ key: String, _ lang: Lang, variants: [String: VariantInfo] = [:]) -> String {
+    if isSourceQuality(key) {
+        guard let v = variants[key], v.height > 0 else { return "Source" }
+        // La cadence au-delà de 30 i/s, comme le nom des autres qualités.
+        let rate = v.fps.isFinite ? Int(v.fps.rounded()) : 0
+        return "\(v.height)p" + (rate > 30 ? "\(rate)" : "") + " (Source)"
+    }
     if isAudioQuality(key) { return translate("q_audio", lang) }
     if key.hasSuffix("p30") { return String(key.dropLast(2)) }
     if key.range(of: #"^\d+x\d+$"#, options: .regularExpression) != nil, let h = nameHeight(key) { return "\(h)p" }

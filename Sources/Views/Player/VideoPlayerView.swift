@@ -1240,5 +1240,6 @@ struct VideoPlayerView: View {
         )
     }
 
-    private func qualityLabel(_ q: String) -> String { qualityText(q, store.lang) }
+    /// « 1440p (Source) » quand la résolution de Source est connue.
+    private func qualityLabel(_ q: String) -> String { qualityText(q, store.lang, variants: variants) }
 }

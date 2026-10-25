@@ -293,7 +293,7 @@ final class AppStore: ObservableObject {
     @Published var liveActivity: Bool = true {
         didSet {
             UserDefaults.standard.set(liveActivity, forKey: PlayerActivity.key)
-            if !liveActivity { PlayerActivity.end() }
+            if !liveActivity { PlayerActivity.end(playerClosed: false) }
         }
     }
 

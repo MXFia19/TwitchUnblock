@@ -266,10 +266,17 @@ final class ChannelPointsService: ObservableObject {
         }
     }
 
+    /// Envoi d'une minute en cours : une minute qui traîne (délais, repli par
+    /// le Worker) ne se double pas de la suivante.
+    private var sendingMinute = false
+
     /// Envoie un événement "minute-watched" à l'endpoint analytics Twitch (spade).
     /// C'est ce qui fait que Twitch te crédite des points passifs et génère les coffres.
+    /// Adresse coupée sur l'appareil (bloqueur de pubs, DNS filtrant) : la
+    /// requête n'aboutissait jamais, aucune minute n'était créditée. Elle
+    /// passe alors par le Worker (/api/spade), qui la transmet à Twitch.
     private func sendMinuteWatched() async {
-        guard let spade = spadeURL, let bcast = broadcastId,
+        guard !sendingMinute, let spade = spadeURL, let bcast = broadcastId,
               let uid = Int(viewerId), let url = URL(string: spade) else { return }
         let payload: [[String: Any]] = [[
             "event": "minute-watched",
@@ -283,21 +290,130 @@ final class ChannelPointsService: ObservableObject {
             ]
         ]]
         guard let data = try? JSONSerialization.data(withJSONObject: payload) else { return }
-        let b64  = data.base64EncodedString()
+        let login = channelLogin
+        sendingMinute = true
+        defer { sendingMinute = false }
+        // Rien n'est passé (ni en direct, ni par un Worker) : déjà au journal.
+        guard let sent = await sendSpade(url, data.base64EncodedString()) else { return }
+        logger.debug("POINTS/WATCH", "minute-watched envoyé",
+                     "HTTP \(sent.status)" + (sent.relayed ? " · par le Worker" : ""))
+        // Minute que Twitch compte pour les points (Réglages → Points de chaîne),
+        // qu'elle soit partie en direct ou par le Worker.
+        if (200..<300).contains(sent.status) { PointsTracker.shared.addMinute(login) }
+    }
+
+    // MARK: – Envoi au spade : en direct, ou par le Worker
+    // Commun à toutes les chaînes (multi-live) et gardé pour la séance : un
+    // bloqueur coupe l'adresse pour toutes.
+    /// Échecs réseau d'affilée de l'envoi direct.
+    private static var spadeDirectFailures = 0
+    /// Minutes envoyées d'abord par le Worker : deux échecs directs d'affilée,
+    /// et un Worker qui répond. L'envoi direct est retenté de temps en temps.
+    private static var spadeViaWorker = false
+    private static var spadeNextDirectTry = Date.distantPast
+    private static let spadeDirectRetry: TimeInterval = 15 * 60
+    private static var spadeWorkerNoted = false
+    /// Erreurs déjà notées au journal : une fois chacune par séance, plus à
+    /// chaque minute.
+    private static var spadeLogged: Set<String> = []
+    /// Workers mis de côté : route absente (Worker d'avant), trop d'envois.
+    private static var spadeWorkerSkip: [String: Date] = [:]
+
+    /// Code HTTP de Twitch, et si la minute est passée par le Worker ; nil si
+    /// elle n'a pu partir ni en direct, ni par un Worker.
+    private func sendSpade(_ url: URL, _ b64: String) async -> (status: Int, relayed: Bool)? {
+        let directFirst = !Self.spadeViaWorker || Date() >= Self.spadeNextDirectTry
+        if !directFirst, let code = await relaySpade(url, b64) { return (code, true) }
+        do {
+            let code = try await directSpade(url, b64)
+            Self.spadeDirectFailures = 0
+            if Self.spadeViaWorker {
+                Self.spadeViaWorker = false
+                logger.info("POINTS/WATCH", "Envoi direct rétabli", url.host ?? "")
+            }
+            return (code, false)
+        } catch {
+            Self.spadeDirectFailures += 1
+            if Self.spadeViaWorker { Self.spadeNextDirectTry = Date().addingTimeInterval(Self.spadeDirectRetry) }
+            let urlCode = (error as? URLError).map { " (URLError \($0.code.rawValue))" } ?? ""
+            noteSpadeOnce("direct" + urlCode + error.localizedDescription, "minute-watched échoué",
+                          error.localizedDescription + urlCode + " · hôte: \(url.host ?? "?")")
+            // Le Worker vient déjà d'échouer pour cette minute.
+            guard directFirst, let code = await relaySpade(url, b64) else { return nil }
+            if Self.spadeDirectFailures >= 2, !Self.spadeViaWorker {
+                Self.spadeViaWorker = true
+                Self.spadeNextDirectTry = Date().addingTimeInterval(Self.spadeDirectRetry)
+                if !Self.spadeWorkerNoted {
+                    Self.spadeWorkerNoted = true
+                    logger.info("POINTS/WATCH", "Minutes envoyées par le Worker",
+                                "envoi direct impossible · nouvel essai direct toutes les 15 min")
+                }
+            }
+            return (code, true)
+        }
+    }
+
+    /// Envoi direct au spade (data= en base64, encodé pour l'adresse). Lève
+    /// l'erreur réseau ; une réponse de Twitch, même refusée, rend son code.
+    private func directSpade(_ url: URL, _ b64: String) async throws -> Int {
         let safe = b64.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? b64
-        var req = URLRequest(url: url)
+        // 15 s au plus (au lieu de 60) : une minute par envoi au plus, repli compris.
+        var req = URLRequest(url: url, timeoutInterval: 15)
         req.httpMethod = "POST"
         req.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
         req.setValue(Self.webUA, forHTTPHeaderField: "User-Agent")
         req.httpBody = "data=\(safe)".data(using: .utf8)
-        if let (_, resp) = try? await URLSession.shared.data(for: req) {
-            let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
-            logger.debug("POINTS/WATCH", "minute-watched envoyé", "HTTP \(code)")
-            // Minute que Twitch compte pour les points (Réglages → Points de chaîne).
-            if (200..<300).contains(code) { PointsTracker.shared.addMinute(channelLogin) }
-        } else {
-            logger.warn("POINTS/WATCH", "minute-watched échoué", "canal: \(channelLogin)")
+        let (_, resp) = try await URLSession.shared.data(for: req)
+        return (resp as? HTTPURLResponse)?.statusCode ?? 0
+    }
+
+    /// Envoi par le Worker (POST /api/spade { url, data }), dans l'ordre de la
+    /// lecture : Worker personnel, principal, secours. Code HTTP de Twitch ;
+    /// nil si aucun Worker n'a pu le transmettre.
+    private func relaySpade(_ spade: URL, _ b64: String) async -> Int? {
+        guard let body = try? JSONSerialization.data(withJSONObject: ["url": spade.absoluteString, "data": b64])
+        else { return nil }
+        for base in APIConfig.lookupBases where (Self.spadeWorkerSkip[base] ?? .distantPast) <= Date() {
+            guard let url = URL(string: base + "/api/spade") else { continue }
+            var req = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 15)
+            req.httpMethod = "POST"
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            req.httpBody = body
+            let data: Data, code: Int
+            do {
+                let (d, resp) = try await URLSession.shared.data(for: req)
+                data = d
+                code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+            } catch {
+                let urlCode = (error as? URLError).map { " (URLError \($0.code.rawValue))" } ?? ""
+                noteSpadeOnce("worker " + base + urlCode, "Relais du Worker injoignable",
+                              "\(base) — " + error.localizedDescription + urlCode)
+                continue
+            }
+            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+            if code == 200, json?["ok"] as? Bool == true, let status = (json?["status"] as? NSNumber)?.intValue {
+                return status
+            }
+            noteSpadeOnce("worker \(base) \(code)", "Relais du Worker refusé",
+                          "HTTP \(code) · \(base)" + ((json?["error"] as? String).map { " · \($0)" } ?? ""))
+            switch code {
+            // Adresse ou données refusées : un autre Worker dirait pareil.
+            case 400: return nil
+            // Route absente : Worker d'avant (personnel pas à jour).
+            case 404: Self.spadeWorkerSkip[base] = .distantFuture
+            // Trop d'envois, ou quota du jour : le suivant, et celui-ci plus tard.
+            case 429: Self.spadeWorkerSkip[base] = Date().addingTimeInterval(10 * 60)
+            // Twitch injoignable depuis ce Worker, panne : le suivant.
+            default: break
+            }
         }
+        return nil
+    }
+
+    /// Note au journal une fois par erreur distincte et par séance.
+    private func noteSpadeOnce(_ key: String, _ message: String, _ detail: String) {
+        guard Self.spadeLogged.insert(key).inserted else { return }
+        logger.warn("POINTS/WATCH", message, detail)
     }
 
     /// Récupère l'ID du viewer connecté via le token web.

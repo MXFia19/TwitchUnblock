@@ -597,7 +597,13 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   giant ones: the number of columns follows the available width (2 on any
   iPhone, 3 in portrait and 4 in landscape on the iPhone Duo's inner display,
   up to 5 on iPad), live through rotation, folding and Split View. Each grid
-  keeps its proportions (16:9 previews, 3:4 box art).
+  keeps its proportions (16:9 previews, 3:4 box art). When the window is wide
+  (700 pt and more: the inner display in landscape, iPad), the tab bar becomes
+  a **column of tabs on the left**, leaving the whole height to the content;
+  it follows Customize the app (order, hidden tabs) and goes back to the
+  bottom as soon as the window narrows. The header, grids, tab bar and mini
+  player stay clear of iOS's status column on the side of the iPhone Duo's
+  displays.
 * 🔠 **Text size** — the app follows iOS's text size (Display & Brightness →
   Text Size, or Accessibility → Larger Text), as soon as you change it, up to
   Accessibility 2: Home, Discover, search, channel pages, settings and chat

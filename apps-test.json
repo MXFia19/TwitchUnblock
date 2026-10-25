@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.6.42",
+          "buildVersion": "360",
+          "date": "2026-10-25",
+          "localizedDescription": "- Other improvements and fixes",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-360/TwitchUnblock.ipa",
+          "size": 4415376,
+          "commit": "312947eee28e7e9fa636fb479318a134d30d4d23"
+        },
+        {
           "version": "1.6.41",
           "buildVersion": "359",
           "date": "2026-10-25",
@@ -280,25 +289,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-328/TwitchUnblock.ipa",
           "size": 3896306,
           "commit": "490136b5df2cb138e958a6b9737f6cce14586d11"
-        },
-        {
-          "version": "1.4.26",
-          "buildVersion": "326",
-          "date": "2026-10-19",
-          "localizedDescription": "- Discover: opening a live or clip no longer leaves the preview playing underneath (no more double sound)",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-326/TwitchUnblock.ipa",
-          "size": 3896302,
-          "commit": "5a70b5b10bcf1f8cfa37876b559e07ad26ebd104"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.6.41",
+      "version": "1.6.42",
       "versionDate": "2026-10-25",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-359/TwitchUnblock.ipa",
-      "size": 4414284
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-360/TwitchUnblock.ipa",
+      "size": 4415376
     }
   ],
   "news": []

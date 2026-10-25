@@ -22,6 +22,15 @@
       "versions": [
         {
           "version": "1.6.37",
+          "buildVersion": "358",
+          "date": "2026-10-25",
+          "localizedDescription": "- Improvements and fixes",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-358/TwitchUnblock.ipa",
+          "size": 4376996,
+          "commit": "6adef16519a0a35822b42ed98fb5bbc39469ec9d"
+        },
+        {
+          "version": "1.6.37",
           "buildVersion": "357",
           "date": "2026-10-22",
           "localizedDescription": "- Other improvements and fixes",
@@ -280,15 +289,6 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-325/TwitchUnblock.ipa",
           "size": 3895957,
           "commit": "b8870431fc74f6dd2a0a37039efcbf74bcc629fd"
-        },
-        {
-          "version": "1.4.24",
-          "buildVersion": "324",
-          "date": "2026-10-19",
-          "localizedDescription": "- Discover: the Clips feed loads again (Twitch refused the request)\n- Discover: the preview no longer fills and crops the whole screen, and the channel name, title, Follow and side buttons are visible again",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-324/TwitchUnblock.ipa",
-          "size": 3891258,
-          "commit": "52a771bbda917fbdab27d9fdbcbf8605c71cfc36"
         }
       ],
       "appPermissions": {
@@ -296,9 +296,9 @@
         "privacy": {}
       },
       "version": "1.6.37",
-      "versionDate": "2026-10-22",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-357/TwitchUnblock.ipa",
-      "size": 4547710
+      "versionDate": "2026-10-25",
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-358/TwitchUnblock.ipa",
+      "size": 4376996
     }
   ],
   "news": []

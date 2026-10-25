@@ -195,8 +195,10 @@ struct TVFollowingTab: View {
     /// lecteur ou une page ouverte d'ici. Jamais lu dans `body` : changer de
     /// carte ne redessine pas la liste.
     @FocusState private var focusedCard: Card?
-    /// Carte d'où le lecteur ou une page a été ouvert, gardée jusqu'au retour
-    /// du focus sur la liste (entryCard, cardFocus).
+    /// Carte où le focus doit revenir : celle d'où le lecteur ou une page a
+    /// été ouvert, ou la voisine d'une vidéo retirée de « Continuer à
+    /// regarder ». Oubliée dès que le focus revient sur une carte
+    /// (entryCard, cardFocus).
     @State private var returnCard: Card?
     private let liveColumns = Array(repeating: GridItem(.flexible(), spacing: 48), count: 4)
     private let offlineColumns = Array(repeating: GridItem(.flexible(), spacing: 40), count: 6)
@@ -293,7 +295,7 @@ struct TVFollowingTab: View {
     /// liste : « Continuer à regarder » au-dessus, directs, « Continuer à
     /// regarder » en dessous, chaînes hors ligne.
     private var firstCard: Card? {
-        let firstResume = resumeShown ? resume.first.map { Card.resume($0.id) } : nil
+        let firstResume: Card? = resumeShown ? resume.first.map { Card.resume($0.id) } : nil
         if session.resumePlace == .top, let firstResume { return firstResume }
         if session.token != nil, let s = streams.first { return .live(s.id) }
         if let firstResume { return firstResume }
@@ -302,7 +304,7 @@ struct TVFollowingTab: View {
     }
 
     /// Lecteur ouvert depuis une carte : le focus doit y revenir à la fermeture.
-    private func open(_ item: TVPlayback, from card: Card) {
+    private func openPlayer(_ item: TVPlayback, from card: Card) {
         returnCard = card
         play(item)
     }
@@ -326,13 +328,13 @@ struct TVFollowingTab: View {
                 HStack(alignment: .top, spacing: 48) {
                     ForEach(resume) { r in
                         Button {
-                            open(r.playback, from: .resume(r.id))
+                            openPlayer(r.playback, from: .resume(r.id))
                         } label: {
                             TVResumeCard(item: r)
                         }
                         .focused($focusedCard, equals: .resume(r.id))
                         .tvCard()
-                        .onPlayPauseCommand { open(r.playback, from: .resume(r.id)) }
+                        .onPlayPauseCommand { openPlayer(r.playback, from: .resume(r.id)) }
                         // Bouton central maintenu : la reprendre, ou la
                         // retirer de la rangée (sa position est oubliée).
                         .contextMenu {
@@ -344,7 +346,7 @@ struct TVFollowingTab: View {
                                 let card = Card.resume(r.id)
                                 Task { @MainActor in
                                     try? await Task.sleep(nanoseconds: 400_000_000)
-                                    open(item, from: card)
+                                    openPlayer(item, from: card)
                                 }
                             } label: {
                                 Label(session.t("tv_resume_play"), systemImage: "play.fill")
@@ -375,14 +377,14 @@ struct TVFollowingTab: View {
         LazyVGrid(columns: liveColumns, spacing: 56) {
             ForEach(streams) { s in
                 Button {
-                    open(.live(login: s.userLogin, name: s.userName), from: .live(s.id))
+                    openPlayer(.live(login: s.userLogin, name: s.userName), from: .live(s.id))
                 } label: {
                     TVStreamCard(stream: s)
                 }
                 .focused($focusedCard, equals: .live(s.id))
                 .tvCard()
                 // Bouton Play de la télécommande : comme Sélection.
-                .onPlayPauseCommand { open(.live(login: s.userLogin, name: s.userName), from: .live(s.id)) }
+                .onPlayPauseCommand { openPlayer(.live(login: s.userLogin, name: s.userName), from: .live(s.id)) }
             }
         }
         .padding(.horizontal, 64)
@@ -544,7 +546,13 @@ struct TVFollowingTab: View {
 
     /// « Retirer de la liste » (appui long dans « Continuer à regarder ») : sa
     /// position est oubliée sur cette Apple TV, elle repartira du début.
+    /// Sa carte avait le focus : il doit passer à la voisine, pas sur la
+    /// première carte de la liste (valeur par défaut, entryCard).
     private func removeResume(_ id: String) {
+        if let i = resume.firstIndex(where: { $0.id == id }) {
+            let next: TVResumeItem? = i + 1 < resume.count ? resume[i + 1] : (i > 0 ? resume[i - 1] : nil)
+            if let next { returnCard = .resume(next.id) }
+        }
         TVProgress.remove(id)
         resume.removeAll { $0.id == id }
     }

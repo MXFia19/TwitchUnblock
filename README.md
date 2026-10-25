@@ -109,8 +109,10 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   tapping the Dynamic Island opens the app that's actually playing. A video
   left paused in the background ends its Live Activity about 20 seconds later,
   just before iOS suspends the app (the lock screen controls stay, to resume;
-  a Picture-in-Picture window keeps the app running, so not then); after 3
-  minutes paused, Now Playing goes too if the app is still running.
+  a Picture-in-Picture window keeps the app running, so not while it's open —
+  closing it starts those 20 seconds); after 3 minutes paused, Now Playing
+  goes too if the app is still running, without getting in the way of a
+  resume from the lock screen.
   Everything comes back when playback resumes (the Live Activity as soon as
   you're back in the app if it resumed from the lock screen). Calls and Siri
   don't count: the video picks up after them, Live Activity included.

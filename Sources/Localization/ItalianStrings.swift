@@ -383,6 +383,7 @@ let kItalianStrings: [String: String] = [
     "emote_search_ph": "Cerca emote",
     "emotes_channel": "Questo canale",
     "emote_locked": "Solo per abbonati",
+    "emotes_mine": "Le mie emote",
     "emote_results": "Risultati per “{q}”: {n}",
     "emotes_loading": "Caricamento emote…",
     "emotes_none": "Nessuna emote disponibile",

@@ -303,6 +303,18 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   channel and session), so channels with only Twitch sub emotes get a tab too.
   Sub emotes your account doesn't have (from the chat's `emote-sets`) are
   greyed out with a lock: tapping one opens its card instead of adding it.
+  When you're logged in to the chat, a **Mine** tab comes first: every
+  Twitch emote your account can use in any chat — the emotes of the channels
+  you're subscribed to, Prime/Turbo and Twitch's global emotes — grouped by
+  channel (avatar and name as a heading): the channel you're watching first
+  if you have its emotes, then the others alphabetically, then "Twitch"
+  (sets without a channel, plus Prime, Turbo, 2FA…). The channel tab still
+  opens first; the same emotes can show in both tabs. Read from the chat's
+  `emote-sets` with public Twitch requests (15 sets per request, once per
+  session; a set that doesn't answer is asked again once, otherwise the tab
+  simply doesn't show; nothing is asked without an account). Smileys (`:)`,
+  `<3`…, typed as they are) and other channels' follower emotes (usable in
+  their own chat only) are left out. Search covers this tab too.
 * 🔎 **Tap an emote or a badge** — a card with the image in large, its exact
   name and source (Twitch, BTTV, FFZ, 7TV, personal), copy it or add it to your
   message. BetterTTV, FFZ and 7TV emotes show their scope (global or channel),

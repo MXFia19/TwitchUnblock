@@ -330,6 +330,7 @@ let kRussianStrings: [String: String] = [
     "emote_type_global": "Глобальный эмоут Twitch", "emote_type_sub": "Эмоут подписчика · уровень {n}", "emote_type_points": "Эмоут за баллы канала", "emote_sub_count": "Эмоуты подписчиков {c}: {n}",
     "chat_info_open": "Подробнее", "emote_search_ph": "Поиск эмоутов", "emotes_channel": "Этот канал", "emote_results": "Результаты для «{q}»: {n}",
     "emote_locked": "Только для подписчиков",
+    "emotes_mine": "Мои эмоуты",
     "emotes_loading": "Загрузка эмоутов…", "emotes_none": "Нет доступных эмоутов", "emotes_no_result": "Ничего не найдено", "emotes_open_live": "Откройте трансляцию, чтобы загрузить эмоуты канала",
     "cfg_follow": "Кнопка «Отслеживать» над чатом",
     "cfg_follow_sub": "В плеере, над сообщениями. На странице канала кнопка остаётся.",

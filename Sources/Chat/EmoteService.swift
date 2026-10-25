@@ -10,6 +10,26 @@ let chatAssetSession: URLSession = {
     return URLSession(configuration: config)
 }()
 
+// MARK: – Onglets du sélecteur
+/// Onglet du sélecteur d'emotes. `label` : clé de traduction (emotes_mine,
+/// emotes_channel) ou nom de marque (7TV, BTTV, FFZ).
+struct EmoteGroup {
+    let label: String
+    /// Toutes ses emotes, dans l'ordre affiché (recherche, onglet sans sections).
+    let emotes: [TwitchEmote]
+    /// « Mes emotes » : une section par chaîne, puis Twitch ; vide ailleurs.
+    var sections: [EmoteSection] = []
+}
+
+/// Section de « Mes emotes » : une chaîne (ou Twitch) et ses emotes.
+struct EmoteSection: Identifiable {
+    /// Id Twitch de la chaîne ; « twitch » pour les jeux sans chaîne.
+    let id: String
+    let title: String
+    let avatar: String?
+    let emotes: [TwitchEmote]
+}
+
 // MARK: – Emote cache per channel
 actor EmoteService {
     static let shared = EmoteService()
@@ -52,6 +72,26 @@ actor EmoteService {
     /// Jeux d'emotes du compte connecté au chat (tag IRC `emote-sets`) : ceux
     /// d'un autre compte ne comptent pas.
     private var userEmoteSets: (login: String, sets: Set<String>)? = nil
+
+    /// Contenu d'un jeu du compte, pour « Mes emotes » : sa chaîne (nil pour
+    /// les jeux de Twitch : globales, Prime…) et ses emotes, avec leur type
+    /// GQL (SUBSCRIPTIONS, GLOBALS, SMILIES, FOLLOWER…).
+    private struct UserEmoteSet {
+        struct Owner {
+            let id: String
+            let login: String
+            let name: String
+            let avatar: String?
+        }
+        let owner: Owner?
+        let emotes: [(emote: TwitchEmote, kind: String)]
+    }
+    /// Jeux du compte déjà lus, par id : une série de requêtes par séance,
+    /// gardée même vide (jeu inconnu de Twitch).
+    private var userSetContents: [String: UserEmoteSet] = [:]
+    /// Jeux demandés en ce moment, et essais par jeu : deux au plus par séance.
+    private var userSetsLoading: Set<String> = []
+    private var userSetAttempts: [String: Int] = [:]
 
     // MARK: – Load globals once
     /// Emotes globales : une fois par séance et par service (reset() les
@@ -121,6 +161,8 @@ actor EmoteService {
         channelBTTV.removeAll(); channelFFZ.removeAll(); channel7TV.removeAll()
         loadedChannels.removeAll(); channelDisplayNames.removeAll()
         channelTwitch.removeAll(); twitchAttempts.removeAll()
+        // « Mes emotes » : relues à la prochaine ouverture du sélecteur.
+        userSetContents.removeAll(); userSetAttempts.removeAll()
         // twitchById est alimenté au fil des messages reçus : on le garde,
         // sinon les emotes Twitch des messages déjà affichés disparaîtraient.
     }
@@ -161,11 +203,23 @@ actor EmoteService {
     }
 
     // MARK: – Grouped emotes for the picker
-    /// `login` : compte du sélecteur. Ses jeux d'emotes (tag IRC) grisent les
-    /// emotes d'abonné de la chaîne qu'il n'a pas ; inconnus (pas encore de
-    /// USERSTATE, autre compte), aucune n'est grisée.
-    func groupedEmotes(channelId: String?, login: String? = nil) -> [(label: String, emotes: [TwitchEmote])] {
-        var groups: [(label: String, emotes: [TwitchEmote])] = []
+    /// `login` : compte du sélecteur. Ses jeux d'emotes (tag IRC) donnent
+    /// l'onglet « Mes emotes » et grisent les emotes d'abonné de la chaîne
+    /// qu'il n'a pas ; inconnus (pas encore de USERSTATE, autre compte, pas
+    /// de compte), ni l'un ni l'autre.
+    func groupedEmotes(channelId: String?, login: String? = nil) -> [EmoteGroup] {
+        var groups: [EmoteGroup] = []
+        var sets: Set<String>? = nil
+        if let known = userEmoteSets, known.login == login?.lowercased() { sets = known.sets }
+
+        // ── Mes emotes : celles du compte, utilisables partout ──────
+        if let sets {
+            let sections = userSections(sets, channelId: channelId)
+            if !sections.isEmpty {
+                groups.append(EmoteGroup(label: "emotes_mine", emotes: sections.flatMap { $0.emotes },
+                                         sections: sections))
+            }
+        }
 
         // ── Emotes du canal (toutes sources) ────────────────────────
         if let cid = channelId {
@@ -177,8 +231,6 @@ actor EmoteService {
             // Emotes Twitch de la chaîne (une chaîne sans 7TV, BTTV ni FFZ
             // n'avait pas d'onglet) : celles du compte d'abord, puis les
             // tierces, puis les emotes d'abonné hors de ses jeux, grisées.
-            var sets: Set<String>? = nil
-            if let known = userEmoteSets, known.login == login?.lowercased() { sets = known.sets }
             var usable: [TwitchEmote] = [], locked: [TwitchEmote] = []
             for item in channelTwitch[cid] ?? [] {
                 if let sets, let setId = item.setId, !sets.contains(setId) {
@@ -193,7 +245,7 @@ actor EmoteService {
             if !canal.isEmpty {
                 // Clé de traduction : le sélecteur l'affiche dans la langue de
                 // l'app (les autres onglets sont des noms de marque).
-                groups.append(("emotes_channel", canal))
+                groups.append(EmoteGroup(label: "emotes_channel", emotes: canal))
             }
         }
 
@@ -202,18 +254,160 @@ actor EmoteService {
         let gBttv = Array(globalBTTV.values).sorted { $0.name.lowercased() < $1.name.lowercased() }
         let gFfz  = Array(globalFFZ.values).sorted  { $0.name.lowercased() < $1.name.lowercased() }
 
-        if !g7tv.isEmpty  { groups.append(("7TV",  g7tv))  }
-        if !gBttv.isEmpty { groups.append(("BTTV", gBttv)) }
-        if !gFfz.isEmpty  { groups.append(("FFZ",  gFfz))  }
+        if !g7tv.isEmpty  { groups.append(EmoteGroup(label: "7TV",  emotes: g7tv))  }
+        if !gBttv.isEmpty { groups.append(EmoteGroup(label: "BTTV", emotes: gBttv)) }
+        if !gFfz.isEmpty  { groups.append(EmoteGroup(label: "FFZ",  emotes: gFfz))  }
 
         return groups
     }
 
-    // MARK: – Emotes Twitch de la chaîne (sélecteur)
-    /// Jeux d'emotes du compte, lus dans GLOBALUSERSTATE et USERSTATE.
-    func setUserEmoteSets(_ sets: Set<String>, login: String) {
-        userEmoteSets = (login: login, sets: sets)
+    // MARK: – Mes emotes (sélecteur)
+    /// Types rangés sous la chaîne du jeu. Les autres (globales, Prime, Turbo,
+    /// 2FA, Hype Train…) vont dans « Twitch » : le jeu des emotes 2FA, par
+    /// exemple, appartient à un compte interne de Twitch (qa_TW_Partner).
+    private static let channelEmoteKinds: Set<String> = ["SUBSCRIPTIONS", "FOLLOWER", "BITS_BADGE_TIERS", "CHANNEL_POINTS"]
+    /// Nom d'emote proposé : lettres, chiffres et « _ » (les smileys « :) »,
+    /// « B-) »… n'en sont pas). Id de jeu envoyé à Twitch : les mêmes, et « - ».
+    private static let wordChars = Set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_")
+    private static let setIdChars = wordChars.union("-")
+
+    /// Jeux par id croissant (les ids sont des nombres) : les plus anciens
+    /// d'abord — les globales (jeu 0) en tête de « Twitch ».
+    private static func setOrder(_ a: String, _ b: String) -> Bool {
+        switch (Int(a), Int(b)) {
+        case let (x?, y?):     return x < y
+        case (.some, .none):   return true
+        case (.none, .some):   return false
+        case (.none, .none):   return a < b
+        }
     }
+
+    /// Sections de « Mes emotes » : la chaîne regardée d'abord si le compte a
+    /// ses emotes, puis les autres par ordre alphabétique, puis « Twitch ».
+    /// Ni smileys (« :) », « <3 » et leurs variantes : ils se tapent tels
+    /// quels), ni emotes follower d'une autre chaîne (utilisables chez elle
+    /// seulement). Une emote présente dans deux jeux ne sort qu'une fois.
+    private func userSections(_ sets: Set<String>, channelId: String?) -> [EmoteSection] {
+        var channels: [String: (owner: UserEmoteSet.Owner, emotes: [TwitchEmote])] = [:]
+        var twitch: [TwitchEmote] = []
+        var seen = Set<String>()
+        for setId in sets.sorted(by: Self.setOrder) {
+            guard let set = userSetContents[setId] else { continue }
+            for (emote, kind) in set.emotes {
+                guard kind != "SMILIES", emote.name.allSatisfy({ Self.wordChars.contains($0) }) else { continue }
+                let owner = Self.channelEmoteKinds.contains(kind) ? set.owner : nil
+                if kind == "FOLLOWER", owner == nil || owner?.id != channelId { continue }
+                guard seen.insert(emote.id).inserted else { continue }
+                if let owner {
+                    channels[owner.id, default: (owner: owner, emotes: [])].emotes.append(emote)
+                } else {
+                    twitch.append(emote)
+                }
+            }
+        }
+        let ordered = channels.values.sorted { a, b in
+            let aHere = a.owner.id == channelId, bHere = b.owner.id == channelId
+            if aHere != bHere { return aHere }
+            return a.owner.name.localizedCaseInsensitiveCompare(b.owner.name) == .orderedAscending
+        }
+        var out = ordered.map {
+            EmoteSection(id: $0.owner.id, title: $0.owner.name, avatar: $0.owner.avatar, emotes: $0.emotes)
+        }
+        if !twitch.isEmpty { out.append(EmoteSection(id: "twitch", title: "Twitch", avatar: nil, emotes: twitch)) }
+        return out
+    }
+
+    /// Jeux d'emotes du compte, lus dans GLOBALUSERSTATE et USERSTATE ; le
+    /// contenu de ceux pas encore lus (« Mes emotes ») est demandé aussitôt.
+    func setUserEmoteSets(_ sets: Set<String>, login: String) async {
+        userEmoteSets = (login: login, sets: sets)
+        await loadUserEmoteSets()
+    }
+
+    /// Contenu des jeux du compte pas encore lus, 15 par requête GQL publique
+    /// (au-delà, Twitch refuse les alias), 300 jeux au plus. Sans compte
+    /// connecté au chat, aucun jeu connu : aucune requête. Sans réponse, un
+    /// second essai au prochain appel (USERSTATE, ouverture du sélecteur), pas
+    /// plus : l'onglet n'apparaît simplement pas.
+    func loadUserEmoteSets() async {
+        guard let known = userEmoteSets else { return }
+        let todo = known.sets.filter { id in
+            guard !id.isEmpty, id.count <= 64, id.allSatisfy({ Self.setIdChars.contains($0) }) else { return false }
+            return userSetContents[id] == nil && !userSetsLoading.contains(id) && userSetAttempts[id, default: 0] < 2
+        }
+        let ids = Array(todo.sorted(by: Self.setOrder).prefix(300))
+        guard !ids.isEmpty else { return }
+        userSetsLoading.formUnion(ids)
+        for id in ids { userSetAttempts[id, default: 0] += 1 }
+        var loaded = 0
+        for start in stride(from: 0, to: ids.count, by: 15) {
+            let batch = Array(ids[start..<min(start + 15, ids.count)])
+            let result = await fetchUserSets(batch)
+            userSetsLoading.subtract(batch)
+            guard let result else {
+                logger.debug("EMOTES", "Jeux d'emotes du compte indisponibles", "\(batch.count)")
+                continue
+            }
+            for (id, set) in result { userSetContents[id] = set }
+            loaded += result.count
+        }
+        if loaded > 0 { logger.success("EMOTES", "Jeux d'emotes du compte chargés", "\(loaded)") }
+    }
+
+    /// nil : pas de réponse lisible de Twitch (réseau, GQL en panne). Un jeu
+    /// absent du résultat (erreur partielle) sera redemandé.
+    private func fetchUserSets(_ ids: [String]) async -> [String: UserEmoteSet]? {
+        // Un alias par jeu ; les ids passent en variables, jamais collés dans le texte.
+        let params = ids.indices.map { "$s\($0): ID!" }.joined(separator: ", ")
+        let fields = ids.indices.map {
+            "s\($0): emoteSet(id: $s\($0)) { id owner { id login displayName profileImageURL(width: 50) } emotes { id token type } }"
+        }.joined(separator: " ")
+        var vars: [String: String] = [:]
+        for (i, id) in ids.enumerated() { vars["s\(i)"] = id }
+        guard let url = URL(string: "https://gql.twitch.tv/gql"),
+              let body = try? JSONSerialization.data(withJSONObject: ["query": "query(\(params)) { \(fields) }",
+                                                                      "variables": vars]) else { return nil }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue(kGQLClientID, forHTTPHeaderField: "Client-ID")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = body
+        guard let (data, resp) = try? await chatAssetSession.data(for: req),
+              (resp as? HTTPURLResponse)?.statusCode == 200,
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let d = json["data"] as? [String: Any] else { return nil }
+        let partial = (json["errors"] as? [Any])?.isEmpty == false
+        var out: [String: UserEmoteSet] = [:]
+        for (i, id) in ids.enumerated() {
+            guard let set = d["s\(i)"] as? [String: Any] else {
+                // `null` : jeu inconnu de Twitch (gardé vide) ou erreur partielle.
+                if !partial { out[id] = UserEmoteSet(owner: nil, emotes: []) }
+                continue
+            }
+            var owner: UserEmoteSet.Owner? = nil
+            if let o = set["owner"] as? [String: Any],
+               let oid = o["id"] as? String, !oid.isEmpty,
+               let login = o["login"] as? String, !login.isEmpty {
+                owner = UserEmoteSet.Owner(
+                    id: oid, login: login,
+                    name: (o["displayName"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? login,
+                    avatar: (o["profileImageURL"] as? String).flatMap { $0.hasPrefix("https://") ? $0 : nil })
+            }
+            var emotes: [(emote: TwitchEmote, kind: String)] = []
+            for e in set["emotes"] as? [[String: Any]] ?? [] {
+                guard let eid = e["id"] as? String, !eid.isEmpty,
+                      let token = e["token"] as? String, !token.isEmpty else { continue }
+                let emote = TwitchEmote(id: eid, name: token,
+                                        url: "https://static-cdn.jtvnw.net/emoticons/v2/\(eid)/default/dark/2.0",
+                                        source: .twitch)
+                emotes.append((emote: emote, kind: e["type"] as? String ?? ""))
+            }
+            out[id] = UserEmoteSet(owner: owner, emotes: emotes)
+        }
+        return out
+    }
+
+    // MARK: – Emotes Twitch de la chaîne (sélecteur)
 
     /// Emotes Twitch de la chaîne (followers, abonnés par niveau) : une
     /// requête GQL publique par chaîne et par séance, gardée même vide. Sans

@@ -338,6 +338,8 @@ enum LogTranslator {
         "Jeton du compte indisponible": ["Account token unavailable", "Token de la cuenta no disponible", "Токен аккаунта недоступен"],
         "Jeton du compte pour \"": ["Account token for \"", "Token de la cuenta para \"", "Токен аккаунта для \""],
         "Jeton du compte trop lent (6 s)": ["Account token too slow (6 s)", "Token de la cuenta demasiado lento (6 s)", "Токен аккаунта слишком медленный (6 с)"],
+        "Jeux d'emotes du compte chargés": ["Account emote sets loaded", "Conjuntos de emotes de la cuenta cargados", "Наборы эмоутов аккаунта загружены"],
+        "Jeux d'emotes du compte indisponibles": ["Account emote sets unavailable", "Conjuntos de emotes de la cuenta no disponibles", "Наборы эмоутов аккаунта недоступны"],
         "JoinRaid inconnu de Twitch": ["JoinRaid unknown to Twitch", "JoinRaid desconocido para Twitch", "JoinRaid неизвестен Twitch"],
         "JS échoué": ["JS failed", "JS falló", "Ошибка JS"],
         "Kasada n'a pas validé l'environnement": ["Kasada didn't validate the environment", "Kasada no validó el entorno", "Kasada не подтвердил окружение"],

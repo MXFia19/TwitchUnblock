@@ -371,6 +371,7 @@ let kTraditionalChineseStrings: [String: String] = [
     "emotes_channel": "本頻道",
     "emote_results": "「{q}」的結果：{n}",
     "emote_locked": "僅限訂閱者",
+    "emotes_mine": "我的表情符號",
     "emotes_loading": "正在載入表情符號…",
     "emotes_none": "沒有可用的表情符號",
     "emotes_no_result": "沒有結果",

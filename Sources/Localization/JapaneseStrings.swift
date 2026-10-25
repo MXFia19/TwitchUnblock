@@ -372,6 +372,7 @@ let kJapaneseStrings: [String: String] = [
     "emote_scope_global": "グローバルエモート",
     "emote_scope_channel": "チャンネルエモート",
     "emote_locked": "サブスク限定",
+    "emotes_mine": "マイエモート",
     "emote_by": "提供: {u}",
     "emote_original": "元の名前: {n}",
     "emote_zero_width": "直前のエモートに重ねて表示",

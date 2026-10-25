@@ -7,8 +7,11 @@ struct EmotePickerView: View {
     var onInfo: ((TwitchEmote) -> Void)? = nil
 
     @EnvironmentObject private var store: AppStore
-    @State private var groups:      [(label: String, emotes: [TwitchEmote])] = []
-    @State private var selectedTab  = 0
+    @State private var groups:      [EmoteGroup] = []
+    /// Onglet touché, par son nom : « Mes emotes », arrivé après coup en tête,
+    /// ne décale pas l'onglet ouvert. nil : celui de la chaîne (comme avant
+    /// « Mes emotes »), sinon le premier.
+    @State private var chosenTab: String? = nil
     @State private var searchText   = ""
     /// Recherche rognée : une recherche faite d'espaces masquait les onglets.
     private var query: String { searchText.trimmingCharacters(in: .whitespaces) }
@@ -22,6 +25,17 @@ struct EmotePickerView: View {
 
     // 6 colonnes fixes — bon équilibre taille / densité
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 2), count: 6)
+
+    private var selectedTab: Int {
+        groups.firstIndex { $0.label == (chosenTab ?? "emotes_channel") } ?? 0
+    }
+
+    /// « Mes emotes » ouvert, sans recherche : ses sections, chaîne par chaîne.
+    private var mineSections: [EmoteSection]? {
+        guard query.isEmpty, groups.indices.contains(selectedTab),
+              groups[selectedTab].label == "emotes_mine" else { return nil }
+        return groups[selectedTab].sections
+    }
 
     // Emotes à afficher : recherche globale OU onglet courant
     private var displayed: [TwitchEmote] {
@@ -75,7 +89,7 @@ struct EmotePickerView: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 6) {
                         ForEach(groups.indices, id: \.self) { i in
-                            Button { withAnimation(.easeInOut(duration: 0.15)) { selectedTab = i } } label: {
+                            Button { withAnimation(.easeInOut(duration: 0.15)) { chosenTab = groups[i].label } } label: {
                                 Text(tabLabel(groups[i].label))
                                     .font(.system(size: 12, weight: .semibold))
                                     .foregroundColor(selectedTab == i ? .white : .tMuted)
@@ -136,6 +150,10 @@ struct EmotePickerView: View {
                 .padding()
                 Spacer()
 
+            } else if let sections = mineSections {
+                // Struct à part : le type de `body` reste court (pile d'iOS 18).
+                MineEmoteGrid(sections: sections, columns: columns, onSelect: onSelect, onInfo: onInfo)
+
             } else {
                 ScrollView {
                     LazyVGrid(columns: columns, spacing: 2) {
@@ -155,7 +173,11 @@ struct EmotePickerView: View {
             // Emotes Twitch de la chaîne : chargées avec le chat, sinon (échec,
             // « Recharger ») demandées ici, sans retenir l'affichage.
             if let channelId { Task { await EmoteService.shared.loadTwitchChannel(channelId: channelId) } }
-            // Le compte : ses jeux d'emotes grisent les emotes d'abonné qu'il n'a pas.
+            // « Mes emotes » : lues avec le chat ; sinon (échec, « Recharger »)
+            // demandées ici. Sans compte connecté au chat, rien n'est demandé.
+            Task { await EmoteService.shared.loadUserEmoteSets() }
+            // Le compte : ses jeux d'emotes donnent « Mes emotes » et grisent
+            // les emotes d'abonné qu'il n'a pas.
             let login = store.twitchLogin
             // Chargements encore en cours à l'ouverture (direct tout juste
             // ouvert, « Recharger ») : relu à 2, 5 et 10 s tant que la liste
@@ -181,9 +203,72 @@ struct EmotePickerView: View {
         }
     }
 
-    /// Onglets : noms de marque (7TV, BTTV, FFZ), sauf celui de la chaîne.
+    /// Onglets : noms de marque (7TV, BTTV, FFZ), sauf ceux de la chaîne et
+    /// du compte.
     private func tabLabel(_ label: String) -> String {
-        label == "emotes_channel" ? "⭐ " + store.t("emotes_channel") : label
+        switch label {
+        case "emotes_channel": return "⭐ " + store.t("emotes_channel")
+        case "emotes_mine":    return store.t("emotes_mine")
+        default:               return label
+        }
+    }
+}
+
+// MARK: – Mes emotes : une section par chaîne
+/// Intertitre épinglé (avatar et nom de la chaîne, ou « Twitch »), puis ses
+/// emotes ; un toucher les insère comme dans les autres onglets.
+private struct MineEmoteGrid: View {
+    let sections: [EmoteSection]
+    let columns: [GridItem]
+    let onSelect: (TwitchEmote) -> Void
+    let onInfo: ((TwitchEmote) -> Void)?
+
+    var body: some View {
+        ScrollView {
+            LazyVGrid(columns: columns, spacing: 2, pinnedViews: [.sectionHeaders]) {
+                ForEach(sections) { section in
+                    Section {
+                        ForEach(section.emotes) { emote in
+                            EmoteCell(emote: emote, onTap: { onSelect(emote) },
+                                      onInfo: onInfo.map { open in { open(emote) } })
+                        }
+                    } header: {
+                        MineSectionHeader(section: section)
+                    }
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.bottom, 6)
+        }
+    }
+}
+
+private struct MineSectionHeader: View {
+    let section: EmoteSection
+
+    var body: some View {
+        HStack(spacing: 6) {
+            if let avatar = section.avatar, let url = URL(string: avatar) {
+                AsyncImage(url: url) { img in
+                    img.resizable().scaledToFill()
+                } placeholder: {
+                    Circle().fill(Color.tSurface)
+                }
+                .frame(width: 18, height: 18)
+                .clipShape(Circle())
+            }
+            Text(section.title)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(.tMuted)
+                .lineLimit(1)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 4)
+        .padding(.top, 8)
+        .padding(.bottom, 4)
+        .background(Color.tCard)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isHeader)
     }
 }
 

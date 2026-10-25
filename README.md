@@ -135,10 +135,13 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   paused stays paused, and unplugging headphones pauses without resuming.
   Multi-live and Apple TV too, their live streams always back at the edge.
 * ⚙️ **Quality selector and preferred quality** — every resolution the channel
-  broadcasts, Source included, sorted by height then frame rate. Pick a
-  preferred quality once (Settings → Player: Source, 1080p, 720p, 480p, 360p,
-  160p or audio only): lives, VODs and clips start in it, or in the closest
-  one below when the channel doesn't have it. The real height of each quality
+  broadcasts, Source included, sorted by height then frame rate. Source shows
+  its own resolution when the stream gives it — “1440p (Source)”, “1080p60
+  (Source)” — in the player's menus, the download picker, My VODs and on
+  Apple TV (plain “Source” otherwise). Pick a preferred quality once
+  (Settings → Player: Source, 1080p, 720p, 480p, 360p, 160p or audio only):
+  lives, VODs and clips start in it, or in the closest one below when the
+  channel doesn't have it. The real height of each quality
   is read from the playlist, so “720p” also finds a channel whose Source is
   720p60. Picking a quality in the player replaces the preference (as on the
   website); backups carry it under the website's name (`qualityPref`).

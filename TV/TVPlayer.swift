@@ -469,9 +469,10 @@ struct TVPlayerController: UIViewControllerRepresentable {
                       children: children)
     }
 
-    /// Libellé commun avec l'iPhone ; l'audio seul garde le texte de la TV.
+    /// Libellé commun avec l'iPhone (« 1440p (Source) » quand la hauteur de
+    /// Source est connue) ; l'audio seul garde le texte de la TV.
     private func label(_ key: String) -> String {
-        isAudioQuality(key) ? session.t("tv_audio") : qualityText(key, session.lang)
+        isAudioQuality(key) ? session.t("tv_audio") : qualityText(key, session.lang, variants: model.variants)
     }
 }
 

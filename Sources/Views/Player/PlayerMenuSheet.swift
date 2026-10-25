@@ -11,6 +11,9 @@ struct PlayerMenuSheet: View {
     let canRewind: Bool
     /// On regarde déjà le DVR d'un direct : proposer le retour au direct.
     let isDvr: Bool
+    /// Hauteur et cadence de chaque qualité : « 1440p (Source) » plutôt que
+    /// « Source » quand on la connaît.
+    var variants: [String: VariantInfo] = [:]
 
     var onSelectQuality: (String) -> Void = { _ in }
     /// Vitesse de lecture en cours ; nil masque la section (direct).
@@ -231,7 +234,7 @@ struct PlayerMenuSheet: View {
         .background(Color.tDark)
     }
 
-    private func label(_ q: String) -> String { qualityText(q, store.lang) }
+    private func label(_ q: String) -> String { qualityText(q, store.lang, variants: variants) }
 
     private var divider: some View {
         Divider().background(Color.tBorder).padding(.leading, 56)

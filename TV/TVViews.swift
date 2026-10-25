@@ -823,7 +823,8 @@ struct TVChannelView: View {
     /// Onglets de la page, comme sur l'iPhone. Toujours affichés, ils
     /// prennent le focus dès l'ouverture : sur une chaîne hors ligne sans
     /// vidéo, rien ne le prenait, il restait dans la barre des onglets, et
-    /// Menu quittait l'app au lieu de revenir à la liste.
+    /// Menu quittait l'app au lieu de revenir à la liste. Collections :
+    /// seulement si la chaîne en a (loadCollections).
     enum ChannelTab: Hashable { case videos, clips, collections }
     @State private var tab = ChannelTab.videos
     @State private var videos: [VodData] = []
@@ -839,10 +840,10 @@ struct TVChannelView: View {
     @State private var clipsFor: String?
     @State private var clipsAsked: String?
     @State private var clipsFailed = false
-    /// Collections (playlists) de la chaîne, avec leurs vidéos.
+    /// Collections (playlists) de la chaîne, avec leurs vidéos, demandées
+    /// une fois avec la page (`collectionsAsked`).
     @State private var collections: [PlaylistData] = []
-    @State private var collectionsLoaded = false
-    @State private var collectionsLoading = false
+    @State private var collectionsAsked = false
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 48), count: 4)
     /// Périodes des clips, mêmes textes que l'iPhone.
     private static let clipPeriods: [(String, String)] = [
@@ -857,7 +858,13 @@ struct TVChannelView: View {
                 Picker("", selection: $tab) {
                     Text(session.t("tv_videos")).tag(ChannelTab.videos)
                     Text(session.t("tv_clips")).tag(ChannelTab.clips)
-                    Text(session.t("tv_collections")).tag(ChannelTab.collections)
+                    // Seulement si la chaîne en a : la plupart n'en ont
+                    // aucune, et un onglet vide faisait croire à une panne.
+                    // Absent pendant le chargement, il s'ajoute à droite des
+                    // deux autres, sans déplacer le focus.
+                    if !collections.isEmpty {
+                        Text(session.t("tv_collections")).tag(ChannelTab.collections)
+                    }
                 }
                 .pickerStyle(.segmented)
                 .frame(maxWidth: 900)
@@ -880,6 +887,9 @@ struct TVChannelView: View {
             if tab == .clips { Task { await loadClips() } }
         }
         .task {
+            // Collections en même temps que le reste : leur onglet n'apparaît
+            // qu'avec elles.
+            Task { await loadCollections() }
             async let channelVideos = getChannelVideos(channelName: login)
             async let liveStreams = getLiveStreamsGQL(logins: [login])
             let result = await channelVideos
@@ -979,39 +989,15 @@ struct TVChannelView: View {
         }
     }
 
-    /// Collections : titre, nombre de vidéos, et leurs vidéos sur une rangée.
+    /// Collections : une rangée par collection (TVCollectionRow), les unes
+    /// sous les autres.
     @ViewBuilder private var collectionsPart: some View {
         if collections.isEmpty {
-            TVMessage(text: collectionsLoaded && !collectionsLoading
-                      ? session.t("tv_no_collections") : session.t("loading"))
+            // L'onglet n'est proposé qu'avec des collections : par sécurité.
+            TVMessage(text: session.t("tv_no_collections"))
         } else {
             ForEach(collections) { list in
-                VStack(alignment: .leading, spacing: 0) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(list.title).font(.title3.bold()).lineLimit(1)
-                        Text(String(format: session.t("videos_count"), list.total))
-                            .font(.caption).foregroundColor(.secondary)
-                    }
-                    .padding(.horizontal, 64)
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        LazyHStack(alignment: .top, spacing: 48) {
-                            ForEach(list.videos) { v in
-                                Button {
-                                    play(vodItem(v))
-                                } label: {
-                                    TVVodCard(video: v).frame(width: 412)
-                                }
-                                .tvCard()
-                                .onPlayPauseCommand { play(vodItem(v)) }
-                            }
-                        }
-                        // Place pour la carte qui grandit avec le focus.
-                        .padding(.horizontal, 64)
-                        .padding(.vertical, 32)
-                    }
-                    // Haut et bas passent d'une collection à l'autre.
-                    .focusSection()
-                }
+                TVCollectionRow(list: list, play: { play(vodItem($0)) })
             }
         }
     }
@@ -1024,14 +1010,14 @@ struct TVChannelView: View {
         .clip(slug: c.id, title: c.title, channel: login)
     }
 
-    /// Contenu d'un onglet, demandé quand il s'affiche (les vidéos viennent
-    /// avec la page). Pas annulé en changeant d'onglet : la réponse sert au
-    /// retour, et une requête coupée s'écrirait dans le journal.
+    /// Contenu d'un onglet, demandé quand il s'affiche (les vidéos et les
+    /// collections viennent avec la page). Pas annulé en changeant d'onglet :
+    /// la réponse sert au retour, et une requête coupée s'écrirait dans le
+    /// journal.
     private func loadTab(_ t: ChannelTab) {
         switch t {
-        case .videos:      break
-        case .clips:       Task { await loadClips() }
-        case .collections: Task { await loadCollections() }
+        case .videos, .collections: break
+        case .clips:                Task { await loadClips() }
         }
     }
 
@@ -1056,15 +1042,54 @@ struct TVChannelView: View {
     }
 
     /// Collections de la chaîne (getCollections, comme l'iPhone : 20 au plus,
-    /// 50 vidéos chacune, vides écartées). Aucune (ou pas de réponse) :
-    /// redemandées en revenant sur l'onglet.
+    /// 50 vidéos chacune, vides écartées), demandées une seule fois, à
+    /// l'ouverture de la page : pas au retour du lecteur, ni annulées si on
+    /// la quitte avant la réponse. Peu de chaînes en ont : sans aucune (ou
+    /// sans réponse, getCollections ne distingue pas les deux), l'onglet
+    /// n'apparaît pas.
     private func loadCollections() async {
-        guard collections.isEmpty, !collectionsLoading else { return }
-        collectionsLoading = true
-        let list = await getCollections(login: login)
-        collections = list
-        collectionsLoading = false
-        collectionsLoaded = true
+        guard !collectionsAsked else { return }
+        collectionsAsked = true
+        collections = await getCollections(login: login)
+    }
+}
+
+/// Une collection sur la page d'une chaîne : son titre, son nombre de
+/// vidéos, et ses vidéos sur une rangée qu'on fait défiler de côté.
+struct TVCollectionRow: View {
+    let list: PlaylistData
+    let play: (VodData) -> Void
+    @EnvironmentObject private var session: TVSession
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(list.title).font(.title3.bold()).lineLimit(1)
+                Text(String(format: session.t("videos_count"), list.total))
+                    .font(.caption).foregroundColor(.secondary)
+            }
+            .padding(.horizontal, 64)
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(alignment: .top, spacing: 48) {
+                    ForEach(list.videos) { v in
+                        Button {
+                            play(v)
+                        } label: {
+                            TVVodCard(video: v).frame(width: 412)
+                        }
+                        .tvCard()
+                        .onPlayPauseCommand { play(v) }
+                    }
+                }
+                // Place pour la carte qui grandit avec le focus.
+                .padding(.horizontal, 64)
+                .padding(.vertical, 32)
+            }
+            // Une rangée = une section, sur toute la largeur : haut et bas
+            // passent d'une collection à l'autre, sur la vidéo la plus
+            // proche, même si la voisine en a moins (aucune juste dessous).
+            .focusSection()
+        }
     }
 }
 

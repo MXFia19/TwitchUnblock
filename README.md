@@ -714,14 +714,19 @@ unsigned `tv-test-N` pre-release:
   streamer who already shows their chat on screen doesn’t need ours), and
   Account sets the defaults.
 * **View channel** in the player's bar opens the channel's page, with its
-  videos, clips and collections; a video started there plays on top of it,
-  and Menu goes back.
-* A channel's page has **Videos, Clips and Collections** tabs, like the
-  iPhone: the most viewed clips over 24 h, 7 days, 30 days or all time, and
-  each collection's videos on a row. A clip plays in the TV player, with its
-  broadcast's chat replayed at that moment. The tabs always take the focus,
-  so Menu goes back to the list even on an offline channel without videos
-  (the focus used to stay on the tab bar, and Menu quit the app).
+  videos, clips and collections (if it has any); a video started there plays
+  on top of it, and Menu goes back.
+* A channel's page has **Videos and Clips** tabs, like the iPhone, plus
+  **Collections** when the channel has some: they load with the page (one
+  request), and the tab only shows up then — most channels have none, and an
+  empty tab looked broken. Clips: the most viewed over 24 h, 7 days, 30 days
+  or all time. Collections: one row each, stacked, with its title, its number
+  of videos and its videos to scroll sideways; up and down move from one
+  collection to the next, on the nearest video. A clip plays in the TV
+  player, with its broadcast's chat replayed at that moment. The tabs always
+  take the focus, so Menu goes back to the list even on an offline channel
+  without videos (the focus used to stay on the tab bar, and Menu quit the
+  app).
 * During a channel's ad break on a live, the same banner as on the iPhone
   says what the purple screen is, with a countdown to the stream's return.
 * Usage count, like the iPhone (Account → Share my usage): a random install ID,

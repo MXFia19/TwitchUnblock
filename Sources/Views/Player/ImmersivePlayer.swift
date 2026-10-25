@@ -2507,9 +2507,18 @@ struct ImmersivePlayer: View {
                 active = true
             }
             .onChanged { value in
-                if pinch.start == nil { pinch.start = (focus: pinch.point, zoom: zoom, pan: pan) }
+                if pinch.start == nil {
+                    pinch.start = (focus: pinch.point, fingers: pinch.fingers, zoom: zoom, pan: pan, scale: 1)
+                } else if let s = pinch.start, pinch.fingersChanged(since: s.fingers) {
+                    // Doigt levé puis reposé (ou un troisième) pendant le
+                    // geste : le point entre les doigts saute d'un coup, et
+                    // l'image sautait avec lui. Départ repris d'ici (zoom,
+                    // décalage et échelle d'à présent).
+                    pinch.start = (focus: pinch.point, fingers: pinch.fingers, zoom: zoom, pan: pan,
+                                   scale: max(value, 0.01))
+                }
                 guard let start = pinch.start else { return }
-                let z = min(max(start.zoom * value, 1), 4)
+                let z = min(max(start.zoom * value / start.scale, 1), 4)
                 zoom = z
                 guard let f0 = start.focus, let f = pinch.point else {
                     pan = clampedPan(pan, zoom: z)

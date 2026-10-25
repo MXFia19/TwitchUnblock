@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.6.50",
+          "buildVersion": "362",
+          "date": "2026-10-25",
+          "localizedDescription": "- Other improvements and fixes",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-362/TwitchUnblock.ipa",
+          "size": 4439779,
+          "commit": "6c598fd87cb8288cf3b163ce9afcdf740ddc8684"
+        },
+        {
           "version": "1.6.46",
           "buildVersion": "361",
           "date": "2026-10-25",
@@ -280,25 +289,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-330/TwitchUnblock.ipa",
           "size": 3949248,
           "commit": "52a894bf3f24af5fcee63bcf8adb01cd0dc1ec5a"
-        },
-        {
-          "version": "1.5.1",
-          "buildVersion": "329",
-          "date": "2026-10-19",
-          "localizedDescription": "- Chat: the Return key now hides the keyboard instead of sending (the send button is right next to it); Settings → Chat → \"Return sends the message\" brings the old behavior back\n- Chat: tapping the chat while the keyboard is open only hides the keyboard, without opening the message or emote card",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-329/TwitchUnblock.ipa",
-          "size": 3898972,
-          "commit": "ec357e5b1bf0464cc186d94f066ea834541518ed"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.6.46",
+      "version": "1.6.50",
       "versionDate": "2026-10-25",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-361/TwitchUnblock.ipa",
-      "size": 4439178
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-362/TwitchUnblock.ipa",
+      "size": 4439779
     }
   ],
   "news": []

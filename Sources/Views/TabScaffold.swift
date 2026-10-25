@@ -23,6 +23,12 @@ struct TabScaffold: View {
     let content: AnyView
 
     @EnvironmentObject private var store: AppStore
+    /// Fenêtre basse (moins de SideTabRail.minHeight) : un iPhone couché,
+    /// lecteur ouvert en grand par-dessus les onglets. Les grilles y gardent
+    /// leurs colonnes d'iPhone, comme avant TGrid : elles passaient sinon de
+    /// 2 à 4 colonnes sous le lecteur, la liste, deux fois moins haute, y
+    /// était remontée, et au retour en portrait on avait perdu sa place.
+    @State private var lowWindow = false
 
     var body: some View {
         let glass = store.liquidGlass && Theme.glassSupported
@@ -37,8 +43,9 @@ struct TabScaffold: View {
 
                 content
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    // Grilles de cartes : colonnes d'après la largeur de l'onglet.
-                    .tMeasuresContentWidth()
+                    // Grilles de cartes : colonnes d'après la largeur de
+                    // l'onglet, sauf fenêtre basse (iPhone couché).
+                    .tMeasuresContentWidth(!lowWindow)
                     .safeAreaInset(edge: .bottom, spacing: 0) {
                         bottomInset(glass: glass)
                     }
@@ -80,6 +87,8 @@ struct TabScaffold: View {
     /// tailles et marges de l'iPhone Duo et de l'iPad, de quoi régler ces
     /// écrans d'après les journaux joints aux retours.
     private func update(_ size: CGSize, appearing: Bool = false) {
+        let low = size.height < SideTabRail.minHeight
+        if low != lowWindow { lowWindow = low }
         let side = SideTabRail.fits(size)
         guard side != sideTabs || (appearing && size.width > 500) else { return }
         if side != sideTabs { sideTabs = side }
@@ -115,12 +124,17 @@ struct SideTabRail: View {
     /// mini-barre se décale d'autant (MainTabView).
     static let width: CGFloat = 84
 
+    /// Hauteur de fenêtre en dessous de laquelle c'est un iPhone couché
+    /// (lecteur ouvert en grand) : barre du bas et grilles d'iPhone
+    /// (TabScaffold).
+    static let minHeight: CGFloat = 500
+
     /// Fenêtre assez large pour la colonne, marges des côtés déduites :
     /// 700 pt et plus (écran intérieur de l'iPhone Duo en paysage, iPad ;
     /// pas l'écran intérieur en portrait, ~670 pt). Un iPhone couché (moins
     /// de 500 pt de haut) garde la barre du bas.
     static func fits(_ size: CGSize) -> Bool {
-        size.width >= 700 && size.height >= 500
+        size.width >= 700 && size.height >= minHeight
     }
 
     /// Même règle d'après la fenêtre d'UIKit, avant la première mesure

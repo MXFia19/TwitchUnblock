@@ -142,12 +142,17 @@ extension EnvironmentValues {
 }
 
 /// Mesure la largeur de la vue et la donne à son contenu (tContentWidth).
+/// `active` faux : largeur donnée pour inconnue (0), les grilles gardent
+/// leurs colonnes d'iPhone (TGrid).
 private struct TContentWidthReader: ViewModifier {
+    let active: Bool
     @State private var width: CGFloat = 0
+
+    init(active: Bool) { self.active = active }
 
     func body(content: Content) -> some View {
         content
-            .environment(\.tContentWidth, width)
+            .environment(\.tContentWidth, active ? width : 0)
             .background(GeometryReader { geo in
                 Color.clear
                     .onAppear { width = geo.size.width }
@@ -159,8 +164,11 @@ private struct TContentWidthReader: ViewModifier {
 extension View {
     /// À poser sur la racine d'un onglet ou d'une feuille qui montre des
     /// grilles de cartes : leur nombre de colonnes suit sa largeur
-    /// (rotation, pliage, Split View de l'iPad).
-    func tMeasuresContentWidth() -> some View { modifier(TContentWidthReader()) }
+    /// (rotation, pliage, Split View de l'iPad). `active` faux : colonnes
+    /// d'iPhone, la mesure continue (TabScaffold, iPhone couché).
+    func tMeasuresContentWidth(_ active: Bool = true) -> some View {
+        modifier(TContentWidthReader(active: active))
+    }
 }
 
 /// Racine d'une feuille : la taille du texte d'iOS (plafonnée) devient celle

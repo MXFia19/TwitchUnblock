@@ -251,7 +251,9 @@ private final class PlayerActivityController {
 ///     terminée juste avant la suspension (≈ 20 s ; pas sous un PiP, qui
 ///     garde l'app en marche). « À l'écoute » reste, pour reprendre depuis
 ///     l'écran verrouillé ; avec l'activité, il s'efface (session audio
-///     rendue sans bruit) après 3 min de pause, si l'app tourne alors.
+///     rendue sans bruit) après 3 min de pause, si l'app tourne alors —
+///     réveillée après coup, elle laisse d'abord passer ce qui l'a réveillée
+///     (« lecture » de l'écran verrouillé).
 /// Jamais pendant un appel, ni pendant une interruption qui n'est pas finie
 /// (Siri, alarme) : la lecture repart à sa fin (PlaybackInterruptions),
 /// activité comprise. Rien ne change au premier plan, ni d'un direct à
@@ -408,12 +410,30 @@ enum PlaybackYield {
             pauseWork.append(work)
             DispatchQueue.main.asyncAfter(deadline: .now() + soon, execute: work)
         }
-        if !nowPlayingYielded {
-            // Heure réelle : l'app suspendue entre-temps le voit à son réveil.
-            let work = DispatchWorkItem { PlaybackYield.pausedTooLong(all: true) }
-            pauseWork.append(work)
-            DispatchQueue.main.asyncAfter(wallDeadline: .now() + pauseLimit, execute: work)
+        if !nowPlayingYielded { armPauseLimit(after: pauseLimit) }
+    }
+
+    /// Fin des 3 min de pause, à l'heure réelle : l'app suspendue entre-temps
+    /// la voit passée à son réveil.
+    private static func armPauseLimit(after delay: TimeInterval) {
+        let due = Date().addingTimeInterval(delay)
+        let work = DispatchWorkItem { PlaybackYield.pauseLimitReached(due: due) }
+        pauseWork.append(work)
+        DispatchQueue.main.asyncAfter(wallDeadline: .now() + delay, execute: work)
+    }
+
+    /// Échéance passée depuis plus de 2 s : l'app était suspendue et vient
+    /// d'être réveillée — le plus souvent par « lecture » sur l'écran
+    /// verrouillé, traité juste après. Effacer « À l'écoute » et rendre la
+    /// session audio d'abord pouvait couper cette reprise (session relâchée
+    /// sur sa file pendant que la lecture repartait) : nouvel essai dans 2 s,
+    /// que la reprise annule (disarmPause).
+    private static func pauseLimitReached(due: Date) {
+        if Date().timeIntervalSince(due) > 2 {
+            armPauseLimit(after: 2)
+            return
         }
+        pausedTooLong(all: true)
     }
 
     fileprivate static func disarmPause() {

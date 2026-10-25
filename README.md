@@ -796,6 +796,9 @@ site can read. For those, use the app.
 
 **Requirements:** macOS, Xcode 16+, iOS 16.0 deployment target, and
 [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`).
+The CI builds the iPhone app with Xcode 27.1 (iOS 27.1 SDK): an app linked
+against an older SDK stays in a phone-sized black frame on the iPhone Duo's
+inner display. Build with Xcode 27.1 or later to get the same result.
 
 ```bash
 git clone https://github.com/MXFia19/TwitchUnblock.git

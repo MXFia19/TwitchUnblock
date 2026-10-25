@@ -186,6 +186,15 @@
       "versions": [
         {
           "version": "1.6.37",
+          "buildVersion": "358",
+          "date": "2026-10-25",
+          "localizedDescription": "- Improvements and fixes",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-358/TwitchUnblock.ipa",
+          "size": 4376996,
+          "commit": "6adef16519a0a35822b42ed98fb5bbc39469ec9d"
+        },
+        {
+          "version": "1.6.37",
           "buildVersion": "357",
           "date": "2026-10-22",
           "localizedDescription": "- Other improvements and fixes",
@@ -264,15 +273,6 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-348/TwitchUnblock.ipa",
           "size": 4333665,
           "commit": "9b33d689c78b0f0dd166f1fb1b9ee5da1b5fce02"
-        },
-        {
-          "version": "1.5.30",
-          "buildVersion": "347",
-          "date": "2026-10-20",
-          "localizedDescription": "- Settings: the top streams language list (and the Categories language menu) scrolls again while a VOD or a live plays in the background\n- Chat: the emote picker's channel tab now lists the channel's own Twitch emotes, with the sub emotes you don't have greyed out behind a lock\n- Player: when the installer removed Live Activity support, the app stops asking for one until its next launch instead of filling the log\n- Player: new Higher qualities setting (off by default) asks Twitch for 1440p and above, in HEVC or AV1 when the device decodes them, on the ad-free stream through your account\n- Other improvements and fixes",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-347/TwitchUnblock.ipa",
-          "size": 4333018,
-          "commit": "c63216c5e776dbc20b01b9cf56ee69921c4a4d21"
         }
       ],
       "appPermissions": {
@@ -280,9 +280,9 @@
         "privacy": {}
       },
       "version": "1.6.37",
-      "versionDate": "2026-10-22",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-357/TwitchUnblock.ipa",
-      "size": 4547710
+      "versionDate": "2026-10-25",
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-358/TwitchUnblock.ipa",
+      "size": 4376996
     }
   ],
   "news": []

@@ -25,6 +25,15 @@
       },
       "versions": [
         {
+          "version": "0.1.38",
+          "buildVersion": "38",
+          "date": "2026-10-25",
+          "localizedDescription": "- A channel's page only shows the Collections tab when the channel has collections (loaded with the page), instead of an empty tab\n- In Following, moving down from the tab bar now lands on the first card of the first row, and up and down always reach the neighbouring row (Continue watching, Live, Offline), even when it has fewer cards\n- Other improvements and fixes",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-test-38/TwitchUnblockTV.ipa",
+          "size": 2714948,
+          "commit": "217a75c467a74a2afec8621e75c6cbb5788dca44"
+        },
+        {
           "version": "0.1.37",
           "buildVersion": "37",
           "date": "2026-10-22",
@@ -194,21 +203,12 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-test-17/TwitchUnblockTV.ipa",
           "size": 2356231,
           "commit": "fd5015e425cac43a5f78e783b3dfefdbf4da2d1f"
-        },
-        {
-          "version": "0.1.16",
-          "buildVersion": "16",
-          "date": "2026-10-18",
-          "localizedDescription": "- The Following tab refreshes on its own (when you come back to it or to the app, every 2 minutes while it's shown, and when you pick the tab again), so ended lives no longer linger",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-test-16/TwitchUnblockTV.ipa",
-          "size": 2354923,
-          "commit": "f0f73f5e29d67f3d87b6462d38973216097857ba"
         }
       ],
-      "version": "0.1.37",
-      "versionDate": "2026-10-22",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-test-37/TwitchUnblockTV.ipa",
-      "size": 2706663
+      "version": "0.1.38",
+      "versionDate": "2026-10-25",
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-test-38/TwitchUnblockTV.ipa",
+      "size": 2714948
     }
   ]
 }

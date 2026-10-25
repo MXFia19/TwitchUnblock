@@ -25,6 +25,15 @@
       },
       "versions": [
         {
+          "version": "0.1.39",
+          "buildVersion": "39",
+          "date": "2026-10-25",
+          "localizedDescription": "- Other improvements and fixes",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-test-39/TwitchUnblockTV.ipa",
+          "size": 2716343,
+          "commit": "5b1bdfe558579fc8f676103cc5006fc232d92485"
+        },
+        {
           "version": "0.1.38",
           "buildVersion": "38",
           "date": "2026-10-25",
@@ -194,21 +203,12 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-test-18/TwitchUnblockTV.ipa",
           "size": 2362373,
           "commit": "c91dbbed694d1196ed819b11b036c4b4aed41ca0"
-        },
-        {
-          "version": "0.1.17",
-          "buildVersion": "17",
-          "date": "2026-10-18",
-          "localizedDescription": "- When the account couldn't load at launch, the Following tab loads it again instead of showing \"No live\" all session",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-test-17/TwitchUnblockTV.ipa",
-          "size": 2356231,
-          "commit": "fd5015e425cac43a5f78e783b3dfefdbf4da2d1f"
         }
       ],
-      "version": "0.1.38",
+      "version": "0.1.39",
       "versionDate": "2026-10-25",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-test-38/TwitchUnblockTV.ipa",
-      "size": 2714948
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-test-39/TwitchUnblockTV.ipa",
+      "size": 2716343
     }
   ]
 }

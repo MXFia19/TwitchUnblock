@@ -61,7 +61,7 @@ let kRussianStrings: [String: String] = [
     "cust_cat_normal": "Обычный",
     "cust_cat_compact": "Компактный",
     "cust_cat_sort": "Порядок",
-    "cust_followed_cats_foot": "Главная → Категории → Отслеживаемые. Компактный: 3 обложки в ряд, 4 на iPad.",
+    "cust_followed_cats_foot": "Главная → Категории → Отслеживаемые. Компактный: 3 обложки в ряд на iPhone, больше на широком экране.",
     "multi_added": "Добавлено в мульти-лайв",
     "multi_removed": "Убрано из мульти-лайва",
     "tab_direct": "Ссылка / ID",

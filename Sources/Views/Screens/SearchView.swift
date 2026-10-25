@@ -112,8 +112,12 @@ struct SearchView: View {
     @State private var suggestTask: Task<Void, Never>? = nil
     @FocusState private var queryFocused: Bool
 
-    /// Deux colonnes ; une seule aux tailles de texte d'accessibilité.
-    private var columns: [GridItem] { TType.cardColumns }
+    /// Largeur de l'onglet ou de la feuille (page de chaîne) : nombre de
+    /// colonnes des cartes.
+    @Environment(\.tContentWidth) private var contentWidth
+    /// Deux colonnes sur iPhone, davantage sur un écran plus large ; une
+    /// seule aux tailles de texte d'accessibilité.
+    private var columns: [GridItem] { TType.cardColumns(width: contentWidth) }
 
     /// Le texte saisi désigne-t-il une VOD (lien twitch.tv/videos/… ou ID) ?
     /// Même règle que le « + » du multi-live (TwitchAPI).

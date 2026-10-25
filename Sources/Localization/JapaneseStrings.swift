@@ -63,7 +63,7 @@ let kJapaneseStrings: [String: String] = [
     "cust_cat_normal": "標準",
     "cust_cat_compact": "コンパクト",
     "cust_cat_sort": "並び順",
-    "cust_followed_cats_foot": "ホーム → カテゴリー → フォロー中。コンパクト：1 行に 3 つ（iPad では 4 つ）。",
+    "cust_followed_cats_foot": "ホーム → カテゴリー → フォロー中。コンパクト：iPhone では 1 行に 3 つ（画面が広いほど多く表示）。",
     "multi_added": "マルチライブに追加しました",
     "multi_removed": "マルチライブから削除しました",
     "tab_direct": "リンク / ID",

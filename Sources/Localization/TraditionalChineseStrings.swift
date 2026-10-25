@@ -1061,7 +1061,7 @@ let kTraditionalChineseStrings: [String: String] = [
     "cust_cat_normal": "一般",
     "cust_cat_compact": "精簡",
     "cust_cat_sort": "排序",
-    "cust_followed_cats_foot": "首頁 → 分類 → 追隨中。精簡：每列 3 個封面，iPad 上 4 個。",
+    "cust_followed_cats_foot": "首頁 → 分類 → 追隨中。精簡：iPhone 上每列 3 個封面，螢幕越寬顯示越多。",
     "app_language": "App 語言",
     "app_icon_blocked": "安裝此 App 的工具（LiveContainer、GBox⋯）不允許變更圖示。",
     "emote_hide": "隱藏這個表情符號",

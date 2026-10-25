@@ -356,6 +356,8 @@ struct MainTabView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                // Grilles de cartes : colonnes d'après la largeur de l'onglet.
+                .tMeasuresContentWidth()
                 // Verre liquide (iOS 26) : la barre d'onglets flotte sur le
                 // contenu, qui défile dessous et transparaît à travers.
                 .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -664,6 +666,9 @@ struct MainTabView: View {
                        onRecovered: { rec in closeChannelSheet(); playRecovered(rec) },
                        initialChannel: item.login,
                        onClose: { channelSheet = nil })
+                // Grilles de la page (VODs, clips) : colonnes d'après la
+                // largeur de la feuille.
+                .tMeasuresContentWidth()
                 .inAppNoticeHost()
                 .environmentObject(store)
                 .presentationDragIndicator(.visible)

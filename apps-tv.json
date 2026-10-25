@@ -25,6 +25,15 @@
       },
       "versions": [
         {
+          "version": "0.1.40",
+          "buildVersion": "40",
+          "date": "2026-10-25",
+          "localizedDescription": "- Improvements and fixes",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-test-40/TwitchUnblockTV.ipa",
+          "size": 2716764,
+          "commit": "6c598fd87cb8288cf3b163ce9afcdf740ddc8684"
+        },
+        {
           "version": "0.1.39",
           "buildVersion": "39",
           "date": "2026-10-25",
@@ -194,21 +203,12 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-test-19/TwitchUnblockTV.ipa",
           "size": 2432299,
           "commit": "0419353b6041cfa41e2fd49a71de5d7c176949d5"
-        },
-        {
-          "version": "0.1.18",
-          "buildVersion": "18",
-          "date": "2026-10-18",
-          "localizedDescription": "- A live source that doesn't answer no longer leaves you on a checked source that isn't playing (the current one keeps playing and a notice says so), and changing quality while paused stays paused\n- Chat reconnects within 2 seconds after a drop, says \"Chat connected\" on quiet channels, retries BTTV/FFZ/7TV emotes after a failed first load, and VOD chat shows emotes from the very first messages\n- Signing in with a code keeps waiting when you switch tabs (with a Cancel button), and a network hiccup at launch no longer signs you out\n- Russian wording for followed channels fixed",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-test-18/TwitchUnblockTV.ipa",
-          "size": 2362373,
-          "commit": "c91dbbed694d1196ed819b11b036c4b4aed41ca0"
         }
       ],
-      "version": "0.1.39",
+      "version": "0.1.40",
       "versionDate": "2026-10-25",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-test-39/TwitchUnblockTV.ipa",
-      "size": 2716343
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-test-40/TwitchUnblockTV.ipa",
+      "size": 2716764
     }
   ]
 }

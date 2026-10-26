@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.6.52",
+          "buildVersion": "364",
+          "date": "2026-10-26",
+          "localizedDescription": "- Vertical streams: when a streamer also sends Twitch a vertical picture (Dual Format: mobile games, IRL), a ▯ button in the player switches to it, like in the Twitch app. The choice is remembered.\n- A live that Twitch keeps to some countries now says so (“not available in your region”) instead of “No source answered”.",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-364/TwitchUnblock.ipa",
+          "size": 4455995,
+          "commit": "e7d15a1fb38530fec3eb88baab2bb9960c0ac4bf"
+        },
+        {
           "version": "1.6.51",
           "buildVersion": "363",
           "date": "2026-10-26",
@@ -280,25 +289,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-332/TwitchUnblock.ipa",
           "size": 3967181,
           "commit": "9d6743b73522147ae6dc6b5b2c025191f829d9d0"
-        },
-        {
-          "version": "1.5.3",
-          "buildVersion": "331",
-          "date": "2026-10-19",
-          "localizedDescription": "- Player: the landscape view forced by the rotate button is kept when the stream reloads (refresh, Retry, followed raid, next VOD)\n- Player: the Live Activity no longer disappears when following a raid or moving to the next VOD with the screen locked\n- Player: a recent VOD opened while AirPlay is on resumes where you left off instead of restarting from 0:00\n- Player: dragging the full-broadcast bar to the very start now opens the recording at its beginning instead of the present\n- Player: after a playback error, Play from the lock screen or headphones no longer keeps the screen awake or shows the video as playing\n- Player: the \"live via your account\" notice no longer comes back after each \"slow connection\" quality drop\n- Player: a speed forced by the player (caught up with a live recording, AirPlay) no longer resets later VODs to 1x\n- Player: the starting quality no longer changes, reloading the stream, when switching between Wi-Fi and cellular\n- Player: changing quality during AirPlay no longer leaves the receiver unable to play\n- Player: after stalls on cellular, the Live button no longer jumps to the very start of the live window\n- Player: a VOD stopped by a muted segment before resuming now restarts at your saved position instead of 0:00\n- Multi-live: the screen can sleep again when no tile is playing (all paused, offline, failed or finished)\n- Multi-live: a tile cut off mid-playback now gets its 3 retries instead of 1 or 2\n- Multi-live: on cellular, tiles follow the cellular quality setting instead of starting in 1080p\n- Discover: music from another app resumes after closing the player, even when a preview starts right away",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-331/TwitchUnblock.ipa",
-          "size": 3955460,
-          "commit": "10b243664cb859edb184a98e692e3879d51888f5"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.6.51",
+      "version": "1.6.52",
       "versionDate": "2026-10-26",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-363/TwitchUnblock.ipa",
-      "size": 4441807
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-364/TwitchUnblock.ipa",
+      "size": 4455995
     }
   ],
   "news": []

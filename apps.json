@@ -185,6 +185,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.6.52",
+          "buildVersion": "364",
+          "date": "2026-10-26",
+          "localizedDescription": "- Vertical streams: when a streamer also sends Twitch a vertical picture (Dual Format: mobile games, IRL), a ▯ button in the player switches to it, like in the Twitch app. The choice is remembered.\n- A live that Twitch keeps to some countries now says so (“not available in your region”) instead of “No source answered”.",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-364/TwitchUnblock.ipa",
+          "size": 4455995,
+          "commit": "e7d15a1fb38530fec3eb88baab2bb9960c0ac4bf"
+        },
+        {
           "version": "1.6.51",
           "buildVersion": "363",
           "date": "2026-10-26",
@@ -264,25 +273,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-355/TwitchUnblock.ipa",
           "size": 4522536,
           "commit": "1663231a6b4a778553e55f1977cd78cc2a92d57e"
-        },
-        {
-          "version": "1.6.28",
-          "buildVersion": "354",
-          "date": "2026-10-22",
-          "localizedDescription": "- Logs are now fully in the app's language: categories, settings changes and details built while the app runs no longer stay in French\n- Settings → General: the language list moved to its own page (App language), like iOS's settings\n- Swipe from the left edge to go back in Settings, from a category's live channels and from a channel opened from search results\n- When the tool that installed the app doesn't allow changing its icon (LiveContainer, GBox…), Settings now says so instead of offering icons that fail\n- Followed categories can use compact covers (3 per row, 4 on iPad) and be sorted A → Z, in Settings → General → Customize the app\n- In landscape, the full-size player (app's or Apple's) and multi-live now let the home indicator fade after a few seconds, like video apps, instead of keeping it over the picture.\n- Multi-live: tap a tile's speaker to hear several videos at once, and long-press it for that tile's volume; tapping a tile still makes it the only one you hear.\n- Hide an emote: long-press it in the chat, or \"Hide this emote\" on its card; it then shows as the typed word, from any source, in the live, VOD and multi-live chat.\n- Settings → Chat → Hidden emotes lists them to show them again; the list follows your account and is shared with the website.\n- New setting Settings → Chat → Show the message box (on by default): hide it if you only read the chat, the room goes to the messages; channel points and the chat's ⋯ menu stay as small buttons at the bottom right.\n- Rewinding into a live's recording now brings back your chosen playback speed once you're away from its edge, instead of staying at 1×.\n- Apple's player now drops to 1× near the edge of a live recording and shows it, instead of a 2× that didn't actually play.\n- The player now checks the speed it really plays at: it applies it again, then shows the real speed if playback still can't keep up.\n- Experimental 2.25×, 2.5× and 3× speeds in the ⋯ menu of the player, for the current video; they fall back to 2× as soon as playback can't keep up.\n- Closing a channel page opened from the full-size player (name, title or chat) now brings the player back full size instead of shrinking it to the mini player.\n- Traditional Chinese interface language (thanks to trend0522)\n- Other improvements and fixes",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-354/TwitchUnblock.ipa",
-          "size": 4570361,
-          "commit": "871fa433f31d8386f343ae6dc5e93ce9f4b341aa"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.6.51",
+      "version": "1.6.52",
       "versionDate": "2026-10-26",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-363/TwitchUnblock.ipa",
-      "size": 4441807
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-364/TwitchUnblock.ipa",
+      "size": 4455995
     }
   ],
   "news": []

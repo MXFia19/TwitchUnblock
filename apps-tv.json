@@ -25,6 +25,15 @@
       },
       "versions": [
         {
+          "version": "0.1.41",
+          "buildVersion": "41",
+          "date": "2026-10-26",
+          "localizedDescription": "- Menu now closes an open category instead of quitting the app",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-test-41/TwitchUnblockTV.ipa",
+          "size": 2722508,
+          "commit": "31ad47a7796a8851b1e1a6fbfc0a34d3dd897a8a"
+        },
+        {
           "version": "0.1.40",
           "buildVersion": "40",
           "date": "2026-10-25",
@@ -194,21 +203,12 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-test-20/TwitchUnblockTV.ipa",
           "size": 2448068,
           "commit": "5a576edaf32ad79ca29af01fa92909a0b58b67be"
-        },
-        {
-          "version": "0.1.19",
-          "buildVersion": "19",
-          "date": "2026-10-18",
-          "localizedDescription": "- Account → Recent errors lists the latest warnings and errors, and failed lives or VODs are logged",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-test-19/TwitchUnblockTV.ipa",
-          "size": 2432299,
-          "commit": "0419353b6041cfa41e2fd49a71de5d7c176949d5"
         }
       ],
-      "version": "0.1.40",
-      "versionDate": "2026-10-25",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-test-40/TwitchUnblockTV.ipa",
-      "size": 2716764
+      "version": "0.1.41",
+      "versionDate": "2026-10-26",
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-test-41/TwitchUnblockTV.ipa",
+      "size": 2722508
     }
   ]
 }

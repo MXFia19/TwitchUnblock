@@ -185,6 +185,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.6.56",
+          "buildVersion": "368",
+          "date": "2026-10-26",
+          "localizedDescription": "- Fixed: a live could be wrongly reported as \"not available in your region\".\n- Vertical video: going back now returns to the ad-free source, and drops keep progressing while the vertical picture plays.",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-368/TwitchUnblock.ipa",
+          "size": 4457983,
+          "commit": "1abc43823678d23c37847468168ee4e03a13e181"
+        },
+        {
           "version": "1.6.55",
           "buildVersion": "367",
           "date": "2026-10-26",
@@ -264,25 +273,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-359/TwitchUnblock.ipa",
           "size": 4414284,
           "commit": "cabf32289ccd8e02941be57f9f004aa310cff314"
-        },
-        {
-          "version": "1.6.37",
-          "buildVersion": "358",
-          "date": "2026-10-25",
-          "localizedDescription": "- Improvements and fixes",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-358/TwitchUnblock.ipa",
-          "size": 4376996,
-          "commit": "6adef16519a0a35822b42ed98fb5bbc39469ec9d"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.6.55",
+      "version": "1.6.56",
       "versionDate": "2026-10-26",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-367/TwitchUnblock.ipa",
-      "size": 4457344
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-368/TwitchUnblock.ipa",
+      "size": 4457983
     }
   ],
   "news": []

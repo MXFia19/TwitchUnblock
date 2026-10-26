@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.6.56",
+          "buildVersion": "368",
+          "date": "2026-10-26",
+          "localizedDescription": "- Fixed: a live could be wrongly reported as \"not available in your region\".\n- Vertical video: going back now returns to the ad-free source, and drops keep progressing while the vertical picture plays.",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-368/TwitchUnblock.ipa",
+          "size": 4457983,
+          "commit": "1abc43823678d23c37847468168ee4e03a13e181"
+        },
+        {
           "version": "1.6.55",
           "buildVersion": "367",
           "date": "2026-10-26",
@@ -280,25 +289,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-336/TwitchUnblock.ipa",
           "size": 4222082,
           "commit": "d83ce6240c749741663778400094090973873b50"
-        },
-        {
-          "version": "1.5.7",
-          "buildVersion": "335",
-          "date": "2026-10-19",
-          "localizedDescription": "- Search: typing text now shows results in tabs (Channels, Categories, Live by title or tags, VODs); live streams and VODs from hidden channels or categories are left out, and links or IDs still open directly\n- Search: your last 10 searches are listed under the search field, each removable, or clear them all\n- Channels: a Schedule tab lists a channel's upcoming streams in your local day and time, with length, title, category, weekly ones and vacation\n- Channels: an offline channel's page shows its next scheduled stream (or its vacation) right under its name",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-335/TwitchUnblock.ipa",
-          "size": 4183176,
-          "commit": "9e0a7847913c19a9432d20730dba2c5c9c963f27"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.6.55",
+      "version": "1.6.56",
       "versionDate": "2026-10-26",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-367/TwitchUnblock.ipa",
-      "size": 4457344
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-368/TwitchUnblock.ipa",
+      "size": 4457983
     }
   ],
   "news": []

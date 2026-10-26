@@ -297,6 +297,7 @@ enum LogTranslator {
         "Épinglées triées par spectateurs": ["Pinned sorted by viewers", "Fijados ordenados por espectadores", "Закреплённые — по числу зрителей"],
         "Erreur de lecture HLS": ["HLS playback error", "Error de reproducción HLS", "Ошибка воспроизведения HLS"],
         "Erreur envoi IRC": ["IRC send error", "Error de envío IRC", "Ошибка отправки IRC"],
+        "erreur GQL — session conservée": ["GQL error — session kept", "error de GQL — sesión conservada", "ошибка GQL — сессия сохранена"],
         "Erreur GQL commentaires": ["Comments GQL error", "Error GQL de comentarios", "Ошибка GQL комментариев"],
         "Erreurs": ["Errors", "Errores", "Ошибки"],
         "Erreurs GQL dans": ["GQL errors in", "Errores GQL en", "Ошибки GQL в"],

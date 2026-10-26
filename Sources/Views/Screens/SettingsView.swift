@@ -1716,9 +1716,7 @@ struct SettingsView: View {
                                                              : store.t("points_connect_btn")
                 ) {
                     if store.twitchWebToken != nil {
-                        logger.info("AUTH/WEB", "Déconnexion session web", nil)
-                        store.twitchWebToken = nil
-                        Task { await TwitchWebSession.clear() }
+                        store.logoutWebSession()
                     } else {
                         startWebLogin()
                     }

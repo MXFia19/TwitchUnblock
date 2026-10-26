@@ -128,6 +128,21 @@ final class AppStore: ObservableObject {
         return twitchWebToken != nil
     }
 
+    /// Déconnexion de la session web (réglages). Sans compte OAuth, le pseudo
+    /// venait de cette session : il part avec elle, sinon la connexion d'un
+    /// autre compte était ensuite refusée comme « autre compte ».
+    @MainActor
+    func logoutWebSession() {
+        logger.info("AUTH/WEB", "Déconnexion session web", nil)
+        twitchWebToken = nil
+        webSessionMismatch = nil
+        if (twitchToken ?? "").isEmpty {
+            twitchLogin = nil
+            twitchAvatar = nil
+        }
+        Task { await TwitchWebSession.clear() }
+    }
+
     /// Session web d'un autre compte : effacée (jeton et cookies twitch.tv),
     /// pour que la prochaine connexion demande le bon compte.
     @MainActor

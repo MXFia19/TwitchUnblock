@@ -52,10 +52,11 @@ struct TVRootView: View {
 
     enum Tab: Hashable { case following, top, categories, search, account }
     @State private var tab = Tab.following
-    /// Pages de chaîne ouvertes dans Suivies et Recherche, gardées ici : Menu
-    /// pressé avec le focus dans la barre des onglets referme la page de
+    /// Pages ouvertes dans Suivies, Catégories et Recherche, gardées ici :
+    /// Menu pressé avec le focus dans la barre des onglets referme la page de
     /// l'onglet au lieu de quitter l'app (closePageFromTabBar).
     @State private var followingPath = NavigationPath()
+    @State private var categoriesPath = NavigationPath()
     @State private var searchPath = NavigationPath()
 
     var body: some View {
@@ -69,7 +70,7 @@ struct TVRootView: View {
             TVTopTab(play: play)
                 .tabItem { Text(session.t("tv_top")) }
                 .tag(Tab.top)
-            TVCategoriesTab(play: play)
+            TVCategoriesTab(play: play, path: $categoriesPath)
                 .tabItem { Text(session.t("tv_categories")) }
                 .tag(Tab.categories)
             TVSearchTab(play: play, path: $searchPath)
@@ -105,13 +106,17 @@ struct TVRootView: View {
     private func play(_ item: TVPlayback) { playing = item }
 
     /// Menu avec le focus remonté dans la barre des onglets alors qu'une page
-    /// de chaîne est ouverte dans l'onglet : elle se referme, au lieu de
-    /// quitter l'app. Le focus dans la page, c'est elle qui répond
-    /// (TVChannelView) ; sans page ouverte, nil : Menu garde son effet habituel.
+    /// (chaîne, catégorie) est ouverte dans l'onglet : elle se referme, au
+    /// lieu de quitter l'app. Une catégorie sans live n'a rien à prendre le
+    /// focus : c'était une impasse. Le focus dans la page, c'est elle qui
+    /// répond (TVChannelView) ; sans page ouverte, nil : Menu garde son effet
+    /// habituel.
     private var closePageFromTabBar: (() -> Void)? {
         switch tab {
         case .following where !followingPath.isEmpty:
             return { if !followingPath.isEmpty { followingPath.removeLast() } }
+        case .categories where !categoriesPath.isEmpty:
+            return { if !categoriesPath.isEmpty { categoriesPath.removeLast() } }
         case .search where !searchPath.isEmpty:
             return { if !searchPath.isEmpty { searchPath.removeLast() } }
         default:
@@ -668,13 +673,15 @@ struct TVTopTab: View {
 // MARK: – Catégories
 struct TVCategoriesTab: View {
     let play: (TVPlayback) -> Void
+    /// Catégorie ouverte d'ici (TVRootView la referme aussi).
+    @Binding var path: NavigationPath
     @EnvironmentObject private var session: TVSession
     @State private var categories: [TwitchCategory] = []
     @State private var loaded = false
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 40), count: 6)
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             ScrollView {
                 if categories.isEmpty {
                     TVMessage(text: loaded ? session.t("tv_error") : session.t("loading"))

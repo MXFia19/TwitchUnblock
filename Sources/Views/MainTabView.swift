@@ -346,7 +346,14 @@ struct MainTabView: View {
                                                    onOpenSettings: { showSettings = true },
                                                    onFeedback: { feedbackContext = nil; showFeedback = true },
                                                    safeTop: headerSafeTop)),
-                        content: AnyView(tabContent))
+                        content: AnyView(tabContent
+                            // Mini-barre et barre du multi-live posées sur le
+                            // bas de l'onglet : les listes s'arrêtent au-dessus
+                            // (« Charger plus », dernière ligne). Découvrir s'en
+                            // occupe lui-même (bottomInset).
+                            .safeAreaInset(edge: .bottom, spacing: 0) {
+                                Color.clear.frame(height: activeTab == .discover ? 0 : listBarsInset)
+                            }))
             // Thème changé dans les réglages : les onglets sont reconstruits,
             // pour qu'aucune vue ne garde les anciennes couleurs. Le lecteur et
             // la feuille des réglages, hors de ce bloc, restent en place. De
@@ -836,6 +843,15 @@ struct MainTabView: View {
         return CGFloat((sideTabs ? 0 : 20) + 65 * bars)
     }
 
+    /// Hauteur que ces mêmes barres cachent au bas des listes des autres
+    /// onglets, au-dessus de la barre d'onglets (ou du bas de l'écran avec la
+    /// colonne) : environ 50 pt par barre, plus l'écart entre elles.
+    private var listBarsInset: CGFloat {
+        guard !playerVisible, !closingPlayer else { return 0 }
+        let bars = (playerMode != nil ? 1 : 0) + (multi.entries.isEmpty ? 0 : 1)
+        return CGFloat(64 * bars)
+    }
+
     /// Feuilles et mosaïque attachées à cet écran : une notification touchée
     /// pendant que l'une d'elles est ouverte lançait le direct dessous (sous
     /// la mosaïque, caché, avec son son en plus des siens) ou rien du tout
@@ -1138,7 +1154,8 @@ struct MainTabView: View {
                 style: style,
                 onJoinChannel: { target in   // raid → suit la chaîne raidée
                     // Lecteur réduit : il le reste (on naviguait ailleurs).
-                    playLive(target, keepVisibility: true)
+                    // En PiP : même lecteur (voir chainKeepsPiP).
+                    playLive(target, soft: chainKeepsPiP, keepVisibility: true)
                 }
             )
             .id(channel)   // changement de chaîne → chat reconstruit à neuf
@@ -1959,7 +1976,20 @@ struct MainTabView: View {
               let i = vodQueue.firstIndex(where: { $0.id == id }) else { return }
         guard i + 1 < vodQueue.count else { vodQueue = []; return }
         let next = vodQueue[i + 1]
-        playVod(next.id, next.title, next.previewThumbnailURL, vodQueueStreamer, keepVisibility: true)
+        let soft = chainKeepsPiP
+        // Bascule douce : la vitesse imposée à la VOD finie n'est pas vidée
+        // par startPlayback, elle ne doit pas passer à la suivante.
+        if soft { forcedVodSpeed = nil }
+        playVod(next.id, next.title, next.previewThumbnailURL, vodQueueStreamer,
+                soft: soft, keepVisibility: true)
+    }
+
+    /// Enchaînement automatique (raid suivi, VOD suivante) pendant un PiP : la
+    /// nouvelle source passe par le lecteur en place (bascule douce), qui
+    /// change seulement d'élément. Un lecteur recréé fermait la fenêtre et le
+    /// son continuait en arrière-plan, sans image.
+    private var chainKeepsPiP: Bool {
+        pipState.active && qualityLinks != nil && errorMsg == nil && !loading
     }
     private func playClip(_ slug: String, _ title: String?) {
         vodQueue = []

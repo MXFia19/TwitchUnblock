@@ -2046,8 +2046,13 @@ func webSessionIdentity(token: String) async -> WebSessionCheck {
           let payload = json["data"] as? [String: Any] else {
         return .unknown   // réponse inattendue : on ne tranche pas
     }
-    // `currentUser` à null = jeton rejeté, même avec un HTTP 200.
+    // `currentUser` à null = jeton rejeté, même avec un HTTP 200. Sauf si GQL
+    // joint des `errors` : panne passagère de Twitch, la session reste en place.
     guard let user = payload["currentUser"] as? [String: Any] else {
+        if let errors = json["errors"] as? [Any], !errors.isEmpty {
+            logger.debug("AUTH/WEB", "Vérification impossible", "erreur GQL — session conservée")
+            return .unknown
+        }
         logger.warn("AUTH/WEB", "Session web expirée", "currentUser vide")
         return .invalid
     }

@@ -195,11 +195,24 @@ actor EmoteService {
 
     func resolveById(_ id: String) -> TwitchEmote? { twitchById[id] }
 
-    /// Emote Twitch par son nom, parmi celles déjà vues dans ce chat (celles
-    /// que les suggestions proposent) : pour l'écho de nos propres messages,
-    /// qui n'a pas de balises d'emotes.
-    func twitchEmote(named name: String) -> TwitchEmote? {
-        twitchById.values.first { $0.name == name }
+    /// Emote Twitch par son nom, pour l'écho de nos propres messages, qui n'a
+    /// pas de balises d'emotes : parmi celles déjà vues dans ce chat (celles
+    /// que les suggestions proposent), puis celles des jeux du compte (« Mes
+    /// emotes » : abonnements à d'autres chaînes, globales…), que Twitch
+    /// reconnaît pour qui les a. Une emote follower d'une autre chaîne ne
+    /// marche que chez elle (`channelId`). Sans ces jeux, une emote choisie
+    /// dans « Mes emotes » restait écrite en texte chez nous.
+    func twitchEmote(named name: String, channelId: String? = nil) -> TwitchEmote? {
+        if let seen = twitchById.values.first(where: { $0.name == name }) { return seen }
+        guard let sets = userEmoteSets?.sets else { return nil }
+        for id in sets.sorted() {
+            guard let set = userSetContents[id] else { continue }
+            for item in set.emotes where item.emote.name == name {
+                if item.kind == "FOLLOWER", set.owner?.id != channelId { continue }
+                return item.emote
+            }
+        }
+        return nil
     }
 
     // MARK: – Grouped emotes for the picker

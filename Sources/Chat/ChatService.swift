@@ -459,7 +459,7 @@ final class ChatService: NSObject, ObservableObject {
         // Emotes Twitch de notre propre message : l'écho n'a pas de balises,
         // elles s'affichaient en texte (« Kappa » choisi dans les suggestions).
         for i in tokens.indices {
-            if case .text(let word) = tokens[i], let e = await EmoteService.shared.twitchEmote(named: word) {
+            if case .text(let word) = tokens[i], let e = await EmoteService.shared.twitchEmote(named: word, channelId: channelId) {
                 tokens[i] = .emote(e)
             }
         }

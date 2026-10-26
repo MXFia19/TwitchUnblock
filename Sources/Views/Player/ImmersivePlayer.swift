@@ -2120,146 +2120,178 @@ struct ImmersivePlayer: View {
                     .frame(height: 28)
             }
 
-            HStack(spacing: TSpace.md) {
-                if isLive {
-                    // Au bord : point rouge et durée du live. En retard (pause,
-                    // coupure, retour en arrière), un vrai bouton « Direct » avec
-                    // le retard, qui ramène au bord — le point grisé d'avant
-                    // passait inaperçu.
-                    Button {
-                        PlayerPull.guarded { model.goLive(); scheduleAutoHide() }
-                    } label: {
-                        if model.atLiveEdge && model.isPlaying {
-                            HStack(spacing: TSpace.xs) {
-                                Circle().fill(Color.tLive).frame(width: 7, height: 7)
-                                Text(info.uptime.isEmpty ? store.t("live_on") : info.uptime)
-                                    .font(.system(size: 12, weight: .semibold).monospacedDigit())
-                            }
-                            .foregroundColor(.white)
-                        } else {
-                            HStack(spacing: TSpace.xs) {
-                                Image(systemName: "forward.end.fill").font(.system(size: 10, weight: .bold))
-                                Text(store.t("back_to_live") + lateLabel(model.endTime - model.position))
-                                    .font(.system(size: 12, weight: .bold).monospacedDigit())
-                            }
-                            .foregroundColor(.white)
-                            .padding(.horizontal, TSpace.sm)
-                            .frame(height: 28)
-                            .background(Color.tLive.opacity(0.85))
-                            .clipShape(Capsule())
-                        }
+            // Une ligne si tout tient ; sinon (portrait, image verticale : deux
+            // boutons de plus) les boutons passent sous l'état du flux. Sur une
+            // ligne, la durée du live s'écrasait jusqu'à une lettre par ligne.
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: TSpace.md) {
+                    barStatus
+                    Spacer(minLength: 0)
+                    barActions
+                }
+                VStack(alignment: .leading, spacing: TSpace.sm) {
+                    HStack(spacing: TSpace.md) {
+                        barStatus
+                        Spacer(minLength: 0)
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(store.t("back_to_live"))
-
-                    if info.viewers > 0 {
-                        overlayMeta(icon: "eye.fill", text: formatViewers(info.viewers))
-                    }
-                    // Un appui sur la latence ramène au bord, comme « Direct ».
-                    if store.showLatency, let l = info.latency {
-                        Button { PlayerPull.guarded { model.goLive(); scheduleAutoHide() } } label: {
-                            overlayMeta(icon: "waveform.path.ecg",
-                                        text: String(format: "%.0f s", max(0, l)))
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(store.t("back_to_live"))
-                    }
-                } else {
-                    // Pendant un glissement, l'instant visé plutôt que la
-                    // position courante (en violet : ce n'est pas encore lu).
-                    HStack(spacing: 0) {
-                        Text("\(timeLabel(dragging ? dragValue : model.position)) / \(timeLabel(model.endTime))")
-                            .foregroundColor(dragging ? .tPurple : .white)
-                        // Vitesse retenue d'une VOD à l'autre : toujours visible
-                        // quand elle n'est pas normale.
-                        if model.speed != 1 {
-                            Text(" · " + VodSpeed.label(model.speed, store.lang))
-                                .foregroundColor(.white)
-                                .accessibilityLabel(store.t("speed") + " " + VodSpeed.label(model.speed, store.lang))
-                        }
-                    }
-                    .font(.system(size: 12, weight: .semibold).monospacedDigit())
-                    // Chapitre en cours ; un appui liste les chapitres pour y sauter.
-                    if chapters.count > 1 {
-                        Button {
-                            PlayerPull.guarded {
-                                hideTask?.cancel()
-                                showChapters = true
-                            }
-                        } label: {
-                            HStack(spacing: 3) {
-                                Image(systemName: "list.bullet").font(.system(size: 10, weight: .bold))
-                                Text(currentChapter?.title ?? "")
-                                    .font(.system(size: 12, weight: .semibold)).lineLimit(1)
-                            }
-                            .foregroundColor(.white)
-                            .padding(.horizontal, TSpace.sm)
-                            .frame(height: 28)
-                            .background(Color.black.opacity(0.4))
-                            .clipShape(Capsule())
-                        }
-                        .buttonStyle(.plain)
+                    HStack(spacing: TSpace.md) {
+                        Spacer(minLength: 0)
+                        barActions
                     }
                 }
+            }
+        }
+    }
 
-                Spacer(minLength: 0)
-
-                // Minuteur de veille : visible pendant la lecture, pas seulement
-                // dans les Réglages. Un appui ouvre le réglage rapide.
-                if let sleep = sleepLabel {
-                    Button { PlayerPull.guarded { onSleep(); scheduleAutoHide() } } label: {
-                        HStack(spacing: 3) {
-                            Image(systemName: "moon.zzz.fill").font(.system(size: 10))
-                            Text(sleep)
+    /// État du flux, à gauche de la barre du bas : point rouge et durée du
+    /// live (ou « Direct » et le retard), spectateurs, latence ; position et
+    /// chapitre d'une VOD. Type effacé : la barre le pose deux fois
+    /// (ViewThatFits), et ce lecteur est déjà profond.
+    private var barStatus: AnyView {
+        AnyView(HStack(spacing: TSpace.md) {
+            if isLive {
+                // Au bord : point rouge et durée du live. En retard (pause,
+                // coupure, retour en arrière), un vrai bouton « Direct » avec
+                // le retard, qui ramène au bord — le point grisé d'avant
+                // passait inaperçu.
+                Button {
+                    PlayerPull.guarded { model.goLive(); scheduleAutoHide() }
+                } label: {
+                    if model.atLiveEdge && model.isPlaying {
+                        HStack(spacing: TSpace.xs) {
+                            Circle().fill(Color.tLive).frame(width: 7, height: 7)
+                            Text(info.uptime.isEmpty ? store.t("live_on") : info.uptime)
                                 .font(.system(size: 12, weight: .semibold).monospacedDigit())
+                                .lineLimit(1)
+                        }
+                        .foregroundColor(.white)
+                    } else {
+                        HStack(spacing: TSpace.xs) {
+                            Image(systemName: "forward.end.fill").font(.system(size: 10, weight: .bold))
+                            Text(store.t("back_to_live") + lateLabel(model.endTime - model.position))
+                                .font(.system(size: 12, weight: .bold).monospacedDigit())
                         }
                         .foregroundColor(.white)
                         .padding(.horizontal, TSpace.sm)
-                        .frame(height: 32)
+                        .frame(height: 28)
+                        .background(Color.tLive.opacity(0.85))
+                        .clipShape(Capsule())
+                    }
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(store.t("back_to_live"))
+
+                if info.viewers > 0 {
+                    overlayMeta(icon: "eye.fill", text: formatViewers(info.viewers))
+                }
+                // Un appui sur la latence ramène au bord, comme « Direct ».
+                if store.showLatency, let l = info.latency {
+                    Button { PlayerPull.guarded { model.goLive(); scheduleAutoHide() } } label: {
+                        overlayMeta(icon: "waveform.path.ecg",
+                                    text: String(format: "%.0f s", max(0, l)))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(store.t("back_to_live"))
+                }
+            } else {
+                // Pendant un glissement, l'instant visé plutôt que la
+                // position courante (en violet : ce n'est pas encore lu).
+                HStack(spacing: 0) {
+                    Text("\(timeLabel(dragging ? dragValue : model.position)) / \(timeLabel(model.endTime))")
+                        .foregroundColor(dragging ? .tPurple : .white)
+                    // Vitesse retenue d'une VOD à l'autre : toujours visible
+                    // quand elle n'est pas normale.
+                    if model.speed != 1 {
+                        Text(" · " + VodSpeed.label(model.speed, store.lang))
+                            .foregroundColor(.white)
+                            .accessibilityLabel(store.t("speed") + " " + VodSpeed.label(model.speed, store.lang))
+                    }
+                }
+                .font(.system(size: 12, weight: .semibold).monospacedDigit())
+                // Chapitre en cours ; un appui liste les chapitres pour y sauter.
+                if chapters.count > 1 {
+                    Button {
+                        PlayerPull.guarded {
+                            hideTask?.cancel()
+                            showChapters = true
+                        }
+                    } label: {
+                        HStack(spacing: 3) {
+                            Image(systemName: "list.bullet").font(.system(size: 10, weight: .bold))
+                            Text(currentChapter?.title ?? "")
+                                .font(.system(size: 12, weight: .semibold)).lineLimit(1)
+                        }
+                        .foregroundColor(.white)
+                        .padding(.horizontal, TSpace.sm)
+                        .frame(height: 28)
                         .background(Color.black.opacity(0.4))
                         .clipShape(Capsule())
                     }
                     .buttonStyle(.plain)
                 }
-
-                // On regarde l'enregistrement d'un direct en cours : le retour
-                // au direct était enfoui dans le menu « ⋯ », alors que c'est
-                // l'action qu'on cherche en premier.
-                if canReturnToLive {
-                    Button { PlayerPull.guarded { onBackToLive() } } label: {
-                        HStack(spacing: TSpace.xs) {
-                            Circle().fill(Color.tLive).frame(width: 7, height: 7)
-                            Text(store.t("back_to_live"))
-                                .font(.system(size: 12, weight: .bold))
-                        }
-                        .foregroundColor(.white)
-                        .padding(.horizontal, TSpace.sm)
-                        .frame(height: 32)
-                        .background(Color.tLive.opacity(0.35))
-                        .clipShape(Capsule())
-                    }
-                    .buttonStyle(.plain)
-                }
-
-                // Direct en « Dual Format » : son image verticale, ou retour à
-                // l'habituelle. Seulement pour ces directs, hors personnalisation
-                // (comme le retour au direct).
-                if let onVertical {
-                    overlayButton(icon: verticalOn ? "rectangle" : "rectangle.portrait") {
-                        onVertical()
-                        flash(store.t(verticalOn ? "vertical_off" : "vertical_on"))
-                        scheduleAutoHide()
-                    }
-                    .accessibilityLabel(store.t("vertical_format"))
-                }
-
-                // Son, PiP, recharger, chat, rotation… dans l'ordre choisi
-                // (Réglages → Personnaliser), chacun seulement quand il sert.
-                ForEach(barButtons, id: \.self) { key in
-                    barButton(key)
-                }
             }
-        }
+        })
+    }
+
+    /// Boutons de la barre du bas : minuteur, retour au direct, image
+    /// verticale, puis ceux choisis (Réglages → Personnaliser).
+    private var barActions: AnyView {
+        AnyView(HStack(spacing: TSpace.md) {
+            // Minuteur de veille : visible pendant la lecture, pas seulement
+            // dans les Réglages. Un appui ouvre le réglage rapide.
+            if let sleep = sleepLabel {
+                Button { PlayerPull.guarded { onSleep(); scheduleAutoHide() } } label: {
+                    HStack(spacing: 3) {
+                        Image(systemName: "moon.zzz.fill").font(.system(size: 10))
+                        Text(sleep)
+                            .font(.system(size: 12, weight: .semibold).monospacedDigit())
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, TSpace.sm)
+                    .frame(height: 32)
+                    .background(Color.black.opacity(0.4))
+                    .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+
+            // On regarde l'enregistrement d'un direct en cours : le retour
+            // au direct était enfoui dans le menu « ⋯ », alors que c'est
+            // l'action qu'on cherche en premier.
+            if canReturnToLive {
+                Button { PlayerPull.guarded { onBackToLive() } } label: {
+                    HStack(spacing: TSpace.xs) {
+                        Circle().fill(Color.tLive).frame(width: 7, height: 7)
+                        Text(store.t("back_to_live"))
+                            .font(.system(size: 12, weight: .bold))
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, TSpace.sm)
+                    .frame(height: 32)
+                    .background(Color.tLive.opacity(0.35))
+                    .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+
+            // Direct en « Dual Format » : son image verticale, ou retour à
+            // l'habituelle. Seulement pour ces directs, hors personnalisation
+            // (comme le retour au direct).
+            if let onVertical {
+                overlayButton(icon: verticalOn ? "rectangle" : "rectangle.portrait") {
+                    onVertical()
+                    flash(store.t(verticalOn ? "vertical_off" : "vertical_on"))
+                    scheduleAutoHide()
+                }
+                .accessibilityLabel(store.t("vertical_format"))
+            }
+
+            // Son, PiP, recharger, chat, rotation… dans l'ordre choisi
+            // (Réglages → Personnaliser), chacun seulement quand il sert.
+            ForEach(barButtons, id: \.self) { key in
+                barButton(key)
+            }
+        })
     }
 
     // MARK: – Briques d'interface

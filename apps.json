@@ -185,6 +185,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.6.53",
+          "buildVersion": "365",
+          "date": "2026-10-26",
+          "localizedDescription": "- Vertical streams now look like the Twitch app's vertical view: the picture fills the player and the chat sits on its bottom, see-through (double-tap or the Chat button hides it).",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-365/TwitchUnblock.ipa",
+          "size": 4458163,
+          "commit": "03c1f679365a2de317131564fad796bb03efc4de"
+        },
+        {
           "version": "1.6.52",
           "buildVersion": "364",
           "date": "2026-10-26",
@@ -264,25 +273,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-356/TwitchUnblock.ipa",
           "size": 4546453,
           "commit": "153d416e8aa8cac62c7d1a396f08ebaf815d5a8e"
-        },
-        {
-          "version": "1.6.29",
-          "buildVersion": "355",
-          "date": "2026-10-22",
-          "localizedDescription": "- Settings: the app no longer crashes when opening Settings on iOS 18",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-355/TwitchUnblock.ipa",
-          "size": 4522536,
-          "commit": "1663231a6b4a778553e55f1977cd78cc2a92d57e"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.6.52",
+      "version": "1.6.53",
       "versionDate": "2026-10-26",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-364/TwitchUnblock.ipa",
-      "size": 4455995
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-365/TwitchUnblock.ipa",
+      "size": 4458163
     }
   ],
   "news": []

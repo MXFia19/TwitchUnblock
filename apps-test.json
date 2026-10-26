@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.6.57",
+          "buildVersion": "369",
+          "date": "2026-10-26",
+          "localizedDescription": "- A brief Twitch error at launch no longer signs you out of the web session\n- Signing out of the web session without an app account now lets you sign in with another account\n- Lists are no longer hidden behind the mini player and the multi-live bar\n- Picture in Picture now follows raids and the next VOD of Play all instead of closing\n- Apple TV: Menu now closes an open category instead of quitting the app",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-369/TwitchUnblock.ipa",
+          "size": 4458918,
+          "commit": "31ad47a7796a8851b1e1a6fbfc0a34d3dd897a8a"
+        },
+        {
           "version": "1.6.56",
           "buildVersion": "368",
           "date": "2026-10-26",
@@ -280,25 +289,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-337/TwitchUnblock.ipa",
           "size": 4231305,
           "commit": "7510455c72b7845c006557bcec606033620890b5"
-        },
-        {
-          "version": "1.5.8",
-          "buildVersion": "336",
-          "date": "2026-10-19",
-          "localizedDescription": "- Settings: signed in, your settings now follow your Twitch account on the website and your other devices: chat settings, top streams language, VOD speed, pinned and hidden channels, and the app's customization (Settings → Twitch Account → Sync my settings, on by default)\n- Settings: language, quality, mobile data, notifications, downloads and appearance stay specific to each device; the latest change wins, and pinned or hidden lists changed on two devices are merged",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-336/TwitchUnblock.ipa",
-          "size": 4222082,
-          "commit": "d83ce6240c749741663778400094090973873b50"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.6.56",
+      "version": "1.6.57",
       "versionDate": "2026-10-26",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-368/TwitchUnblock.ipa",
-      "size": 4457983
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-369/TwitchUnblock.ipa",
+      "size": 4458918
     }
   ],
   "news": []

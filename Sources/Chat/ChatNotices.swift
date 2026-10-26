@@ -244,6 +244,9 @@ struct CollapsedNoticesBar: View {
     var pollEnds: Date? = nil
     var predictionEnds: Date? = nil
     var hypeEnds: Date? = nil
+    /// Chat posé sur l'image : fond transparent, comme le reste du chat (un
+    /// fond plein y faisait une barre noire en travers de l'image).
+    var translucent = false
     let onExpand: () -> Void
     @EnvironmentObject private var store: AppStore
 
@@ -261,8 +264,8 @@ struct CollapsedNoticesBar: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .background(Color.tCard)
-        .overlay(Divider().background(Color.tBorder), alignment: .bottom)
+        .background(translucent ? Color.black.opacity(0.3) : Color.tCard)
+        .overlay(alignment: .bottom) { if !translucent { Divider().background(Color.tBorder) } }
         .accessibilityLabel(store.t("notices_show"))
     }
 }
@@ -303,6 +306,8 @@ struct NoticesHideStrip: View {
     var predictionEnds: Date? = nil
     var hypeEnds: Date? = nil
     var onReopenClosed: () -> Void = {}
+    /// Chat posé sur l'image : fond transparent (voir CollapsedNoticesBar).
+    var translucent = false
     let onHide: () -> Void
     @EnvironmentObject private var store: AppStore
 
@@ -341,8 +346,8 @@ struct NoticesHideStrip: View {
             .fixedSize()
         }
         .padding(.leading, 12).padding(.trailing, 6)
-        .background(Color.tCard)
-        .overlay(Divider().background(Color.tBorder), alignment: .bottom)
+        .background(translucent ? Color.black.opacity(0.3) : Color.tCard)
+        .overlay(alignment: .bottom) { if !translucent { Divider().background(Color.tBorder) } }
     }
 }
 

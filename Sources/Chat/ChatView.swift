@@ -249,7 +249,8 @@ struct ChatView: View {
             // Replié, il garde sa place ; déplié, il s'affiche par-dessus le chat
             // au lieu de le pousser : le chat ne bouge pas et continue de défiler.
             if store.showPinnedMessages, let pin = pubsub.pinned, pin.id != dismissedPinId {
-                PinnedBanner(pin: pin, width: chromeWidth, expanded: $pinnedExpanded, layoutOnly: true) {
+                PinnedBanner(pin: pin, width: chromeWidth, expanded: $pinnedExpanded, layoutOnly: true,
+                             translucent: style.translucent) {
                     withAnimation(.easeInOut(duration: 0.18)) { dismissedPinId = pin.id }
                 }
                 // La version dépliée est dessinée à la racine du chat (voir
@@ -381,7 +382,8 @@ struct ChatView: View {
                     kinds: activeNotices,
                     pollEnds: pollEnds,
                     predictionEnds: predictionEnds,
-                    hypeEnds: hypeEnds
+                    hypeEnds: hypeEnds,
+                    translucent: style.translucent
                 ) {
                     withAnimation(.easeInOut(duration: 0.18)) {
                         dismissedPinId = nil
@@ -401,6 +403,7 @@ struct ChatView: View {
                     predictionEnds: predictionEnds,
                     hypeEnds: hypeEnds,
                     onReopenClosed: { reopenClosedNotices() },
+                    translucent: style.translucent,
                     onHide: {
                         withAnimation(.easeInOut(duration: 0.18)) {
                             pinnedExpanded = false

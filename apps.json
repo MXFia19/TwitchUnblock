@@ -185,6 +185,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.6.55",
+          "buildVersion": "367",
+          "date": "2026-10-26",
+          "localizedDescription": "- With the chat on top of the video (vertical video, overlay chat in landscape), the pinned-message bar is now see-through instead of a black band.\n- The player's bottom bar no longer squeezes the live's duration when there are many buttons (vertical video): the buttons move to a second row.",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-367/TwitchUnblock.ipa",
+          "size": 4457344,
+          "commit": "c78dbdd12e305b24f22cc6f00fbf3cba4795f707"
+        },
+        {
           "version": "1.6.54",
           "buildVersion": "366",
           "date": "2026-10-26",
@@ -264,25 +273,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-358/TwitchUnblock.ipa",
           "size": 4376996,
           "commit": "6adef16519a0a35822b42ed98fb5bbc39469ec9d"
-        },
-        {
-          "version": "1.6.37",
-          "buildVersion": "357",
-          "date": "2026-10-22",
-          "localizedDescription": "- Other improvements and fixes",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-357/TwitchUnblock.ipa",
-          "size": 4547710,
-          "commit": "95e378417e8263868a27a00fac86f44c7a978232"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.6.54",
+      "version": "1.6.55",
       "versionDate": "2026-10-26",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-366/TwitchUnblock.ipa",
-      "size": 4457513
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-367/TwitchUnblock.ipa",
+      "size": 4457344
     }
   ],
   "news": []

@@ -118,6 +118,8 @@ final class ChannelDropsNotice: ObservableObject {
 /// Carte « Drops » en haut du chat : à fermer, avec un lien vers les détails.
 struct DropsNoticeCard: View {
     let campaign: DropsCampaignNotice
+    /// Chat posé sur l'image : fond transparent (voir CollapsedNoticesBar).
+    var translucent = false
     let onDismiss: () -> Void
     @EnvironmentObject private var store: AppStore
 
@@ -168,8 +170,8 @@ struct DropsNoticeCard: View {
             .accessibilityLabel(store.t("close"))
         }
         .padding(.horizontal, 12).padding(.vertical, 8)
-        .background(Color.tCard)
-        .overlay(Divider().background(Color.tBorder), alignment: .bottom)
+        .background(translucent ? Color.black.opacity(0.45) : Color.tCard)
+        .overlay(alignment: .bottom) { if !translucent { Divider().background(Color.tBorder) } }
     }
 }
 

@@ -170,10 +170,18 @@ func tokenGeoBlock(_ value: String) -> String? {
 }
 
 /// Refus d'usher pour cause de pays :
-/// `[{"error":"Content Restricted In Region","error_code":"content_geoblocked",…}]`.
-private func usherGeoBlocked(_ body: String) -> Bool {
-    let b = body.lowercased()
-    return b.contains("geoblock") || b.contains("geo_blocked") || b.contains("restricted in region")
+/// `[{"url":"…","error":"Content Restricted In Region","error_code":"content_geoblocked",…}]`.
+/// Seuls `error_code` et `error` comptent : `url` recopie l'adresse demandée,
+/// jeton compris, et le jeton contient toujours `geoblock_reason` (même vide)
+/// — un refus de signature ou de jeton (403 nauth_…) passait pour un blocage
+/// par pays (vu le 26/10).
+private func usherGeoBlocked(_ data: Data) -> Bool {
+    guard let json = try? JSONSerialization.jsonObject(with: data) else { return false }
+    let entries = (json as? [[String: Any]]) ?? [json as? [String: Any]].compactMap { $0 }
+    return entries.contains { e in
+        ((e["error_code"] as? String)?.lowercased().contains("geo") ?? false)
+            || ((e["error"] as? String)?.lowercased().contains("restricted in region") ?? false)
+    }
 }
 
 /// Blocage par pays vu pendant getLive (jetons, réponse d'usher) : sa raison.
@@ -994,7 +1002,7 @@ private func usherLiveLinks(login: String, token: (value: String, signature: Str
     else { return ([:], [:]) }
     let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
     guard status == 200, let body = String(data: data, encoding: .utf8) else {
-        if let geo, usherGeoBlocked(String(decoding: data, as: UTF8.self)) {
+        if let geo, usherGeoBlocked(data) {
             geo.reason = geo.reason ?? "usher \(status)"
             logger.warn("LIVE", "🌍 Twitch : direct bloqué dans ce pays", "usher \(status)")
         }

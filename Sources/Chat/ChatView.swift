@@ -262,7 +262,7 @@ struct ChatView: View {
 
             // ── Drops de la chaîne (carte à fermer) ─────────────────
             if let campaign = dropsCampaign {
-                DropsNoticeCard(campaign: campaign) {
+                DropsNoticeCard(campaign: campaign, translucent: style.translucent) {
                     withAnimation(.easeInOut(duration: 0.18)) { dropsNotice.dismiss(campaign) }
                 }
                 .transition(.opacity)

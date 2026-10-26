@@ -727,9 +727,11 @@ struct MainTabView: View {
                 startDropsHeartbeat(channel: channel)
             }
             // Qualités supérieures : les liens du compte, gardés pour le retour
-            // pendant une pause pub, sont signés pour l'ancienne session.
+            // pendant une pause pub, sont signés pour l'ancienne session. De même
+            // ceux gardés pour le retour de l'image verticale.
             guard case .live(let channel)? = playerMode, dvrSourceChannel == nil,
-                  liveSourceUsed == "account" || hqLive != nil, !closingPlayer else { return }
+                  liveSourceUsed == "account" || hqLive != nil || verticalBackup?.source == "account",
+                  !closingPlayer else { return }
             logger.info("LECTEUR", "Session web changée : direct relu", channel)
             let visible = playerVisible, onlyChat = chatOnly
             playLive(channel, soft: true)
@@ -2687,12 +2689,20 @@ struct MainTabView: View {
         guard on != verticalOn, linksAreLive, dvrSourceChannel == nil, !switchingSource else { return }
         if on {
             guard let portrait = portraitMaster, let links = qualityLinks else { return }
-            if hqLive != nil {
+            // Retour prévu : l'image habituelle telle qu'elle est — sauf pendant
+            // les qualités supérieures sans abonnement, dont les liens du compte
+            // ont des pubs que plus rien ne contournerait (hqLive s'arrête ici) :
+            // le retour se fait alors sur la source sans pub, comme settleOnAdFree.
+            var backup = (links: links, variants: qualityVariants, source: liveSourceUsed)
+            if let live = hqLive {
                 hqReturnTask?.cancel()
                 hqReturnTask = nil
                 hqLive = nil
+                if !live.adFree.isEmpty {
+                    backup = (links: live.adFree, variants: live.adFreeVariants, source: live.adFreeSource)
+                }
             }
-            verticalBackup = (links: links, variants: qualityVariants, source: liveSourceUsed)
+            verticalBackup = backup
             qualityLinks = store.lowLatency ? LivePlaylistLoader.wrap(portrait.links) : portrait.links
             qualityVariants = portrait.variants
             liveSourceUsed = "twitch"
@@ -2708,6 +2718,10 @@ struct MainTabView: View {
             verticalOn = false
             logger.info("LECTEUR", "Retour à l'image habituelle")
         }
+        // Drops : l'image verticale vient d'un jeton anonyme, la pulsation doit
+        // relire les segments ; au retour, selon la source retrouvée (le compte
+        // d'un abonné lit déjà le flux).
+        if case .live(let channel)? = playerMode { startDropsHeartbeat(channel: channel) }
     }
 
     // MARK: – Live timers

@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.6.58",
+          "buildVersion": "370",
+          "date": "2026-10-26",
+          "localizedDescription": "- New Background playback setting: keep playing, audio only or pause when the screen locks or you switch apps\n- Stream archives show the real time of day of each moment, and ⋯ → Go to a time of day jumps to it\n- Clips: ⋯ → Watch in the VOD opens the original VOD at that moment, and ⋯ → Download the clip saves it\n- The higher-quality and account notices now show only once\n- Update now opens a help page for every installer when Feather, SideStore or AltStore isn't found",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-370/TwitchUnblock.ipa",
+          "size": 4493827,
+          "commit": "af80fe92a77754bf55b3e07574e90062c5ca9f72"
+        },
+        {
           "version": "1.6.57",
           "buildVersion": "369",
           "date": "2026-10-26",
@@ -280,25 +289,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-338/TwitchUnblock.ipa",
           "size": 4236402,
           "commit": "ff7053ac8f7eb1af374a4128e71740033ab32795"
-        },
-        {
-          "version": "1.5.11",
-          "buildVersion": "337",
-          "date": "2026-10-19",
-          "localizedDescription": "- Other improvements and fixes",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-337/TwitchUnblock.ipa",
-          "size": 4231305,
-          "commit": "7510455c72b7845c006557bcec606033620890b5"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.6.57",
+      "version": "1.6.58",
       "versionDate": "2026-10-26",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-369/TwitchUnblock.ipa",
-      "size": 4458918
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-370/TwitchUnblock.ipa",
+      "size": 4493827
     }
   ],
   "news": []

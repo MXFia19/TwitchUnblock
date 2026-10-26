@@ -66,6 +66,12 @@ func parseMaster(_ content: String, baseURL: URL? = nil) -> MasterPlaylist {
     for i in 0..<lines.count {
         let line = lines[i].trimmingCharacters(in: .whitespaces)
         guard line.hasPrefix("#EXT-X-STREAM-INF") else { continue }
+        // Image verticale (Dual Format : IVS-GROUPS="portrait", liste v2
+        // d'usher avec multigroup_video) : jamais parmi les qualités
+        // habituelles, elle a sa bascule (portraitLive). Aucune source ne la
+        // renvoie aujourd'hui ; un proxy passé à la v2 ne l'y mêlerait pas.
+        let groups = (m3u8Attr(line, "IVS-GROUPS") ?? "").lowercased().split(separator: ",")
+        if groups.contains("portrait"), !groups.contains("landscape") { continue }
         // Deux formats : VIDEO="chunked" (l'ancien) et STABLE-VARIANT-ID="1080p60"
         // + IVS-VARIANT-SOURCE="source" (serveurs IVS, que renvoie le miroir
         // européen de Luminous). Sans ce dernier, la résolution servait de nom

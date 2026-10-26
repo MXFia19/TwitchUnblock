@@ -65,6 +65,8 @@ struct MainTabView: View {
     /// `verticalOn`, l'habituelle gardée pour le retour (`verticalBackup`).
     @State private var portraitMaster: MasterPlaylist? = nil
     @State private var verticalOn = false
+    /// Image verticale, lecteur maison : chat masqué (double-tap, bouton Chat).
+    @State private var verticalChatHidden = false
     @State private var verticalBackup: (links: QualityLinks, variants: [String: VariantInfo], source: String?)? = nil
     /// Feuille « Télécharger » (VOD en cours).
     @State private var showDownloadSheet = false
@@ -968,15 +970,25 @@ struct MainTabView: View {
         // Le mode « chat seul » n'a pas de colonne vidéo : il reste empilé.
         let split  = landscape && !chatOnly
         let mode   = store.landscapeChat
+        // Image verticale d'un direct (Dual Format), en portrait, lecteur
+        // maison : comme « Affichage vertical » dans l'app de Twitch, l'image
+        // prend toute la hauteur et le chat se pose sur son bas (ou se masque).
+        // Le lecteur d'Apple garde ses commandes au bas de l'image, sous un
+        // chat posé dessus : lui reste en 9:16 sur 62 % de l'écran au plus,
+        // le chat dessous.
+        let verticalOverlay = verticalOn && !split && !chatOnly && store.immersivePlayer
         let layout = split ? AnyLayout(HStackLayout(spacing: 0))
                            : AnyLayout(VStackLayout(spacing: 0))
         // Portrait : hauteur 16:9 imposée, le chat prend le reste ; image
-        // verticale d'un direct en « Dual Format » : 9:16, sans dépasser 62 %
-        // de l'écran (le chat garde de la place).
-        // Paysage : libre, la colonne donne toute sa hauteur à l'image.
-        let videoHeight: CGFloat? = split ? nil
+        // verticale avec le lecteur d'Apple : 9:16, 62 % de l'écran au plus.
+        // Paysage, et image verticale avec le lecteur maison : libre, l'image
+        // prend toute la hauteur.
+        let videoHeight: CGFloat? = split || verticalOverlay ? nil
             : verticalOn ? min(size.width * 16 / 9, size.height * 0.62) : size.width * 9 / 16
-        let videoMaxHeight: CGFloat? = split ? CGFloat.infinity : nil
+        let videoMaxHeight: CGFloat? = split || verticalOverlay ? CGFloat.infinity : nil
+        // Chat posé sur le bas de l'image verticale : 40 % de la hauteur, là
+        // où l'app de Twitch met le sien (le streamer laisse ce bas libre).
+        let verticalChatHeight: CGFloat? = verticalOverlay ? max(size.height * 0.4, 220) : nil
         // Largeur réglable, mais jamais sous 220 pt : en deçà les messages se
         // hachent en mots isolés, quel que soit le réglage.
         //
@@ -993,16 +1005,18 @@ struct MainTabView: View {
             guard split, mode != .column else { return chatWidth }
             return CGFloat(0)
         }()
-        let chatVisible = !split || mode != .hidden
-        let overlaying  = split && mode == .overlay
+        let chatVisible = verticalOverlay ? !verticalChatHidden : (!split || mode != .hidden)
+        let overlaying  = (split && mode == .overlay) || verticalOverlay
         // Le décor ne tient que dans le chat plein cadre ; la transparence ne
         // sert qu'au calque. Le reste (tailles) vient des réglages.
-        let chatStyle = store.chatStyle(chrome: !split, translucent: overlaying)
+        let chatStyle = store.chatStyle(chrome: !split && !verticalOverlay, translucent: overlaying)
         // Posé sur l'image, le chat couvre la droite de l'écran. Plutôt que de
         // se disputer les touchers avec les boutons du lecteur, on les écarte :
         // les barres du lecteur se replient de la largeur du chat et restent
         // donc entièrement visibles et cliquables, quelle que soit sa taille.
-        let controlsInset: CGFloat = overlaying ? (chatWidth ?? 0) : 0
+        // Image verticale : le chat couvre le bas, les barres remontent.
+        let controlsInset: CGFloat = split && mode == .overlay ? (chatWidth ?? 0) : 0
+        let controlsBottomInset: CGFloat = verticalOverlay && chatVisible ? (verticalChatHeight ?? 0) : 0
 
         layout {
             VStack(spacing: 0) {
@@ -1013,7 +1027,9 @@ struct MainTabView: View {
                 }
                 if !chatOnly {
                     videoSurface(links: links, landscape: split,
-                                 controlsInset: controlsInset)
+                                 controlsInset: controlsInset,
+                                 verticalLayout: verticalOverlay,
+                                 controlsBottomInset: controlsBottomInset)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .frame(height: videoHeight)
                 }
@@ -1033,15 +1049,22 @@ struct MainTabView: View {
             // Replié, `opacity` le masque et `allowsHitTesting` coupe les
             // touchers : sans ça on appuyait encore sur un chat invisible, un
             // cadrage nul ne bornant pas les zones tactiles.
+            //
+            // Image verticale (lecteur maison, portrait) : même principe en
+            // hauteur. Le chat a sa hauteur (verticalChatHeight) mais ne prend
+            // aucune place dans la pile : à zéro et aligné en bas, il déborde
+            // vers le haut, sur le bas de l'image.
             chatPane(style: chatStyle)
                 .frame(width: chatWidth)
-                .frame(maxHeight: .infinity)
+                .frame(height: verticalChatHeight)
+                .frame(maxHeight: verticalOverlay ? nil : CGFloat.infinity)
                 // Bord du chat : une petite poignée pour régler sa largeur,
                 // sans trait au repos (le chat se fond dans l'image).
                 .overlay(alignment: .leading) {
                     if split { chatResizeHandle(totalWidth: size.width) }
                 }
                 .frame(width: chatColumn, alignment: .trailing)
+                .frame(height: verticalOverlay ? 0 : nil, alignment: .bottom)
                 .opacity(chatVisible ? 1 : 0)
                 .allowsHitTesting(chatVisible)
         }
@@ -1142,9 +1165,13 @@ struct MainTabView: View {
     }
 
     /// Surface vidéo : lecteur natif (contrôles Apple) ou immersif (contrôles maison).
+    /// `verticalLayout` : image verticale en portrait, chat posé sur son bas
+    /// (`controlsBottomInset` : sa hauteur, 0 s'il est masqué).
     @ViewBuilder
     private func videoSurface(links: QualityLinks, landscape: Bool,
-                              controlsInset: CGFloat = 0) -> some View {
+                              controlsInset: CGFloat = 0,
+                              verticalLayout: Bool = false,
+                              controlsBottomInset: CGFloat = 0) -> some View {
         if store.immersivePlayer {
             ImmersivePlayer(
                 url: URL(string: links[currentQuality(links)] ?? "") ?? URL(string: "about:blank")!,
@@ -1155,9 +1182,11 @@ struct MainTabView: View {
                 info: overlayInfo,
                 onChannel: playerChannelLogin.map { l in { store.openChannelPage(l) } },
                 sleepLabel: sleepTimer.isActive ? sleepTimer.label : nil,
-                chatMode: store.landscapeChat,
+                chatMode: verticalLayout ? (verticalChatHidden ? .hidden : .overlay) : store.landscapeChat,
                 isLandscape: landscape,
                 controlsInset: controlsInset,
+                verticalLayout: verticalLayout,
+                controlsBottomInset: controlsBottomInset,
                 // Image verticale en paysage : jamais recadrée (il n'en
                 // resterait qu'une bande).
                 fillScreen: store.fillScreen && !verticalOn,
@@ -1194,7 +1223,13 @@ struct MainTabView: View {
                 onMenu:   { showPlayerMenu = true },
                 onRefresh: { reloadCurrent() },
                 onToggleChat: { withAnimation { store.landscapeChat = store.landscapeChat.next } },
-                onToggleChatVisibility: { withAnimation { store.toggleLandscapeChatVisibility() } },
+                onToggleChatVisibility: {
+                    // Image verticale : chat posé sur l'image, ou masqué.
+                    guard verticalLayout else { return withAnimation { store.toggleLandscapeChatVisibility() } }
+                    let hidden = !verticalChatHidden
+                    withAnimation { verticalChatHidden = hidden }
+                    return hidden ? .hidden : .overlay
+                },
                 onSleep: { showSleepSheet = true },
                 onBackToLive: { backToLiveAction?() },
                 onSeekToArchive: { offset in

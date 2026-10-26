@@ -210,9 +210,16 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   variants; the mirrors never have it) and, when there is one, shows a ▯
   button: in the player's top bar (Apple's player) or next to the bottom
   buttons (the app's player). It swaps the picture the way a quality change
-  does — no reload, chat and Live Activity stay — and the player becomes
-  taller in portrait (9:16, at most 62 % of the screen so the chat keeps some
-  room; never cropped in landscape). The vertical picture comes straight from
+  does — no reload, chat and Live Activity stay. In portrait with the app's
+  player, it looks like the Twitch app's “Vertical view”: the picture fills
+  the whole player (cropped a little on the sides, as on Twitch) and the chat
+  sits on its bottom 40 %, see-through; the controls move up above it, and a
+  double tap or the Chat button hides or shows the chat. Apple's player keeps
+  its controls at the bottom of the picture, so there the picture becomes a
+  9:16 box (at most 62 % of the screen) with the chat below. Never cropped in
+  landscape. A source that would one day list the vertical variants with the
+  usual ones (`IVS-GROUPS="portrait"`) keeps them out of the quality picker.
+  The vertical picture comes straight from
   Twitch (anonymous token), with its ad breaks muted and announced as on the
   other sources; Higher qualities stop until the next launch. The choice is
   remembered: the next streams that have a vertical picture start on it.

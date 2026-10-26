@@ -1220,6 +1220,13 @@ struct ImmersivePlayer: View {
     /// Marge droite des barres de commande : en chat superposé, le calque
     /// occupe cette largeur, et les boutons doivent rester à sa gauche.
     var controlsInset: CGFloat = 0
+    /// Image verticale d'un direct, en portrait, chat posé dessus (comme
+    /// « Affichage vertical » dans l'app de Twitch) : l'image remplit la
+    /// boîte, et le double-tap ou le bouton Chat montre ou masque le chat.
+    var verticalLayout: Bool = false
+    /// Hauteur du chat posé sur le bas de l'image (image verticale) : les
+    /// commandes remontent d'autant pour rester entièrement visibles.
+    var controlsBottomInset: CGFloat = 0
     /// Recadrer pour remplir l'écran au lieu de laisser des bandes noires.
     /// Coupe le haut et le bas de l'image : c'est le compromis, d'où le réglage.
     var fillScreen: Bool = false
@@ -1366,6 +1373,8 @@ struct ImmersivePlayer: View {
          chatMode: LandscapeChat = .column,
          isLandscape: Bool = false,
          controlsInset: CGFloat = 0,
+         verticalLayout: Bool = false,
+         controlsBottomInset: CGFloat = 0,
          fillScreen: Bool = false,
          canReturnToLive: Bool = false,
          streamStartedAt: Date? = nil,
@@ -1411,6 +1420,7 @@ struct ImmersivePlayer: View {
         self.onPull = onPull; self.onPullEnd = onPullEnd
         self.sleepLabel = sleepLabel; self.chatMode = chatMode
         self.isLandscape = isLandscape; self.controlsInset = controlsInset
+        self.verticalLayout = verticalLayout; self.controlsBottomInset = controlsBottomInset
         self.fillScreen = fillScreen; self.canReturnToLive = canReturnToLive
         self.streamStartedAt = streamStartedAt; self.archiveAvailable = archiveAvailable
         self.chapters = chapters; self.nowPlaying = nowPlaying
@@ -1439,8 +1449,10 @@ struct ImmersivePlayer: View {
 
     /// Le recadrage est réservé au paysage. En portrait la boîte fait déjà
     /// 16:9, comme l'image : il n'y a rien à remplir, et agrandir ne faisait
-    /// que couper les côtés.
-    private var croppingFill: Bool { fillScreen && isLandscape }
+    /// que couper les côtés. Sauf l'image verticale, qui remplit l'écran comme
+    /// dans l'app de Twitch (le streamer la compose pour : un peu des côtés
+    /// coupé sur les téléphones plus allongés que du 9:16).
+    private var croppingFill: Bool { (fillScreen && isLandscape) || verticalLayout }
 
     /// Repères de la barre « toute la diffusion », en secondes depuis le début.
     /// Tout est exprimé par rapport à l'horloge réelle : la base de temps HLS
@@ -1531,7 +1543,7 @@ struct ImmersivePlayer: View {
                     tapZone(.back)
                     tapZone(.forward)
                 }
-            } else if isLandscape {
+            } else if isLandscape || verticalLayout {
                 tapZone(.chat)
             }
 
@@ -1546,6 +1558,7 @@ struct ImmersivePlayer: View {
                     // prend la place (chat superposé) ; un long message se
                     // replie dans cette largeur au lieu de passer sous le chat.
                     .padding(.trailing, controlsInset)
+                    .padding(.bottom, controlsBottomInset)
                     .transition(.opacity)
             }
 
@@ -1861,7 +1874,7 @@ struct ImmersivePlayer: View {
                         .tGlass(in: Circle(), fallback: Color.black.opacity(0.45), clear: true)
                 }
                 .buttonStyle(.plain)
-                .offset(x: -controlsInset / 2)
+                .offset(x: -controlsInset / 2, y: -controlsBottomInset / 2)
             }
 
             VStack(spacing: 0) {
@@ -1870,6 +1883,9 @@ struct ImmersivePlayer: View {
                 bottomBar
             }
             .padding(TSpace.sm)
+            // Image verticale : la barre du bas passe au-dessus du chat posé
+            // sur le bas de l'image.
+            .padding(.bottom, controlsBottomInset)
             // Un peu d'air sous la barre du bas en paysage : les commandes y
             // descendent jusqu'au bord physique, et le trait de la barre
             // d'accueil passerait sinon au ras des boutons.
@@ -2314,7 +2330,7 @@ struct ImmersivePlayer: View {
         .background(Color.black.opacity(0.72))
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         // Centrée sur la partie visible de l'image, comme ▶ (chat superposé).
-        .offset(x: -controlsInset / 2)
+        .offset(x: -controlsInset / 2, y: -controlsBottomInset / 2)
         .transition(.opacity)
     }
 
@@ -2327,7 +2343,7 @@ struct ImmersivePlayer: View {
                 tapZone(.forward)
             }
         } else {
-            tapZone(isLandscape ? .chat : .plain)
+            tapZone(isLandscape || verticalLayout ? .chat : .plain)
         }
     }
 
@@ -2412,6 +2428,12 @@ struct ImmersivePlayer: View {
                 overlayButton(icon: chatMode.icon) {
                     onToggleChat()
                     flash(store.t(chatMode.next.labelKey))
+                    scheduleAutoHide()
+                }
+            } else if verticalLayout {
+                // Image verticale : chat posé dessus, ou masqué.
+                overlayButton(icon: chatMode.icon) {
+                    toggleChatVisibility()
                     scheduleAutoHide()
                 }
             }

@@ -3129,7 +3129,7 @@ func getClip(slug: String) async -> ClipPlayback? {
 func getVodMarkers(vodId: String) async -> VodMarkers {
     let q = """
     query($id: ID!) { video(id: $id) {
-      createdAt
+      createdAt broadcastType lengthSeconds
       moments(first: 50, momentRequestType: VIDEO_CHAPTER_MARKERS) {
         edges { node { positionMilliseconds durationMilliseconds description } }
       }
@@ -3174,5 +3174,7 @@ func getVodMarkers(vodId: String) async -> VodMarkers {
             return df.date(from: s)
         }()
     }
+    if (v["broadcastType"] as? String)?.uppercased() == "ARCHIVE" { out.broadcastStart = out.createdAt }
+    out.length = num(v["lengthSeconds"]) ?? 0
     return out
 }

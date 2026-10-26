@@ -331,6 +331,9 @@ extension Notification.Name {
     /// Appui sur la latence affichée : le lecteur ouvert revient au bord du
     /// direct par un saut, sans recharger le flux (comme le bouton « Direct »).
     static let tuGoLive = Notification.Name("TUGoLive")
+    /// « Aller à une heure » d'une archive (objet : la position en secondes) :
+    /// le lecteur immersif ouvert y saute.
+    static let tuSeekTo = Notification.Name("TUSeekTo")
     /// Calages répétés (objet : « immersive » ou « native », le lecteur) : la
     /// qualité est trop haute pour le débit, on la baisse.
     static let tuPlaybackStalling = Notification.Name("TUPlaybackStalling")

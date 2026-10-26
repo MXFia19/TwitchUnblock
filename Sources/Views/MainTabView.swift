@@ -138,6 +138,8 @@ struct MainTabView: View {
     /// (l'enregistrement s'ouvrait à la position du direct, pas à l'instant
     /// visé). Posés en même temps que `qualityLinks`.
     @State private var linksContentID = ""
+    /// Avis du lecteur déjà vus au lancement de cette lecture (accountNotice).
+    @State private var noticesSeenAtStart: Set<String> = []
     @State private var linksAreLive = false
     /// Incrémenté à chaque ouverture et fermeture du lecteur : la réponse
     /// d'un chargement dépassé (chaîne A arrivée après la chaîne B, lecteur
@@ -157,6 +159,13 @@ struct MainTabView: View {
     /// Clip en cours : VOD d'origine et position, pour en rejouer le chat.
     @State private var clipVodId: String? = nil
     @State private var clipOffset: Double = 0
+    /// Chaîne du clip en cours (« Voir dans la VOD »).
+    @State private var clipChannel: String? = nil
+    /// Archive d'un direct : début de la diffusion et durée de la VOD (heure
+    /// réelle dans la barre, « Aller à une heure »).
+    @State private var vodStartedAt: Date? = nil
+    @State private var vodLength: Double = 0
+    @State private var showGotoTime = false
     /// Vitesse du clip en cours : un clip part toujours à 1×, et celle qu'on
     /// y choisit n'est pas retenue pour les VODs.
     @State private var clipSpeed: Double = 1
@@ -458,11 +467,26 @@ struct MainTabView: View {
                 multiLiveFull: multi.isFull,
                 shareURL: shareURL,
                 shareDetail: shareDetail,
-                onCreateClip: createClipAction
+                onCreateClip: createClipAction,
+                onGotoTime: gotoTimeAction,
+                onClipToVod: clipToVodAction,
+                clipToVodDetail: clipToVodAction == nil ? nil : formatClipVodTime(clipOffset + vodPlaybackTime),
+                onDownloadClip: downloadClipAction
             )
             .presentationDetents([.medium])
             .inAppNoticeHost()
             .tTypeRoot()
+        }
+        // « Aller à une heure » d'une archive (menu ⋯ du lecteur).
+        .sheet(isPresented: $showGotoTime) {
+            if let start = vodStartedAt {
+                VodClockSheet(start: start, duration: vodLength, position: vodPlaybackTime) { seconds in
+                    NotificationCenter.default.post(name: .tuSeekTo, object: seconds)
+                }
+                .environmentObject(store)
+                .presentationDetents([.medium])
+                .tTypeRoot()
+            }
         }
         // Clip du direct en cours (menu ⋯ du lecteur).
         .sheet(isPresented: $showClipSheet) {
@@ -1221,6 +1245,8 @@ struct MainTabView: View {
                 onSpeedChange: { setForcedSpeed($0) },
                 onSpeedRestore: { restoreChosenSpeed($0) },
                 notice: slowNetworkNotice ?? hqNotice ?? accountNotice,
+                backgroundAudioURL: backgroundAudioURL(links),
+                vodStartedAt: vodStartedAt,
                 onProgress: { time in
                     // Pendant une bascule, `playerMode` désigne déjà la
                     // nouvelle source alors que le lecteur en place joue encore
@@ -1488,6 +1514,15 @@ struct MainTabView: View {
                                 cellular: NetworkStatus.shared.isCellular, variants: variants ?? qualityVariants)
     }
 
+    /// Qualité audio de ces liens, pour le son seul en arrière-plan (réglage
+    /// « Lecture en arrière-plan ») ; nil sans ce réglage, sans qualité audio,
+    /// ou si c'est déjà elle qui joue.
+    private func backgroundAudioURL(_ links: QualityLinks) -> URL? {
+        guard store.backgroundPlayback == "audio", !isAudioQuality(currentQuality(links)),
+              let key = links.keys.sorted().first(where: { isAudioQuality($0) }) else { return nil }
+        return links[key].flatMap { URL(string: $0) }
+    }
+
     /// Arrondi à la seconde : sinon la vue se recalculerait à chaque tick.
     private func updateLatency(_ value: Double?) {
         let rounded = (value ?? 0).rounded()
@@ -1717,14 +1752,26 @@ struct MainTabView: View {
     /// une fois. Revenu après « Connexion lente » (4 s plus tard), il était
     /// réannoncé à chaque baisse de qualité. Qualités supérieures sans
     /// abonnement : pas « sans pub », et plus après une première bascule
-    /// (chacune a son avis, hqNotice).
+    /// (chacune a son avis, hqNotice). Seulement au premier direct qui passe
+    /// par là (noticesSeenAtStart, noteSourceNotice).
     private var accountNotice: String? {
-        guard !slowNoticeShown else { return nil }
+        guard !slowNoticeShown, let key = accountNoticeKey,
+              !noticesSeenAtStart.contains(key) else { return nil }
+        return store.t(key)
+    }
+
+    private var accountNoticeKey: String? {
         switch menuLiveSource {
-        case "account"?: return store.t("src_account_toast")
-        case "account_hq"? where (hqLive?.switches ?? 0) == 0: return store.t("src_account_hq_toast")
+        case "account"?: return "src_account_toast"
+        case "account_hq"? where (hqLive?.switches ?? 0) == 0: return "src_account_hq_toast"
         default: return nil
         }
+    }
+
+    /// Avis de la source montré pour ce direct : retenu pour les suivants
+    /// (relu au lancement de chacun, noticesSeenAtStart).
+    private func noteSourceNotice() {
+        if let key = accountNoticeKey { store.markNoticeSeen(key) }
     }
 
     /// Source du direct pour le menu du lecteur : seulement pendant un direct
@@ -1793,6 +1840,55 @@ struct MainTabView: View {
         guard let mode = playerMode else { return false }
         if case .live = mode { return true }
         return false
+    }
+
+    /// Archive d'un direct dans le lecteur immersif : aller à une heure de la
+    /// diffusion. Pas pendant une bascule (la position serait l'ancienne).
+    private var gotoTimeAction: (() -> Void)? {
+        guard store.immersivePlayer, vodStartedAt != nil, vodLength > 0, currentVodId != nil,
+              !switchingSource, !loading, errorMsg == nil else { return nil }
+        return {
+            showPlayerMenu = false
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { showGotoTime = true }
+        }
+    }
+
+    /// Clip : sa VOD d'origine, à l'instant lu dans le clip.
+    private var clipToVodAction: (() -> Void)? {
+        guard isClipPlaying, let vod = clipVodId, !vod.isEmpty else { return nil }
+        return {
+            showPlayerMenu = false
+            let at = clipOffset + (vodPlaybackTime.isFinite ? vodPlaybackTime : 0)
+            store.setVodProgress(vod, time: at)
+            logger.info("LECTEUR", "Clip : VOD d'origine ouverte", "\(vod) · \(Int(at)) s")
+            playVod(vod, nil, nil, clipChannel)
+        }
+    }
+
+    /// Position d'un instant dans la VOD d'origine d'un clip (« 1:02:03 »).
+    private func formatClipVodTime(_ s: Double) -> String {
+        let t = max(0, Int(s.isFinite ? s : 0))
+        return t >= 3600 ? String(format: "%d:%02d:%02d", t / 3600, t / 60 % 60, t % 60)
+                         : String(format: "%d:%02d", t / 60, t % 60)
+    }
+
+    /// Clip : le télécharger dans la qualité lue, puis la feuille de partage.
+    private var downloadClipAction: (() -> Void)? {
+        guard isClipPlaying, let links = qualityLinks, !loading, errorMsg == nil,
+              let url = links[currentQuality(links)].flatMap({ URL(string: $0) }) else { return nil }
+        let title = statusTitle
+        return {
+            showPlayerMenu = false
+            InAppNotices.shared.show(InAppNotice(kind: .download, title: store.t("clip_dl_started"), body: title))
+            Task { @MainActor in
+                // Le menu se ferme d'abord : la feuille de partage s'ouvre par-dessus le lecteur.
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                let saved = await ClipSaver.save(url, title: title)
+                if !saved {
+                    InAppNotices.shared.show(InAppNotice(kind: .download, title: store.t("clip_dl_failed"), body: title))
+                }
+            }
+        }
     }
 
     private var isClipPlaying: Bool {
@@ -2047,6 +2143,7 @@ struct MainTabView: View {
         }
         playerMode    = mode
         if !keepVisibility { playerVisible = true }
+        noticesSeenAtStart = store.seenNotices
         // Une fermeture en plein fondu est remplacée par cette lecture (voir
         // stopPlayer).
         closingPlayer = false
@@ -2109,7 +2206,8 @@ struct MainTabView: View {
 
         loadGeneration += 1
         let gen = loadGeneration
-        clipVodId = nil; clipOffset = 0; clipSpeed = 1
+        clipVodId = nil; clipOffset = 0; clipSpeed = 1; clipChannel = nil
+        vodStartedAt = nil; vodLength = 0
         vodChapters = []
         vodMuted = []
         vodUnmuted = 0
@@ -2130,6 +2228,7 @@ struct MainTabView: View {
                     statusTitle     = clip.title.isEmpty ? (title ?? "Clip") : clip.title
                     clipVodId       = clip.vodId
                     clipOffset      = clip.vodOffset ?? 0
+                    clipChannel     = clip.broadcasterLogin
                     loading         = false
                     switchingSource = false
                 }
@@ -2171,6 +2270,8 @@ struct MainTabView: View {
                         guard gen == loadGeneration else { return }
                         vodChapters     = markers.chapters
                         vodMuted        = markers.muted
+                        vodStartedAt    = markers.broadcastStart
+                        vodLength       = markers.length
                         qualityLinks    = links
                         linksContentID  = playerContentID
                         linksAreLive    = false
@@ -2269,11 +2370,12 @@ struct MainTabView: View {
                         loading           = false
                         switchingSource   = false
                         startLiveTimers(channel: channel)
+                        noteSourceNotice()
                         // Pub au début du flux du compte : annoncée, et retour
                         // prévu à sa fin.
                         if let hq, hq.live.onAdFree {
                             let q = hqQualityLabel(hq.live.adFree, hq.live.adFreeVariants)
-                            showHQNotice(store.t("hq_ad_fallback").replacingOccurrences(of: "{q}", with: q))
+                            showHQNotice(store.t("hq_ad_fallback").replacingOccurrences(of: "{q}", with: q), once: "hq_ad_fallback")
                             scheduleHQReturn(after: hq.wait + 1)
                         }
                     }
@@ -2344,6 +2446,9 @@ struct MainTabView: View {
             pull.y             = 0
             liveAvatar         = nil
             clipVodId          = nil
+            clipChannel        = nil
+            vodStartedAt       = nil
+            vodLength          = 0
             clipOffset         = 0
             clipSpeed          = 1
             liveGame           = ""
@@ -2481,7 +2586,7 @@ struct MainTabView: View {
         qualityVariants = live.adFreeVariants
         liveSourceUsed = live.adFreeSource
         let q = hqQualityLabel(live.adFree, live.adFreeVariants)
-        showHQNotice(store.t("hq_ad_fallback").replacingOccurrences(of: "{q}", with: q))
+        showHQNotice(store.t("hq_ad_fallback").replacingOccurrences(of: "{q}", with: q), once: "hq_ad_fallback")
         logger.info("PUB", "Pause pub Twitch : source sans pub", "\(q) · \(left) s")
         if live.quickAds >= 2 {
             logger.warn("PUB", "Pubs répétées sur le flux du compte", "reste sur la source sans pub")
@@ -2571,7 +2676,7 @@ struct MainTabView: View {
         qualityVariants = live.accountVariants
         liveSourceUsed = "account"
         let q = hqQualityLabel(live.account, live.accountVariants)
-        showHQNotice(store.t("hq_ad_back").replacingOccurrences(of: "{q}", with: q))
+        showHQNotice(store.t("hq_ad_back").replacingOccurrences(of: "{q}", with: q), once: "hq_ad_back")
         logger.info("PUB", "Fin de la pause pub : retour au flux du compte", q)
     }
 
@@ -2661,8 +2766,14 @@ struct MainTabView: View {
         return qualityText(key, store.lang)
     }
 
-    /// Bascule annoncée dans le lecteur, 4 s.
-    private func showHQNotice(_ text: String) {
+    /// Bascule annoncée dans le lecteur, 4 s. `once` : avis des pauses pub,
+    /// montré la première fois seulement — on sait ensuite ce qu'il dit, il
+    /// revenait à chaque pub.
+    private func showHQNotice(_ text: String, once key: String? = nil) {
+        if let key {
+            guard !store.seenNotices.contains(key) else { return }
+            store.markNoticeSeen(key)
+        }
         hqNotice = text
         hqNoticeTask?.cancel()
         hqNoticeTask = Task { @MainActor in

@@ -44,6 +44,13 @@ struct PlayerMenuSheet: View {
     var shareDetail: String? = nil
     /// Direct (pas son rembobinage) : en créer un clip.
     var onCreateClip: (() -> Void)? = nil
+    /// Archive d'un direct : aller à une heure de la diffusion (« 22 h 15 »).
+    var onGotoTime: (() -> Void)? = nil
+    /// Clip : sa VOD d'origine, à l'instant lu (position dans la VOD à droite).
+    var onClipToVod: (() -> Void)? = nil
+    var clipToVodDetail: String? = nil
+    /// Clip : le télécharger (feuille de partage d'iOS).
+    var onDownloadClip: (() -> Void)? = nil
 
     @EnvironmentObject private var store: AppStore
     @Environment(\.dismiss) private var dismiss
@@ -187,6 +194,23 @@ struct PlayerMenuSheet: View {
                     } else if canRewind {
                         row(icon: "gobackward", title: store.t("rewind"),
                             detail: store.t("rewind_sub"), action: onRewind)
+                        divider
+                    }
+
+                    if let onGotoTime {
+                        row(icon: "clock", title: store.t("vod_goto_time"), action: onGotoTime)
+                        divider
+                    }
+
+                    if let onClipToVod {
+                        row(icon: "film.stack", title: store.t("clip_full_vod"),
+                            detail: clipToVodDetail, action: onClipToVod)
+                        divider
+                    }
+
+                    if let onDownloadClip {
+                        row(icon: "arrow.down.circle", title: store.t("clip_download"),
+                            detail: store.t("clip_download_sub"), action: onDownloadClip)
                         divider
                     }
 

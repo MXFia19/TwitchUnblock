@@ -1351,6 +1351,8 @@ struct SettingsView: View {
                 toggleRow(store.t("pip_on_leave"), store.t("pip_on_leave_sub"),
                           $store.pipOnLeave, log: "PiP en quittant le lecteur")
                 Divider().background(Color.tBorder)
+                backgroundPlaybackRow
+                Divider().background(Color.tBorder)
                 toggleRow(store.t("low_latency"), store.t("low_latency_sub"),
                           $store.lowLatency, log: "Mode faible latence")
                 Divider().background(Color.tBorder)
@@ -1445,6 +1447,30 @@ struct SettingsView: View {
             }
         }
         .padding(.top, 8)
+    }
+
+    /// Écran verrouillé ou autre app, sans PiP : la lecture continue, passe au
+    /// son seul ou s'arrête (ImmersivePlayerModel.enteredBackground).
+    @ViewBuilder private var backgroundPlaybackRow: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(store.t("bg_playback"))
+                .font(.tCardTitle)
+                .foregroundColor(.tText)
+            Text(store.t("bg_playback_sub"))
+                .font(.tMeta)
+                .foregroundColor(.tMuted)
+                .fixedSize(horizontal: false, vertical: true)
+            Picker("", selection: $store.backgroundPlayback) {
+                Text(store.t("bg_playback_continue")).tag("continue")
+                Text(store.t("bg_playback_audio")).tag("audio")
+                Text(store.t("bg_playback_pause")).tag("pause")
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .onChange(of: store.backgroundPlayback) { value in
+                logger.settingChanged("Lecture en arrière-plan", value: value)
+            }
+        }
     }
 
     /// Audio spatial (AirPods) : seul choix qu'iOS laisse aux apps (voir SpatialAudio).

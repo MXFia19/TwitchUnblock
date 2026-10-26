@@ -152,6 +152,19 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
     }
     @Published private(set) var forcedSpeed: SpeedChange?
     private var rateObs: NSObjectProtocol?
+    /// Réglage « Lecture en arrière-plan » (AppStore.backgroundPlayback) :
+    /// qualité audio du contenu en cours, donnée par la vue (nil s'il n'y en a
+    /// pas, ou si c'est déjà elle) ; pendant le son seul, l'adresse lue avant
+    /// (rendue au retour) et celle de l'audio — un autre chargement entre-temps
+    /// annule le retour.
+    var backgroundAudioURL: URL?
+    /// « Aller à une heure » (.tuSeekTo).
+    private var seekObs: NSObjectProtocol?
+    private var urlBeforeBackground: URL?
+    private var audioInUse: URL?
+    /// Adresse du dernier élément chargé (load).
+    private var currentURL: URL?
+    private var backgroundObs: [NSObjectProtocol] = []
     /// Vitesse d'avant le retour à 1× au bord d'un enregistrement en cours
     /// (fait ici, ou par AVPlayer). Un retour en arrière la laissait à 1× pour
     /// toute la lecture, et la choisir de nouveau près du bord la faisait
@@ -340,10 +353,65 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
             guard let self, self.isLive else { return }
             self.goLive()
         }
+        seekObs = NotificationCenter.default.addObserver(
+            forName: .tuSeekTo, object: nil, queue: .main
+        ) { [weak self] note in
+            guard let self, !self.isLive, let s = note.object as? Double else { return }
+            self.seek(to: s)
+        }
         interruptions = PlaybackInterruptions(name: "lecteur") { [weak self] since in
             self?.resumeAfterInterruption(since: since)
         }
         interruptions?.watch(player)
+        // Écran verrouillé, autre app : le réglage « Lecture en arrière-plan ».
+        // Observé ici et pas par la vue : SwiftUI ne met plus rien à jour une
+        // fois l'app en arrière-plan.
+        backgroundObs = [
+            NotificationCenter.default.addObserver(
+                forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main
+            ) { [weak self] _ in self?.enteredBackground() },
+            NotificationCenter.default.addObserver(
+                forName: UIApplication.willEnterForegroundNotification, object: nil, queue: .main
+            ) { [weak self] _ in self?.returnedToForeground() },
+        ]
+    }
+
+    /// App passée en arrière-plan sans PiP : la lecture continue (réglage par
+    /// défaut), passe au son seul, ou s'arrête. Une seconde plus tard : le
+    /// PiP automatique démarre juste après le passage, et l'emporte.
+    private func enteredBackground() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
+            guard let self, !self.tornDown, !self.pipActive, !PlayerPiP.shared.active,
+                  self.isPlaying, !self.failed,
+                  UIApplication.shared.applicationState == .background else { return }
+            switch UserDefaults.standard.string(forKey: "cfg_background_playback") {
+            case "pause"?:
+                logger.info("LECTEUR", "Arrière-plan : lecture mise en pause", "réglage")
+                self.setPlaying(false)
+            case "audio"?:
+                guard let audio = self.backgroundAudioURL, let now = self.currentURL, now != audio else { return }
+                logger.info("LECTEUR", "Arrière-plan : son seul", "réglage")
+                self.audioInUse = audio
+                self.urlBeforeBackground = now
+                self.switchQuality(to: audio)
+            default:
+                break
+            }
+        }
+    }
+
+    /// Retour au premier plan après le son seul : la qualité d'avant revient
+    /// (en pause si la lecture y a été mise entre-temps), sauf si un autre
+    /// chargement l'a remplacée.
+    private func returnedToForeground() {
+        guard !tornDown, let back = urlBeforeBackground, let audio = audioInUse,
+              currentURL == audio else { return }
+        urlBeforeBackground = nil
+        audioInUse = nil
+        let wasPlaying = isPlaying
+        logger.info("LECTEUR", "Retour au premier plan : image rétablie", nil)
+        switchQuality(to: back)
+        if !wasPlaying { setPlaying(false) }
     }
 
     /// Réglage « Audio spatial » changé : l'élément est recréé au même endroit
@@ -421,6 +489,10 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
     func load(url: URL, seek: Double = 0, isLive: Bool? = nil,
               resume: Bool = false, behind: Double? = nil, exact: Bool = false) {
         if let isLive { self.isLive = isLive }
+        // Autre chargement que le son seul : plus de retour prévu à l'image
+        // d'avant (autre qualité, source, contenu).
+        currentURL = url
+        if url != audioInUse { audioInUse = nil; urlBeforeBackground = nil }
         stallTimes = []
         // Nouvel élément : la vitesse tenue se mesure de nouveau. La vitesse
         // d'avant le bord d'un enregistrement reste à rendre (retour au
@@ -1005,6 +1077,9 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
         if let o = jumpObs { NotificationCenter.default.removeObserver(o); jumpObs = nil }
         if let o = failObs { NotificationCenter.default.removeObserver(o); failObs = nil }
         if let o = stallObs { NotificationCenter.default.removeObserver(o); stallObs = nil }
+        for o in backgroundObs { NotificationCenter.default.removeObserver(o) }
+        backgroundObs = []
+        if let o = seekObs { NotificationCenter.default.removeObserver(o); seekObs = nil }
         mutedObs = nil
         clearNowPlaying()
     }
@@ -1016,6 +1091,8 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
         if let o = rateObs { NotificationCenter.default.removeObserver(o) }
         if let o = jumpObs { NotificationCenter.default.removeObserver(o) }
         if let o = failObs { NotificationCenter.default.removeObserver(o) }
+        for o in backgroundObs { NotificationCenter.default.removeObserver(o) }
+        if let o = seekObs { NotificationCenter.default.removeObserver(o) }
         for (command, target) in remoteTargets { command.removeTarget(target) }
         // Libéré pendant un PiP (lecteur fermé sans démontage) : la session
         // n'est plus tenue par personne d'ici.
@@ -1270,6 +1347,12 @@ struct ImmersivePlayer: View {
     var onSpeedRestore: (Double) -> Void = { _ in }
     /// Annonce brève au lancement (direct servi par le compte, sans pub).
     var notice: String? = nil
+    /// Qualité audio du contenu, pour le son seul en arrière-plan (réglage
+    /// « Lecture en arrière-plan ») ; nil si le réglage ne la demande pas.
+    var backgroundAudioURL: URL? = nil
+    /// Archive d'un direct : début de la diffusion, pour l'heure réelle de
+    /// l'instant lu (« 22:15 ») à côté de la position.
+    var vodStartedAt: Date? = nil
 
     var onProgress: (Double) -> Void = { _ in }
     var onLatency:  (Double?) -> Void = { _ in }
@@ -1387,6 +1470,8 @@ struct ImmersivePlayer: View {
          onSpeedChange: @escaping (Double) -> Void = { _ in },
          onSpeedRestore: @escaping (Double) -> Void = { _ in },
          notice: String? = nil,
+         backgroundAudioURL: URL? = nil,
+         vodStartedAt: Date? = nil,
          onProgress: @escaping (Double) -> Void = { _ in },
          onLatency:  @escaping (Double?) -> Void = { _ in },
          onBehind:   @escaping (Double?) -> Void = { _ in },
@@ -1425,6 +1510,8 @@ struct ImmersivePlayer: View {
         self.streamStartedAt = streamStartedAt; self.archiveAvailable = archiveAvailable
         self.chapters = chapters; self.nowPlaying = nowPlaying
         self.speed = speed; self.onSpeedChange = onSpeedChange; self.notice = notice
+        self.backgroundAudioURL = backgroundAudioURL
+        self.vodStartedAt = vodStartedAt
         self.onSpeedRestore = onSpeedRestore
         self.mutedRanges = mutedRanges; self.unmutedCount = unmutedCount
         self.onReduce = onReduce; self.onClose = onClose
@@ -1649,6 +1736,7 @@ struct ImmersivePlayer: View {
             // bord ne joue qu'en direct). Fixé à faux par une vue ouverte sur
             // l'enregistrement, il le restait au retour au direct.
             model.lowLatency = store.lowLatency
+            model.backgroundAudioURL = backgroundAudioURL
             model.setNowPlaying(nowPlaying)
             // L'élément se charge encore : rien n'a joué à 1×. Une vitesse
             // retenue est annoncée, elle ne doit pas surprendre.
@@ -1687,6 +1775,7 @@ struct ImmersivePlayer: View {
             onSpeedRestore(release.value)
         }
         .onChange(of: nowPlaying) { model.setNowPlaying($0) }
+        .onChange(of: backgroundAudioURL) { model.backgroundAudioURL = $0 }
         // Son rétabli sur des passages coupés : on le signale une fois.
         .onChange(of: unmutedCount) { n in
             if n > 0 { flash(store.t("vod_unmuted"), duration: 2_500_000_000) }
@@ -2199,6 +2288,11 @@ struct ImmersivePlayer: View {
                 HStack(spacing: 0) {
                     Text("\(timeLabel(dragging ? dragValue : model.position)) / \(timeLabel(model.endTime))")
                         .foregroundColor(dragging ? .tPurple : .white)
+                    // Heure réelle de la diffusion à cet instant (archives).
+                    if let clock = clockLabel(dragging ? dragValue : model.position) {
+                        Text(" · " + clock)
+                            .foregroundColor(.white.opacity(0.7))
+                    }
                     // Vitesse retenue d'une VOD à l'autre : toujours visible
                     // quand elle n'est pas normale.
                     if model.speed != 1 {
@@ -2554,9 +2648,17 @@ struct ImmersivePlayer: View {
 
     /// « 1:23:45 · Just Chatting » : l'instant, et le chapitre où il tombe.
     private func scrubLabel(_ t: Double) -> String {
-        guard chapters.count > 1, let c = chapter(at: t) else { return timeLabel(t) }
+        let time = clockLabel(t).map { "\(timeLabel(t)) · \($0)" } ?? timeLabel(t)
+        guard chapters.count > 1, let c = chapter(at: t) else { return time }
         let title = c.title.count > 28 ? String(c.title.prefix(27)) + "…" : c.title
-        return "\(timeLabel(t)) · \(title)"
+        return "\(time) · \(title)"
+    }
+
+    /// Heure réelle d'un instant d'une archive (« 22:15 », réglages de
+    /// l'appareil) ; nil hors archive.
+    private func clockLabel(_ t: Double) -> String? {
+        guard !isLive, let start = vodStartedAt, t.isFinite else { return nil }
+        return start.addingTimeInterval(max(0, t)).formatted(date: .omitted, time: .shortened)
     }
 
     private func chapter(at t: Double) -> VodChapter? {

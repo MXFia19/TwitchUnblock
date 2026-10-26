@@ -699,5 +699,14 @@
  "🌍 Twitch : direct bloqué dans ce pays": ["🌍 Twitch: live blocked in this country", "🌍 Twitch: directo bloqueado en este país", "🌍 Twitch: трансляция заблокирована в этой стране"],
  "qualités, par Twitch": ["qualities, from Twitch", "calidades, desde Twitch", "качеств, от Twitch"],
  "Retour à l'image habituelle": ["Back to the regular video", "Vuelta al vídeo habitual", "Возврат к обычному видео"],
- "erreur GQL — session conservée": ["GQL error — session kept", "error de GQL — sesión conservada", "ошибка GQL — сессия сохранена"]
+ "erreur GQL — session conservée": ["GQL error — session kept", "error de GQL — sesión conservada", "ошибка GQL — сессия сохранена"],
+ "Arrière-plan : lecture mise en pause": ["Background: playback paused", "Segundo plano: reproducción en pausa", "Фон: воспроизведение на паузе"],
+ "Arrière-plan : son seul": ["Background: audio only", "Segundo plano: solo audio", "Фон: только звук"],
+ "Clip : VOD d'origine ouverte": ["Clip: original VOD opened", "Clip: VOD original abierto", "Клип: открыта исходная запись"],
+ "Clip téléchargé": ["Clip downloaded", "Clip descargado", "Клип скачан"],
+ "Lecture en arrière-plan": ["Background playback", "Reproducción en segundo plano", "Воспроизведение в фоне"],
+ "réglage": ["setting", "ajuste", "настройка"],
+ "Retour au premier plan : image rétablie": ["Back to the foreground: video restored", "Vuelta al primer plano: vídeo restablecido", "Возврат на передний план: видео восстановлено"],
+ "Téléchargement du clip impossible": ["Couldn't download the clip", "No se pudo descargar el clip", "Не удалось скачать клип"],
+ "Téléchargement du clip…": ["Downloading the clip…", "Descargando el clip…", "Загрузка клипа…"]
 }

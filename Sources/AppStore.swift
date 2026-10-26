@@ -73,6 +73,17 @@ final class AppStore: ObservableObject {
     /// aller-retour. Oublié à la connexion suivante (adoptToken).
     @Published var oauthExpired = false
 
+    /// Avis du lecteur déjà montrés une fois (direct par le compte, pauses
+    /// pub des qualités supérieures) : on sait ce qu'ils disent, ils ne
+    /// reviennent plus à chaque direct ni à chaque pub.
+    private(set) var seenNotices: Set<String> =
+        Set(UserDefaults.standard.stringArray(forKey: "cfg_seen_notices") ?? [])
+
+    func markNoticeSeen(_ key: String) {
+        guard seenNotices.insert(key).inserted else { return }
+        UserDefaults.standard.set(Array(seenNotices).sorted(), forKey: "cfg_seen_notices")
+    }
+
     /// Vérifie la session web : effacée si Twitch la refuse, ou si elle est à
     /// un autre compte que celui de l'app. Une panne réseau ne l'efface pas :
     /// couper la session sur un wifi capricieux serait pire que de la laisser
@@ -392,6 +403,14 @@ final class AppStore: ObservableObject {
     /// la règle. Propre à l'appareil (pas synchronisé, voir SettingsSync).
     @Published var pipOnLeave: Bool = false {
         didSet { UserDefaults.standard.set(pipOnLeave, forKey: "cfg_pip_on_leave") }
+    }
+
+    /// Écran verrouillé ou autre app, sans PiP (lecteur immersif) :
+    /// "continue" (la lecture continue, comme avant), "audio" (qualité audio
+    /// le temps de l'arrière-plan, l'image revient au retour) ou "pause".
+    /// Propre à l'appareil.
+    @Published var backgroundPlayback: String = "continue" {
+        didSet { UserDefaults.standard.set(backgroundPlayback, forKey: "cfg_background_playback") }
     }
 
     /// Place du chat en paysage : colonne, superposé à l'image, ou replié.
@@ -953,6 +972,8 @@ final class AppStore: ObservableObject {
         dropsNotify        = ud.object(forKey: "cfg_drops_notify")    as? Bool ?? true
         fillScreen         = ud.object(forKey: "cfg_fill_screen") as? Bool ?? false
         pipOnLeave         = ud.object(forKey: "cfg_pip_on_leave") as? Bool ?? false
+        backgroundPlayback = ["audio", "pause"].contains(ud.string(forKey: "cfg_background_playback") ?? "")
+                             ? ud.string(forKey: "cfg_background_playback")! : "continue"
         landscapeChat      = LandscapeChat(rawValue: ud.string(forKey: "cfg_landscape_chat") ?? "")
                              ?? .column
         if landscapeChat != .hidden { lastShownLandscapeChat = landscapeChat }

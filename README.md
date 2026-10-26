@@ -97,6 +97,19 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   lock screen activity.
   Starting it shrinks the player into the mini player, so you can browse the app right away (no more black full-size player to close).
   The PiP window's expand button brings the player back full size on the same video, without reloading (with the app's player, tapping the mini player does too).
+  A followed raid or the next VOD of **Play all** keeps playing in the same window: the player only changes what it plays (the window used to close while the sound went on).
+* 🌙 **Background playback** — Settings → Player: when the screen locks or you
+  switch to another app without Picture-in-Picture, the video keeps playing
+  (default), switches to **audio only** (much less data; the picture comes
+  back, same quality, when you return to the app), or **pauses**.
+* 🕰️ **Real time in VODs** — on a stream archive, the time of day each moment
+  was streamed shows next to the timer and on the scrub bubble (“1:02:03 ·
+  10:15 PM”), and ⋯ → **Go to a time of day** jumps straight to it (with the
+  day too when the stream ran past midnight).
+* ✂️ **Clips: full VOD and download** — ⋯ → **Watch in the VOD** opens the
+  original VOD at the moment you're watching in the clip; ⋯ → **Download the
+  clip** saves the MP4 in the quality being played, through iOS's share sheet
+  (Save Video, Files, AirDrop…).
 * 🪟 **PiP when leaving the player** — optional, off by default (Settings → Player): swiping a live or VOD down, or the back arrow, opens it in Picture-in-Picture instead of the mini player while it plays (app's player; Apple's player keeps the mini player).
 * 🔒 **Lock Screen and Dynamic Island** — the live or VOD you're watching
   (channel, title, playback) as a Live Activity; turn it off in Settings →
@@ -171,6 +184,8 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   answer, the usual sources take over. Picking a source in the ⋯ menu skips
   your account for that channel until the app restarts.
 * 💎 **Higher qualities (if the channel offers them)** — off by default
+  (each of its notices, like the one for a stream played through your
+  account, shows only once, then stays quiet)
   (Settings → Player, under Watch ad-free with my sub). Channels on Enhanced
   Broadcasting can send 1440p and above, sometimes in HEVC or AV1; the app
   then tells Twitch which codecs the device decodes (`supported_codecs`: H.264

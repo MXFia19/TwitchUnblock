@@ -155,13 +155,15 @@ final class UpdateChecker: ObservableObject {
     }
 
     /// Ouvre l'app de sideload installée (Feather, SideStore, AltStore) pour
-    /// faire la mise à jour ; à défaut, la page des versions sur GitHub.
+    /// faire la mise à jour ; à défaut, la page « Mettre à jour l'app » du
+    /// site, qui dit quoi faire selon l'outil (ESign, GBox, Scarlet, KSign,
+    /// TrollStore…). La page des versions sur GitHub ne l'expliquait pas.
     static func openSource() {
         let candidates = ["feather://", "sidestore://", "altstore://"]
             .compactMap(URL.init(string:))
             .filter { UIApplication.shared.canOpenURL($0) }
         let target = candidates.first
-            ?? URL(string: "https://github.com/MXFia19/TwitchUnblock/releases")!
+            ?? URL(string: "https://twitchunblock.vercel.app/?update=ios")!
         UIApplication.shared.open(target)
     }
 

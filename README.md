@@ -202,6 +202,26 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   the next break. The source shows as “Your account (higher quality)” in the
   ⋯ menu; picking a source there leaves your account for that channel, as
   with a sub.
+* 📱 **Vertical streams (Dual Format)** — some streamers (mobile games like
+  Clash Royale, IRL) send Twitch a vertical 9:16 picture next to the usual
+  one, which the Twitch app shows when the phone is held upright. Once a live
+  has started, the app looks for it (Twitch's v2 playlist with
+  `multigroup_video`, the only one that lists the `IVS-GROUPS="portrait"`
+  variants; the mirrors never have it) and, when there is one, shows a ▯
+  button: in the player's top bar (Apple's player) or next to the bottom
+  buttons (the app's player). It swaps the picture the way a quality change
+  does — no reload, chat and Live Activity stay — and the player becomes
+  taller in portrait (9:16, at most 62 % of the screen so the chat keeps some
+  room; never cropped in landscape). The vertical picture comes straight from
+  Twitch (anonymous token), with its ad breaks muted and announced as on the
+  other sources; Higher qualities stop until the next launch. The choice is
+  remembered: the next streams that have a vertical picture start on it.
+* 🌍 **Lives blocked in your country** — when Twitch keeps a live to some
+  countries (broadcast rights, “premium content … geo_blocked” in the Twitch
+  app) and no source can reach it, the app says so instead of “No source
+  answered”. It reads it from the playback token (`geoblock_reason`) or from
+  Twitch's refusal; the mirrors are still tried, in case one is in an allowed
+  country.
 * 📢 **Channel ad breaks explained** — during an ad break (or the pre-roll
   when a stream opens), Twitch replaces the stream with its purple
   “Commercial break in progress” screen or a real ad. The player now says so,

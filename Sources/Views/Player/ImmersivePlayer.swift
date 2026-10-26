@@ -1245,6 +1245,10 @@ struct ImmersivePlayer: View {
     var multiLiveOn = false
     var multiLiveFull = false
     var onRewind: (() -> Void)? = nil
+    /// Direct en « Dual Format » : passer à son image verticale ou en revenir
+    /// (bouton de la barre, seulement pour ces directs).
+    var onVertical: (() -> Void)? = nil
+    var verticalOn = false
     /// Titre, chaîne et image affichés sur l'écran verrouillé.
     var nowPlaying = NowPlayingMeta()
     /// Vitesse voulue hors direct : celle des VODs, retenue (store.vodSpeed),
@@ -1393,6 +1397,8 @@ struct ImmersivePlayer: View {
          multiLiveOn: Bool = false,
          multiLiveFull: Bool = false,
          onRewind: (() -> Void)? = nil,
+         onVertical: (() -> Void)? = nil,
+         verticalOn: Bool = false,
          onAdBreak: @escaping (Int?) -> Void = { _ in },
          onFailed: @escaping () -> Void = {},
          onPiPStart: @escaping () -> Void = {},
@@ -1418,6 +1424,7 @@ struct ImmersivePlayer: View {
         self.onBackToLive = onBackToLive; self.onSeekToArchive = onSeekToArchive
         self.onMultiLive = onMultiLive; self.multiLiveOn = multiLiveOn
         self.multiLiveFull = multiLiveFull; self.onRewind = onRewind
+        self.onVertical = onVertical; self.verticalOn = verticalOn
         self.onAdBreak = onAdBreak; self.onFailed = onFailed
         // PiP : démarré, le parent réduit le lecteur ; agrandi depuis la
         // fenêtre, il le rend en grand. Rappels du modèle (délégué d'AVKit).
@@ -2216,6 +2223,18 @@ struct ImmersivePlayer: View {
                         .clipShape(Capsule())
                     }
                     .buttonStyle(.plain)
+                }
+
+                // Direct en « Dual Format » : son image verticale, ou retour à
+                // l'habituelle. Seulement pour ces directs, hors personnalisation
+                // (comme le retour au direct).
+                if let onVertical {
+                    overlayButton(icon: verticalOn ? "rectangle" : "rectangle.portrait") {
+                        onVertical()
+                        flash(store.t(verticalOn ? "vertical_off" : "vertical_on"))
+                        scheduleAutoHide()
+                    }
+                    .accessibilityLabel(store.t("vertical_format"))
                 }
 
                 // Son, PiP, recharger, chat, rotation… dans l'ordre choisi

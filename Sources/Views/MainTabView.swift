@@ -60,6 +60,12 @@ struct MainTabView: View {
     /// Bascule annoncée dans le lecteur (4 s), et son effacement.
     @State private var hqNotice: String? = nil
     @State private var hqNoticeTask: Task<Void, Never>? = nil
+    /// Image verticale du direct en cours (Dual Format, voir portraitLive),
+    /// quand Twitch en a une ; jouée à la place de l'habituelle quand
+    /// `verticalOn`, l'habituelle gardée pour le retour (`verticalBackup`).
+    @State private var portraitMaster: MasterPlaylist? = nil
+    @State private var verticalOn = false
+    @State private var verticalBackup: (links: QualityLinks, variants: [String: VariantInfo], source: String?)? = nil
     /// Feuille « Télécharger » (VOD en cours).
     @State private var showDownloadSheet = false
     /// Multi-live : la sélection, et la mosaïque ouverte.
@@ -964,9 +970,12 @@ struct MainTabView: View {
         let mode   = store.landscapeChat
         let layout = split ? AnyLayout(HStackLayout(spacing: 0))
                            : AnyLayout(VStackLayout(spacing: 0))
-        // Portrait : hauteur 16:9 imposée, le chat prend le reste.
+        // Portrait : hauteur 16:9 imposée, le chat prend le reste ; image
+        // verticale d'un direct en « Dual Format » : 9:16, sans dépasser 62 %
+        // de l'écran (le chat garde de la place).
         // Paysage : libre, la colonne donne toute sa hauteur à l'image.
-        let videoHeight: CGFloat? = split ? nil : size.width * 9 / 16
+        let videoHeight: CGFloat? = split ? nil
+            : verticalOn ? min(size.width * 16 / 9, size.height * 0.62) : size.width * 9 / 16
         let videoMaxHeight: CGFloat? = split ? CGFloat.infinity : nil
         // Largeur réglable, mais jamais sous 220 pt : en deçà les messages se
         // hachent en mots isolés, quel que soit le réglage.
@@ -1149,7 +1158,9 @@ struct MainTabView: View {
                 chatMode: store.landscapeChat,
                 isLandscape: landscape,
                 controlsInset: controlsInset,
-                fillScreen: store.fillScreen,
+                // Image verticale en paysage : jamais recadrée (il n'en
+                // resterait qu'une bande).
+                fillScreen: store.fillScreen && !verticalOn,
                 canReturnToLive: dvrSourceChannel != nil,
                 streamStartedAt: liveStartedAt,
                 archiveAvailable: liveDvrVideoId != nil,
@@ -1200,6 +1211,8 @@ struct MainTabView: View {
                 multiLiveOn: menuMultiLiveOn,
                 multiLiveFull: multi.isFull,
                 onRewind: dvrSourceChannel == nil ? rewindAction : nil,
+                onVertical: verticalAvailable ? { toggleVertical() } : nil,
+                verticalOn: verticalOn,
                 // Qualités supérieures sans abonnement : pauses pub et échec
                 // du flux du compte (voir adBreakChanged).
                 onAdBreak: { adBreakChanged($0) },
@@ -1239,9 +1252,16 @@ struct MainTabView: View {
                 wantedQuality: hqLive?.accountQuality,
                 onAdBreak: { adBreakChanged($0) },
                 onPiPStart: { pipStarted() },
-                onPiPRestore: { pipRestore() }
+                onPiPRestore: { pipRestore() },
+                videoAspect: verticalOn ? 9 / 16 : 16 / 9
             )
         }
+    }
+
+    /// Le direct en cours a une image verticale (Dual Format) qu'on peut
+    /// choisir : pas pendant son rembobinage.
+    private var verticalAvailable: Bool {
+        portraitMaster != nil && linksAreLive && dvrSourceChannel == nil
     }
 
     /// Bandeau au-dessus de la vidéo (mode natif) : qui regarde-t-on, et quoi.
@@ -1305,6 +1325,20 @@ struct MainTabView: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+
+            // Direct en « Dual Format » : son image verticale, ou retour.
+            if verticalAvailable {
+                Button { PlayerPull.guarded { toggleVertical() } } label: {
+                    Image(systemName: verticalOn ? "rectangle" : "rectangle.portrait")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(verticalOn ? .tPurple : .tMuted)
+                        .frame(width: 32, height: 32)
+                        .background(verticalOn ? Color.tPurple.opacity(0.18) : Color.tSurface)
+                        .cornerRadius(TRadius.chip)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(store.t("vertical_format"))
+            }
 
             // Minuteur de veille
             Button { PlayerPull.guarded { showSleepSheet = true } } label: {
@@ -2183,6 +2217,10 @@ struct MainTabView: View {
                                                            token: store.twitchToken)
                         await MainActor.run { if gen == loadGeneration { liveAvatar = fallback } }
                     }
+                    // Image verticale (Dual Format) : cherchée une fois le direct
+                    // parti, jamais sur le chemin du lancement.
+                    let portrait = await portraitLive(login: channel.lowercased(), lowLatency: store.lowLatency)
+                    await MainActor.run { if gen == loadGeneration { portraitFound(portrait) } }
                 } else {
                     await MainActor.run {
                         guard gen == loadGeneration else { return }
@@ -2575,6 +2613,66 @@ struct MainTabView: View {
         hqNoticeTask?.cancel()
         hqNoticeTask = nil
         hqNotice = nil
+        // Image verticale : cherchée de nouveau par cette lecture.
+        portraitMaster = nil
+        verticalOn = false
+        verticalBackup = nil
+    }
+
+    // MARK: – Image verticale (Dual Format)
+    /// Préférence retenue : une fois l'image verticale choisie, les directs
+    /// suivants qui en ont une partent dessus (comme l'app de Twitch, téléphone
+    /// tenu droit), jusqu'à ce qu'on revienne à l'habituelle.
+    private static let verticalKey = "cfg_prefer_vertical"
+
+    /// Résultat de portraitLive pour le direct en cours : le bouton apparaît,
+    /// et l'image verticale est prise d'office si on l'avait choisie avant.
+    private func portraitFound(_ portrait: MasterPlaylist?) {
+        guard let portrait, linksAreLive, dvrSourceChannel == nil else { return }
+        portraitMaster = portrait
+        if UserDefaults.standard.bool(forKey: Self.verticalKey) {
+            setVertical(true)
+            showHQNotice(store.t("vertical_on"))
+        }
+    }
+
+    /// Bouton « vertical » : l'une ou l'autre image, et le choix retenu.
+    private func toggleVertical() {
+        setVertical(!verticalOn)
+        UserDefaults.standard.set(verticalOn, forKey: Self.verticalKey)
+        logger.settingChanged("Image verticale", value: verticalOn ? "oui" : "non")
+    }
+
+    /// Image verticale à la place de l'habituelle, ou retour. Comme un
+    /// changement de qualité : lecteur, chat et Live Activity restent. Les
+    /// qualités supérieures par le compte s'arrêtent (leurs bascules pendant
+    /// les pubs ne connaissent que l'image habituelle) ; elles reviennent au
+    /// prochain lancement.
+    private func setVertical(_ on: Bool) {
+        guard on != verticalOn, linksAreLive, dvrSourceChannel == nil, !switchingSource else { return }
+        if on {
+            guard let portrait = portraitMaster, let links = qualityLinks else { return }
+            if hqLive != nil {
+                hqReturnTask?.cancel()
+                hqReturnTask = nil
+                hqLive = nil
+            }
+            verticalBackup = (links: links, variants: qualityVariants, source: liveSourceUsed)
+            qualityLinks = store.lowLatency ? LivePlaylistLoader.wrap(portrait.links) : portrait.links
+            qualityVariants = portrait.variants
+            liveSourceUsed = "twitch"
+            verticalOn = true
+            logger.info("LECTEUR", "Image verticale (Dual Format)", "\(portrait.links.count) qualités, par Twitch")
+        } else {
+            if let back = verticalBackup {
+                qualityLinks = back.links
+                qualityVariants = back.variants
+                liveSourceUsed = back.source
+            }
+            verticalBackup = nil
+            verticalOn = false
+            logger.info("LECTEUR", "Retour à l'image habituelle")
+        }
     }
 
     // MARK: – Live timers

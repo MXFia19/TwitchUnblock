@@ -694,5 +694,9 @@
  "Lecture reprise : l'app reprend sa place": ["Playback resumed: the app takes its place back", "Reproducción reanudada: la app recupera su sitio", "Воспроизведение возобновлено: приложение возвращает своё место"],
  "Live Activity terminée : place laissée": ["Live Activity ended: stepping aside", "Live Activity terminada: se cede el sitio", "Live Activity завершена: место уступлено"],
  "une autre app joue du son": ["another app is playing sound", "otra app reproduce sonido", "другое приложение играет звук"],
- "son toujours pris par une autre app": ["sound still taken by another app", "sonido aún tomado por otra app", "звук всё ещё занят другим приложением"]
+ "son toujours pris par une autre app": ["sound still taken by another app", "sonido aún tomado por otra app", "звук всё ещё занят другим приложением"],
+ "❌ Direct bloqué dans ce pays par Twitch": ["❌ Live blocked in this country by Twitch", "❌ Directo bloqueado en este país por Twitch", "❌ Трансляция заблокирована Twitch в этой стране"],
+ "🌍 Twitch : direct bloqué dans ce pays": ["🌍 Twitch: live blocked in this country", "🌍 Twitch: directo bloqueado en este país", "🌍 Twitch: трансляция заблокирована в этой стране"],
+ "qualités, par Twitch": ["qualities, from Twitch", "calidades, desde Twitch", "качеств, от Twitch"],
+ "Retour à l'image habituelle": ["Back to the regular video", "Vuelta al vídeo habitual", "Возврат к обычному видео"]
 }

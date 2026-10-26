@@ -942,6 +942,9 @@ struct VideoPlayerView: View {
     /// fenêtre : il le rend en grand.
     var onPiPStart: () -> Void = {}
     var onPiPRestore: () -> Void = {}
+    /// Format du cadre : 16:9, ou 9:16 pour l'image verticale d'un direct en
+    /// « Dual Format ».
+    var videoAspect: CGFloat = 16 / 9
 
     @EnvironmentObject private var store: AppStore
     @State private var selectedQuality: String = ""
@@ -1148,7 +1151,7 @@ struct VideoPlayerView: View {
             onPiPStart: onPiPStart,
             onPiPRestore: onPiPRestore
         )
-        .aspectRatio(16/9, contentMode: .fit)
+        .aspectRatio(videoAspect, contentMode: .fit)
         .background(Color.black)
         .overlay(alignment: .topLeading) {
             // Un appui ramène au bord du direct, sans recharger. Rien pendant

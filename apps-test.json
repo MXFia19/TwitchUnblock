@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.6.51",
+          "buildVersion": "363",
+          "date": "2026-10-26",
+          "localizedDescription": "- Other improvements and fixes",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-363/TwitchUnblock.ipa",
+          "size": 4441807,
+          "commit": "621506228d1aa21b10ccf54faed6e66235d42bd5"
+        },
+        {
           "version": "1.6.50",
           "buildVersion": "362",
           "date": "2026-10-25",
@@ -280,25 +289,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-331/TwitchUnblock.ipa",
           "size": 3955460,
           "commit": "10b243664cb859edb184a98e692e3879d51888f5"
-        },
-        {
-          "version": "1.5.2",
-          "buildVersion": "330",
-          "date": "2026-10-19",
-          "localizedDescription": "- New Settings → General → Customize the app: show, hide and reorder the tabs, and pick the tab the app opens on\n- Customize the Home screen: reorder or hide the Followed / Top / Offline tabs, hide the announcement, poll, sign-in and web session cards or the Categories view\n- Customize the player's bottom bar: reorder or hide its buttons, add sleep timer, multi-live and rewind buttons, hide AirPlay\n- Chat banners: polls, predictions and the hype train can now be hidden one by one",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-330/TwitchUnblock.ipa",
-          "size": 3949248,
-          "commit": "52a894bf3f24af5fcee63bcf8adb01cd0dc1ec5a"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.6.50",
-      "versionDate": "2026-10-25",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-362/TwitchUnblock.ipa",
-      "size": 4439779
+      "version": "1.6.51",
+      "versionDate": "2026-10-26",
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-363/TwitchUnblock.ipa",
+      "size": 4441807
     }
   ],
   "news": []

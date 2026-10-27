@@ -15,3 +15,4 @@ f35ce49eeb1ab0f978a2b6624bb43103bf1e9852  ntfy : correctif (annoncé par 8abcbb0
 5143e8d1852e4f978047e9dafa7f756ddc5cffed  icônes au choix : correctif (annoncées par 3c5ebbe)
 3c5ebbec3724b599665c8838b8dd4de2626ca927  icônes au choix : ligne remplacée (versions sombre et teintée retirées des icônes au choix), voir le commit du commentaire de make_icons.py
 8b9f9ce0465a3b2f5c8ce16cd777dbbfb109e99c  synchro du lot A1 : ligne remplacée par sa relecture (elle promettait que les VODs et chaînes retirées ne reviennent plus)
+ea868e57703d4b113f9c92fef0e7a48fb8581fc1  sources du direct : ligne remplacée (secours devenus des sources à part, annoncées par 334f786)

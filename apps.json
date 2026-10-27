@@ -185,6 +185,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.6.59",
+          "buildVersion": "371",
+          "date": "2026-10-27",
+          "localizedDescription": "- Live: each source now has a backup server (PerfProd Asia, nadeko's second server, Luminous Europe 2), and a Luminous mirror that no longer answered was removed.",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-371/TwitchUnblock.ipa",
+          "size": 4492756,
+          "commit": "ea868e57703d4b113f9c92fef0e7a48fb8581fc1"
+        },
+        {
           "version": "1.6.58",
           "buildVersion": "370",
           "date": "2026-10-26",
@@ -264,25 +273,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-362/TwitchUnblock.ipa",
           "size": 4439779,
           "commit": "6c598fd87cb8288cf3b163ce9afcdf740ddc8684"
-        },
-        {
-          "version": "1.6.46",
-          "buildVersion": "361",
-          "date": "2026-10-25",
-          "localizedDescription": "- The quality menus now show Source with its resolution, like “1440p (Source)” or “1080p60 (Source)”, when the stream provides it.\n- Pinch to zoom in the app's player now zooms right where you pinch, and moving both fingers while pinching moves the picture, like the Twitch app.\n- The Live Activity and Now Playing now step aside when another app takes the sound or the video stays paused in the background, so tapping the Dynamic Island opens the app that's actually playing (e.g. Spotify).\n- Channel points: when an ad blocker or filtering DNS blocks Twitch's watch-time address, the watched minute goes through the TwitchUnblock server so passive points and chests still count.",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-361/TwitchUnblock.ipa",
-          "size": 4439178,
-          "commit": "5b1bdfe558579fc8f676103cc5006fc232d92485"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.6.58",
-      "versionDate": "2026-10-26",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-370/TwitchUnblock.ipa",
-      "size": 4493827
+      "version": "1.6.59",
+      "versionDate": "2026-10-27",
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-371/TwitchUnblock.ipa",
+      "size": 4492756
     }
   ],
   "news": []

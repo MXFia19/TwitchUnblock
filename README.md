@@ -161,11 +161,11 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   720p60. Picking a quality in the player replaces the preference (as on the
   website); backups carry it under the website's name (`qualityPref`).
 * 🛡 **Live sources, in the order you pick** — lives come from sources that
-  avoid most ads (Luminous Asia, an Albania proxy based on TTV.LOL, Luminous
-  Europe) or official Twitch (with ads), tried one after the other until one
-  answers — each proxy source with a backup server of its own (Asia: Luminous,
-  then PerfProd Asia; Albania: nadeko's two servers; Europe: Luminous Europe,
-  then Europe 2) —, without waiting a minute on one that stays silent: the loading
+  avoid most ads (Luminous Asia, PerfProd Asia, an Albania proxy based on
+  TTV.LOL and its second server, Luminous Europe and Europe 2) or official
+  Twitch (with ads), tried one after the other until one answers — a source
+  added later goes right after the one it backs up in an order saved before
+  it —, without waiting a minute on one that stays silent: the loading
   screen says which one is being tried, and the player can be minimized or
   closed while it loads.
   Reorder them in Settings → Player; picking a source from the player's ⋯

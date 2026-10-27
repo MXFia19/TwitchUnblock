@@ -134,29 +134,51 @@ enum APIConfig {
     }
 }
 
-/// Proxys au format Luminous (/live/<chaîne>), par source, essayés dans
-/// l'ordre : le second est un secours si le premier ne répond pas (sondés le
-/// 2026-10-27 sur trois directs, sans pré-roll). Pas « sans pub » pour
-/// autant : les pauses pub de la chaîne y arrivent comme sur Twitch (mesuré
-/// le 2026-10-14).
-/// Asie : Luminous (sortie Ouzbékistan), puis PerfProd Asie (Maurice).
-let kAsiaLiveHosts = ["as.luminous.dev", "lb-as.cdn-perfprod.com"]
-/// Europe : Luminous Europe, puis Europe 2 (eu3 ne répondait plus).
-let kEuropeLiveHosts = ["eu.luminous.dev", "eu2.luminous.dev"]
+/// Proxys au format Luminous (/live/<chaîne>) : un serveur par source
+/// (sondés le 2026-10-27 sur trois directs, sans pré-roll). Pas « sans pub »
+/// pour autant : les pauses pub de la chaîne y arrivent comme sur Twitch
+/// (mesuré le 2026-10-14). as = Luminous Asie (sortie Ouzbékistan), pp =
+/// PerfProd Asie (Maurice), al2 = l'autre serveur de nadeko
+/// (twitch.zzls.xyz n'est qu'une redirection vers lui), eu / eu2 = Luminous
+/// Europe et Europe 2 (eu3 ne répondait plus).
+let kLiveProxyHosts = [
+    "as": "as.luminous.dev",
+    "pp": "lb-as.cdn-perfprod.com",
+    "al2": "twitch.nadeko.net",
+    "eu": "eu.luminous.dev",
+    "eu2": "eu2.luminous.dev"
+]
 
-/// Proxys au format TTV.LOL v1, essayés après Luminous. Celui-ci est en
-/// Albanie ; ses variantes se lisent de n'importe quelle adresse et annoncent
-/// leurs segments d'avance. Les pauses pub de la chaîne y passent aussi.
+/// Proxys au format TTV.LOL v1 (source « al »). Celui-ci est en Albanie ; ses
+/// variantes se lisent de n'importe quelle adresse et annoncent leurs
+/// segments d'avance. Les pauses pub de la chaîne y passent aussi.
 let kTTVLOLHosts = ["twitch-al.nadeko.net"]
-/// Secours de la source albanaise, au format Luminous : l'autre serveur de
-/// nadeko (twitch.zzls.xyz n'est qu'une redirection vers lui).
-let kAlbaniaLiveHosts = ["twitch.nadeko.net"]
 
 /// Sources du direct proposées dans les réglages et le menu du lecteur.
-let kLiveSourceChoices = ["auto", "as", "al", "eu", "twitch"]
-/// Sources du direct, dans l'ordre automatique : Luminous Asie, proxy
-/// albanais (TTV.LOL), Luminous Europe, Twitch officiel (avec ses pubs).
-let kLiveSources = ["as", "al", "eu", "twitch"]
+let kLiveSourceChoices = ["auto", "as", "pp", "al", "al2", "eu", "eu2", "twitch"]
+/// Sources du direct, dans l'ordre automatique : Luminous Asie, PerfProd
+/// Asie, proxy albanais (TTV.LOL) et son second serveur, Luminous Europe et
+/// Europe 2, Twitch officiel (avec ses pubs).
+let kLiveSources = ["as", "pp", "al", "al2", "eu", "eu2", "twitch"]
+/// Source ajoutée → celle qu'elle secourt : un ordre enregistré avant elle
+/// la reçoit juste après (comme le site et le Worker).
+let kLiveSourceBackupOf = ["pp": "as", "al2": "al", "eu2": "eu"]
+
+/// Ordre complet des sources : celles de `saved` connues, sans doublon ;
+/// une source qui manque va juste après celle qu'elle secourt, sinon à la
+/// fin, dans l'ordre automatique.
+func completeLiveSourceOrder(_ saved: [String]) -> [String] {
+    var order: [String] = []
+    for id in saved where kLiveSources.contains(id) && !order.contains(id) { order.append(id) }
+    for id in kLiveSources where !order.contains(id) {
+        if let parent = kLiveSourceBackupOf[id], let i = order.firstIndex(of: parent) {
+            order.insert(id, at: i + 1)
+        } else {
+            order.append(id)
+        }
+    }
+    return order
+}
 
 /// Récupération de VODs supprimées : distributions CloudFront où Twitch range
 /// les VODs (les plus fréquentes d'abord), plus des hôtes historiques. Le
@@ -739,6 +761,9 @@ private let translations: [Lang: [String: String]] = [
         "src_as": "Luminous Asie",
         "src_al": "Proxy Albanie (TTV.LOL)",
         "src_eu": "Luminous Europe",
+        "src_pp": "PerfProd Asie",
+        "src_al2": "Proxy Albanie 2",
+        "src_eu2": "Luminous Europe 2",
         "src_twitch": "Twitch officiel (pubs)",
         "src_worker": "Serveur TwitchUnblock",
         "chat_unreachable": "Le chat ne répond pas. Vérifie ta connexion (VPN, réseau filtré) ou touche « Reconnecter le chat » dans le menu du chat.",
@@ -1517,6 +1542,9 @@ private let translations: [Lang: [String: String]] = [
         "src_as": "Luminous Asia",
         "src_al": "Albania proxy (TTV.LOL)",
         "src_eu": "Luminous Europe",
+        "src_pp": "PerfProd Asia",
+        "src_al2": "Albania proxy 2",
+        "src_eu2": "Luminous Europe 2",
         "src_twitch": "Official Twitch (ads)",
         "src_worker": "TwitchUnblock server",
         "chat_unreachable": "The chat isn't responding. Check your connection (VPN, filtered network) or tap “Reconnect chat” in the chat menu.",
@@ -2295,6 +2323,9 @@ private let translations: [Lang: [String: String]] = [
         "src_as": "Luminous Asia",
         "src_al": "Proxy de Albania (TTV.LOL)",
         "src_eu": "Luminous Europa",
+        "src_pp": "PerfProd Asia",
+        "src_al2": "Proxy de Albania 2",
+        "src_eu2": "Luminous Europa 2",
         "src_twitch": "Twitch oficial (anuncios)",
         "src_worker": "Servidor de TwitchUnblock",
         "chat_unreachable": "El chat no responde. Revisa tu conexión (VPN, red filtrada) o toca «Reconectar el chat» en el menú del chat.",

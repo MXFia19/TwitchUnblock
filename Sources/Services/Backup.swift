@@ -415,14 +415,10 @@ enum Backup {
         bool("shareUsage") { store.shareUsage = $0 }
         num("vodSpeed", 0.25...2) { store.vodSpeed = VodSpeed.nearestSafe($0) }
         // Ordre des sources du direct (nom du site) : sources connues, sans
-        // doublon, celles qui manquent à la fin.
-        if let v = s["liveSourceOrder"] as? [String] {
-            var seen = Set<String>()
-            let order = v.filter { kLiveSources.contains($0) && seen.insert($0).inserted }
-            if !order.isEmpty {
-                store.liveSourceOrder = order + kLiveSources.filter { !order.contains($0) }
-                ok("liveSourceOrder")
-            }
+        // doublon, celles qui manquent juste après celle qu'elles secourent.
+        if let v = s["liveSourceOrder"] as? [String], v.contains(where: { kLiveSources.contains($0) }) {
+            store.liveSourceOrder = completeLiveSourceOrder(v)
+            ok("liveSourceOrder")
         }
         bool("multiChat") { store.multiLiveChat = $0 }
 

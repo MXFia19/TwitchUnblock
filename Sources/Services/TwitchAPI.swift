@@ -693,14 +693,10 @@ func getLive(channelName: String, webToken: String? = nil,
     for src in steps where found.links.isEmpty {
         onSource?(src)
         switch src {
-        case "as":     found = await luminousLiveLinks(hosts: kAsiaLiveHosts, login: login, lowLatency: lowLatency)
-        case "al":
-            found = await ttvlolLiveLinks(login: login, lowLatency: lowLatency)
-            if found.links.isEmpty {
-                found = await luminousLiveLinks(hosts: kAlbaniaLiveHosts, login: login, lowLatency: lowLatency)
-            }
-        case "eu":     found = await luminousLiveLinks(hosts: kEuropeLiveHosts, login: login, lowLatency: lowLatency)
+        case "al":     found = await ttvlolLiveLinks(login: login, lowLatency: lowLatency)
         case "twitch": if let token { found = await usherLiveLinks(login: login, token: token, lowLatency: lowLatency, geo: geo) }
+        case let id where kLiveProxyHosts[id] != nil:
+            found = await luminousLiveLinks(hosts: [kLiveProxyHosts[id]!], login: login, lowLatency: lowLatency)
         default:
             let worker = await workerLiveLinks(login: login)
             found = worker.master
@@ -856,15 +852,14 @@ private final class AccountPlaybackGate: @unchecked Sendable {
 // MARK: – Sources du direct
 /// Ordre des sources du direct : celui des réglages (« liveSourceOrder »),
 /// sinon la source préférée d'avant (« liveSource », celle que garde l'app
-/// Apple TV) en tête de l'ordre automatique — Luminous Asie, proxy albanais,
-/// Luminous Europe, Twitch officiel (avec ses pubs). Une source inconnue est
-/// ignorée, une oubliée ajoutée à la fin ; le Worker toujours en dernier.
+/// Apple TV) en tête de l'ordre automatique (kLiveSources). Une source
+/// inconnue est ignorée, une oubliée ajoutée juste après celle qu'elle
+/// secourt, sinon à la fin (completeLiveSourceOrder) ; le Worker toujours en
+/// dernier.
 func liveSourceSteps() -> [String] {
     let ud = UserDefaults.standard
     let saved = ud.stringArray(forKey: "liveSourceOrder") ?? [ud.string(forKey: "liveSource") ?? "auto"]
-    var order: [String] = []
-    for id in saved where kLiveSources.contains(id) && !order.contains(id) { order.append(id) }
-    return order + kLiveSources.filter { !order.contains($0) } + ["worker"]
+    return completeLiveSourceOrder(saved) + ["worker"]
 }
 
 /// Proxys au format Luminous (/live/<chaîne>), essayés dans l'ordre ; vide

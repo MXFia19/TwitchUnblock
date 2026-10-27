@@ -185,6 +185,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.6.60",
+          "buildVersion": "372",
+          "date": "2026-10-27",
+          "localizedDescription": "- Live: three more sources to pick in Settings → Player (PerfProd Asia, Albania proxy 2, Luminous Europe 2); if you change nothing, each one is tried right after its neighbor.",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-372/TwitchUnblock.ipa",
+          "size": 4493961,
+          "commit": "334f786b7af8f58d61edf796434e957abae0e41d"
+        },
+        {
           "version": "1.6.59",
           "buildVersion": "371",
           "date": "2026-10-27",
@@ -264,25 +273,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-363/TwitchUnblock.ipa",
           "size": 4441807,
           "commit": "621506228d1aa21b10ccf54faed6e66235d42bd5"
-        },
-        {
-          "version": "1.6.50",
-          "buildVersion": "362",
-          "date": "2026-10-25",
-          "localizedDescription": "- Other improvements and fixes",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-362/TwitchUnblock.ipa",
-          "size": 4439779,
-          "commit": "6c598fd87cb8288cf3b163ce9afcdf740ddc8684"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.6.59",
+      "version": "1.6.60",
       "versionDate": "2026-10-27",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-371/TwitchUnblock.ipa",
-      "size": 4492756
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-372/TwitchUnblock.ipa",
+      "size": 4493961
     }
   ],
   "news": []

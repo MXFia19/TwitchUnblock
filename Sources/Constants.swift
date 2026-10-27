@@ -134,21 +134,23 @@ enum APIConfig {
     }
 }
 
-/// Miroirs Luminous, essayés dans l'ordre : si l'un est indisponible on passe
-/// au suivant. as = Asie (historique), eu/eu2/eu3 = Europe (recommandés pour
-/// le mobile). Pas « sans pub » : les pré-rolls et les pauses pub de la chaîne
-/// y arrivent comme sur Twitch (mesuré le 2026-10-14).
-let kLuminousHosts = [
-    "as.luminous.dev",
-    "eu.luminous.dev",
-    "eu2.luminous.dev",
-    "eu3.luminous.dev"
-]
+/// Proxys au format Luminous (/live/<chaîne>), par source, essayés dans
+/// l'ordre : le second est un secours si le premier ne répond pas (sondés le
+/// 2026-10-27 sur trois directs, sans pré-roll). Pas « sans pub » pour
+/// autant : les pauses pub de la chaîne y arrivent comme sur Twitch (mesuré
+/// le 2026-10-14).
+/// Asie : Luminous (sortie Ouzbékistan), puis PerfProd Asie (Maurice).
+let kAsiaLiveHosts = ["as.luminous.dev", "lb-as.cdn-perfprod.com"]
+/// Europe : Luminous Europe, puis Europe 2 (eu3 ne répondait plus).
+let kEuropeLiveHosts = ["eu.luminous.dev", "eu2.luminous.dev"]
 
 /// Proxys au format TTV.LOL v1, essayés après Luminous. Celui-ci est en
 /// Albanie ; ses variantes se lisent de n'importe quelle adresse et annoncent
 /// leurs segments d'avance. Les pauses pub de la chaîne y passent aussi.
 let kTTVLOLHosts = ["twitch-al.nadeko.net"]
+/// Secours de la source albanaise, au format Luminous : l'autre serveur de
+/// nadeko (twitch.zzls.xyz n'est qu'une redirection vers lui).
+let kAlbaniaLiveHosts = ["twitch.nadeko.net"]
 
 /// Sources du direct proposées dans les réglages et le menu du lecteur.
 let kLiveSourceChoices = ["auto", "as", "al", "eu", "twitch"]

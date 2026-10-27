@@ -693,10 +693,13 @@ func getLive(channelName: String, webToken: String? = nil,
     for src in steps where found.links.isEmpty {
         onSource?(src)
         switch src {
-        case "as":     found = await luminousLiveLinks(hosts: ["as.luminous.dev"], login: login, lowLatency: lowLatency)
-        case "al":     found = await ttvlolLiveLinks(login: login, lowLatency: lowLatency)
-        case "eu":     found = await luminousLiveLinks(hosts: kLuminousHosts.filter { $0 != "as.luminous.dev" },
-                                                       login: login, lowLatency: lowLatency)
+        case "as":     found = await luminousLiveLinks(hosts: kAsiaLiveHosts, login: login, lowLatency: lowLatency)
+        case "al":
+            found = await ttvlolLiveLinks(login: login, lowLatency: lowLatency)
+            if found.links.isEmpty {
+                found = await luminousLiveLinks(hosts: kAlbaniaLiveHosts, login: login, lowLatency: lowLatency)
+            }
+        case "eu":     found = await luminousLiveLinks(hosts: kEuropeLiveHosts, login: login, lowLatency: lowLatency)
         case "twitch": if let token { found = await usherLiveLinks(login: login, token: token, lowLatency: lowLatency, geo: geo) }
         default:
             let worker = await workerLiveLinks(login: login)
@@ -864,13 +867,13 @@ func liveSourceSteps() -> [String] {
     return order + kLiveSources.filter { !order.contains($0) } + ["worker"]
 }
 
-/// Miroirs Luminous, essayés dans l'ordre ; vide si aucun ne répond. Pas
-/// « sans pub » : les pré-rolls et les pauses pub de la chaîne y arrivent
-/// comme sur Twitch (écran « Commercial break in progress » ou vraie pub,
-/// cousus dans la playlist ; voir AdBreakMonitor).
+/// Proxys au format Luminous (/live/<chaîne>), essayés dans l'ordre ; vide
+/// si aucun ne répond. Pas « sans pub » : les pré-rolls et les pauses pub
+/// de la chaîne y arrivent comme sur Twitch (écran « Commercial break in
+/// progress » ou vraie pub, cousus dans la playlist ; voir AdBreakMonitor).
 private func luminousLiveLinks(hosts: [String], login: String, lowLatency: Bool) async -> MasterPlaylist {
     for host in hosts {
-        logger.info("LIVE", "Tentative Luminous…", host)
+        logger.info("LIVE", "Tentative proxy…", host)
         guard var comps = URLComponents(string: "https://\(host)/live/\(login)") else { continue }
         comps.queryItems = [
             .init(name: "allow_source",     value: "true"),
@@ -889,15 +892,15 @@ private func luminousLiveLinks(hosts: [String], login: String, lowLatency: Bool)
             if code == 200, let body = String(data: data, encoding: .utf8) {
                 let master = parseMaster(body, baseURL: url)
                 if !master.links.isEmpty {
-                    logger.success("LIVE", "✅ Luminous OK (\(host))", "\(master.links.count) qualités")
+                    logger.success("LIVE", "✅ Proxy OK (\(host))", "\(master.links.count) qualités")
                     return master
                 }
-                logger.warn("LIVE", "⚠️ Luminous \(host) : playlist vide", "miroir suivant…")
+                logger.warn("LIVE", "⚠️ Proxy \(host) : playlist vide", "serveur suivant…")
             } else {
-                logger.warn("LIVE", "⚠️ Luminous \(host) échec (\(code))", "miroir suivant…")
+                logger.warn("LIVE", "⚠️ Proxy \(host) échec (\(code))", "serveur suivant…")
             }
         } catch {
-            logger.error("LIVE", "❌ Erreur Luminous \(host)", error.localizedDescription)
+            logger.error("LIVE", "❌ Erreur proxy \(host)", error.localizedDescription)
         }
     }
     return ([:], [:])

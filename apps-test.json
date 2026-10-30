@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.6.63",
+          "buildVersion": "375",
+          "date": "2026-10-30",
+          "localizedDescription": "- Live notifications through the ntfy app are gone: for instant ones, install the TwitchUnblock website as a web app (Settings → Features in testing → Open the website shows how)\n- If you had ntfy on, the app tells you once and stops the server from posting to your topic: you can uninstall ntfy",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-375/TwitchUnblock.ipa",
+          "size": 4484889,
+          "commit": "8ac87e483204734d18c265bdb0fba1e6a50508c9"
+        },
+        {
           "version": "1.6.62",
           "buildVersion": "374",
           "date": "2026-10-30",
@@ -280,25 +289,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-345/TwitchUnblock.ipa",
           "size": 4280124,
           "commit": "14c0754c3f4ac46c356f1eb57e26bf6600ac03aa"
-        },
-        {
-          "version": "1.5.22",
-          "buildVersion": "342",
-          "date": "2026-10-20",
-          "localizedDescription": "- Smoother swipe-down to minimize the player (thanks to dwojc6)\n- Italian interface language (thanks to Domenico-lel)\n- Other improvements and fixes",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-342/TwitchUnblock.ipa",
-          "size": 4274993,
-          "commit": "d28a2794a10e917f6ebdbac57557581c5a762317"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.6.62",
+      "version": "1.6.63",
       "versionDate": "2026-10-30",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-374/TwitchUnblock.ipa",
-      "size": 4502860
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-375/TwitchUnblock.ipa",
+      "size": 4484889
     }
   ],
   "news": []

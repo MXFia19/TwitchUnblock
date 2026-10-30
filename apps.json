@@ -185,6 +185,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.6.64",
+          "buildVersion": "376",
+          "date": "2026-10-30",
+          "localizedDescription": "- Going back in a live (−10 s or the bar) now plays at your chosen speed, up to 2×, to catch up, then back to 1× at the live edge; the speed is also in the player's ⋯ menu during a live\n- The player no longer shows your VOD speed next to the timer during a live when it doesn't apply\n- Rewinding into a live's recording now brings back your chosen playback speed once you're away from its edge, instead of staying at 1×\n- Apple's player now drops to 1× near the edge of a live recording and shows it, instead of a 2× that didn't actually play\n- The player now checks the speed it really plays at: it applies it again, then shows the real speed if playback still can't keep up",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-376/TwitchUnblock.ipa",
+          "size": 4486050,
+          "commit": "bb0b73cf3071659fe779f19a259da7516fb98195"
+        },
+        {
           "version": "1.6.63",
           "buildVersion": "375",
           "date": "2026-10-30",
@@ -264,25 +273,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-367/TwitchUnblock.ipa",
           "size": 4457344,
           "commit": "c78dbdd12e305b24f22cc6f00fbf3cba4795f707"
-        },
-        {
-          "version": "1.6.54",
-          "buildVersion": "366",
-          "date": "2026-10-26",
-          "localizedDescription": "- The player's bottom bar no longer squeezes the live's duration when there are many buttons (vertical video): the buttons move to a second row.",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-366/TwitchUnblock.ipa",
-          "size": 4457513,
-          "commit": "413df41f091fa97701846b85db753fa50e32ad16"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.6.63",
+      "version": "1.6.64",
       "versionDate": "2026-10-30",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-375/TwitchUnblock.ipa",
-      "size": 4484889
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-376/TwitchUnblock.ipa",
+      "size": 4486050
     }
   ],
   "news": []

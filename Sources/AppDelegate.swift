@@ -53,7 +53,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
             if response.actionIdentifier == LiveNotifier.muteAction {
                 // « Ne plus notifier cette chaîne » : sans ouvrir l'app. iOS
                 // peut la suspendre dès completionHandler : appelé une fois la
-                // chaîne coupée et ntfy prévenu.
+                // chaîne coupée.
                 Task { @MainActor in
                     await LiveNotifier.mute(login)
                     completionHandler()

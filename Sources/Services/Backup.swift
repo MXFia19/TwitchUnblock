@@ -15,7 +15,7 @@ import UniformTypeIdentifiers
 //  noms.
 //
 //  JAMAIS dans le fichier : jetons et sessions Twitch, jeton d'intégrité,
-//  identifiant d'installation, sujet ntfy, Worker personnel (un fichier
+//  identifiant d'installation, Worker personnel (un fichier
 //  piégé ferait passer le jeton chez un tiers). Seules les clés listées
 //  ci-dessous partent, et seules elles sont relues.
 //
@@ -189,8 +189,7 @@ enum Backup {
             "ios_dropsProgress": store.dropsProgress,
             "ios_autoClaimDrops": store.autoClaimDrops,
             "ios_dropsNotify": store.dropsNotify,
-            // Notifications de live : l'état et les chaînes coupées, jamais
-            // le sujet ntfy (secret, propre à chaque installation).
+            // Notifications de live : l'état et les chaînes coupées.
             "ios_liveNotif": LiveNotifier.isEnabled,
             "ios_notifMuted": NotifChannels.muted.sorted(),
             "ios_downloadWifiOnly": store.downloadWifiOnly,

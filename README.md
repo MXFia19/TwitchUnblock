@@ -651,15 +651,14 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   a backup) and its button downloads the right IPA.
 * 🔔 **Live notifications** — be told when a followed channel goes live
   (checked in the background, as often as iOS allows). For instant ones, even
-  with the app closed, turn on **ntfy** (Settings → Features in testing): the
-  app creates a secret topic, you add it in the free
-  [ntfy](https://apps.apple.com/app/ntfy/id1625396347) app, and the backend
-  posts there within a minute or two of a stream starting — tapping it opens
-  the stream in TwitchUnblock. ntfy.sh counts free messages per address and
-  turns away the backend's shared Cloudflare addresses, so they leave from the
-  project's own server (the video relay); **Test** tells you when ntfy.sh is
-  refusing messages for now (sending limit reached). **Notified channels**
-  (same place) picks which followed channels notify you, for both. The app's
+  with the app closed, install the website as a web app: Settings → Features
+  in testing → **Open the website** shows how (add it to the Home Screen,
+  iOS 16.4 or later, open it from its icon, then Settings → Notifications →
+  “Followed channels going live”); the website then sends them itself, with no
+  third-party app. The **ntfy** notifications are gone: an app that had them
+  on tells the backend to forget its topic (retried until it answers) and
+  says once that ntfy can be uninstalled. **Notified channels** (same place)
+  picks which followed channels the app notifies you about. The app's
   own notifications show the stream's thumbnail, are grouped per channel, and
   have **Watch** and **Stop notifying for this channel** (press and hold). A
   **bell** on a channel's page and next to **Follow** above the chat turns that
@@ -730,7 +729,7 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   TwitchUnblock Worker). iOS only allows `http://` on your local network: a
   Docker Worker on a server needs HTTPS in front of it (Caddy, Cloudflare
   Tunnel). **Send everything through this Worker** also moves
-  history backups, feedback, announcements and polls, ntfy notifications and the usage
+  history backups, feedback, announcements and polls, and the usage
   count there (your Twitch token is then sent to it — only for a Worker you
   host yourself).
 * 🔒 **Chat restrictions said upfront** — above the message box, the room's

@@ -171,7 +171,7 @@ jobs:
             plutil -replace CFBundleIdentifier -string "com.mxfia19.TwitchUnblock.test" "$APP_PLIST"
             plutil -replace CFBundleDisplayName -string "TU Test" "$APP_PLIST"
             # Son propre schéma de lien : avec le même que l'app, iOS ouvrait
-            # l'une ou l'autre au toucher d'une notification ntfy.
+            # l'une ou l'autre au toucher d'un lien twitchunblock://.
             plutil -replace CFBundleURLTypes.0.CFBundleURLSchemes.0 -string "twitchunblock-test" "$APP_PLIST"
             plutil -replace CFBundleURLTypes.0.CFBundleURLName -string "com.mxfia19.TwitchUnblock.test" "$APP_PLIST"
           else

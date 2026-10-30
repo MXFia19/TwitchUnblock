@@ -3,6 +3,9 @@ import SwiftUI
 // MARK: – API
 let kAPIURL          = "https://test2.kurzmathis4.workers.dev"
 let kDiscordURL      = "https://discord.gg/cEsMRdxsVq"
+/// Notifications de live instantanées : le site installé en web app (à la
+/// place de ntfy). Ce lien ouvre ses étapes d'installation et d'activation.
+let kNotifInstallURL = URL(string: "https://twitchunblock.vercel.app/?install=notifications")!
 let kHelixClientID   = "1e68ku2ehgzy5cy0di3xvfy82sxpf6"
 let kGQLClientID     = "kimne78kx3ncx6brgo4mv6wki5h1ko"
 /// Client-ID public de l'app Android de Twitch (technique d'Xtra). Twitch
@@ -14,7 +17,7 @@ let kGQLNextClientID = "kd1unb4b3q4t58fwlpcbzcbnm76a8fp"
 let kRedirectURI     = "https://mxfia19.github.io/TwitchUnblock/auth.html"
 /// Schéma des liens de l'app, lu dans l'Info.plist : « twitchunblock », ou
 /// « twitchunblock-test » pour TU Test (changé par la CI : avec le même, iOS
-/// ouvrait l'une ou l'autre app au toucher d'une notification ntfy).
+/// ouvrait l'une ou l'autre app au toucher d'un lien twitchunblock://).
 let kAppURLScheme: String = {
     let types = Bundle.main.object(forInfoDictionaryKey: "CFBundleURLTypes") as? [[String: Any]]
     return (types?.first?["CFBundleURLSchemes"] as? [String])?.first ?? "twitchunblock"
@@ -31,8 +34,7 @@ let kAPIFallbackURLs: [String] = ["https://test2-fallback.vxcraftmanpetit.worker
 /// depuis le dépôt du site, sur Cloudflare ou avec Docker), essayé en premier
 /// pour la lecture — si les Workers officiels tombent, ou si le projet
 /// disparaît, l'app continue de lire. Et, s'il le demande, pour tout le reste
-/// aussi : sauvegarde (avec son jeton Twitch), retours, annonces, comptage,
-/// notifications ntfy.
+/// aussi : sauvegarde (avec son jeton Twitch), retours, annonces, comptage.
 enum APIConfig {
     static let customKey = "cfg_custom_worker"
     static let allKey = "cfg_custom_worker_all"
@@ -441,7 +443,7 @@ private let translations: [Lang: [String: String]] = [
         "clips": "Clips", "no_clips": "Aucun clip sur cette période", "highlights": "Highlights", "no_highlights": "Aucun highlight", "backup": "Sauvegarde", "backup_sub": "Exporte tes chaînes (suivies, épinglées, masquées), tes réglages, ta personnalisation et « Continuer à regarder » dans un fichier, pour les reprendre ailleurs : l'app de test TU Test, une réinstallation, le site. Tes connexions Twitch n'y sont jamais.", "export_data": "Exporter", "import_data": "Importer", "export_done": "Fichier exporté", "import_done": "Import terminé : %d chaîne(s) ajoutée(s)", "import_bad": "Ce fichier n’est pas une sauvegarde TwitchUnblock", "playlists": "Playlists", "play_all": "Tout lire", "videos_count": "%d vidéo(s)", "no_playlists": "Aucune playlist", "err_clip": "Ce clip est introuvable", "period_day": "24 h", "period_week": "7 j", "period_month": "30 j", "period_all": "Tout",
         "notif_live": "Notifications de live", "notif_live_sub": "Prévient quand une chaîne suivie commence un live (vérifié en arrière-plan quand iOS le permet ; suivis Twitch et suivis sur cet appareil).", "notif_test": "Envoyer une notification de test", "notif_test_title": "TwitchUnblock", "notif_test_body": "Les notifications fonctionnent 🎉", "notif_test_sent": "Envoyée : elle arrive dans 3 s (quitte l'app pour la voir comme une vraie).", "notif_test_denied": "Notifications refusées : autorise-les dans Réglages iOS → TwitchUnblock.", "notif_last_never": "Aucune vérification en arrière-plan pour l'instant. iOS choisit le moment : laisse l'app en arrière-plan (sans la fermer) quelques heures.", "notif_last_run": "Dernière vérification en arrière-plan : {t}", "notif_last_failed": "échec (connexion ou jeton)", "notif_bg_off": "« Actualisation en arrière-plan » est coupée (ou le mode économie d'énergie est actif) : iOS ne réveillera pas l'app. Réglages iOS → Général → Actualisation en arrière-plan.", "notif_bg_refused": "iOS a refusé de programmer la vérification", "web_banner_title": "Connecte ta session web", "web_banner_msg": "Pour les points de chaîne, les coffres récupérés tout seuls et les prédictions : connecte-toi une fois sur twitch.tv dans l'app.", "web_banner_btn": "Connecter", "announcement_open": "Ouvrir", "dont_show_again": "Ne plus afficher", "notif_live_title": "{u} est en live",
         "notif_channels": "Chaînes notifiées",
-        "notif_channels_sub": "Les notifications de live (réveils de l'app et ntfy) ne concernent que les chaînes allumées ici. Une chaîne suivie plus tard est allumée d'office.",
+        "notif_channels_sub": "Les notifications de live (réveils de l'app) ne concernent que les chaînes allumées ici. Une chaîne suivie plus tard est allumée d'office.",
         "notif_channels_all": "Toutes tes chaînes suivies",
         "notif_channels_muted": "{n} chaîne(s) sans notification",
         "notif_channels_all_on": "Tout activer",
@@ -466,7 +468,7 @@ private let translations: [Lang: [String: String]] = [
         "raid_bonus": "Bonus de raid",
         "logs_count_one": "{n} log",
         "dl_chat_count_one": "chat : {n} message",
-        "ntfy_status_one": "{n} chaîne suivie prise en compte (compte Twitch et cet appareil).",
+        
         "viewers_one": "spectateur",
         "followers_one": "follower",
         "poll_votes_one": "vote",
@@ -895,19 +897,11 @@ private let translations: [Lang: [String: String]] = [
         "multi_sound_off": "Couper le son de cette vidéo",
         "live_activity": "Activité en direct",
         "live_activity_sub": "La vidéo en cours sur l'écran verrouillé et dans la Dynamic Island (chaîne, titre, lecture). Coupée, elle disparaît aussitôt.",
-        "ntfy_live": "Notifications instantanées (ntfy)",
-        "ntfy_live_sub": "Même app fermée, dans la minute ou les deux qui suivent : par l'app gratuite ntfy, qui a le droit aux notifications d'Apple. Les notifications de l'app elle-même s'arrêtent alors, pour éviter les doublons.",
-        "ntfy_steps": "1. Installe ntfy (App Store). 2. Dans ntfy : + → colle ce sujet → S'abonner (serveur ntfy.sh par défaut). 3. Envoie une notification de test. La toucher ouvrira le live ici.",
-        "ntfy_copy": "Copier",
-        "ntfy_copied": "Copié",
-        "ntfy_install": "Installer ntfy",
-        "ntfy_test_sent": "Envoyée : elle arrive dans ntfy dans quelques secondes.",
-        "ntfy_failed": "Impossible de joindre le serveur pour l'instant : réessaie plus tard.",
-        "ntfy_limited": "ntfy.sh n'accepte plus de messages pour l'instant (limite d'envoi atteinte) : réessaie plus tard.",
-        "ntfy_not_ready": "Activé, mais le serveur ne gère pas encore ces notifications : elles arrivent avec la prochaine mise à jour du site. L'app réessaie toute seule à chaque fois que tu reviens dedans.",
-        "ntfy_pending": "Activé, mais le serveur n'a pas répondu : l'app réessaie toute seule à chaque fois que tu reviens dedans.",
-        "ntfy_status": "{n} chaînes suivies prises en compte (compte Twitch et cet appareil).",
-        "ntfy_privacy": "Les messages passent par ntfy.sh (service tiers gratuit). Ton sujet est secret : ne le partage pas.",
+        "notif_pwa_title": "Notifications instantanées : le site en web app",
+        "notif_pwa_sub": "Même app fermée, dans la minute : ajoute le site à l'écran d'accueil (dans Safari : Partager → Sur l'écran d'accueil, iOS 16.4 ou plus), ouvre-le depuis son icône, puis Réglages → Notifications → « Lives des chaînes suivies ». Connecte-toi avec ton compte Twitch pour retrouver tes chaînes.",
+        "notif_pwa_open": "Ouvrir le site",
+        "ntfy_retired_title": "Fin des notifications ntfy",
+        "ntfy_retired_body": "L'app ne passe plus par ntfy : tu peux le désinstaller. Pour être prévenu quand une chaîne passe en live, installe le site en web app : il envoie lui-même les notifications, sans app tierce.",
         "app_icon": "Icône de l'app",
         "app_icon_sub": "« Contraste » reste la plus nette avec les icônes transparentes ou teintées d'iOS 26.",
         "app_icon_failed": "iOS a refusé de changer l'icône : {e}",
@@ -999,7 +993,7 @@ private let translations: [Lang: [String: String]] = [
         "expert_quota": "Ce Worker a atteint son quota (Cloudflare) : réessaie plus tard (le quota du jour repart à minuit UTC).",
         "expert_reset": "Revenir aux Workers officiels",
         "expert_all": "Tout passer par ce Worker",
-        "expert_all_sub": "Aussi la sauvegarde de l'historique, les retours, les annonces, les notifications ntfy et le comptage. Ton jeton Twitch lui est alors envoyé (sauvegarde) : n'active ça que pour un Worker que tu héberges toi-même.",
+        "expert_all_sub": "Aussi la sauvegarde de l'historique, les retours, les annonces et le comptage. Ton jeton Twitch lui est alors envoyé (sauvegarde) : n'active ça que pour un Worker que tu héberges toi-même.",
         "expert_all_no_db": "Ce Worker n'a pas de base D1 : la sauvegarde, les retours et les notifications n'y marcheraient pas. L'option reste coupée.",
         "expert_using": "En service : {u}",
         "chat_mode_followers": "Followers uniquement",
@@ -1222,7 +1216,7 @@ private let translations: [Lang: [String: String]] = [
         "clips": "Clips", "no_clips": "No clips for this period", "highlights": "Highlights", "no_highlights": "No highlights", "backup": "Backup", "backup_sub": "Export your channels (followed, pinned, hidden), settings, customization and Continue watching to a file, to bring them elsewhere: the TU Test app, a reinstall, the website. Your Twitch sign-ins are never in it.", "export_data": "Export", "import_data": "Import", "export_done": "File exported", "import_done": "Import done: %d channel(s) added", "import_bad": "This file is not a TwitchUnblock backup", "playlists": "Playlists", "play_all": "Play all", "videos_count": "%d video(s)", "no_playlists": "No playlists", "err_clip": "This clip could not be found", "period_day": "24h", "period_week": "7d", "period_month": "30d", "period_all": "All",
         "notif_live": "Live notifications", "notif_live_sub": "Get notified when a followed channel goes live (checked in the background when iOS allows it; Twitch follows and follows on this device).", "notif_test": "Send a test notification", "notif_test_title": "TwitchUnblock", "notif_test_body": "Notifications are working 🎉", "notif_test_sent": "Sent: it arrives in 3 s (leave the app to see it like a real one).", "notif_test_denied": "Notifications denied: allow them in iOS Settings → TwitchUnblock.", "notif_last_never": "No background check yet. iOS picks the moment: leave the app in the background (without closing it) for a few hours.", "notif_last_run": "Last background check: {t}", "notif_last_failed": "failed (network or token)", "notif_bg_off": "“Background App Refresh” is off (or Low Power Mode is on): iOS won’t wake the app. iOS Settings → General → Background App Refresh.", "notif_bg_refused": "iOS refused to schedule the check", "web_banner_title": "Connect your web session", "web_banner_msg": "For channel points, auto-claimed chests and predictions: sign in once to twitch.tv inside the app.", "web_banner_btn": "Connect", "announcement_open": "Open", "dont_show_again": "Don’t show again", "notif_live_title": "{u} is live",
         "notif_channels": "Notified channels",
-        "notif_channels_sub": "Live notifications (app wake-ups and ntfy) only cover the channels switched on here. A channel you follow later is on by default.",
+        "notif_channels_sub": "Live notifications (app wake-ups) only cover the channels switched on here. A channel you follow later is on by default.",
         "notif_channels_all": "All the channels you follow",
         "notif_channels_muted": "{n} channel(s) without notifications",
         "notif_channels_all_on": "Turn all on",
@@ -1247,7 +1241,7 @@ private let translations: [Lang: [String: String]] = [
         "raid_bonus": "Raid bonus",
         "logs_count_one": "{n} log",
         "dl_chat_count_one": "chat: {n} message",
-        "ntfy_status_one": "{n} followed channel taken into account (Twitch account and this device).",
+        
         "viewers_one": "viewer",
         "followers_one": "follower",
         "poll_votes_one": "vote",
@@ -1676,19 +1670,11 @@ private let translations: [Lang: [String: String]] = [
         "multi_sound_off": "Mute this video",
         "live_activity": "Live Activity",
         "live_activity_sub": "What's playing on the Lock Screen and in the Dynamic Island (channel, title, playback). Turned off, it goes away right away.",
-        "ntfy_live": "Instant notifications (ntfy)",
-        "ntfy_live_sub": "Even with the app closed, within a minute or two: through the free ntfy app, which is allowed to use Apple's notifications. The app's own notifications then stop, to avoid duplicates.",
-        "ntfy_steps": "1. Install ntfy (App Store). 2. In ntfy: + → paste this topic → Subscribe (default ntfy.sh server). 3. Send a test notification. Tapping it will open the stream here.",
-        "ntfy_copy": "Copy",
-        "ntfy_copied": "Copied",
-        "ntfy_install": "Install ntfy",
-        "ntfy_test_sent": "Sent: it shows up in ntfy within a few seconds.",
-        "ntfy_failed": "Couldn't reach the server right now: try again later.",
-        "ntfy_limited": "ntfy.sh isn't accepting messages right now (sending limit reached): try again later.",
-        "ntfy_not_ready": "On, but the server doesn't handle these notifications yet: they come with the next site update. The app retries by itself every time you come back to it.",
-        "ntfy_pending": "On, but the server didn't answer: the app retries by itself every time you come back to it.",
-        "ntfy_status": "{n} followed channels taken into account (Twitch account and this device).",
-        "ntfy_privacy": "Messages go through ntfy.sh (a free third-party service). Your topic is secret: don't share it.",
+        "notif_pwa_title": "Instant notifications: the website as a web app",
+        "notif_pwa_sub": "Even with the app closed, within a minute: add the website to your Home Screen (in Safari: Share → Add to Home Screen, iOS 16.4 or later), open it from its icon, then Settings → Notifications → “Followed channels going live”. Log in with your Twitch account to get your channels.",
+        "notif_pwa_open": "Open the website",
+        "ntfy_retired_title": "ntfy notifications are over",
+        "ntfy_retired_body": "The app no longer goes through ntfy: you can uninstall it. To know when a channel goes live, install the website as a web app: it sends the notifications itself, with no third-party app.",
         "app_icon": "App icon",
         "app_icon_sub": "“Contrast” stays the sharpest with iOS 26's clear or tinted icons.",
         "app_icon_failed": "iOS refused to change the icon: {e}",
@@ -1780,7 +1766,7 @@ private let translations: [Lang: [String: String]] = [
         "expert_quota": "This Worker has reached its quota (Cloudflare): try again later (the daily quota resets at midnight UTC).",
         "expert_reset": "Back to the official Workers",
         "expert_all": "Send everything through this Worker",
-        "expert_all_sub": "Also history backups, feedback, announcements, ntfy notifications and the usage count. Your Twitch token is then sent to it (backups): only turn this on for a Worker you host yourself.",
+        "expert_all_sub": "Also history backups, feedback, announcements and the usage count. Your Twitch token is then sent to it (backups): only turn this on for a Worker you host yourself.",
         "expert_all_no_db": "This Worker has no D1 database: backups, feedback and notifications wouldn't work on it. The option stays off.",
         "expert_using": "In use: {u}",
         "chat_mode_followers": "Followers only",
@@ -2003,7 +1989,7 @@ private let translations: [Lang: [String: String]] = [
         "clips": "Clips", "no_clips": "No hay clips en este periodo", "highlights": "Destacados", "no_highlights": "Sin destacados", "backup": "Copia de seguridad", "backup_sub": "Exporta tus canales (seguidos, fijados, ocultos), tus ajustes, tu personalización y «Seguir viendo» a un archivo, para recuperarlos en otro lugar: la app de pruebas TU Test, una reinstalación, la web. Tus sesiones de Twitch nunca se incluyen.", "export_data": "Exportar", "import_data": "Importar", "export_done": "Archivo exportado", "import_done": "Importación terminada: %d canal(es) añadido(s)", "import_bad": "Este archivo no es una copia de TwitchUnblock", "playlists": "Listas", "play_all": "Reproducir todo", "videos_count": "%d vídeo(s)", "no_playlists": "Sin listas", "err_clip": "No se encontró este clip", "period_day": "24 h", "period_week": "7 d", "period_month": "30 d", "period_all": "Todo",
         "notif_live": "Notificaciones de directo", "notif_live_sub": "Avisa cuando un canal seguido empieza un directo (se comprueba en segundo plano cuando iOS lo permite; canales seguidos en Twitch y en este dispositivo).", "notif_test": "Enviar una notificación de prueba", "notif_test_title": "TwitchUnblock", "notif_test_body": "Las notificaciones funcionan 🎉", "notif_test_sent": "Enviada: llega en 3 s (sal de la app para verla como una real).", "notif_test_denied": "Notificaciones denegadas: permítelas en Ajustes de iOS → TwitchUnblock.", "notif_last_never": "Aún no hay comprobación en segundo plano. iOS elige el momento: deja la app en segundo plano (sin cerrarla) unas horas.", "notif_last_run": "Última comprobación en segundo plano: {t}", "notif_last_failed": "error (conexión o token)", "notif_bg_off": "«Actualización en segundo plano» está desactivada (o el modo de bajo consumo está activo): iOS no despertará la app. Ajustes de iOS → General → Actualización en segundo plano.", "notif_bg_refused": "iOS se negó a programar la comprobación", "web_banner_title": "Conecta tu sesión web", "web_banner_msg": "Para los puntos del canal, los cofres recogidos solos y las predicciones: inicia sesión una vez en twitch.tv dentro de la app.", "web_banner_btn": "Conectar", "announcement_open": "Abrir", "dont_show_again": "No volver a mostrar", "notif_live_title": "{u} está en directo",
         "notif_channels": "Canales notificados",
-        "notif_channels_sub": "Las notificaciones de directo (despertares de la app y ntfy) solo cubren los canales activados aquí. Un canal que sigas más tarde se activa por defecto.",
+        "notif_channels_sub": "Las notificaciones de directo (despertares de la app) solo cubren los canales activados aquí. Un canal que sigas más tarde se activa por defecto.",
         "notif_channels_all": "Todos los canales que sigues",
         "notif_channels_muted": "{n} canal(es) sin notificaciones",
         "notif_channels_all_on": "Activar todo",
@@ -2028,7 +2014,7 @@ private let translations: [Lang: [String: String]] = [
         "raid_bonus": "Bonificación de raid",
         "logs_count_one": "{n} registro",
         "dl_chat_count_one": "chat: {n} mensaje",
-        "ntfy_status_one": "{n} canal seguido tenido en cuenta (cuenta de Twitch y este dispositivo).",
+        
         "viewers_one": "espectador",
         "followers_one": "seguidor",
         "poll_votes_one": "voto",
@@ -2457,19 +2443,11 @@ private let translations: [Lang: [String: String]] = [
         "multi_sound_off": "Silenciar este vídeo",
         "live_activity": "Actividad en directo",
         "live_activity_sub": "Lo que se reproduce en la pantalla bloqueada y en la Dynamic Island (canal, título, reproducción). Si la desactivas, desaparece al instante.",
-        "ntfy_live": "Notificaciones instantáneas (ntfy)",
-        "ntfy_live_sub": "Incluso con la app cerrada, en uno o dos minutos: mediante la app gratuita ntfy, que puede usar las notificaciones de Apple. Las notificaciones de la propia app se detienen entonces, para evitar duplicados.",
-        "ntfy_steps": "1. Instala ntfy (App Store). 2. En ntfy: + → pega este tema → Suscribirse (servidor ntfy.sh por defecto). 3. Envía una notificación de prueba. Al tocarla se abrirá el directo aquí.",
-        "ntfy_copy": "Copiar",
-        "ntfy_copied": "Copiado",
-        "ntfy_install": "Instalar ntfy",
-        "ntfy_test_sent": "Enviada: llega a ntfy en unos segundos.",
-        "ntfy_failed": "No se pudo contactar con el servidor: inténtalo más tarde.",
-        "ntfy_limited": "ntfy.sh no acepta mensajes por ahora (límite de envío alcanzado): inténtalo más tarde.",
-        "ntfy_not_ready": "Activado, pero el servidor aún no gestiona estas notificaciones: llegan con la próxima actualización del sitio. La app lo reintenta sola cada vez que vuelves a ella.",
-        "ntfy_pending": "Activado, pero el servidor no respondió: la app lo reintenta sola cada vez que vuelves a ella.",
-        "ntfy_status": "{n} canales seguidos tenidos en cuenta (cuenta de Twitch y este dispositivo).",
-        "ntfy_privacy": "Los mensajes pasan por ntfy.sh (un servicio gratuito de terceros). Tu tema es secreto: no lo compartas.",
+        "notif_pwa_title": "Notificaciones instantáneas: el sitio como app web",
+        "notif_pwa_sub": "Incluso con la app cerrada, en menos de un minuto: añade el sitio a la pantalla de inicio (en Safari: Compartir → Añadir a pantalla de inicio, iOS 16.4 o posterior), ábrelo desde su icono y luego Ajustes → Notificaciones → «Directos de los canales seguidos». Inicia sesión con tu cuenta de Twitch para tener tus canales.",
+        "notif_pwa_open": "Abrir el sitio",
+        "ntfy_retired_title": "Se acabaron las notificaciones de ntfy",
+        "ntfy_retired_body": "La app ya no pasa por ntfy: puedes desinstalarlo. Para saber cuándo un canal empieza un directo, instala el sitio como app web: envía las notificaciones él mismo, sin app de terceros.",
         "app_icon": "Icono de la app",
         "app_icon_sub": "«Contraste» es el más nítido con los iconos transparentes o teñidos de iOS 26.",
         "app_icon_failed": "iOS se negó a cambiar el icono: {e}",
@@ -2561,7 +2539,7 @@ private let translations: [Lang: [String: String]] = [
         "expert_quota": "Este Worker alcanzó su cuota (Cloudflare): inténtalo más tarde (la cuota diaria se reinicia a medianoche UTC).",
         "expert_reset": "Volver a los Workers oficiales",
         "expert_all": "Pasar todo por este Worker",
-        "expert_all_sub": "También las copias del historial, los comentarios, los anuncios, las notificaciones ntfy y el recuento. Tu token de Twitch se le envía entonces (copias): actívalo solo para un Worker que alojes tú mismo.",
+        "expert_all_sub": "También las copias del historial, los comentarios, los anuncios y el recuento. Tu token de Twitch se le envía entonces (copias): actívalo solo para un Worker que alojes tú mismo.",
         "expert_all_no_db": "Este Worker no tiene base de datos D1: las copias, los comentarios y las notificaciones no funcionarían en él. La opción sigue desactivada.",
         "expert_using": "En uso: {u}",
         "chat_mode_followers": "Solo seguidores",

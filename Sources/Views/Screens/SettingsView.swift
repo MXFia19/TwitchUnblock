@@ -19,11 +19,7 @@ struct SettingsView: View {
     @State private var mutedDraft      = ""
     @State private var liveNotif       = LiveNotifier.isEnabled
     @State private var notifTestResult: String? = nil
-    @State private var ntfyOn          = NtfyNotifier.isEnabled
     @State private var showNotifChannels = false
-    @State private var ntfyResult: String? = nil
-    @State private var ntfyCopied      = false
-    @State private var ntfySynced      = !NtfyNotifier.isPending
     @State private var appIcon: AppIconChoice = .standard
     @State private var appIconError: String? = nil
     /// Vrai après un refus d'iOS qui tient à l'installation ; nil : ce
@@ -1850,11 +1846,6 @@ struct SettingsView: View {
                 LiveNotifier.disable()
             }
         }
-        // Chaînes notifiées peut-être changées : ntfy suit (sujet inchangé).
-        if scope == .all, NtfyNotifier.isEnabled {
-            let lang = store.lang
-            Task { _ = await NtfyNotifier.sync(lang: lang) }
-        }
         // Après l'import : dans la langue qu'il a peut-être changée.
         importSummary = importSummaryText(summary, scope: scope)
         backupMessage = importSummary
@@ -1980,32 +1971,15 @@ struct SettingsView: View {
                               }
                           }), log: "Notifications de live")
                 if liveNotif { liveNotifTools }
-                Divider().background(Color.tBorder)
-                // Instantanées, même app fermée : par l'app ntfy.
-                toggleRow(store.t("ntfy_live"), store.t("ntfy_live_sub"),
-                          Binding(get: { ntfyOn }, set: { on in
-                              ntfyOn = on
-                              ntfyResult = nil
-                              Task {
-                                  if on {
-                                      // Reste activé même si le serveur ne répond pas
-                                      // encore : nouvel essai à chaque retour dans l'app.
-                                      let ok = await NtfyNotifier.enable(lang: store.lang)
-                                      await MainActor.run {
-                                          ntfySynced = ok
-                                          if !ok { ntfyResult = ntfyPendingText }
-                                      }
-                                  } else {
-                                      await NtfyNotifier.disable()
-                                  }
-                              }
-                          }), log: "Notifications ntfy")
-                if ntfyOn { ntfyTools }
-                // Lesquelles des chaînes suivies préviennent (les deux modes).
-                if liveNotif || ntfyOn {
+                // Lesquelles des chaînes suivies préviennent.
+                if liveNotif {
                     Divider().background(Color.tBorder)
                     notifChannelsRow
                 }
+                Divider().background(Color.tBorder)
+                // Instantanées, même app fermée : le site installé en web app
+                // (à la place de ntfy, retiré : voir NtfyNotifier).
+                pwaNotifRow
             }
         }
         .sheet(isPresented: $showNotifChannels) {
@@ -2037,73 +2011,24 @@ struct SettingsView: View {
         .buttonStyle(.plain)
     }
 
-    /// Activé, mais pas encore accepté par le serveur : pourquoi, et la suite.
-    private var ntfyPendingText: String {
-        store.t(NtfyNotifier.serverNotReady ? "ntfy_not_ready" : "ntfy_pending")
-    }
-
-    /// ntfy : le sujet à ajouter dans l'app ntfy, l'installer, tester.
-    @ViewBuilder private var ntfyTools: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(store.t("ntfy_steps"))
+    /// Notifications instantanées, même app fermée : le site installé en web
+    /// app sur l'écran d'accueil (notifications web d'iOS 16.4 et plus). Le
+    /// lien ouvre ses étapes d'installation et d'activation (kNotifInstallURL).
+    private var pwaNotifRow: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(store.t("notif_pwa_title"))
+                .font(.tCardTitle)
+                .foregroundColor(.tText)
+            Text(store.t("notif_pwa_sub"))
                 .font(.tMeta).foregroundColor(.tMuted)
                 .fixedSize(horizontal: false, vertical: true)
-            HStack(spacing: 8) {
-                Text(NtfyNotifier.topic)
-                    .font(.tSystem(size: 14, weight: .semibold, design: .monospaced))
-                    .foregroundColor(.tText)
-                    .lineLimit(1).minimumScaleFactor(0.6)
-                    .textSelection(.enabled)
-                Spacer(minLength: 4)
-                Button {
-                    UIPasteboard.general.string = NtfyNotifier.topic
-                    ntfyCopied = true
-                } label: {
-                    Label(store.t(ntfyCopied ? "ntfy_copied" : "ntfy_copy"),
-                          systemImage: ntfyCopied ? "checkmark" : "doc.on.doc")
-                        .font(.tSystem(size: 13, weight: .semibold))
-                        .foregroundColor(.tPrimary)
-                }
-                .buttonStyle(.plain)
+            Link(destination: kNotifInstallURL) {
+                notifPill(store.t("notif_pwa_open"), icon: "safari.fill")
             }
-            .padding(10)
-            .background(Color.tSurface)
-            .cornerRadius(10)
-            HStack(spacing: 8) {
-                Link(destination: NtfyNotifier.appStoreURL) {
-                    ntfyPill(store.t("ntfy_install"), icon: "arrow.down.app.fill")
-                }
-                Button {
-                    ntfyResult = nil
-                    Task {
-                        let result = await NtfyNotifier.sendTest(lang: store.lang)
-                        await MainActor.run { ntfyResult = store.t(result.textKey) }
-                    }
-                } label: {
-                    ntfyPill(store.t("notif_test"), icon: "bell.badge.fill")
-                }
-                .buttonStyle(.plain)
-            }
-            if let ntfyResult {
-                Text(ntfyResult).font(.tMeta).foregroundColor(.tMuted)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            if ntfySynced {
-                let count = UserDefaults.standard.integer(forKey: NtfyNotifier.countKey)
-                Text(store.tn("ntfy_status", count).replacingOccurrences(of: "{n}", with: "\(count)"))
-                    .font(.tMeta).foregroundColor(.tMuted)
-            } else if ntfyResult == nil {
-                Text(ntfyPendingText).font(.tMeta).foregroundColor(.orange)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Text(store.t("ntfy_privacy"))
-                .font(.tMeta).foregroundColor(.tMuted)
-                .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(.leading, 2)
     }
 
-    private func ntfyPill(_ title: String, icon: String) -> some View {
+    private func notifPill(_ title: String, icon: String) -> some View {
         HStack(spacing: 8) {
             Image(systemName: icon).font(.tSystem(size: 13, weight: .semibold))
             Text(title).font(.tSystem(size: 14, weight: .semibold)).lineLimit(1)

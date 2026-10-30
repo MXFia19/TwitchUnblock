@@ -55,28 +55,22 @@ enum LiveNotifier {
     }
 
     /// « Ne plus notifier cette chaîne » (action d'une notification) : la
-    /// chaîne passe dans les coupées de « Chaînes notifiées », et ntfy suit.
-    /// Attendu jusqu'au bout par AppDelegate : l'app, réveillée en arrière-plan
-    /// pour l'action, peut être suspendue dès qu'elle rend la main, et l'envoi
-    /// à ntfy partait dans une tâche à part, sans garantie d'aboutir. Fil
-    /// principal : les cloches affichées suivent .notifChannelsChanged.
+    /// chaîne passe dans les coupées de « Chaînes notifiées ». Attendu par
+    /// AppDelegate : l'app, réveillée en arrière-plan pour l'action, peut être
+    /// suspendue dès qu'elle rend la main. Fil principal : les cloches
+    /// affichées suivent .notifChannelsChanged.
     @MainActor
     static func mute(_ login: String) async {
         let l = login.lowercased()
         guard !l.isEmpty else { return }
         NotifChannels.setNotify(l, false)
         logger.info("NOTIF", "Chaîne retirée des notifications", "@\(l)")
-        let lang = Lang(rawValue: UserDefaults.standard.string(forKey: "lang") ?? "en") ?? .en
-        await NtfyNotifier.sync(lang: lang)
     }
 
     /// Programme le prochain réveil : pour les lives suivis (option), ou pour
     /// les réponses aux retours envoyés (FeedbackStore).
     static func schedule() {
-        // ntfy aussi : son sujet est renvoyé au Worker pendant ces réveils (il
-        // l'oubliait après 60 jours sans retour dans l'app).
-        guard isEnabled || NtfyNotifier.isEnabled
-                || UserDefaults.standard.bool(forKey: FeedbackStore.hasReportsKey) else { return }
+        guard isEnabled || UserDefaults.standard.bool(forKey: FeedbackStore.hasReportsKey) else { return }
         let req = BGAppRefreshTaskRequest(identifier: taskId)
         req.earliestBeginDate = Date(timeIntervalSinceNow: 15 * 60)
         do {
@@ -134,12 +128,6 @@ enum LiveNotifier {
             let ok = isEnabled ? await check(notify: true) : true
             // Réponses aux retours envoyés : notifiées par FeedbackStore.
             await FeedbackStore.shared.refresh(force: true)
-            // ntfy : chaînes suivies renvoyées si elles ont changé (et au moins
-            // une fois par jour), même sans ouvrir l'app.
-            if NtfyNotifier.isEnabled {
-                let lang = Lang(rawValue: UserDefaults.standard.string(forKey: "lang") ?? "en") ?? .en
-                _ = await NtfyNotifier.sync(lang: lang)
-            }
             UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: lastRunKey)
             UserDefaults.standard.set(ok, forKey: lastOkKey)
             task.setTaskCompleted(success: ok)
@@ -176,9 +164,8 @@ enum LiveNotifier {
         guard reached else { return false }
         let known = Set(ud.stringArray(forKey: knownKey) ?? [])
         let now = Set(streams.map { $0.userLogin.lowercased() })
-        // ntfy actif : c'est lui qui prévient (sans doublon, et plus vite).
         let firstPass = ud.object(forKey: knownKey) == nil
-        if notify && !firstPass && !(NtfyNotifier.isEnabled && !NtfyNotifier.isPending) {
+        if notify && !firstPass {
             let lang = Lang(rawValue: ud.string(forKey: "lang") ?? "en") ?? .en
             // Chaînes coupées dans « Chaînes notifiées » : connues quand même,
             // pour ne pas notifier un live en cours le jour où on les rallume.

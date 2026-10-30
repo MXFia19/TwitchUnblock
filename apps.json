@@ -185,6 +185,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.6.61",
+          "buildVersion": "373",
+          "date": "2026-10-30",
+          "localizedDescription": "- iPhone Duo: the full-size player in landscape now hides the status column on the side, so the video fills the display\n- The player's rotate button goes away when iOS doesn't let the app turn the screen (apps in a window, as on the iPhone Duo's inner display)",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-373/TwitchUnblock.ipa",
+          "size": 4496574,
+          "commit": "858417ed00ca59b09dfe09f892001b0e71d73bfc"
+        },
+        {
           "version": "1.6.60",
           "buildVersion": "372",
           "date": "2026-10-27",
@@ -264,25 +273,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-364/TwitchUnblock.ipa",
           "size": 4455995,
           "commit": "e7d15a1fb38530fec3eb88baab2bb9960c0ac4bf"
-        },
-        {
-          "version": "1.6.51",
-          "buildVersion": "363",
-          "date": "2026-10-26",
-          "localizedDescription": "- Other improvements and fixes",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-363/TwitchUnblock.ipa",
-          "size": 4441807,
-          "commit": "621506228d1aa21b10ccf54faed6e66235d42bd5"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.6.60",
-      "versionDate": "2026-10-27",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-372/TwitchUnblock.ipa",
-      "size": 4493961
+      "version": "1.6.61",
+      "versionDate": "2026-10-30",
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-373/TwitchUnblock.ipa",
+      "size": 4496574
     }
   ],
   "news": []

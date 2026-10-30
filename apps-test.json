@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.7.0",
+          "buildVersion": "377",
+          "date": "2026-10-30",
+          "localizedDescription": "- Improvements and fixes",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-377/TwitchUnblock.ipa",
+          "size": 4486051,
+          "commit": "fe6d3aba005d3f836fe315e45b2a47ab8d60068c"
+        },
+        {
           "version": "1.6.64",
           "buildVersion": "376",
           "date": "2026-10-30",
@@ -280,25 +289,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-347/TwitchUnblock.ipa",
           "size": 4333018,
           "commit": "c63216c5e776dbc20b01b9cf56ee69921c4a4d21"
-        },
-        {
-          "version": "1.5.28",
-          "buildVersion": "346",
-          "date": "2026-10-20",
-          "localizedDescription": "- Settings → About now credits the people who contribute to the app\n- Japanese interface language (thanks to kinboy56)\n- Other improvements and fixes",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-346/TwitchUnblock.ipa",
-          "size": 4310080,
-          "commit": "5000d324dbf353e2830d60fbe10f56cbe7704c28"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.6.64",
+      "version": "1.7.0",
       "versionDate": "2026-10-30",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-376/TwitchUnblock.ipa",
-      "size": 4486050
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-377/TwitchUnblock.ipa",
+      "size": 4486051
     }
   ],
   "news": []

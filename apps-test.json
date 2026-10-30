@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.6.61",
+          "buildVersion": "373",
+          "date": "2026-10-30",
+          "localizedDescription": "- iPhone Duo: the full-size player in landscape now hides the status column on the side, so the video fills the display\n- The player's rotate button goes away when iOS doesn't let the app turn the screen (apps in a window, as on the iPhone Duo's inner display)",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-373/TwitchUnblock.ipa",
+          "size": 4496574,
+          "commit": "858417ed00ca59b09dfe09f892001b0e71d73bfc"
+        },
+        {
           "version": "1.6.60",
           "buildVersion": "372",
           "date": "2026-10-27",
@@ -280,25 +289,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-341/TwitchUnblock.ipa",
           "size": 4252146,
           "commit": "5ff465d6696e0a634fe3051d25e6e6239b52569b"
-        },
-        {
-          "version": "1.5.16",
-          "buildVersion": "340",
-          "date": "2026-10-20",
-          "localizedDescription": "- Live chat now waits for the video: messages show up when the picture catches up, following stalls and jumps back to live (tap the ⏱ badge above the chat for real-time chat)\n- Other improvements and fixes",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-340/TwitchUnblock.ipa",
-          "size": 4251784,
-          "commit": "acfecbb08414ef3672dffef0e28445fd15c8e4f9"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.6.60",
-      "versionDate": "2026-10-27",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-372/TwitchUnblock.ipa",
-      "size": 4493961
+      "version": "1.6.61",
+      "versionDate": "2026-10-30",
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-373/TwitchUnblock.ipa",
+      "size": 4496574
     }
   ],
   "news": []

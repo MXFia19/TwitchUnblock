@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.6.62",
+          "buildVersion": "374",
+          "date": "2026-10-30",
+          "localizedDescription": "- Chat: tapping a GIF from Twitch's GIF keyboard opens its card (title, author, GIPHY page, link to copy) instead of the sender's messages\n- A live paused by your AirPods, earphones or iOS and resumed from them or the lock screen now picks up at the live edge instead of where it stopped",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-374/TwitchUnblock.ipa",
+          "size": 4502860,
+          "commit": "ed9b128e38adf558fb6f542addf7b856e0ad9763"
+        },
+        {
           "version": "1.6.61",
           "buildVersion": "373",
           "date": "2026-10-30",
@@ -280,25 +289,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-342/TwitchUnblock.ipa",
           "size": 4274993,
           "commit": "d28a2794a10e917f6ebdbac57557581c5a762317"
-        },
-        {
-          "version": "1.5.17",
-          "buildVersion": "341",
-          "date": "2026-10-20",
-          "localizedDescription": "- Other improvements and fixes",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-341/TwitchUnblock.ipa",
-          "size": 4252146,
-          "commit": "5ff465d6696e0a634fe3051d25e6e6239b52569b"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.6.61",
+      "version": "1.6.62",
       "versionDate": "2026-10-30",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-373/TwitchUnblock.ipa",
-      "size": 4496574
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-374/TwitchUnblock.ipa",
+      "size": 4502860
     }
   ],
   "news": []

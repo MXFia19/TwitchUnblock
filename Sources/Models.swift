@@ -87,6 +87,11 @@ struct VodMarkers {
     var chapters: [VodChapter] = []
     var muted: [MutedRange] = []
     var createdAt: Date? = nil
+    /// Début de la diffusion, pour une archive de direct seulement (pas un
+    /// highlight ni un upload) : l'heure réelle d'un instant de la VOD.
+    var broadcastStart: Date? = nil
+    /// Durée de la VOD au moment de la lecture (secondes, 0 si inconnue).
+    var length: Double = 0
 }
 
 /// Clip du fil Découvrir : un clip populaire d'une chaîne du top.

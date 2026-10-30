@@ -11,22 +11,208 @@ import SwiftUI
 //  il écrit `.font(.tCardTitle)`.
 // ═══════════════════════════════════════════════════════════════════════════
 
+// MARK: – Taille du texte d'iOS (Dynamic Type)
+/// Taille du texte choisie dans iOS (Réglages → Luminosité et affichage →
+/// Taille du texte, ou Accessibilité → Affichage et taille du texte),
+/// appliquée aux polices de l'app.
+///
+/// Les tailles écrites dans l'app sont celles du réglage par défaut
+/// (« Grand ») : `scaled` les fait grossir ou rétrécir comme le style de
+/// texte d'iOS le plus proche, avec les paliers d'Apple. Plafond à
+/// `maxSize` : au-delà, cartes et lignes ne tiennent plus.
+///
+/// SwiftUI ne fait pas suivre la taille du texte à `Font.system(size:)`.
+/// La taille en cours est donc relevée par les racines (MainTabView,
+/// `tTypeRoot()` des feuilles), au début de leur rendu, avant celui de leur
+/// contenu ; quand elle change, elles refont ce contenu (comme pour un
+/// changement de thème). Les commandes posées sur la vidéo et les pastilles
+/// sur les miniatures gardent `Font.system(size:)`, à taille fixe.
+enum TType {
+    /// Plafond : « Accessibilité 2 » (le 9ᵉ cran sur 12).
+    static let maxSize: DynamicTypeSize = .accessibility2
+    /// Taille en cours, plafonnée.
+    private(set) static var size: DynamicTypeSize = .large
+
+    static func capped(_ s: DynamicTypeSize) -> DynamicTypeSize { min(s, maxSize) }
+
+    /// Relevée par une racine : rend la taille plafonnée (clé de son contenu).
+    @discardableResult
+    static func adopt(_ s: DynamicTypeSize) -> DynamicTypeSize {
+        let c = capped(s)
+        if c != size { size = c }
+        return c
+    }
+
+    /// Tailles d'accessibilité (les 5 derniers crans) : les mises en page
+    /// serrées passent sur une colonne.
+    static var isAccessibility: Bool { size.isAccessibilitySize }
+
+    /// Points des styles de texte d'iOS, du plus petit cran (« Très petit »)
+    /// au plus grand (« Accessibilité 5 »), le défaut (« Grand ») en 4ᵉ ;
+    /// `upTo` : plus grande taille par défaut qui suit ce style.
+    private static let curves: [(upTo: CGFloat, points: [CGFloat])] = [
+        (11, [11, 11, 11, 11, 13, 15, 17, 20, 24, 29, 34, 40]),            // caption 2
+        (12, [11, 11, 11, 12, 14, 16, 18, 22, 26, 32, 37, 43]),            // caption 1
+        (13, [12, 12, 12, 13, 15, 17, 19, 23, 27, 33, 38, 44]),            // footnote
+        (15, [12, 13, 14, 15, 17, 19, 21, 25, 30, 36, 42, 49]),            // subheadline
+        (16, [13, 14, 15, 16, 18, 20, 22, 26, 32, 38, 44, 51]),            // callout
+        (19, [14, 15, 16, 17, 19, 21, 23, 28, 33, 40, 47, 53]),            // body
+        (21, [17, 18, 19, 20, 22, 24, 26, 31, 37, 43, 49, 55]),            // title 3
+        (25, [19, 20, 21, 22, 24, 26, 28, 34, 39, 44, 50, 56]),            // title 2
+        (31, [25, 26, 27, 28, 30, 32, 34, 38, 43, 48, 53, 58]),            // title 1
+        (.infinity, [31, 32, 33, 34, 36, 38, 40, 44, 48, 52, 56, 60]),     // large title
+    ]
+
+    /// Crans dans l'ordre, du plus petit au plus grand.
+    private static let order: [DynamicTypeSize] = DynamicTypeSize.allCases
+
+    /// `base` points au réglage par défaut, à la taille du texte en cours.
+    static func scaled(_ base: CGFloat) -> CGFloat {
+        guard size != .large, base > 0,
+              let i = order.firstIndex(of: size), let d = order.firstIndex(of: .large),
+              let curve = curves.first(where: { base <= $0.upTo })?.points,
+              curve.indices.contains(i), curve.indices.contains(d) else { return base }
+        return base * curve[i] / curve[d]
+    }
+
+    /// Facteur de la taille en cours pour un texte de `base` points : de quoi
+    /// agrandir une hauteur réservée à du texte.
+    static func ratio(_ base: CGFloat) -> CGFloat { scaled(base) / base }
+
+    /// Grille de cartes : deux colonnes sur iPhone, une seule aux tailles
+    /// d'accessibilité (titres et pseudos y seraient coupés au bout de
+    /// quelques lettres) ; davantage quand la largeur en tient plus (TGrid).
+    /// `width` : largeur du contenu (`tContentWidth`), 0 si inconnue.
+    static func cardColumns(width: CGFloat) -> [GridItem] {
+        TGrid.columns(width: width,
+                      minWidth: isAccessibility ? 2 * TGrid.cardMinWidth : TGrid.cardMinWidth,
+                      base: isAccessibility ? 1 : 2,
+                      alignment: .top)
+    }
+}
+
+// MARK: – Grilles
+/// Colonnes des grilles de cartes d'après la largeur du contenu
+/// (`tContentWidth`) : celles d'un iPhone (`base`) jusqu'à ~440 pt, puis
+/// autant que la largeur en tient. Sur l'écran intérieur de l'iPhone Duo ou
+/// sur iPad, les cartes gardent à peu près leur taille d'iPhone au lieu de
+/// grossir (deux colonnes de tuiles géantes).
+enum TGrid {
+    /// Largeur minimale d'une carte (aperçu 16:9, jaquette 3:4) : 2 par
+    /// ligne sur tout iPhone, 3 sur l'écran intérieur de l'iPhone Duo en
+    /// portrait (~670 pt), 4 en paysage.
+    static let cardMinWidth: CGFloat = 165
+    /// Jaquettes compactes des catégories suivies : 3 par ligne sur iPhone.
+    static let compactMinWidth: CGFloat = 115
+    /// Espace entre deux colonnes : celui d'un GridItem sans `spacing`.
+    static let columnSpacing: CGFloat = 8
+
+    /// Colonnes pour `width` points de contenu, marges de la page
+    /// (TSpace.lg de chaque côté) comprises : au moins `base`, au plus
+    /// `limit` (au-delà, les cartes grandissent). Largeur inconnue : `base`.
+    static func count(width: CGFloat, minWidth: CGFloat, base: Int, limit: Int = 5) -> Int {
+        let usable = width - 2 * TSpace.lg
+        guard usable > 0, usable.isFinite, minWidth > 0 else { return base }
+        let fit = Int((usable + columnSpacing) / (minWidth + columnSpacing))
+        return min(max(base, fit), max(base, limit))
+    }
+
+    /// Autant de colonnes souples, toutes pareilles (`spacing` et
+    /// `alignment` : ceux de la grille, nil pour ceux d'iOS).
+    static func columns(width: CGFloat, minWidth: CGFloat, base: Int, limit: Int = 5,
+                        spacing: CGFloat? = nil, alignment: Alignment? = nil) -> [GridItem] {
+        let n = count(width: width, minWidth: minWidth, base: base, limit: limit)
+        return Array(repeating: GridItem(.flexible(), spacing: spacing, alignment: alignment), count: n)
+    }
+}
+
+// MARK: – Largeur du contenu
+private struct TContentWidthKey: EnvironmentKey {
+    static let defaultValue: CGFloat = 0
+}
+
+extension EnvironmentValues {
+    /// Largeur offerte au contenu d'un onglet ou d'une feuille, marges de
+    /// sécurité et colonne d'onglets déduites (0 : pas encore mesurée).
+    /// Les grilles en tirent leur nombre de colonnes (TGrid).
+    var tContentWidth: CGFloat {
+        get { self[TContentWidthKey.self] }
+        set { self[TContentWidthKey.self] = newValue }
+    }
+}
+
+/// Mesure la largeur de la vue et la donne à son contenu (tContentWidth).
+/// `active` faux : largeur donnée pour inconnue (0), les grilles gardent
+/// leurs colonnes d'iPhone (TGrid).
+private struct TContentWidthReader: ViewModifier {
+    let active: Bool
+    @State private var width: CGFloat = 0
+
+    init(active: Bool) { self.active = active }
+
+    func body(content: Content) -> some View {
+        content
+            .environment(\.tContentWidth, active ? width : 0)
+            .background(GeometryReader { geo in
+                Color.clear
+                    .onAppear { width = geo.size.width }
+                    .onChange(of: geo.size.width) { width = $0 }
+            })
+    }
+}
+
+extension View {
+    /// À poser sur la racine d'un onglet ou d'une feuille qui montre des
+    /// grilles de cartes : leur nombre de colonnes suit sa largeur
+    /// (rotation, pliage, Split View de l'iPad). `active` faux : colonnes
+    /// d'iPhone, la mesure continue (TabScaffold, iPhone couché).
+    func tMeasuresContentWidth(_ active: Bool = true) -> some View {
+        modifier(TContentWidthReader(active: active))
+    }
+}
+
+/// Racine d'une feuille : la taille du texte d'iOS (plafonnée) devient celle
+/// des polices de l'app, et le contenu est refait quand elle change.
+private struct TTypeRoot: ViewModifier {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    func body(content: Content) -> some View {
+        content
+            .id(TType.adopt(dynamicTypeSize))
+            .dynamicTypeSize(...TType.maxSize)
+    }
+}
+
+extension View {
+    /// À poser sur le contenu d'une feuille (voir TType).
+    func tTypeRoot() -> some View { modifier(TTypeRoot()) }
+}
+
 // MARK: – Typographie
+// Tailles du réglage par défaut d'iOS, qui suivent la taille du texte
+// choisie (TType). Calculées à chaque rendu.
 extension Font {
     /// Grand titre d'écran (en-tête de page).
-    static let tScreenTitle = Font.system(size: 26, weight: .bold)
+    static var tScreenTitle: Font { .system(size: TType.scaled(26), weight: .bold) }
     /// Titre de section dans une page.
-    static let tSection     = Font.system(size: 17, weight: .bold)
+    static var tSection: Font     { .system(size: TType.scaled(17), weight: .bold) }
     /// Titre d'une carte / d'une ligne de liste.
-    static let tCardTitle   = Font.system(size: 14, weight: .semibold)
+    static var tCardTitle: Font   { .system(size: TType.scaled(14), weight: .semibold) }
     /// Texte courant.
-    static let tBody        = Font.system(size: 14)
+    static var tBody: Font        { .system(size: TType.scaled(14)) }
     /// Libellé de bouton ou de champ.
-    static let tLabel       = Font.system(size: 13, weight: .semibold)
+    static var tLabel: Font       { .system(size: TType.scaled(13), weight: .semibold) }
     /// Métadonnée secondaire (durée, vues, date…).
-    static let tMeta        = Font.system(size: 12, weight: .medium)
+    static var tMeta: Font        { .system(size: TType.scaled(12), weight: .medium) }
     /// Pastille, badge, compteur.
-    static let tBadge       = Font.system(size: 11, weight: .bold)
+    static var tBadge: Font       { .system(size: TType.scaled(11), weight: .bold) }
+
+    /// `Font.system(size:)` qui suit la taille du texte d'iOS : `size` est la
+    /// taille au réglage par défaut.
+    static func tSystem(size: CGFloat, weight: Font.Weight = .regular,
+                        design: Font.Design = .default) -> Font {
+        .system(size: TType.scaled(size), weight: weight, design: design)
+    }
 }
 
 // MARK: – Espacements
@@ -82,7 +268,7 @@ struct TSectionHeader<Trailing: View>: View {
     var body: some View {
         HStack(spacing: TSpace.sm) {
             Image(systemName: icon)
-                .font(.system(size: 14, weight: .semibold))
+                .font(.tSystem(size: 14, weight: .semibold))
                 .foregroundColor(.tPrimary)
             Text(title)
                 .font(.tSection)
@@ -114,14 +300,17 @@ struct TPrimaryButton: View {
         Button(action: action) {
             HStack(spacing: TSpace.sm) {
                 if let icon {
-                    Image(systemName: icon).font(.system(size: 13, weight: .bold))
+                    Image(systemName: icon).font(.tSystem(size: 13, weight: .bold))
                 }
-                Text(title).font(.tLabel)
+                Text(title).font(.tLabel).multilineTextAlignment(.center)
             }
             .foregroundColor(.white)
             .frame(maxWidth: fullWidth ? .infinity : nil)
             .padding(.horizontal, fullWidth ? 0 : TSpace.lg)
-            .frame(height: 44)
+            // Hauteur minimale : avec un grand texte (réglage d'iOS), le
+            // libellé passe sur deux lignes au lieu de déborder.
+            .padding(.vertical, TSpace.xs)
+            .frame(minHeight: 44)
             .tGlass(in: RoundedRectangle(cornerRadius: TRadius.control, style: .continuous),
                     fallback: .tPrimary, tint: .tPrimary)
         }
@@ -141,14 +330,15 @@ struct TSecondaryButton: View {
         Button(action: action) {
             HStack(spacing: TSpace.sm) {
                 if let icon {
-                    Image(systemName: icon).font(.system(size: 13, weight: .bold))
+                    Image(systemName: icon).font(.tSystem(size: 13, weight: .bold))
                 }
-                Text(title).font(.tLabel)
+                Text(title).font(.tLabel).multilineTextAlignment(.center)
             }
             .foregroundColor(tint)
             .frame(maxWidth: fullWidth ? .infinity : nil)
             .padding(.horizontal, fullWidth ? 0 : TSpace.lg)
-            .frame(height: 44)
+            .padding(.vertical, TSpace.xs)
+            .frame(minHeight: 44)
             .background(tint.opacity(0.15))
             .cornerRadius(TRadius.control)
             .overlay(RoundedRectangle(cornerRadius: TRadius.control)
@@ -188,13 +378,14 @@ struct TChip: View {
         Button(action: action) {
             HStack(spacing: TSpace.xs) {
                 if let icon {
-                    Image(systemName: icon).font(.system(size: 11, weight: .semibold))
+                    Image(systemName: icon).font(.tSystem(size: 11, weight: .semibold))
                 }
                 Text(title).font(.tLabel).lineLimit(1)
             }
             .foregroundColor(isOn ? .white : .tMuted)
             .padding(.horizontal, TSpace.md)
-            .frame(height: 32)
+            .padding(.vertical, TSpace.xs)
+            .frame(minHeight: 32)
             .background(isOn ? Color.tPrimary : Color.tSurface)
             .cornerRadius(TRadius.chip)
         }
@@ -282,7 +473,7 @@ struct TSearchField: View {
                     .frame(width: 15, height: 15)
             } else {
                 Image(systemName: "magnifyingglass")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.tSystem(size: 14, weight: .semibold))
                     .foregroundColor(focused ? .tPrimary : .tMuted)
             }
 
@@ -298,14 +489,15 @@ struct TSearchField: View {
             if !text.isEmpty {
                 Button { text = "" } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 15))
+                        .font(.tSystem(size: 15))
                         .foregroundColor(.tMuted)
                 }
                 .buttonStyle(.plain)
             }
         }
         .padding(.horizontal, TSpace.md)
-        .frame(height: 44)
+        .padding(.vertical, TSpace.xs)
+        .frame(minHeight: 44)
         .tControlSurface(focused: focused)
     }
 }
@@ -381,11 +573,14 @@ struct TMeta: View {
     let icon: String
     let text: String
     var tint: Color = .tMuted
+    /// Posée sur une image (spectateurs sur une miniature) : taille fixe,
+    /// sinon un grand texte (réglage d'iOS) couvrirait l'image.
+    var onImage = false
 
     var body: some View {
         HStack(spacing: 3) {
-            Image(systemName: icon).font(.system(size: 10))
-            Text(text).font(.tMeta)
+            Image(systemName: icon).font(onImage ? Font.system(size: 10) : Font.tSystem(size: 10))
+            Text(text).font(onImage ? Font.system(size: 12, weight: .medium) : Font.tMeta)
         }
         .foregroundColor(tint)
         .fixedSize()
@@ -410,7 +605,8 @@ struct TLoadMoreButton: View {
                 }
             }
             .frame(maxWidth: .infinity)
-            .frame(height: 44)
+            .padding(.vertical, TSpace.xs)
+            .frame(minHeight: 44)
             .background(Color.tPrimary.opacity(0.12))
             .cornerRadius(TRadius.control)
         }
@@ -582,5 +778,73 @@ struct TPromptCard: View {
             .padding(.horizontal, 28)
             .transition(.scale(scale: 0.92).combined(with: .opacity))
         }
+    }
+}
+
+// MARK: – Retour en glissant depuis le bord gauche
+/// Nos navigations maison (pages des Réglages, catégorie ouverte, chaîne
+/// ouverte depuis une recherche) ne passent pas par un UINavigationController :
+/// pas de glissé d'iOS depuis le bord gauche, il fallait toucher Retour. Ce
+/// geste le rend. Il ne part qu'à moins de 24 pt du bord gauche de la vue,
+/// vers la droite et plus à l'horizontale qu'à la verticale ; simultané, il
+/// laisse défiler les listes, et les gestes du lecteur, de Découvrir ou des
+/// feuilles, posés sur d'autres vues, ne le reçoivent pas. Une fois le retour
+/// reconnu, les listes de la page ne défilent plus jusqu'au lever du doigt :
+/// la page montait et descendait sous le doigt pendant le glissé.
+private struct EdgeSwipeBack: ViewModifier {
+    let enabled: Bool
+    /// La vue suit le doigt (une page posée sur ce qu'elle découvre).
+    let follows: Bool
+    let onBack: () -> Void
+
+    struct Drag: Equatable {
+        var dx: CGFloat = 0
+        /// Sens décidé au premier mouvement : un défilement vertical ne
+        /// devient pas un retour en cours de route.
+        var decided = false
+        var back = false
+    }
+    /// Remis à zéro, en douceur, quand le doigt se lève ou que le geste est
+    /// interrompu (la vue revient en place).
+    @GestureState(resetTransaction: Transaction(animation: .easeOut(duration: 0.2)))
+    private var drag = Drag()
+
+    func body(content: Content) -> some View {
+        content
+            // Seulement couper, jamais rétablir un défilement coupé plus haut.
+            .transformEnvironment(\.isScrollEnabled) { if drag.back { $0 = false } }
+            .offset(x: follows ? drag.dx : 0)
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 12)
+                    .updating($drag) { value, state, _ in
+                        if !state.decided {
+                            state.decided = true
+                            state.back = isEdgeBackSwipe(value)
+                        }
+                        if state.back { state.dx = max(0, value.translation.width) }
+                    }
+                    .onEnded { value in
+                        // Assez loin, ou lancé : retour ; sinon la vue revient.
+                        guard isEdgeBackSwipe(value),
+                              value.translation.width > 100 || value.predictedEndTranslation.width > 240
+                        else { return }
+                        onBack()
+                    },
+                including: enabled ? GestureMask.all : GestureMask.subviews)
+    }
+}
+
+/// Parti du bord gauche de la vue, vers la droite, plus à l'horizontale qu'à
+/// la verticale.
+private func isEdgeBackSwipe(_ value: DragGesture.Value) -> Bool {
+    value.startLocation.x <= 24 && value.translation.width > abs(value.translation.height)
+}
+
+extension View {
+    /// Retour par un glissé depuis le bord gauche (voir EdgeSwipeBack).
+    /// `follows` : la vue suit le doigt ; `enabled` faux : pas de geste.
+    func edgeSwipeBack(enabled: Bool = true, follows: Bool = true,
+                       onBack: @escaping () -> Void) -> some View {
+        modifier(EdgeSwipeBack(enabled: enabled, follows: follows, onBack: onBack))
     }
 }

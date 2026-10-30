@@ -66,13 +66,25 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   itself twice, unless you had paused it). When the connection comes back
   after a drop, a player stopped on **Retry** (or on a loading error) and
   failed multi-live tiles start again on their own, once, two seconds later.
+* 📱 **Home indicator out of the way** — in landscape, with the player full
+  size (app's or Apple's) or in multi-live, the bar at the bottom of the
+  screen fades after a few seconds, like in video apps; touch the screen to
+  bring it back.
 * 🐢 **Playback speed** — 0.25× to 2× on VODs and clips, from the ⋯ menu (or
   Apple's own speed menu in the native player and on Apple TV). The VOD speed
   is remembered from one VOD to the next, shown next to the timer, and synced
-  with the website through the backup file; clips start at 1×, live streams
-  always play at normal speed. Catching up with a live recording drops back to
-  1× near its edge, and a speed the player can't keep (AirPlay, slow motion
-  refused) is announced; in both cases 1× becomes the remembered speed.
+  with the website through the backup file; clips start at 1×. A live plays at
+  normal speed, except to **catch up**: once you go back in it (−10 s, the
+  bar), the app's player plays at the chosen speed (1× to 2×, also in the ⋯
+  menu during a live) until the live edge, then back to 1× ("Caught up with
+  the live"); the timer only shows the speed while it applies. Catching up with
+  a live recording drops back to 1× near its edge (Apple's player too, whose
+  menu used to keep showing 2×), and the chosen speed comes back once you
+  rewind away from the edge. A speed the player can't keep (AirPlay, slow
+  motion refused, or measured lower than asked once applied again) is
+  announced and shown as it really plays, for the current video only. No
+  faster than 2×: Twitch publishes no I-frame playlists, and iOS doesn't play
+  its streams above 2× (2.25× to 3× were tried in TU Test and removed).
 * ⏩ **Double-tap to skip ±10 s** — consecutive taps add up, so three taps read
   "+30 s" instead of three separate "+10 s". On a live there's nothing to skip
   ahead to: in landscape, double-tap shows or hides the chat instead, and once
@@ -84,15 +96,44 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   rest of the app with the player reduced. Closing the player, opening another
   video or switching to chat only ends it, along with its chat connection and
   lock screen activity.
+  Starting it shrinks the player into the mini player, so you can browse the app right away (no more black full-size player to close).
+  The PiP window's expand button brings the player back full size on the same video, without reloading (with the app's player, tapping the mini player does too).
+  A followed raid or the next VOD of **Play all** keeps playing in the same window: the player only changes what it plays (the window used to close while the sound went on).
+* 🌙 **Background playback** — Settings → Player: when the screen locks or you
+  switch to another app without Picture-in-Picture, the video keeps playing
+  (default), switches to **audio only** (much less data; the picture comes
+  back, same quality, when you return to the app), or **pauses**.
+* 🕰️ **Real time in VODs** — on a stream archive, the time of day each moment
+  was streamed shows next to the timer and on the scrub bubble (“1:02:03 ·
+  10:15 PM”), and ⋯ → **Go to a time of day** jumps straight to it (with the
+  day too when the stream ran past midnight).
+* ✂️ **Clips: full VOD and download** — ⋯ → **Watch in the VOD** opens the
+  original VOD at the moment you're watching in the clip; ⋯ → **Download the
+  clip** saves the MP4 in the quality being played, through iOS's share sheet
+  (Save Video, Files, AirDrop…).
+* 🪟 **PiP when leaving the player** — optional, off by default (Settings → Player): swiping a live or VOD down, or the back arrow, opens it in Picture-in-Picture instead of the mini player while it plays (app's player; Apple's player keeps the mini player).
 * 🔒 **Lock Screen and Dynamic Island** — the live or VOD you're watching
   (channel, title, playback) as a Live Activity; turn it off in Settings →
   Player → Live Activity if you don't need it. When iOS refuses it because the
   installer rewrote the app's Info.plist (missing `NSSupportsLiveActivities`),
   the app stops asking until its next launch: one line in the log instead of
   one per video.
+  It steps aside for other apps: when another app takes the sound (Spotify, a
+  video…), the Live Activity ends and the app stops showing as Now Playing, so
+  tapping the Dynamic Island opens the app that's actually playing. A video
+  left paused in the background ends its Live Activity about 20 seconds later,
+  just before iOS suspends the app (the lock screen controls stay, to resume;
+  a Picture-in-Picture window keeps the app running, so not while it's open —
+  closing it starts those 20 seconds); after 3 minutes paused, Now Playing
+  goes too if the app is still running, without getting in the way of a
+  resume from the lock screen.
+  Everything comes back when playback resumes (the Live Activity as soon as
+  you're back in the app if it resumed from the lock screen). Calls and Siri
+  don't count: the video picks up after them, Live Activity included.
 * 🏷️ **Full title** — tap the title at the top of the player (often cut off)
   to read it in full, with the category, viewers, uptime and a shortcut to the
-  channel.
+  channel. Closing a channel page opened from the full-size player (name,
+  title or chat) brings the player back full size instead of the mini player.
 * 🎵 **Leaves your music alone** — opening the app no longer stops music
   playing in another app: the sound switches over only when a video starts,
   and goes back to that app when you close the player (not when the sleep
@@ -109,18 +150,28 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   (in multi-live, a **Play** button on each tile that stopped). A video you
   paused stays paused, and unplugging headphones pauses without resuming.
   Multi-live and Apple TV too, their live streams always back at the edge.
+  A live paused by your earphones or iOS (an AirPod taken out, the
+  background setting) and resumed from them, the lock screen or Control
+  Center picks up at the live edge too, not where it stopped; one you paused
+  in the app's player still picks up where you were (with **Live · −45 s**
+  to jump back), and so does a moment you rewound to.
 * ⚙️ **Quality selector and preferred quality** — every resolution the channel
-  broadcasts, Source included, sorted by height then frame rate. Pick a
-  preferred quality once (Settings → Player: Source, 1080p, 720p, 480p, 360p,
-  160p or audio only): lives, VODs and clips start in it, or in the closest
-  one below when the channel doesn't have it. The real height of each quality
+  broadcasts, Source included, sorted by height then frame rate. Source shows
+  its own resolution when the stream gives it — “1440p (Source)”, “1080p60
+  (Source)” — in the player's menus, the download picker, My VODs and on
+  Apple TV (plain “Source” otherwise). Pick a preferred quality once
+  (Settings → Player: Source, 1080p, 720p, 480p, 360p, 160p or audio only):
+  lives, VODs and clips start in it, or in the closest one below when the
+  channel doesn't have it. The real height of each quality
   is read from the playlist, so “720p” also finds a channel whose Source is
   720p60. Picking a quality in the player replaces the preference (as on the
   website); backups carry it under the website's name (`qualityPref`).
 * 🛡 **Live sources, in the order you pick** — lives come from sources that
-  avoid most ads (Luminous Asia, an Albania proxy based on TTV.LOL, Luminous
-  Europe) or official Twitch (with ads), tried one after the other until one
-  answers, without waiting a minute on one that stays silent: the loading
+  avoid most ads (Luminous Asia, PerfProd Asia, an Albania proxy based on
+  TTV.LOL and its second server, Luminous Europe and Europe 2) or official
+  Twitch (with ads), tried one after the other until one answers — a source
+  added later goes right after the one it backs up in an order saved before
+  it —, without waiting a minute on one that stays silent: the loading
   screen says which one is being tried, and the player can be minimized or
   closed while it loads.
   Reorder them in Settings → Player; picking a source from the player's ⋯
@@ -141,6 +192,8 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   answer, the usual sources take over. Picking a source in the ⋯ menu skips
   your account for that channel until the app restarts.
 * 💎 **Higher qualities (if the channel offers them)** — off by default
+  (each of its notices, like the one for a stream played through your
+  account, shows only once, then stays quiet)
   (Settings → Player, under Watch ad-free with my sub). Channels on Enhanced
   Broadcasting can send 1440p and above, sometimes in HEVC or AV1; the app
   then tells Twitch which codecs the device decodes (`supported_codecs`: H.264
@@ -172,6 +225,33 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   the next break. The source shows as “Your account (higher quality)” in the
   ⋯ menu; picking a source there leaves your account for that channel, as
   with a sub.
+* 📱 **Vertical streams (Dual Format)** — some streamers (mobile games like
+  Clash Royale, IRL) send Twitch a vertical 9:16 picture next to the usual
+  one, which the Twitch app shows when the phone is held upright. Once a live
+  has started, the app looks for it (Twitch's v2 playlist with
+  `multigroup_video`, the only one that lists the `IVS-GROUPS="portrait"`
+  variants; the mirrors never have it) and, when there is one, shows a ▯
+  button: in the player's top bar (Apple's player) or next to the bottom
+  buttons (the app's player). It swaps the picture the way a quality change
+  does — no reload, chat and Live Activity stay. In portrait with the app's
+  player, it looks like the Twitch app's “Vertical view”: the picture fills
+  the whole player (cropped a little on the sides, as on Twitch) and the chat
+  sits on its bottom 40 %, see-through; the controls move up above it, and a
+  double tap or the Chat button hides or shows the chat. Apple's player keeps
+  its controls at the bottom of the picture, so there the picture becomes a
+  9:16 box (at most 62 % of the screen) with the chat below. Never cropped in
+  landscape. A source that would one day list the vertical variants with the
+  usual ones (`IVS-GROUPS="portrait"`) keeps them out of the quality picker.
+  The vertical picture comes straight from
+  Twitch (anonymous token), with its ad breaks muted and announced as on the
+  other sources; Higher qualities stop until the next launch. The choice is
+  remembered: the next streams that have a vertical picture start on it.
+* 🌍 **Lives blocked in your country** — when Twitch keeps a live to some
+  countries (broadcast rights, “premium content … geo_blocked” in the Twitch
+  app) and no source can reach it, the app says so instead of “No source
+  answered”. It reads it from the playback token (`geoblock_reason`) or from
+  Twitch's refusal; the mirrors are still tried, in case one is in an allowed
+  country.
 * 📢 **Channel ad breaks explained** — during an ad break (or the pre-roll
   when a stream opens), Twitch replaces the stream with its purple
   “Commercial break in progress” screen or a real ad. The player now says so,
@@ -196,6 +276,11 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   landscape. Cuts off the top and bottom: 16:9 in a phone screen can't do both.
   Otherwise the picture never goes under the Dynamic Island or the notch in
   landscape, even when the chat takes a column next to it.
+* 🔍 **Pinch to zoom** — in the app's player, like the Twitch app: the zoom
+  (up to 4×) starts right where you pinch, and moving both fingers while
+  pinching moves the picture around; once zoomed, one finger is enough to
+  look around. The picture never leaves its frame; pinch back out, or rotate
+  the phone, to see it whole again. Works on every iOS version.
 * 🌙 **Sleep timer** — presets or a custom duration, with the countdown shown
   right in the player. It stops multi-live too. The screen only stays awake
   while a video plays on screen: paused, minimized or in audio only, it
@@ -261,6 +346,9 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   replayed chat for a VOD) — a button in the mosaic and Settings → Player
   turn it on or off. Each tile plays 1080p alone, 720p with two, 480p
   beyond — or your preferred quality when it is lower.
+* 🔊 **Several sounds in multi-live** — tapping a tile still makes it the
+  only one you hear; tap the speaker on other tiles to hear them too, and
+  long-press it for that tile's volume (100 %, 75 %, 50 %, 25 %).
 
 ### Chat
 
@@ -285,6 +373,18 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   channel and session), so channels with only Twitch sub emotes get a tab too.
   Sub emotes your account doesn't have (from the chat's `emote-sets`) are
   greyed out with a lock: tapping one opens its card instead of adding it.
+  When you're logged in to the chat, a **Mine** tab comes first: every
+  Twitch emote your account can use in any chat — the emotes of the channels
+  you're subscribed to, Prime/Turbo and Twitch's global emotes — grouped by
+  channel (avatar and name as a heading): the channel you're watching first
+  if you have its emotes, then the others alphabetically, then "Twitch"
+  (sets without a channel, plus Prime, Turbo, 2FA…). The channel tab still
+  opens first; the same emotes can show in both tabs. Read from the chat's
+  `emote-sets` with public Twitch requests (15 sets per request, once per
+  session; a set that doesn't answer is asked again once, otherwise the tab
+  simply doesn't show; nothing is asked without an account). Smileys (`:)`,
+  `<3`…, typed as they are) and other channels' follower emotes (usable in
+  their own chat only) are left out. Search covers this tab too.
 * 🔎 **Tap an emote or a badge** — a card with the image in large, its exact
   name and source (Twitch, BTTV, FFZ, 7TV, personal), copy it or add it to your
   message. BetterTTV, FFZ and 7TV emotes show their scope (global or channel),
@@ -293,9 +393,16 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   their type (global, Tier 1/2/3 sub, channel points), the channel they belong
   to (live or not, with "See channel") and a preview of that channel's other
   sub emotes of the same tier — one public Twitch request, no account needed.
-  A badge shows its title ("3-Month Subscriber"…) in high resolution. In the
+  A badge shows its title ("3-Month Subscriber"…) in high resolution. A GIF
+  from Twitch's GIF keyboard shows in large with its title and author, where
+  it comes from (GIPHY), a link to its GIPHY page and its link to copy. In the
   live chat, the multistream, the pinned message, a message thread and the
   VOD and clip chat; VoiceOver can open it too.
+* 🙅 **Hide an emote** — long-press it in the chat, or **Hide this emote** on
+  its card: it then shows as the typed word, from any source (Twitch, BTTV,
+  FFZ, 7TV), in the live, VOD and multi-live chat. Settings → Chat → Hidden
+  emotes lists them (up to 200) to show them again; the list follows your
+  account, shared with the website (`hiddenEmotes`).
 * 🏅 **Badges** — global and channel-specific, resolved through Helix.
 * 🕘 **Recent messages** — Twitch sends nothing from before you join, so the
   last messages are fetched from `recent-messages.robotty.de` (third party) and
@@ -322,6 +429,9 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   of the chat shows the reward, the watch time it takes, the end date and a
   link to the details, like in the Twitch app; dismissed, it stays away for
   that campaign (Settings → Chat → Customization → Channel drops).
+* 🎟 **Special Events** — Twitch's own reward campaigns (category Special
+  Events, e.g. "1 Month of Apple TV") hide on their own, the channel's drops
+  stay (Settings → General → Customize the app → Chat · banners).
 * 📊 **Polls, predictions, hype train** — vote, bet channel points on a
   prediction, see the countdown, the results and the winning outcome. Each
   outcome shows, like the Twitch app, the points bet on it, its return ratio
@@ -340,6 +450,9 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   incoming raids shown with a link to the raider. Each of these can be switched off.
 * 🔦 **Highlights & filters** — messages mentioning you or containing your words
   stand out; hide bots, `!commands`, muted words or someone in particular.
+* 🤖 **Bot commands** — a channel's Nightbot, StreamElements, Fossabot and
+  Moobot commands without typing `!commands`: from the chat's ⋯ menu, or from
+  the channel page, live or offline (tap one to copy it).
 * 🔥 **Watch streak** and a **follow / unfollow** button. Unfollowing, from the
   player or a channel page, asks for confirmation first; from the player, the
   same dialog can hide the button (Settings → Chat → Customization → Follow
@@ -350,6 +463,12 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   Settings → Channel points tracks, like drops, the time watched and the points
   earned by watching (passive points, streaks, chests; not prediction
   winnings): right now, in total and per channel, on this device.
+  Passive points need the "minute watched" sent to Twitch's statistics address
+  every minute; when an ad blocker or a filtering DNS cuts that address off,
+  the minute goes through the TwitchUnblock server instead (your own Worker
+  first, if set), so it still counts. After two failures in a row the server
+  is used first, and the direct route is tried again every 15 minutes. The
+  log keeps the exact error once per session instead of a line every minute.
 * ⏱ **Chat synced with the video** (Settings → Chat, on by default) — live
   messages arrive almost instantly while the picture is seconds behind, so
   each one waits until the video catches up: your delay behind live as the
@@ -394,6 +513,14 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
 * 🔠 **Sizing** — font size, message spacing, badge and emote scale,
   timestamps, with a live preview. The time shows in 12 h or 24 h: Auto
   follows the device, or pick one (Settings → Chat; the log follows it too).
+* 🙈 **Hide the message box** (Settings → Chat → Show the message box, on by
+  default) — for those who only read: the room goes to the messages, in
+  portrait, landscape and multi-live; channel points and the chat's ⋯ menu
+  stay as small buttons at the bottom right of the chat.
+* 🔕 **Hide the chat's bell, chat mode and crown** (Settings → General →
+  Customize the app → Chat · banners) — the notification bell stays on the
+  channel page, and channel points move to the chat's ⋯ menu (also there in
+  landscape, where the crown never shows).
 
 ### Finding things
 
@@ -415,6 +542,8 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   than 30 s watched, not finished), latest first (up to 10), with their
   progress; a tap resumes where you stopped, as from My VODs. Hide it in
   Settings → General → Customize the app.
+* ✋ **Continue watching menu** — long-press a video there: **Resume**, or
+  **Remove from the list** (its resume point is forgotten; it stays in My VODs).
 * 📜 **Long lists without an account** — a channel's VODs and clips, the
   categories and the live channels in a category keep loading past the first
   100 without logging in (the next pages are asked the way Twitch's Android
@@ -439,6 +568,7 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   art. A category you follow on Twitch shows as followed on its page, and
   unfollowing it there removes it from your Twitch account (web session).
   Errors and empty lists have **Retry** / pull to refresh.
+* 🗂️ **Followed categories your way** — Settings → General → Customize the app → Followed categories: **Compact** covers (3 per row on iPhone, more on a wider screen) and the order (most watched first, as before, or A → Z).
 * 🏷 **Stream tags** — language, DropsEnabled… under each live stream, like on
   Twitch.
 * 🔍 **Search** — type anything and the results come in tabs, like Twitch's
@@ -504,19 +634,32 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   the account first takes what the account has, adding its own lists
   (pinned, hidden, hidden chat words and people); one still on default
   values never sends them. Off, nothing is sent or applied on this device.
+* 💾 **Backup & restore** — Settings → General → Backup: **Export** saves your
+  channels (followed, pinned, hidden), followed categories, every setting
+  (language, qualities, chat, player, appearance, notifications, downloads),
+  the customization and Continue watching to a file — never your Twitch
+  sign-ins, tokens or install ID. **Import** asks **Everything** or **Channels
+  only**, adds without removing anything, then lists what it restored
+  (unknown or invalid settings are skipped). Handy to move between the app
+  and TU Test; older backups and the website's still import.
 * ⬆️ **Update check** — the app tells you when a new version is out on the
   source, with a shortcut to Feather / SideStore / AltStore.
+* 🔢 **Build number** — Settings → About shows the version and its build
+  (“Version 1.6.0 (build 352)”); a tap copies them, for a bug report.
+* 🩹 **Botched installs spotted** — when an install tool puts an old build under
+  the latest version's number, the update alert explains it (old build N
+  installed as X: delete the app and reinstall it from GitHub, after exporting
+  a backup) and its button downloads the right IPA.
 * 🔔 **Live notifications** — be told when a followed channel goes live
   (checked in the background, as often as iOS allows). For instant ones, even
-  with the app closed, turn on **ntfy** (Settings → Features in testing): the
-  app creates a secret topic, you add it in the free
-  [ntfy](https://apps.apple.com/app/ntfy/id1625396347) app, and the backend
-  posts there within a minute or two of a stream starting — tapping it opens
-  the stream in TwitchUnblock. ntfy.sh counts free messages per address and
-  turns away the backend's shared Cloudflare addresses, so they leave from the
-  project's own server (the video relay); **Test** tells you when ntfy.sh is
-  refusing messages for now (sending limit reached). **Notified channels**
-  (same place) picks which followed channels notify you, for both. The app's
+  with the app closed, install the website as a web app: Settings → Features
+  in testing → **Open the website** shows how (add it to the Home Screen,
+  iOS 16.4 or later, open it from its icon, then Settings → Notifications →
+  “Followed channels going live”); the website then sends them itself, with no
+  third-party app. The **ntfy** notifications are gone: an app that had them
+  on tells the backend to forget its topic (retried until it answers) and
+  says once that ntfy can be uninstalled. **Notified channels** (same place)
+  picks which followed channels the app notifies you about. The app's
   own notifications show the stream's thumbnail, are grouped per channel, and
   have **Watch** and **Stop notifying for this channel** (press and hold). A
   **bell** on a channel's page and next to **Follow** above the chat turns that
@@ -538,6 +681,27 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   backup file.
 * 🎨 **Themes** — 7 accent colours and 3 backgrounds (dark, OLED black, slate),
   in Settings → General → Appearance.
+* 📐 **Large screens** — on the iPhone Duo's inner display and on iPad, grids
+  of lives, VODs, clips and categories show more, smaller tiles instead of two
+  giant ones: the number of columns follows the available width (2 on any
+  iPhone, 3 in portrait and 4 in landscape on the iPhone Duo's inner display,
+  up to 5 on iPad), live through rotation, folding and Split View. Each grid
+  keeps its proportions (16:9 previews, 3:4 box art). When the window is wide
+  (700 pt and more: the inner display in landscape, iPad), the tab bar becomes
+  a **column of tabs on the left**, leaving the whole height to the content;
+  it follows Customize the app (order, hidden tabs) and goes back to the
+  bottom as soon as the window narrows. The header, grids, tab bar and mini
+  player stay clear of iOS's status column on the side of the iPhone Duo's
+  displays; the full-size player in landscape hides that column (as an iPhone
+  hides its status bar in landscape), so the picture uses the whole display,
+  and its rotate button goes away when iOS doesn't let apps turn the screen
+  (apps in a window, as on the inner display).
+* 🔠 **Text size** — the app follows iOS's text size (Display & Brightness →
+  Text Size, or Accessibility → Larger Text), as soon as you change it, up to
+  Accessibility 2: Home, Discover, search, channel pages, settings and chat
+  messages (on top of the chat's own size). At the accessibility sizes, cards
+  get twice as wide (one column on iPhone) and list rows put the details under the thumbnail; the
+  player's controls over the video and the badges on thumbnails keep their size.
 * 🖼️ **App icons** — six to pick from in Settings → General → Appearance
   (Classic, Purple, Night, Light, Contrast, Neon); the default one has dark
   and tinted versions, and “Contrast” stays the sharpest with iOS 26's clear
@@ -548,11 +712,13 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   generic profile of a purchased certificate), iOS refuses to change the icon:
   the app reads its own signature and says so. Feather's next version adds a
   **Merge Entitlements** option that fixes the signature.
+  When the installing tool doesn't allow it (LiveContainer, GBox…), iOS's refusal is remembered and the picker gives way to a line saying why (it comes back with another version or signature).
 * 🫧 **Liquid Glass** — optional on iOS 26: a floating tab bar and glass buttons
   over the picture.
 * ⬆️ **Back to the top** — tap the tab you're already on to scroll Home (any
   live tab), Search or My VODs back to the top, or Discover back to its first
   page.
+* 👈 **Swipe back** — swipe from the left edge to go back, as in iOS apps: in Settings (the page follows your finger), from a category's live channels and from a channel opened from search results. Once the swipe is recognized, the page stops scrolling up and down until you lift your finger.
 
 ### The rest
 
@@ -564,7 +730,7 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   TwitchUnblock Worker). iOS only allows `http://` on your local network: a
   Docker Worker on a server needs HTTPS in front of it (Caddy, Cloudflare
   Tunnel). **Send everything through this Worker** also moves
-  history backups, feedback, announcements and polls, ntfy notifications and the usage
+  history backups, feedback, announcements and polls, and the usage
   count there (your Twitch token is then sent to it — only for a Worker you
   host yourself).
 * 🔒 **Chat restrictions said upfront** — above the message box, the room's
@@ -573,12 +739,14 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   first message, like on Twitch; and when Twitch refuses a message, it's
   removed and the reason shown in your language instead of looking sent;
   banned from the chat, it switches to read-only (see above).
-* 🌍 **Six languages** — English (default), French, Spanish, Russian, Italian
-  and Japanese, on the iPhone and the Apple TV. The Russian translation was
-  made with AI; the Italian one was contributed by Domenico-lel and the
-  Japanese one by kinboy56 (made with AI), newer texts translated with AI. For
-  these three, the iPhone app says so next to the language picker, with a
-  button to report a mistake.
+* 🌍 **Seven languages** — English (default), French, Spanish, Russian,
+  Italian, Japanese and Traditional Chinese (Taiwan), on the iPhone and the
+  Apple TV. The Russian translation was made with AI; the Italian one was
+  contributed by Domenico-lel, the Japanese one by kinboy56 and the
+  Traditional Chinese one by trend0522 (both made with AI), newer texts
+  translated with AI. For these four, the iPhone app says so next to the
+  language picker, with a button to report a mistake.
+  On the iPhone, Settings → General → **App language** opens the list on its own page, like iOS's settings.
 * 🐞 **Bug reports & ideas** — a form in the header, in Settings and in the
   player menu, screenshots included. **My reports** shows where each one stands
   (received, seen, accepted, in progress, done, declined) and the developer's reply,
@@ -613,6 +781,7 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   app's language (written in French, translated when shown: numbers and names
   stay as they are). Share them as text or export them as a `.txt` file
   (Files, AirDrop, Mail…).
+  Categories (PLAYER, NETWORK…), settings changes and details built on the fly are translated too; only iOS's own error messages stay in iOS's language.
 
 ---
 
@@ -628,10 +797,15 @@ unsigned `tv-test-N` pre-release:
   Following list refreshes on its own (back on the tab or in the app, every
   2 minutes while it's shown, and when you come back down from the tab bar),
   so ended lives don't linger.
-* **Continue watching** at the top of Following, with or without an
-  account: the VODs started on this Apple TV (more than 30 s, not finished),
-  last watched first (up to 10), with their progress; Select or Play resumes
-  where you stopped.
+* **Continue watching** in Following (at the top by default), with or
+  without an account: the VODs started on this Apple TV (more than 30 s, not
+  finished), last watched first (up to 10), with their progress; Select or
+  Play resumes where you stopped.
+* Account → Settings → **“Continue watching” row**: above the live channels,
+  below them, or hidden; when the row is shown, a **Live** title heads the
+  live channels, which looked like part of it.
+* Press and hold the center button on a Continue watching video: **Resume**,
+  or **Remove from list** (its progress on this Apple TV is forgotten).
 * The remote's **Play** button starts the focused live or VOD, like Select; on
   an offline channel (Following, Search) it opens the channel and plays its
   latest broadcast (or its live, if it just started).
@@ -644,8 +818,19 @@ unsigned `tv-test-N` pre-release:
   streamer who already shows their chat on screen doesn’t need ours), and
   Account sets the defaults.
 * **View channel** in the player's bar opens the channel's page, with its
-  past broadcasts; a video started there plays on top of it, and Menu goes
-  back.
+  videos, clips and collections (if it has any); a video started there plays
+  on top of it, and Menu goes back.
+* A channel's page has **Videos and Clips** tabs, like the iPhone, plus
+  **Collections** when the channel has some: they load with the page (one
+  request), and the tab only shows up then — most channels have none, and an
+  empty tab looked broken. Clips: the most viewed over 24 h, 7 days, 30 days
+  or all time. Collections: one row each, stacked, with its title, its number
+  of videos and its videos to scroll sideways; up and down move from one
+  collection to the next, on the nearest video. A clip plays in the TV
+  player, with its broadcast's chat replayed at that moment. The tabs always
+  take the focus, so Menu goes back to the list even on an offline channel
+  without videos (the focus used to stay on the tab bar, and Menu quit the
+  app).
 * During a channel's ad break on a live, the same banner as on the iPhone
   says what the purple screen is, with a countdown to the stream's return.
 * Usage count, like the iPhone (Account → Share my usage): a random install ID,
@@ -654,6 +839,14 @@ unsigned `tv-test-N` pre-release:
   the channels. It waits until the backend counts the Apple TV on its own.
 * Account's settings move one row at a time with the remote, land on the
   ticked option, and always lead back up to the tab bar.
+* In Following, moving down from the tab bar lands on the first card of the
+  first row (top left), not on the one that happens to sit under the tab.
+  Each row (Continue watching, Live, Offline) is a focus section: up and
+  down always reach the neighbouring row, on its nearest card, even when it
+  has fewer cards than the row you leave. Back from the player or a channel
+  page, the focus returns to the card you opened.
+* Account → **About** shows the app's version and build number (“Version
+  0.1.N (build N)”), to check an update or report a problem.
 * A preferred quality (Account → Settings), same rule as the iPhone: the
   closest one below when the channel doesn't have it; picking a quality in the
   player's bar replaces it.
@@ -718,6 +911,9 @@ site can read. For those, use the app.
 
 **Requirements:** macOS, Xcode 16+, iOS 16.0 deployment target, and
 [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`).
+The CI builds the iPhone app with Xcode 27.1 (iOS 27.1 SDK): an app linked
+against an older SDK stays in a phone-sized black frame on the iPhone Duo's
+inner display. Build with Xcode 27.1 or later to get the same result.
 
 ```bash
 git clone https://github.com/MXFia19/TwitchUnblock.git
@@ -762,6 +958,7 @@ Settings → About):
 
 * [Domenico-lel](https://github.com/Domenico-lel) — Italian translation
 * [kinboy56](https://github.com/kinboy56) — Japanese translation
+* [trend0522](https://github.com/trend0522) — Traditional Chinese translation
 * [dwojc6](https://github.com/dwojc6) — more responsive swipe-down on the player
 
 All contributors on GitHub:

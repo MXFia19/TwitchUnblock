@@ -17,11 +17,30 @@ struct DropsCampaignNotice: Equatable, Identifiable {
     let minutes: Int
     /// Récompenses suivantes de la même campagne.
     let more: Int
+    /// Campagne de Twitch rangée dans la catégorie « Special Events »
+    /// (« 1 Month of Apple TV »…, sur beaucoup de chaînes à la fois), et non
+    /// drops du jeu de la chaîne : masquable à part (Réglages → Personnaliser).
+    let specialEvent: Bool
+
+    /// Catégorie « Special Events » de Twitch : son id, ou son nom (en
+    /// anglais, comme Twitch le rend), au cas où l'id ne serait pas celui-là.
+    static func isSpecialEvents(_ game: [String: Any]?) -> Bool {
+        guard let game else { return false }
+        if game["id"] as? String == "509663" { return true }
+        return [game["name"], game["displayName"]].contains {
+            ($0 as? String)?.trimmingCharacters(in: .whitespaces)
+                .caseInsensitiveCompare("Special Events") == .orderedSame
+        }
+    }
 }
 
 @MainActor
 final class ChannelDropsNotice: ObservableObject {
-    @Published private(set) var campaign: DropsCampaignNotice?
+    /// Campagnes en cours sur la chaîne, dans l'ordre de Twitch, sans celles
+    /// dont la carte a été fermée. Le chat montre la première que ses
+    /// réglages laissent passer (drops de la chaîne, Special Events) : une
+    /// campagne masquée ne cache plus celle d'après.
+    @Published private(set) var campaigns: [DropsCampaignNotice] = []
 
     private var channelId = ""
     private var task: Task<Void, Never>?
@@ -44,21 +63,21 @@ final class ChannelDropsNotice: ObservableObject {
 
     func stop() {
         task?.cancel(); task = nil
-        campaign = nil
+        campaigns = []
     }
 
     func dismiss(_ c: DropsCampaignNotice) {
         var ids = UserDefaults.standard.stringArray(forKey: Self.dismissedKey) ?? []
         if !ids.contains(c.id) { ids.append(c.id) }
         UserDefaults.standard.set(Array(ids.suffix(100)), forKey: Self.dismissedKey)
-        campaign = nil
+        campaigns.removeAll { $0.id == c.id }
     }
 
     private func fetch() async {
         let cid = channelId
         let q = """
         query { user(id: "\(gqlStr(cid))") { channel { viewerDropCampaigns {
-          id name endAt detailsURL game { displayName }
+          id name endAt detailsURL game { id name displayName }
           timeBasedDrops { name requiredMinutesWatched benefitEdges { benefit { name imageAssetURL } } }
         } } } }
         """
@@ -79,25 +98,28 @@ final class ChannelDropsNotice: ObservableObject {
                 .sorted { ($0["requiredMinutesWatched"] as? Int ?? 0) < ($1["requiredMinutesWatched"] as? Int ?? 0) }
             let first = drops.first
             let benefit = ((first?["benefitEdges"] as? [[String: Any]])?.first?["benefit"]) as? [String: Any]
-            let game = (c["game"] as? [String: Any])?["displayName"] as? String ?? ""
+            let game = c["game"] as? [String: Any]
             return DropsCampaignNotice(
                 id: id,
                 name: c["name"] as? String ?? "",
-                game: game,
+                game: game?["displayName"] as? String ?? "",
                 endsAt: end,
                 detailsURL: (c["detailsURL"] as? String).flatMap { $0.hasPrefix("https://") ? URL(string: $0) : nil },
                 rewardName: (benefit?["name"] as? String) ?? (first?["name"] as? String) ?? "",
                 rewardImage: benefit?["imageAssetURL"] as? String,
                 minutes: first?["requiredMinutesWatched"] as? Int ?? 0,
-                more: max(0, drops.count - 1))
+                more: max(0, drops.count - 1),
+                specialEvent: DropsCampaignNotice.isSpecialEvents(game))
         }
-        if campaign != found.first { campaign = found.first }
+        if campaigns != found { campaigns = found }
     }
 }
 
 /// Carte « Drops » en haut du chat : à fermer, avec un lien vers les détails.
 struct DropsNoticeCard: View {
     let campaign: DropsCampaignNotice
+    /// Chat posé sur l'image : fond transparent (voir CollapsedNoticesBar).
+    var translucent = false
     let onDismiss: () -> Void
     @EnvironmentObject private var store: AppStore
 
@@ -148,8 +170,8 @@ struct DropsNoticeCard: View {
             .accessibilityLabel(store.t("close"))
         }
         .padding(.horizontal, 12).padding(.vertical, 8)
-        .background(Color.tCard)
-        .overlay(Divider().background(Color.tBorder), alignment: .bottom)
+        .background(translucent ? Color.black.opacity(0.45) : Color.tCard)
+        .overlay(alignment: .bottom) { if !translucent { Divider().background(Color.tBorder) } }
     }
 }
 
@@ -224,6 +246,9 @@ struct CollapsedNoticesBar: View {
     var pollEnds: Date? = nil
     var predictionEnds: Date? = nil
     var hypeEnds: Date? = nil
+    /// Chat posé sur l'image : fond transparent, comme le reste du chat (un
+    /// fond plein y faisait une barre noire en travers de l'image).
+    var translucent = false
     let onExpand: () -> Void
     @EnvironmentObject private var store: AppStore
 
@@ -241,8 +266,8 @@ struct CollapsedNoticesBar: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .background(Color.tCard)
-        .overlay(Divider().background(Color.tBorder), alignment: .bottom)
+        .background(translucent ? Color.black.opacity(0.3) : Color.tCard)
+        .overlay(alignment: .bottom) { if !translucent { Divider().background(Color.tBorder) } }
         .accessibilityLabel(store.t("notices_show"))
     }
 }
@@ -283,6 +308,8 @@ struct NoticesHideStrip: View {
     var predictionEnds: Date? = nil
     var hypeEnds: Date? = nil
     var onReopenClosed: () -> Void = {}
+    /// Chat posé sur l'image : fond transparent (voir CollapsedNoticesBar).
+    var translucent = false
     let onHide: () -> Void
     @EnvironmentObject private var store: AppStore
 
@@ -321,29 +348,34 @@ struct NoticesHideStrip: View {
             .fixedSize()
         }
         .padding(.leading, 12).padding(.trailing, 6)
-        .background(Color.tCard)
-        .overlay(Divider().background(Color.tBorder), alignment: .bottom)
+        .background(translucent ? Color.black.opacity(0.3) : Color.tCard)
+        .overlay(alignment: .bottom) { if !translucent { Divider().background(Color.tBorder) } }
     }
 }
 
 // MARK: – Fiche d'une emote ou d'un badge
-/// Ce qu'on touche dans un message : une emote ou un badge.
+/// Ce qu'on touche dans un message : une emote, un badge, ou un GIF du
+/// clavier GIF de Twitch (adresse GIPHY et texte « [… GIF by …] »).
 enum ChatInfoItem: Identifiable {
     case emote(TwitchEmote)
     case badge(TwitchBadge)
+    case gif(url: String, alt: String)
 
     var id: String {
         switch self {
         case .emote(let e): return "emote:\(e.source.rawValue):\(e.id)"
         case .badge(let b): return "badge:\(b.id)"
+        case .gif(let url, _): return "gif:\(url)"
         }
     }
 
-    /// Ce que VoiceOver annonce : nom de l'emote, ou nom du jeu de badges.
+    /// Ce que VoiceOver annonce : nom de l'emote, nom du jeu de badges, ou
+    /// titre du GIF.
     var accessibilityName: String {
         switch self {
         case .emote(let e): return e.name
         case .badge(let b): return ChatInfoSheet.fallbackTitle(b)
+        case .gif(_, let alt): return ChatInfoSheet.gifParts(alt).title
         }
     }
 }
@@ -420,6 +452,7 @@ struct ChatInfoSheet: View {
                 switch item {
                 case .emote(let e): emoteContent(e)
                 case .badge(let b): badgeContent(b)
+                case .gif(let url, let alt): gifContent(url: url, alt: alt)
                 }
             }
             .padding(20)
@@ -446,12 +479,87 @@ struct ChatInfoSheet: View {
                 // celle d'avant, sans message d'erreur.
                 let info = await EmoteInfoService.shared.twitch(id: e.id)
                 if !Task.isCancelled { twitchInfo = info }
+            case .gif:
+                // Tout est dans le message : rien à lire de plus.
+                return
             }
         }
         // Un peu de marge : selon le système, la barre d'accueil est comptée
         // dans la hauteur demandée.
         .presentationDetents([.height(max(200, contentHeight + 16))])
         .presentationDragIndicator(.visible)
+    }
+
+    // MARK: GIF du clavier GIF de Twitch
+    /// Le GIF en grand, son titre et son auteur (lus dans le texte que Twitch
+    /// joint, « [Titre GIF by Auteur] »), d'où il vient, sa page GIPHY et son
+    /// lien à copier. Il n'avait pas de fiche : le toucher allait au message,
+    /// qui ouvrait l'historique de son auteur (retour de dave).
+    @ViewBuilder
+    private func gifContent(url: String, alt: String) -> some View {
+        let parts = Self.gifParts(alt)
+        CachedEmoteImage(url: url, name: alt, height: 160, maxWidth: 300)
+        Text(parts.title)
+            .font(.system(size: 18, weight: .bold))
+            .foregroundColor(.tText)
+            .textSelection(.enabled)
+            .multilineTextAlignment(.center)
+        VStack(spacing: 4) {
+            Text(store.t("chat_gif_source")).font(.system(size: 13)).foregroundColor(.tMuted)
+            if let author = parts.author {
+                Text(store.t("chat_gif_by").replacingOccurrences(of: "{a}", with: author))
+                    .font(.system(size: 12)).foregroundColor(.tMuted)
+            }
+        }
+        .multilineTextAlignment(.center)
+        if let page = Self.giphyPage(url) {
+            Button { UIApplication.shared.open(page) } label: {
+                Label(store.t("emote_view_on").replacingOccurrences(of: "{p}", with: "GIPHY"),
+                      systemImage: "arrow.up.right.square")
+            }
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundColor(.tPrimary)
+            .buttonStyle(.plain)
+        }
+        Button {
+            UIPasteboard.general.string = url
+            copied = true
+        } label: {
+            Label(store.t(copied ? "chat_info_copied" : "copy_link"),
+                  systemImage: copied ? "checkmark" : "link")
+        }
+        .buttonStyle(.borderedProminent).tint(.tPrimary)
+        .font(.system(size: 14, weight: .semibold))
+    }
+
+    /// « [Happy Dance GIF by Someone] » → titre « Happy Dance », auteur
+    /// « Someone » ; un texte d'une autre forme reste le titre tel quel.
+    static func gifParts(_ alt: String) -> (title: String, author: String?) {
+        var s = alt.trimmingCharacters(in: .whitespaces)
+        if s.hasPrefix("[") && s.hasSuffix("]") { s = String(s.dropFirst().dropLast()) }
+        if let r = s.range(of: " GIF by ", options: .backwards) {
+            let title = String(s[..<r.lowerBound]).trimmingCharacters(in: .whitespaces)
+            let author = String(s[r.upperBound...]).trimmingCharacters(in: .whitespaces)
+            return (title.isEmpty ? "GIF" : title, author.isEmpty ? nil : author)
+        }
+        if s.hasSuffix(" GIF") { s = String(s.dropLast(4)) }
+        return (s.isEmpty ? "GIF" : s, nil)
+    }
+
+    /// Page GIPHY d'un GIF servi par son CDN (…giphy.com/media/<id>/…) ;
+    /// nil pour une autre adresse.
+    static func giphyPage(_ raw: String) -> URL? {
+        guard let u = URL(string: raw), let host = u.host?.lowercased(),
+              host == "giphy.com" || host.hasSuffix(".giphy.com") else { return nil }
+        let parts = u.path.split(separator: "/")
+        guard var i = parts.firstIndex(of: "media") else { return nil }
+        i += 1
+        // Les adresses récentes glissent un segment « v1.… » après « media ».
+        if i < parts.count, parts[i].hasPrefix("v1.") { i += 1 }
+        guard i < parts.count else { return nil }
+        let id = parts[i]
+        guard !id.isEmpty, id.allSatisfy({ $0.isLetter || $0.isNumber }) else { return nil }
+        return URL(string: "https://giphy.com/gifs/\(id)")
     }
 
     // MARK: Emote
@@ -505,6 +613,9 @@ struct ChatInfoSheet: View {
             }
         }
         .font(.system(size: 14, weight: .semibold))
+        // Masquée : affichée dans le chat comme le mot tapé (Réglages → Chat).
+        // Le sélecteur d'emotes la garde : on peut toujours l'envoyer.
+        EmoteHideButton(code: e.name)
     }
 
     /// Chaîne propriétaire d'une emote Twitch : avatar, nom, en direct ou non.

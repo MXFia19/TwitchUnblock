@@ -112,8 +112,12 @@ struct SearchView: View {
     @State private var suggestTask: Task<Void, Never>? = nil
     @FocusState private var queryFocused: Bool
 
-    private let columns = [GridItem(.flexible(), alignment: .top),
-                           GridItem(.flexible(), alignment: .top)]
+    /// Largeur de l'onglet ou de la feuille (page de chaîne) : nombre de
+    /// colonnes des cartes.
+    @Environment(\.tContentWidth) private var contentWidth
+    /// Deux colonnes sur iPhone, davantage sur un écran plus large ; une
+    /// seule aux tailles de texte d'accessibilité.
+    private var columns: [GridItem] { TType.cardColumns(width: contentWidth) }
 
     /// Le texte saisi désigne-t-il une VOD (lien twitch.tv/videos/… ou ID) ?
     /// Même règle que le « + » du multi-live (TwitchAPI).
@@ -229,9 +233,20 @@ struct SearchView: View {
                                     onBack: { openedCategory = nil },
                                     onPlayStream: { login in leaveRecovery(); onPlayLive(login) })
             } else {
+                // Chaîne ouverte depuis les résultats : un glissé depuis le
+                // bord gauche y ramène, comme « ‹ Résultats pour … » (la page
+                // ne suit pas le doigt : les résultats ne sont pas dessous).
                 searchPage
+                    .edgeSwipeBack(enabled: canSwipeBackToResults, follows: false) { closeChannel() }
             }
         }
+    }
+
+    /// Chaîne (ou son erreur) ouverte depuis les résultats d'une recherche,
+    /// avec son bouton « ‹ Résultats pour … ».
+    private var canSwipeBackToResults: Bool {
+        initialChannel == nil && !found.query.isEmpty && !loading
+            && (errorMsg != nil || !searchedName.isEmpty)
     }
 
     private var searchPage: some View {
@@ -266,7 +281,7 @@ struct SearchView: View {
                     HStack(spacing: TSpace.xs) {
                         Image(systemName: queryIsClip ? "scissors" : queryIsVod ? "play.rectangle.fill"
                               : queryIsChannelLink ? "person.fill" : "magnifyingglass")
-                            .font(.system(size: 10))
+                            .font(.tSystem(size: 10))
                         Text(store.t(queryIsClip ? "hint_is_clip" : queryIsVod ? "hint_is_vod"
                                      : queryIsChannelLink ? "hint_is_channel" : "hint_is_search"))
                             .font(.tMeta)
@@ -365,7 +380,7 @@ struct SearchView: View {
     @ViewBuilder private var searchField: some View {
         HStack(spacing: TSpace.sm) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 14, weight: .semibold))
+                .font(.tSystem(size: 14, weight: .semibold))
                 .foregroundColor(queryFocused ? .tPrimary : .tMuted)
 
             TextField(store.t("ph_search"), text: $query)
@@ -383,13 +398,14 @@ struct SearchView: View {
                     query = ""; suggestions = []
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 15)).foregroundColor(.tMuted)
+                        .font(.tSystem(size: 15)).foregroundColor(.tMuted)
                 }
                 .buttonStyle(.plain)
             }
         }
         .padding(.horizontal, TSpace.md)
-        .frame(height: 44)
+        .padding(.vertical, TSpace.xs)
+        .frame(minHeight: 44)
         .tControlSurface(focused: queryFocused)
     }
 
@@ -419,7 +435,7 @@ struct SearchView: View {
                                 // Masquée des listes : la recherche la trouve quand même.
                                 if store.hidden.hides(channel: s.login) {
                                     Image(systemName: "eye.slash")
-                                        .font(.system(size: 11, weight: .semibold))
+                                        .font(.tSystem(size: 11, weight: .semibold))
                                         .foregroundColor(.tMuted)
                                         .accessibilityLabel(store.t("hidden_badge"))
                                 }
@@ -427,7 +443,7 @@ struct SearchView: View {
                             if let viewers = s.viewers {
                                 HStack(spacing: 5) {
                                     Text("LIVE")
-                                        .font(.system(size: 9, weight: .heavy))
+                                        .font(.tSystem(size: 9, weight: .heavy))
                                         .foregroundColor(.white)
                                         .padding(.horizontal, 4).padding(.vertical, 1)
                                         .background(Color.tLive).cornerRadius(3)
@@ -438,10 +454,11 @@ struct SearchView: View {
                         }
                         Spacer()
                         Image(systemName: "arrow.up.left")
-                            .font(.system(size: 11)).foregroundColor(.tMuted)
+                            .font(.tSystem(size: 11)).foregroundColor(.tMuted)
                     }
                     .padding(.horizontal, TSpace.md)
-                    .frame(height: 48)
+                    .padding(.vertical, TSpace.xs)
+                    .frame(minHeight: 48)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -479,7 +496,7 @@ struct SearchView: View {
                 ForEach(store.searchHistory, id: \.self) { term in
                     HStack(spacing: TSpace.md) {
                         Image(systemName: "clock.arrow.circlepath")
-                            .font(.system(size: 13))
+                            .font(.tSystem(size: 13))
                             .foregroundColor(.tMuted)
                         Text(term)
                             .font(.tBody).foregroundColor(.tText)
@@ -497,7 +514,7 @@ struct SearchView: View {
                         .buttonStyle(.plain)
                     }
                     .padding(.leading, TSpace.md).padding(.trailing, TSpace.xs)
-                    .frame(height: 44)
+                    .frame(minHeight: 44)
                     .contentShape(Rectangle())
                     .onTapGesture {
                         query = term
@@ -522,7 +539,7 @@ struct SearchView: View {
         if initialChannel == nil, !found.query.isEmpty {
             Button { closeChannel() } label: {
                 HStack(spacing: TSpace.xs) {
-                    Image(systemName: "chevron.left").font(.system(size: 13, weight: .bold))
+                    Image(systemName: "chevron.left").font(.tSystem(size: 13, weight: .bold))
                     Text(store.t("search_back").replacingOccurrences(of: "{q}", with: found.query))
                         .font(.tLabel)
                         .lineLimit(1)
@@ -563,13 +580,14 @@ struct SearchView: View {
                                     store.removeFromHistory(term: item.term)
                                 } label: {
                                     Image(systemName: "xmark")
-                                        .font(.system(size: 9, weight: .bold))
+                                        .font(.tSystem(size: 9, weight: .bold))
                                         .foregroundColor(.tMuted)
                                 }
                                 .buttonStyle(.plain)
                             }
                             .padding(.leading, TSpace.md).padding(.trailing, TSpace.sm)
-                            .frame(height: 34)
+                            .padding(.vertical, 4)
+                            .frame(minHeight: 34)
                             .background(Color.tSurface)
                             .clipShape(Capsule())
                             .contentShape(Capsule())
@@ -630,9 +648,9 @@ struct SearchView: View {
                     } label: {
                         HStack(spacing: 6) {
                             Image(systemName: on ? "heart.fill" : "heart")
-                            Text(store.t(on ? "following" : "follow")).font(.system(size: 14, weight: .bold))
+                            Text(store.t(on ? "following" : "follow")).font(.tSystem(size: 14, weight: .bold))
                             if local {
-                                Text("· " + store.t("on_this_device")).font(.system(size: 12)).opacity(0.8)
+                                Text("· " + store.t("on_this_device")).font(.tSystem(size: 12)).opacity(0.8)
                             }
                         }
                         .foregroundColor(on ? .tDanger : .tPrimary)
@@ -669,6 +687,13 @@ struct SearchView: View {
                 }
             }
 
+            // Commandes des bots (Nightbot, StreamElements…) : aussi hors
+            // ligne, quand il n'y a pas de chat pour ouvrir son menu ⋯.
+            if !channelName.isEmpty {
+                BotCommandsButton(channelName: channelName)
+                    .padding(.horizontal, TSpace.lg)
+            }
+
             // Chaîne masquée des listes de découverte : la réafficher d'ici.
             if !channelName.isEmpty, store.hidden.hides(channel: channelName) {
                 Button {
@@ -677,7 +702,7 @@ struct SearchView: View {
                     HStack(spacing: 6) {
                         Image(systemName: "eye")
                         Text("\(store.t("hidden_badge")) · \(store.t("unhide"))")
-                            .font(.system(size: 13, weight: .bold))
+                            .font(.tSystem(size: 13, weight: .bold))
                     }
                     .foregroundColor(.tMuted)
                     .padding(.horizontal, 14).padding(.vertical, 7)
@@ -843,12 +868,12 @@ struct SearchView: View {
                         HStack(alignment: .firstTextBaseline, spacing: TSpace.sm) {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(list.title)
-                                    .font(.system(size: 16, weight: .bold)).foregroundColor(.tText)
+                                    .font(.tSystem(size: 16, weight: .bold)).foregroundColor(.tText)
                                     .lineLimit(2)
                                 Text(list.description.isEmpty
                                      ? String(format: store.t("videos_count"), list.total)
                                      : "\(list.description) · \(String(format: store.t("videos_count"), list.total))")
-                                    .font(.system(size: 12)).foregroundColor(.tMuted)
+                                    .font(.tSystem(size: 12)).foregroundColor(.tMuted)
                                     .lineLimit(2)
                             }
                             Spacer(minLength: 0)
@@ -857,7 +882,7 @@ struct SearchView: View {
                                 onPlayQueue(list.videos, channelName)
                             } label: {
                                 Label(store.t("play_all"), systemImage: "play.fill")
-                                    .font(.system(size: 13, weight: .semibold))
+                                    .font(.tSystem(size: 13, weight: .semibold))
                                     .padding(.horizontal, 12).padding(.vertical, 7)
                                     .background(Capsule().fill(Color.tPrimary.opacity(0.18)))
                                     .foregroundColor(.tPrimary)

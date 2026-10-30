@@ -5,6 +5,9 @@ struct TwitchUnblockApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var store = AppStore()
     @Environment(\.scenePhase) private var scenePhase
+    /// ntfy retiré, et il était activé ici : dit une fois, avec le site en
+    /// web app à la place (NtfyNotifier).
+    @State private var ntfyRetired = false
 
     var body: some Scene {
         WindowGroup {
@@ -14,6 +17,9 @@ struct TwitchUnblockApp: App {
                 .inAppNoticeHost()
                 .environmentObject(store)
                 .preferredColorScheme(.dark)
+                // Taille du texte d'iOS suivie jusqu'à « Accessibilité 2 » :
+                // au-delà, cartes et lignes ne tiennent plus (voir TType).
+                .dynamicTypeSize(...TType.maxSize)
                 .task { await UsageService.shared.ping(enabled: store.shareUsage) }
                 // À chaque lancement : nouvelle version disponible ?
                 .task { await UpdateChecker.shared.checkIfDue(atLaunch: true) }
@@ -27,8 +33,17 @@ struct TwitchUnblockApp: App {
                     FeedbackStore.shared.startForegroundChecks()
                     await FeedbackStore.shared.refresh(force: true)
                 }
-                // Notification ntfy touchée : twitchunblock://live/<chaîne>
-                // (twitchunblock-test:// pour TU Test).
+                // Notifications ntfy retirées : le Worker oublie le sujet, et
+                // qui les avait activées l'apprend une fois.
+                .task { if await NtfyNotifier.retire() { ntfyRetired = true } }
+                .alert(store.t("ntfy_retired_title"), isPresented: $ntfyRetired) {
+                    Button(store.t("notif_pwa_open")) { UIApplication.shared.open(kNotifInstallURL) }
+                    Button(store.t("close"), role: .cancel) {}
+                } message: {
+                    Text(store.t("ntfy_retired_body"))
+                }
+                // Lien twitchunblock://live/<chaîne> (twitchunblock-test://
+                // pour TU Test) : ouvre le direct.
                 .onOpenURL { url in
                     guard url.scheme == kAppURLScheme || url.scheme == "twitchunblock", url.host == "live",
                           let login = url.pathComponents.dropFirst().first, !login.isEmpty else { return }
@@ -70,8 +85,9 @@ struct TwitchUnblockApp: App {
                         Task { await PollService.shared.refresh() }
                         Task { await FeedbackStore.shared.refresh() }
                         FeedbackStore.shared.startForegroundChecks()
-                        // ntfy : chaînes suivies changées (ou une fois par jour).
-                        Task { await NtfyNotifier.sync(lang: store.lang) }
+                        // ntfy retiré : désabonnement pas encore confirmé
+                        // par le Worker (hors ligne…), renvoyé.
+                        Task { await NtfyNotifier.retire() }
                         // Téléchargements : l'app reprend la main sur iOS,
                         // redemande ce qui manque (app fermée en la
                         // balayant…) et reprend les chats inachevés.

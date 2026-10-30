@@ -15,6 +15,7 @@
         <string>ru</string>
         <string>it</string>
         <string>ja</string>
+        <string>zh-Hant</string>
     </array>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
@@ -110,10 +111,14 @@
     </array>
 
     <!-- ── Status bar ─────────────────────────────────────────── -->
+    <!-- Laissée aux contrôleurs : le lecteur en grand la masque
+         (statusBarHidden, MainTabView). L'iPhone la cache seul en paysage,
+         pas l'écran intérieur de l'iPhone Duo, où sa colonne restait sur le
+         côté de l'image. Texte clair : l'app est toujours en sombre. -->
     <key>UIStatusBarStyle</key>
     <string>UIStatusBarStyleLightContent</string>
     <key>UIViewControllerBasedStatusBarAppearance</key>
-    <false/>
+    <true/>
 
     <!-- ── Apparence : toujours sombre (écran de lancement compris) ── -->
     <key>UIUserInterfaceStyle</key>

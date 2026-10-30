@@ -182,3 +182,127 @@ final class PlayerPullTouchGuard: UIGestureRecognizer {
 
     override func canBePrevented(by preventingGestureRecognizer: UIGestureRecognizer) -> Bool { false }
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  Pincement sur l'image : le point entre les doigts.
+//
+//  Le zoom partait toujours du milieu de l'image : MagnificationGesture ne
+//  donne que l'échelle, et MagnifyGesture (iOS 17 et après) seulement son
+//  point de départ — rien pour suivre deux doigts qui se déplacent. Un geste
+//  UIKit posé sur la fenêtre relève donc les doigts posés sur l'image, sans
+//  jamais rien reconnaître : SwiftUI garde la main sur le pincement (image
+//  bien touchée, rien par-dessus), le lecteur lit seulement où sont les
+//  doigts (ImmersivePlayer, zoomGesture). Toutes les versions d'iOS.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Doigts posés sur la surface vidéo, et pincement en cours. Une classe
+/// gardée hors de l'état SwiftUI : rien n'est redessiné quand ces valeurs
+/// changent, à chaque déplacement des doigts.
+final class PinchFocus {
+    /// Surface vidéo : repère des points rendus.
+    fileprivate weak var anchor: UIView?
+    fileprivate var touches: [UITouch] = []
+    /// Départ du pincement en cours, repris quand les doigts changent : point
+    /// entre les doigts (nil s'ils n'ont pas été relevés) et ces doigts, zoom
+    /// et décalage de l'image, échelle du geste à cet instant.
+    var start: (focus: CGPoint?, fingers: [UITouch], zoom: CGFloat, pan: CGSize, scale: CGFloat)?
+    /// Déplacement du glissé à un doigt en cours (zéro sans glissé) : un
+    /// doigt resté posé après le pincement continue de déplacer l'image.
+    var drag: CGSize = .zero
+
+    /// Doigts posés sur la surface, pas encore levés.
+    var fingers: [UITouch] { touches.filter { $0.phase != .ended && $0.phase != .cancelled } }
+
+    /// Autres doigts que `old` (un levé, un reposé) : leur milieu a sauté.
+    func fingersChanged(since old: [UITouch]) -> Bool {
+        !fingers.elementsEqual(old) { $0 === $1 }
+    }
+
+    /// Milieu des doigts posés sur la surface (deux au moins), dans son repère.
+    var point: CGPoint? {
+        guard let anchor else { return nil }
+        let live = fingers
+        guard live.count >= 2 else { return nil }
+        let points = live.map { $0.location(in: anchor) }
+        let n = CGFloat(points.count)
+        return CGPoint(x: points.reduce(0) { $0 + $1.x } / n,
+                       y: points.reduce(0) { $0 + $1.y } / n)
+    }
+}
+
+/// Repère de la surface vidéo : posé derrière elle, à sa taille, sans
+/// recevoir aucun toucher. Il installe le relevé des doigts sur sa fenêtre
+/// tant qu'il y est.
+struct PinchFocusAnchor: UIViewRepresentable {
+    let focus: PinchFocus
+
+    func makeUIView(context: Context) -> PinchFocusView { PinchFocusView(focus: focus) }
+    func updateUIView(_ uiView: PinchFocusView, context: Context) {}
+}
+
+final class PinchFocusView: UIView {
+    private let recognizer: PinchFocusRecognizer
+
+    init(focus: PinchFocus) {
+        recognizer = PinchFocusRecognizer(target: nil, action: nil)
+        super.init(frame: .zero)
+        focus.anchor = self
+        recognizer.focus = focus
+        // Ne retient ni n'annule aucun toucher.
+        recognizer.cancelsTouchesInView = false
+        recognizer.delaysTouchesEnded = false
+        isUserInteractionEnabled = false
+        backgroundColor = .clear
+    }
+
+    required init?(coder: NSCoder) { return nil }
+
+    /// Sur la fenêtre où se trouve le lecteur, retiré avec lui.
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        recognizer.view?.removeGestureRecognizer(recognizer)
+        window?.addGestureRecognizer(recognizer)
+    }
+}
+
+/// Relève les doigts posés sur la surface. Ne reconnaît jamais rien : il
+/// n'empêche aucun geste, aucun ne l'empêche, et il ne retient ni n'annule
+/// aucun toucher (comme PlayerPullTouchGuard).
+private final class PinchFocusRecognizer: UIGestureRecognizer {
+    var focus: PinchFocus?
+
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
+        super.touchesBegan(touches, with: event)
+        guard let focus, let anchor = focus.anchor else { return }
+        for touch in touches where anchor.bounds.contains(touch.location(in: anchor)) {
+            focus.touches.append(touch)
+        }
+    }
+
+    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent) {
+        super.touchesEnded(touches, with: event)
+        lifted(touches, event)
+    }
+
+    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent) {
+        super.touchesCancelled(touches, with: event)
+        lifted(touches, event)
+    }
+
+    /// Doigts levés : oubliés. Plus aucun doigt sur l'écran : le relevé
+    /// repart de zéro au prochain toucher.
+    private func lifted(_ touches: Set<UITouch>, _ event: UIEvent) {
+        focus?.touches.removeAll { touches.contains($0) }
+        let down = event.allTouches?.contains { $0.phase != .ended && $0.phase != .cancelled } ?? false
+        if !down { state = .failed }
+    }
+
+    override func reset() {
+        super.reset()
+        focus?.touches.removeAll()
+    }
+
+    override func canPrevent(_ preventedGestureRecognizer: UIGestureRecognizer) -> Bool { false }
+
+    override func canBePrevented(by preventingGestureRecognizer: UIGestureRecognizer) -> Bool { false }
+}

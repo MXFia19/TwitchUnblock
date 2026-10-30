@@ -7,6 +7,10 @@ struct MainTabView: View {
     private static let launchTab = TabName(rawValue: UICustomization.saved()?.startTab ?? "home") ?? .home
     @State private var activeTab: TabName = MainTabView.launchTab
     @State private var headerSafeTop = HeaderView.windowSafeTop
+    /// Onglets en colonne à gauche (fenêtre large, voir TabScaffold) : la
+    /// mini-barre et la barre du multi-live se posent alors à sa droite, au
+    /// bas de l'écran.
+    @State private var sideTabs = SideTabRail.windowFits
 
     // ── Player state ─────────────────────────────────────────────────────
     @State private var playerMode: PlayerMode? = nil
@@ -56,10 +60,20 @@ struct MainTabView: View {
     /// Bascule annoncée dans le lecteur (4 s), et son effacement.
     @State private var hqNotice: String? = nil
     @State private var hqNoticeTask: Task<Void, Never>? = nil
+    /// Image verticale du direct en cours (Dual Format, voir portraitLive),
+    /// quand Twitch en a une ; jouée à la place de l'habituelle quand
+    /// `verticalOn`, l'habituelle gardée pour le retour (`verticalBackup`).
+    @State private var portraitMaster: MasterPlaylist? = nil
+    @State private var verticalOn = false
+    /// Image verticale, lecteur maison : chat masqué (double-tap, bouton Chat).
+    @State private var verticalChatHidden = false
+    @State private var verticalBackup: (links: QualityLinks, variants: [String: VariantInfo], source: String?)? = nil
     /// Feuille « Télécharger » (VOD en cours).
     @State private var showDownloadSheet = false
     /// Multi-live : la sélection, et la mosaïque ouverte.
     @ObservedObject private var multi = MultiLive.shared
+    /// Image dans l'image du lecteur : la mini-barre le dit (voir PlayerPiP).
+    @ObservedObject private var pipState = PlayerPiP.shared
     @State private var showMultiLive = false
     @State private var liveStartedAt: Date? = nil
     @State private var liveUptimeText: String = ""
@@ -74,6 +88,9 @@ struct MainTabView: View {
     /// se redessine pendant le geste (voir PlayerPull.swift).
     @State private var pull = PlayerPull()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Taille du texte d'iOS (plafonnée par TwitchUnblockApp) : relevée
+    /// avant tout rendu (TType), les onglets sont refaits quand elle change.
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     // ── Minuteur de veille ────────────────────────────────────────────────
     @ObservedObject private var sleepTimer = SleepTimerService.shared
@@ -121,6 +138,8 @@ struct MainTabView: View {
     /// (l'enregistrement s'ouvrait à la position du direct, pas à l'instant
     /// visé). Posés en même temps que `qualityLinks`.
     @State private var linksContentID = ""
+    /// Avis du lecteur déjà vus au lancement de cette lecture (accountNotice).
+    @State private var noticesSeenAtStart: Set<String> = []
     @State private var linksAreLive = false
     /// Incrémenté à chaque ouverture et fermeture du lecteur : la réponse
     /// d'un chargement dépassé (chaîne A arrivée après la chaîne B, lecteur
@@ -131,11 +150,22 @@ struct MainTabView: View {
     @State private var showDiscordPrompt = false
     /// Page d'une chaîne ouverte en feuille (sans passer par l'onglet Recherche).
     @State private var channelSheet: ChannelSheetItem? = nil
+    /// Cette page a été ouverte depuis le lecteur affiché en grand (pseudo,
+    /// titre, chat) : fermée sans rien lancer, elle rend le lecteur en grand.
+    /// Il restait réduit en mini-lecteur.
+    @State private var channelReturnsToPlayer = false
     /// Visite guidée du tout premier lancement (revue depuis les réglages).
     @AppStorage("onboarding_done") private var onboardingDone = false
     /// Clip en cours : VOD d'origine et position, pour en rejouer le chat.
     @State private var clipVodId: String? = nil
     @State private var clipOffset: Double = 0
+    /// Chaîne du clip en cours (« Voir dans la VOD »).
+    @State private var clipChannel: String? = nil
+    /// Archive d'un direct : début de la diffusion et durée de la VOD (heure
+    /// réelle dans la barre, « Aller à une heure »).
+    @State private var vodStartedAt: Date? = nil
+    @State private var vodLength: Double = 0
+    @State private var showGotoTime = false
     /// Vitesse du clip en cours : un clip part toujours à 1×, et celle qu'on
     /// y choisit n'est pas retenue pour les VODs.
     @State private var clipSpeed: Double = 1
@@ -310,57 +340,35 @@ struct MainTabView: View {
     }
 
     var body: some View {
+        // En premier : les polices de l'app (TType) en dépendent, celles de
+        // ce rendu comprises (mini-barre, chat du lecteur).
+        let typeSize = TType.adopt(dynamicTypeSize)
         ZStack(alignment: .bottom) {
             Color.tDark.ignoresSafeArea()
 
-            VStack(spacing: 0) {
-                HeaderView(title: activeTab.label(store),
-                           onOpenSettings: { showSettings = true },
-                           onFeedback: { feedbackContext = nil; showFeedback = true },
-                           safeTop: headerSafeTop)
-                    .zIndex(10)
-
-                Group {
-                    switch activeTab {
-                    // Les fermetures sont explicites : Swift n'applique pas les
-                    // valeurs par défaut (`soft:`) quand une méthode est passée
-                    // comme valeur, donc `playLive` vaudrait ici
-                    // `(String, Bool) -> Void` et ne collerait pas au callback.
-                    case .home:    HomeView(onPlayStream: { playLive($0) },
-                                            onPlayVod: { playVod($0, $1, $2, $3) })
-                    // Aperçus seulement sans lecteur ouvert (ni réduit, ni
-                    // multi-live) et sans feuille par-dessus.
-                    case .discover: DiscoverView(active: playerMode == nil && !presentationOpen,
-                                                 bottomInset: floatingBarsInset,
-                                                 onPlayLive: { playLive($0) },
-                                                 onPlayClip: { playClip($0, $1) })
-                    case .search:  SearchView(onPlayVod: { playVod($0, $1, $2, $3) },
-                                              onPlayLive: { playLive($0) },
-                                              onPlayClip: { playClip($0, $1) },
-                                              onPlayQueue: { playQueue($0, $1) },
-                                              onRecovered: { playRecovered($0) })
-                    case .library: LibraryView(onPlayVod: { playVod($0, $1, $2, $3) },
-                                               onPlayOffline: { playRecovered($0) })
-                    }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                // Verre liquide (iOS 26) : la barre d'onglets flotte sur le
-                // contenu, qui défile dessous et transparaît à travers.
-                .safeAreaInset(edge: .bottom, spacing: 0) {
-                    if store.liquidGlass && Theme.glassSupported {
-                        CustomTabBar(activeTab: $activeTab, floating: true)
-                    }
-                }
-
-                if !(store.liquidGlass && Theme.glassSupported) {
-                    CustomTabBar(activeTab: $activeTab)
-                }
-            }
-            .ignoresSafeArea()
+            // En-tête, écran de l'onglet, et barre d'onglets en bas ou en
+            // colonne à gauche (fenêtre large) : voir TabScaffold.
+            TabScaffold(activeTab: $activeTab,
+                        sideTabs: $sideTabs,
+                        safeTop: headerSafeTop,
+                        header: AnyView(HeaderView(title: activeTab.label(store),
+                                                   onOpenSettings: { showSettings = true },
+                                                   onFeedback: { feedbackContext = nil; showFeedback = true },
+                                                   safeTop: headerSafeTop)),
+                        content: AnyView(tabContent
+                            // Mini-barre et barre du multi-live posées sur le
+                            // bas de l'onglet : les listes s'arrêtent au-dessus
+                            // (« Charger plus », dernière ligne). Découvrir s'en
+                            // occupe lui-même (bottomInset).
+                            .safeAreaInset(edge: .bottom, spacing: 0) {
+                                Color.clear.frame(height: activeTab == .discover ? 0 : listBarsInset)
+                            }))
             // Thème changé dans les réglages : les onglets sont reconstruits,
             // pour qu'aucune vue ne garde les anciennes couleurs. Le lecteur et
-            // la feuille des réglages, hors de ce bloc, restent en place.
-            .id(store.themeID)
+            // la feuille des réglages, hors de ce bloc, restent en place. De
+            // même pour la taille du texte d'iOS, que les polices de l'app ne
+            // suivent pas d'elles-mêmes (TType).
+            .id("\(store.themeID)|\(typeSize)")
             // Onglet masqué pendant qu'il est affiché (Réglages →
             // Personnaliser), ou fin de la visite guidée qui les montrait
             // tous : le premier de la barre.
@@ -404,6 +412,7 @@ struct MainTabView: View {
                 selected: currentQuality(qualityLinks ?? [:]),
                 canRewind: liveDvrVideoId != nil,
                 isDvr: dvrSourceChannel != nil,
+                variants: qualityVariants,
                 onSelectQuality: { q in
                     // Toucher la qualité déjà cochée ne change pas la préférence.
                     if q != currentQuality(qualityLinks ?? [:]) {
@@ -412,9 +421,10 @@ struct MainTabView: View {
                     immersiveQuality = q
                     showPlayerMenu = false
                 },
-                // Pas sur le direct lui-même ; son rembobinage (enregistrement)
-                // l'a, de quoi rattraper le bord.
-                speed: isLivePlaying ? nil : playbackSpeed,
+                // Sur le direct : la vitesse qui rattrape le bord après un
+                // retour en arrière (ImmersivePlayerModel.liveCatchUp).
+                speed: playbackSpeed,
+                liveCatchUp: isLivePlaying,
                 onSelectSpeed: { setPlaybackSpeed($0); showPlayerMenu = false },
                 onRewind: { showPlayerMenu = false; rewindAction?() },
                 onBackToLive: { showPlayerMenu = false; backToLiveAction?() },
@@ -458,10 +468,26 @@ struct MainTabView: View {
                 multiLiveFull: multi.isFull,
                 shareURL: shareURL,
                 shareDetail: shareDetail,
-                onCreateClip: createClipAction
+                onCreateClip: createClipAction,
+                onGotoTime: gotoTimeAction,
+                onClipToVod: clipToVodAction,
+                clipToVodDetail: clipToVodAction == nil ? nil : formatClipVodTime(clipOffset + vodPlaybackTime),
+                onDownloadClip: downloadClipAction
             )
             .presentationDetents([.medium])
             .inAppNoticeHost()
+            .tTypeRoot()
+        }
+        // « Aller à une heure » d'une archive (menu ⋯ du lecteur).
+        .sheet(isPresented: $showGotoTime) {
+            if let start = vodStartedAt {
+                VodClockSheet(start: start, duration: vodLength, position: vodPlaybackTime) { seconds in
+                    NotificationCenter.default.post(name: .tuSeekTo, object: seconds)
+                }
+                .environmentObject(store)
+                .presentationDetents([.medium])
+                .tTypeRoot()
+            }
         }
         // Clip du direct en cours (menu ⋯ du lecteur).
         .sheet(isPresented: $showClipSheet) {
@@ -469,6 +495,7 @@ struct MainTabView: View {
                 .environmentObject(store)
                 .presentationDetents([.medium, .large])
                 .inAppNoticeHost()
+                .tTypeRoot()
         }
         // Multi-live : jusqu'à quatre vidéos côte à côte, directs et VODs.
         .fullScreenCover(isPresented: $showMultiLive) {
@@ -497,6 +524,7 @@ struct MainTabView: View {
                     .inAppNoticeHost()
                     .environmentObject(store)
                     .presentationDetents([.large])
+                    .tTypeRoot()
             }
         }
         // Réglages : ouverts depuis l'avatar de l'en-tête. `.equatable()` :
@@ -506,6 +534,7 @@ struct MainTabView: View {
             SettingsView()
                 .equatable()
                 .inAppNoticeHost()
+                .tTypeRoot()
         }
         // Signaler un bug ou proposer une idée (en-tête, menu du lecteur).
         .sheet(isPresented: $showFeedback) {
@@ -513,6 +542,7 @@ struct MainTabView: View {
                 .inAppNoticeHost()
                 .environmentObject(store)
                 .presentationDetents([.large])
+                .tTypeRoot()
         }
         // Invitation au Discord : à chaque lancement à partir du 2ᵉ, tant
         // qu'on n'a pas choisi « Ne plus afficher » (ou rejoint), et jamais en
@@ -530,17 +560,25 @@ struct MainTabView: View {
         // Jamais pendant la visite guidée, qui passe avant tout le reste.
         .overlay {
             if onboardingDone, updater.showAlert, let up = updater.available {
+                // Installation ratée (vieil IPA sous le numéro de la dernière
+                // version) : ce qu'il faut faire, et l'IPA à réinstaller,
+                // plutôt qu'une mise à jour qu'on croit déjà avoir.
                 TPromptCard(
-                    icon: "arrow.down.circle.fill",
-                    title: store.t("update_title"),
-                    message: store.t(up.changes.isEmpty ? "update_msg_short" : "update_whats_new"),
+                    icon: up.mislabeled ? "exclamationmark.triangle.fill" : "arrow.down.circle.fill",
+                    title: store.t(up.mislabeled ? "update_stale_title" : "update_title"),
+                    message: up.mislabeled ? UpdateChecker.staleInstallMessage(store)
+                        : store.t(up.changes.isEmpty ? "update_msg_short" : "update_whats_new"),
                     // Même version (builds de test) : le numéro de build les distingue.
                     detail: UpdateChecker.installedVersion == up.version
                         ? "\(up.version) (\(UpdateChecker.installedBuild))  →  \(up.version) (\(up.build))"
                         : "\(UpdateChecker.installedVersion)  →  \(up.version)",
-                    primary: store.t("update_open"),
+                    primary: store.t(up.mislabeled ? "update_stale_download" : "update_open"),
                     secondary: store.t("later"),
-                    onPrimary: { withAnimation(.spring(response: 0.3)) { updater.dismiss() }; UpdateChecker.openSource() },
+                    onPrimary: {
+                        withAnimation(.spring(response: 0.3)) { updater.dismiss() }
+                        if up.mislabeled { UpdateChecker.openDownload(up.downloadURL) }
+                        else { UpdateChecker.openSource() }
+                    },
                     onSecondary: { withAnimation(.spring(response: 0.3)) { updater.dismiss() } },
                     // Nouveautés de chaque build manquant, du plus récent au plus ancien.
                     sections: up.changes.map { c -> TPromptCard.PromptSection in
@@ -588,6 +626,7 @@ struct MainTabView: View {
                     GeometryReader { proxy in
                         OnboardingTour(rects: anchors.mapValues { proxy[$0] },
                                        size: proxy.size,
+                                       insets: proxy.safeAreaInsets,
                                        activeTab: $activeTab) {
                             withAnimation(.easeInOut(duration: 0.3)) { onboardingDone = true }
                         }
@@ -607,24 +646,37 @@ struct MainTabView: View {
         // Notification « en live » touchée : on ouvre le direct.
         // Page d'une chaîne demandée (pseudo dans le lecteur, accueil…) :
         // ouverte dans une feuille par-dessus l'onglet en cours, sans passer
-        // par Recherche ; le lecteur se réduit en mini-barre.
+        // par Recherche ; le lecteur se réduit en mini-barre le temps de la
+        // page (portrait, clavier du chat fermé). Ouverte depuis le lecteur
+        // en grand, sa fermeture le rend en grand (channelSheetDismissed).
         .onChange(of: store.pendingChannel) { login in
             guard let login else { return }
             store.pendingChannel = nil
+            // Une page en remplace une autre : le retour prévu à l'ouverture
+            // de la première tient.
+            if channelSheet == nil {
+                channelReturnsToPlayer = playerMode != nil && playerVisible && !closingPlayer
+            }
             withAnimation(.easeInOut(duration: 0.2)) { playerVisible = false }
             channelSheet = ChannelSheetItem(login: login)
         }
-        .sheet(item: $channelSheet) { item in
-            SearchView(onPlayVod: { id, t, th, s in channelSheet = nil; playVod(id, t, th, s) },
-                       onPlayLive: { l in channelSheet = nil; playLive(l) },
-                       onPlayClip: { slug, t in channelSheet = nil; playClip(slug, t) },
-                       onPlayQueue: { list, s in channelSheet = nil; playQueue(list, s) },
-                       onRecovered: { rec in channelSheet = nil; playRecovered(rec) },
+        // Une vidéo lancée depuis la page s'ouvre elle-même en grand : pas
+        // de retour au lecteur d'avant (closeChannelSheet).
+        .sheet(item: $channelSheet, onDismiss: channelSheetDismissed) { item in
+            SearchView(onPlayVod: { id, t, th, s in closeChannelSheet(); playVod(id, t, th, s) },
+                       onPlayLive: { l in closeChannelSheet(); playLive(l) },
+                       onPlayClip: { slug, t in closeChannelSheet(); playClip(slug, t) },
+                       onPlayQueue: { list, s in closeChannelSheet(); playQueue(list, s) },
+                       onRecovered: { rec in closeChannelSheet(); playRecovered(rec) },
                        initialChannel: item.login,
                        onClose: { channelSheet = nil })
+                // Grilles de la page (VODs, clips) : colonnes d'après la
+                // largeur de la feuille.
+                .tMeasuresContentWidth()
                 .inAppNoticeHost()
                 .environmentObject(store)
                 .presentationDragIndicator(.visible)
+                .tTypeRoot()
         }
         .onReceive(NotificationCenter.default.publisher(for: .AVPlayerItemDidPlayToEndTime)) { _ in
             playNextInQueue()
@@ -680,6 +732,7 @@ struct MainTabView: View {
                 .inAppNoticeHost()
                 .environmentObject(store)
                 .preferredColorScheme(.dark)
+                .tTypeRoot()
         }
         // Réglage rapide du minuteur depuis le lecteur.
         .sheet(isPresented: $showSleepSheet) {
@@ -706,9 +759,11 @@ struct MainTabView: View {
                 startDropsHeartbeat(channel: channel)
             }
             // Qualités supérieures : les liens du compte, gardés pour le retour
-            // pendant une pause pub, sont signés pour l'ancienne session.
+            // pendant une pause pub, sont signés pour l'ancienne session. De même
+            // ceux gardés pour le retour de l'image verticale.
             guard case .live(let channel)? = playerMode, dvrSourceChannel == nil,
-                  liveSourceUsed == "account" || hqLive != nil, !closingPlayer else { return }
+                  liveSourceUsed == "account" || hqLive != nil || verticalBackup?.source == "account",
+                  !closingPlayer else { return }
             logger.info("LECTEUR", "Session web changée : direct relu", channel)
             let visible = playerVisible, onlyChat = chatOnly
             playLive(channel, soft: true)
@@ -738,8 +793,10 @@ struct MainTabView: View {
         // Lecteur réduit (ou fermé) après le bouton de rotation : sur iPhone,
         // le reste de l'app revient au portrait au lieu de rester couché. Le
         // clavier du chat se ferme aussi : il restait par-dessus l'app.
+        // Rouvert en grand (mini-barre, notification…) pendant un PiP :
+        // l'image revient dans le lecteur, qui restait noir sinon.
         .onChange(of: playerVisible) { visible in
-            guard !visible else { return }
+            guard !visible else { PlayerPiP.shared.playerShown(); return }
             PlayerOrientation.restorePortraitIfForced()
             UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder),
                                             to: nil, from: nil, for: nil)
@@ -762,6 +819,31 @@ struct MainTabView: View {
         }
     }
 
+    /// Écran de l'onglet affiché (sous l'en-tête, voir TabScaffold).
+    @ViewBuilder private var tabContent: some View {
+        switch activeTab {
+        // Les fermetures sont explicites : Swift n'applique pas les
+        // valeurs par défaut (`soft:`) quand une méthode est passée
+        // comme valeur, donc `playLive` vaudrait ici
+        // `(String, Bool) -> Void` et ne collerait pas au callback.
+        case .home:    HomeView(onPlayStream: { playLive($0) },
+                                onPlayVod: { playVod($0, $1, $2, $3) })
+        // Aperçus seulement sans lecteur ouvert (ni réduit, ni
+        // multi-live) et sans feuille par-dessus.
+        case .discover: DiscoverView(active: playerMode == nil && !presentationOpen,
+                                     bottomInset: floatingBarsInset,
+                                     onPlayLive: { playLive($0) },
+                                     onPlayClip: { playClip($0, $1) })
+        case .search:  SearchView(onPlayVod: { playVod($0, $1, $2, $3) },
+                                  onPlayLive: { playLive($0) },
+                                  onPlayClip: { playClip($0, $1) },
+                                  onPlayQueue: { playQueue($0, $1) },
+                                  onRecovered: { playRecovered($0) })
+        case .library: LibraryView(onPlayVod: { playVod($0, $1, $2, $3) },
+                                   onPlayOffline: { playRecovered($0) })
+        }
+    }
+
     private func updateHeaderSafeTop(_ top: CGFloat) {
         let value = top > 0 ? top : HeaderView.windowSafeTop
         if abs(value - headerSafeTop) > 0.5 { headerSafeTop = value }
@@ -777,10 +859,22 @@ struct MainTabView: View {
 
     /// Hauteur que la mini-barre et la barre du multi-live, posées par-dessus
     /// le bas des onglets, cachent à Découvrir (voir DiscoverView.bottomInset).
+    /// Onglets en colonne : les barres descendent au bas de l'écran, sans
+    /// barre d'onglets dessous (voir miniBar).
     private var floatingBarsInset: CGFloat {
         guard !playerVisible, !closingPlayer else { return 0 }
         let bars = (playerMode != nil ? 1 : 0) + (multi.entries.isEmpty ? 0 : 1)
-        return bars == 0 ? 0 : CGFloat(20 + 65 * bars)
+        guard bars > 0 else { return 0 }
+        return CGFloat((sideTabs ? 0 : 20) + 65 * bars)
+    }
+
+    /// Hauteur que ces mêmes barres cachent au bas des listes des autres
+    /// onglets, au-dessus de la barre d'onglets (ou du bas de l'écran avec la
+    /// colonne) : environ 50 pt par barre, plus l'écart entre elles.
+    private var listBarsInset: CGFloat {
+        guard !playerVisible, !closingPlayer else { return 0 }
+        let bars = (playerMode != nil ? 1 : 0) + (multi.entries.isEmpty ? 0 : 1)
+        return CGFloat(64 * bars)
     }
 
     /// Feuilles et mosaïque attachées à cet écran : une notification touchée
@@ -797,9 +891,28 @@ struct MainTabView: View {
         showClipSheet = false
         showDownloadSheet = false
         showSleepSheet = false
-        channelSheet = nil
+        closeChannelSheet()
         showMultiLive = false
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { action() }
+    }
+
+    /// Page d'une chaîne fermée pour autre chose (vidéo lancée depuis elle,
+    /// notification touchée) : le lecteur d'avant ne revient pas en grand.
+    private func closeChannelSheet() {
+        channelReturnsToPlayer = false
+        channelSheet = nil
+    }
+
+    /// Page d'une chaîne fermée (balayée, « Fermer ») : ouverte depuis le
+    /// lecteur en grand, celui-ci revient tel qu'il était, au lieu de rester
+    /// en mini-lecteur. Rien si le lecteur a été fermé entre-temps.
+    private func channelSheetDismissed() {
+        // Remplacée par la page d'une autre chaîne : on attend la dernière.
+        guard channelReturnsToPlayer, channelSheet == nil else { return }
+        channelReturnsToPlayer = false
+        guard playerMode != nil, !playerVisible, !closingPlayer else { return }
+        pull.y = 0
+        withAnimation(.easeInOut(duration: 0.2)) { playerVisible = true }
     }
 
     // MARK: – Lecteur
@@ -864,7 +977,7 @@ struct MainTabView: View {
                             .font(.tLabel).foregroundColor(.white)
                     }
                     .padding(.horizontal, TSpace.md)
-                    .frame(height: 34)
+                    .frame(minHeight: 34)
                     .background(Color.black.opacity(0.65))
                     .clipShape(Capsule())
                     .padding(.top, TSpace.lg)
@@ -872,6 +985,21 @@ struct MainTabView: View {
                 }
             }
             .animation(.easeInOut(duration: 0.2), value: switchingSource)
+            // Lecteur en grand en paysage (immersif ou natif, chat seul à
+            // part) : l'indicateur d'accueil s'efface au bout de quelques
+            // secondes et revient au moindre toucher, comme dans les apps
+            // vidéo. Il restait affiché en permanence sur l'image (retour d'un
+            // iPhone XR, iOS 18.7). Préférence lue par le contrôleur de la
+            // fenêtre : posée ici, elle vaut pour toute l'app tant que le
+            // lecteur est affiché ainsi.
+            .persistentSystemOverlays(landscape && playerVisible && !chatOnly && !closingPlayer
+                                      ? .hidden : .automatic)
+            // La barre d'état aussi : l'iPhone la cache seul en paysage, mais
+            // pas l'écran intérieur de l'iPhone Duo (fenêtre aux tailles
+            // « regular », comme l'iPad), où sa colonne restait sur le côté
+            // de l'image (fb_mvt2q11b). Demande que l'Info.plist la laisse aux
+            // contrôleurs (UIViewControllerBasedStatusBarAppearance).
+            .statusBarHidden(landscape && playerVisible && !chatOnly && !closingPlayer)
         }
     }
 
@@ -891,12 +1019,25 @@ struct MainTabView: View {
         // Le mode « chat seul » n'a pas de colonne vidéo : il reste empilé.
         let split  = landscape && !chatOnly
         let mode   = store.landscapeChat
+        // Image verticale d'un direct (Dual Format), en portrait, lecteur
+        // maison : comme « Affichage vertical » dans l'app de Twitch, l'image
+        // prend toute la hauteur et le chat se pose sur son bas (ou se masque).
+        // Le lecteur d'Apple garde ses commandes au bas de l'image, sous un
+        // chat posé dessus : lui reste en 9:16 sur 62 % de l'écran au plus,
+        // le chat dessous.
+        let verticalOverlay = verticalOn && !split && !chatOnly && store.immersivePlayer
         let layout = split ? AnyLayout(HStackLayout(spacing: 0))
                            : AnyLayout(VStackLayout(spacing: 0))
-        // Portrait : hauteur 16:9 imposée, le chat prend le reste.
-        // Paysage : libre, la colonne donne toute sa hauteur à l'image.
-        let videoHeight: CGFloat? = split ? nil : size.width * 9 / 16
-        let videoMaxHeight: CGFloat? = split ? CGFloat.infinity : nil
+        // Portrait : hauteur 16:9 imposée, le chat prend le reste ; image
+        // verticale avec le lecteur d'Apple : 9:16, 62 % de l'écran au plus.
+        // Paysage, et image verticale avec le lecteur maison : libre, l'image
+        // prend toute la hauteur.
+        let videoHeight: CGFloat? = split || verticalOverlay ? nil
+            : verticalOn ? min(size.width * 16 / 9, size.height * 0.62) : size.width * 9 / 16
+        let videoMaxHeight: CGFloat? = split || verticalOverlay ? CGFloat.infinity : nil
+        // Chat posé sur le bas de l'image verticale : 40 % de la hauteur, là
+        // où l'app de Twitch met le sien (le streamer laisse ce bas libre).
+        let verticalChatHeight: CGFloat? = verticalOverlay ? max(size.height * 0.4, 220) : nil
         // Largeur réglable, mais jamais sous 220 pt : en deçà les messages se
         // hachent en mots isolés, quel que soit le réglage.
         //
@@ -913,16 +1054,18 @@ struct MainTabView: View {
             guard split, mode != .column else { return chatWidth }
             return CGFloat(0)
         }()
-        let chatVisible = !split || mode != .hidden
-        let overlaying  = split && mode == .overlay
+        let chatVisible = verticalOverlay ? !verticalChatHidden : (!split || mode != .hidden)
+        let overlaying  = (split && mode == .overlay) || verticalOverlay
         // Le décor ne tient que dans le chat plein cadre ; la transparence ne
         // sert qu'au calque. Le reste (tailles) vient des réglages.
-        let chatStyle = store.chatStyle(chrome: !split, translucent: overlaying)
+        let chatStyle = store.chatStyle(chrome: !split && !verticalOverlay, translucent: overlaying)
         // Posé sur l'image, le chat couvre la droite de l'écran. Plutôt que de
         // se disputer les touchers avec les boutons du lecteur, on les écarte :
         // les barres du lecteur se replient de la largeur du chat et restent
         // donc entièrement visibles et cliquables, quelle que soit sa taille.
-        let controlsInset: CGFloat = overlaying ? (chatWidth ?? 0) : 0
+        // Image verticale : le chat couvre le bas, les barres remontent.
+        let controlsInset: CGFloat = split && mode == .overlay ? (chatWidth ?? 0) : 0
+        let controlsBottomInset: CGFloat = verticalOverlay && chatVisible ? (verticalChatHeight ?? 0) : 0
 
         layout {
             VStack(spacing: 0) {
@@ -933,7 +1076,9 @@ struct MainTabView: View {
                 }
                 if !chatOnly {
                     videoSurface(links: links, landscape: split,
-                                 controlsInset: controlsInset)
+                                 controlsInset: controlsInset,
+                                 verticalLayout: verticalOverlay,
+                                 controlsBottomInset: controlsBottomInset)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .frame(height: videoHeight)
                 }
@@ -953,15 +1098,22 @@ struct MainTabView: View {
             // Replié, `opacity` le masque et `allowsHitTesting` coupe les
             // touchers : sans ça on appuyait encore sur un chat invisible, un
             // cadrage nul ne bornant pas les zones tactiles.
+            //
+            // Image verticale (lecteur maison, portrait) : même principe en
+            // hauteur. Le chat a sa hauteur (verticalChatHeight) mais ne prend
+            // aucune place dans la pile : à zéro et aligné en bas, il déborde
+            // vers le haut, sur le bas de l'image.
             chatPane(style: chatStyle)
                 .frame(width: chatWidth)
-                .frame(maxHeight: .infinity)
+                .frame(height: verticalChatHeight)
+                .frame(maxHeight: verticalOverlay ? nil : CGFloat.infinity)
                 // Bord du chat : une petite poignée pour régler sa largeur,
                 // sans trait au repos (le chat se fond dans l'image).
                 .overlay(alignment: .leading) {
                     if split { chatResizeHandle(totalWidth: size.width) }
                 }
                 .frame(width: chatColumn, alignment: .trailing)
+                .frame(height: verticalOverlay ? 0 : nil, alignment: .bottom)
                 .opacity(chatVisible ? 1 : 0)
                 .allowsHitTesting(chatVisible)
         }
@@ -1033,7 +1185,8 @@ struct MainTabView: View {
                 style: style,
                 onJoinChannel: { target in   // raid → suit la chaîne raidée
                     // Lecteur réduit : il le reste (on naviguait ailleurs).
-                    playLive(target, keepVisibility: true)
+                    // En PiP : même lecteur (voir chainKeepsPiP).
+                    playLive(target, soft: chainKeepsPiP, keepVisibility: true)
                 }
             )
             .id(channel)   // changement de chaîne → chat reconstruit à neuf
@@ -1062,9 +1215,13 @@ struct MainTabView: View {
     }
 
     /// Surface vidéo : lecteur natif (contrôles Apple) ou immersif (contrôles maison).
+    /// `verticalLayout` : image verticale en portrait, chat posé sur son bas
+    /// (`controlsBottomInset` : sa hauteur, 0 s'il est masqué).
     @ViewBuilder
     private func videoSurface(links: QualityLinks, landscape: Bool,
-                              controlsInset: CGFloat = 0) -> some View {
+                              controlsInset: CGFloat = 0,
+                              verticalLayout: Bool = false,
+                              controlsBottomInset: CGFloat = 0) -> some View {
         if store.immersivePlayer {
             ImmersivePlayer(
                 url: URL(string: links[currentQuality(links)] ?? "") ?? URL(string: "about:blank")!,
@@ -1075,10 +1232,14 @@ struct MainTabView: View {
                 info: overlayInfo,
                 onChannel: playerChannelLogin.map { l in { store.openChannelPage(l) } },
                 sleepLabel: sleepTimer.isActive ? sleepTimer.label : nil,
-                chatMode: store.landscapeChat,
+                chatMode: verticalLayout ? (verticalChatHidden ? .hidden : .overlay) : store.landscapeChat,
                 isLandscape: landscape,
                 controlsInset: controlsInset,
-                fillScreen: store.fillScreen,
+                verticalLayout: verticalLayout,
+                controlsBottomInset: controlsBottomInset,
+                // Image verticale en paysage : jamais recadrée (il n'en
+                // resterait qu'une bande).
+                fillScreen: store.fillScreen && !verticalOn,
                 canReturnToLive: dvrSourceChannel != nil,
                 streamStartedAt: liveStartedAt,
                 archiveAvailable: liveDvrVideoId != nil,
@@ -1089,7 +1250,10 @@ struct MainTabView: View {
                 speed: playbackSpeed,
                 // Toujours une vitesse imposée par le lecteur (voir forcedVodSpeed).
                 onSpeedChange: { setForcedSpeed($0) },
+                onSpeedRestore: { restoreChosenSpeed($0) },
                 notice: slowNetworkNotice ?? hqNotice ?? accountNotice,
+                backgroundAudioURL: backgroundAudioURL(links),
+                vodStartedAt: vodStartedAt,
                 onProgress: { time in
                     // Pendant une bascule, `playerMode` désigne déjà la
                     // nouvelle source alors que le lecteur en place joue encore
@@ -1106,12 +1270,18 @@ struct MainTabView: View {
                 onPlaying: { playerPlaying = $0 },
                 onPull: { pullPlayer($0) },
                 onPullEnd: { endPull($0, predicted: $1) },
-                onReduce: { reducePlayer() },
+                onReduce: { leavePlayer() },
                 onClose:  { stopPlayer() },
                 onMenu:   { showPlayerMenu = true },
                 onRefresh: { reloadCurrent() },
                 onToggleChat: { withAnimation { store.landscapeChat = store.landscapeChat.next } },
-                onToggleChatVisibility: { withAnimation { store.toggleLandscapeChatVisibility() } },
+                onToggleChatVisibility: {
+                    // Image verticale : chat posé sur l'image, ou masqué.
+                    guard verticalLayout else { return withAnimation { store.toggleLandscapeChatVisibility() } }
+                    let hidden = !verticalChatHidden
+                    withAnimation { verticalChatHidden = hidden }
+                    return hidden ? .hidden : .overlay
+                },
                 onSleep: { showSleepSheet = true },
                 onBackToLive: { backToLiveAction?() },
                 onSeekToArchive: { offset in
@@ -1128,10 +1298,14 @@ struct MainTabView: View {
                 multiLiveOn: menuMultiLiveOn,
                 multiLiveFull: multi.isFull,
                 onRewind: dvrSourceChannel == nil ? rewindAction : nil,
+                onVertical: verticalAvailable ? { toggleVertical() } : nil,
+                verticalOn: verticalOn,
                 // Qualités supérieures sans abonnement : pauses pub et échec
                 // du flux du compte (voir adBreakChanged).
                 onAdBreak: { adBreakChanged($0) },
-                onFailed: { hqStreamFailed() }
+                onFailed: { hqStreamFailed() },
+                onPiPStart: { pipStarted() },
+                onPiPRestore: { pipRestore() }
             )
         } else {
             VideoPlayerView(
@@ -1147,6 +1321,9 @@ struct MainTabView: View {
                 nowPlaying: nowPlayingMeta,
                 speed: playbackSpeed,
                 onSpeedChange: { setPlaybackSpeed($0) },
+                // Imposée (bord d'un enregistrement, AirPlay) : pour cette
+                // lecture seulement, comme dans le lecteur immersif.
+                onSpeedForced: { setForcedSpeed($0) },
                 onTime: { vodPlaybackTime = $0 },
                 onLatency: { updateLatency($0) },
                 onBehind: { updateBehind($0) },
@@ -1160,9 +1337,18 @@ struct MainTabView: View {
                 // Qualités supérieures sans abonnement : la qualité du compte au
                 // retour d'une pause pub, et les pauses elles-mêmes.
                 wantedQuality: hqLive?.accountQuality,
-                onAdBreak: { adBreakChanged($0) }
+                onAdBreak: { adBreakChanged($0) },
+                onPiPStart: { pipStarted() },
+                onPiPRestore: { pipRestore() },
+                videoAspect: verticalOn ? 9 / 16 : 16 / 9
             )
         }
+    }
+
+    /// Le direct en cours a une image verticale (Dual Format) qu'on peut
+    /// choisir : pas pendant son rembobinage.
+    private var verticalAvailable: Bool {
+        portraitMaster != nil && linksAreLive && dvrSourceChannel == nil
     }
 
     /// Bandeau au-dessus de la vidéo (mode natif) : qui regarde-t-on, et quoi.
@@ -1172,7 +1358,7 @@ struct MainTabView: View {
     @ViewBuilder
     private var playerTopBar: some View {
         HStack(spacing: TSpace.sm) {
-            Button { PlayerPull.guarded { reducePlayer() } } label: {
+            Button { PlayerPull.guarded { leavePlayer() } } label: {
                 Image(systemName: "chevron.down")
                     .font(.system(size: 14, weight: .bold))
                     .foregroundColor(.tPrimary)
@@ -1226,6 +1412,20 @@ struct MainTabView: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+
+            // Direct en « Dual Format » : son image verticale, ou retour.
+            if verticalAvailable {
+                Button { PlayerPull.guarded { toggleVertical() } } label: {
+                    Image(systemName: verticalOn ? "rectangle" : "rectangle.portrait")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(verticalOn ? .tPurple : .tMuted)
+                        .frame(width: 32, height: 32)
+                        .background(verticalOn ? Color.tPurple.opacity(0.18) : Color.tSurface)
+                        .cornerRadius(TRadius.chip)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(store.t("vertical_format"))
+            }
 
             // Minuteur de veille
             Button { PlayerPull.guarded { showSleepSheet = true } } label: {
@@ -1321,6 +1521,15 @@ struct MainTabView: View {
                                 cellular: NetworkStatus.shared.isCellular, variants: variants ?? qualityVariants)
     }
 
+    /// Qualité audio de ces liens, pour le son seul en arrière-plan (réglage
+    /// « Lecture en arrière-plan ») ; nil sans ce réglage, sans qualité audio,
+    /// ou si c'est déjà elle qui joue.
+    private func backgroundAudioURL(_ links: QualityLinks) -> URL? {
+        guard store.backgroundPlayback == "audio", !isAudioQuality(currentQuality(links)),
+              let key = links.keys.sorted().first(where: { isAudioQuality($0) }) else { return nil }
+        return links[key].flatMap { URL(string: $0) }
+    }
+
     /// Arrondi à la seconde : sinon la vue se recalculerait à chaque tick.
     private func updateLatency(_ value: Double?) {
         let rounded = (value ?? 0).rounded()
@@ -1355,14 +1564,71 @@ struct MainTabView: View {
     }
 
     /// Doigt levé : assez loin (seuil selon la hauteur), ou lancé
-    /// franchement, on réduit ; sinon le lecteur revient à sa place.
+    /// franchement, on quitte le lecteur ; sinon il revient à sa place.
     private func endPull(_ distance: CGFloat, predicted: CGFloat) {
         guard playerVisible, !closingPlayer else { return }
         let threshold = PlayerPull.threshold(for: pull.height)
         if distance >= threshold || (distance > 20 && predicted >= threshold * 1.8) {
-            reducePlayer()
+            leavePlayer()
         } else {
             pullPlayer(0)
+        }
+    }
+
+    // MARK: – Image dans l'image (PiP)
+    /// Lecteur quitté (flèche, glissé vers le bas) : avec « PiP en quittant le
+    /// lecteur », la vidéo passe en PiP et le lecteur se réduit à son départ
+    /// (pipStarted) ; sinon, ou si le PiP ne démarre pas, mini-lecteur.
+    private func leavePlayer() {
+        guard playerVisible, !closingPlayer else { return }
+        if pipOnLeaveAllowed, PlayerPiP.shared.startOnLeave(fallback: { reducePlayer() }) { return }
+        reducePlayer()
+    }
+
+    /// « PiP en quittant le lecteur » : lecteur immersif (le natif n'a rien
+    /// de public pour démarrer son PiP), une image à montrer — ni chargement,
+    /// ni erreur, ni chat seul, ni audio seul. Le lecteur dit ensuite s'il
+    /// joue et si AVKit le permet (PlayerPiP.startOnLeave).
+    private var pipOnLeaveAllowed: Bool {
+        guard store.pipOnLeave, store.immersivePlayer, !chatOnly, !loading,
+              errorMsg == nil, let links = qualityLinks else { return false }
+        return !isAudioQuality(currentQuality(links))
+    }
+
+    /// PiP démarré (bouton, app en arrière-plan, lecteur quitté) : le lecteur
+    /// se réduit pour laisser naviguer dans l'app, comme dans les apps vidéo.
+    /// Il restait en grand, noir (l'image partie dans la fenêtre), et il
+    /// fallait le fermer à la main.
+    private func pipStarted() {
+        // Paysage du bouton de rotation : la réduction le perd (retour au
+        // portrait), pipRestore le remet. Rien à remettre pour un lecteur
+        // déjà réduit.
+        PlayerOrientation.landscapeBeforePiP = playerVisible && !closingPlayer
+            && PlayerOrientation.forcedLandscape
+        guard playerVisible, !closingPlayer else { return }
+        reducePlayer()
+    }
+
+    /// Bouton « agrandir » de la fenêtre PiP, ou PiP arrêté pour rouvrir le
+    /// lecteur : il revient en grand sur la même lecture, où AVKit ramène
+    /// l'image. Une feuille ouverte par-dessus (réglages, page d'une chaîne…)
+    /// se ferme : le lecteur serait revenu dessous.
+    private func pipRestore() {
+        guard playerMode != nil, !closingPlayer else { return }
+        if presentationOpen { afterClosingPresentations {} }
+        let landscape = PlayerOrientation.landscapeBeforePiP
+        PlayerOrientation.landscapeBeforePiP = false
+        guard !playerVisible else { return }
+        pull.y = 0
+        withAnimation(.easeInOut(duration: 0.2)) { playerVisible = true }
+        // Regardé en paysage forcé (rotation verrouillée) avant le PiP : il
+        // revient en paysage, une fois l'image rentrée dans le lecteur (la
+        // fenêtre s'y pose en ~0,3 s), et non en portrait.
+        guard landscape else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            guard playerVisible, playerMode != nil, !closingPlayer else { return }
+            OrientationLock.allowLandscape(true)
+            PlayerOrientation.forceLandscape()
         }
     }
 
@@ -1493,14 +1759,26 @@ struct MainTabView: View {
     /// une fois. Revenu après « Connexion lente » (4 s plus tard), il était
     /// réannoncé à chaque baisse de qualité. Qualités supérieures sans
     /// abonnement : pas « sans pub », et plus après une première bascule
-    /// (chacune a son avis, hqNotice).
+    /// (chacune a son avis, hqNotice). Seulement au premier direct qui passe
+    /// par là (noticesSeenAtStart, noteSourceNotice).
     private var accountNotice: String? {
-        guard !slowNoticeShown else { return nil }
+        guard !slowNoticeShown, let key = accountNoticeKey,
+              !noticesSeenAtStart.contains(key) else { return nil }
+        return store.t(key)
+    }
+
+    private var accountNoticeKey: String? {
         switch menuLiveSource {
-        case "account"?: return store.t("src_account_toast")
-        case "account_hq"? where (hqLive?.switches ?? 0) == 0: return store.t("src_account_hq_toast")
+        case "account"?: return "src_account_toast"
+        case "account_hq"? where (hqLive?.switches ?? 0) == 0: return "src_account_hq_toast"
         default: return nil
         }
+    }
+
+    /// Avis de la source montré pour ce direct : retenu pour les suivants
+    /// (relu au lancement de chacun, noticesSeenAtStart).
+    private func noteSourceNotice() {
+        if let key = accountNoticeKey { store.markNoticeSeen(key) }
     }
 
     /// Source du direct pour le menu du lecteur : seulement pendant un direct
@@ -1571,6 +1849,55 @@ struct MainTabView: View {
         return false
     }
 
+    /// Archive d'un direct dans le lecteur immersif : aller à une heure de la
+    /// diffusion. Pas pendant une bascule (la position serait l'ancienne).
+    private var gotoTimeAction: (() -> Void)? {
+        guard store.immersivePlayer, vodStartedAt != nil, vodLength > 0, currentVodId != nil,
+              !switchingSource, !loading, errorMsg == nil else { return nil }
+        return {
+            showPlayerMenu = false
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { showGotoTime = true }
+        }
+    }
+
+    /// Clip : sa VOD d'origine, à l'instant lu dans le clip.
+    private var clipToVodAction: (() -> Void)? {
+        guard isClipPlaying, let vod = clipVodId, !vod.isEmpty else { return nil }
+        return {
+            showPlayerMenu = false
+            let at = clipOffset + (vodPlaybackTime.isFinite ? vodPlaybackTime : 0)
+            store.setVodProgress(vod, time: at)
+            logger.info("LECTEUR", "Clip : VOD d'origine ouverte", "\(vod) · \(Int(at)) s")
+            playVod(vod, nil, nil, clipChannel)
+        }
+    }
+
+    /// Position d'un instant dans la VOD d'origine d'un clip (« 1:02:03 »).
+    private func formatClipVodTime(_ s: Double) -> String {
+        let t = max(0, Int(s.isFinite ? s : 0))
+        return t >= 3600 ? String(format: "%d:%02d:%02d", t / 3600, t / 60 % 60, t % 60)
+                         : String(format: "%d:%02d", t / 60, t % 60)
+    }
+
+    /// Clip : le télécharger dans la qualité lue, puis la feuille de partage.
+    private var downloadClipAction: (() -> Void)? {
+        guard isClipPlaying, let links = qualityLinks, !loading, errorMsg == nil,
+              let url = links[currentQuality(links)].flatMap({ URL(string: $0) }) else { return nil }
+        let title = statusTitle
+        return {
+            showPlayerMenu = false
+            InAppNotices.shared.show(InAppNotice(kind: .download, title: store.t("clip_dl_started"), body: title))
+            Task { @MainActor in
+                // Le menu se ferme d'abord : la feuille de partage s'ouvre par-dessus le lecteur.
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                let saved = await ClipSaver.save(url, title: title)
+                if !saved {
+                    InAppNotices.shared.show(InAppNotice(kind: .download, title: store.t("clip_dl_failed"), body: title))
+                }
+            }
+        }
+    }
+
     private var isClipPlaying: Bool {
         if case .clip? = playerMode { return true }
         return false
@@ -1594,15 +1921,25 @@ struct MainTabView: View {
         }
     }
 
-    /// Vitesse imposée par le lecteur immersif : retenue pour cette lecture
-    /// seulement (voir `forcedVodSpeed`) ; celle d'un clip, comme un choix.
+    /// Vitesse imposée par le lecteur : retenue pour cette lecture seulement
+    /// (voir `forcedVodSpeed`) ; celle d'un clip, comme un choix. Gardée même
+    /// égale à la préférence : restoreChosenSpeed y lit qu'elle est imposée.
     private func setForcedSpeed(_ v: Double) {
         let speed = VodSpeed.nearest(v)
         if isClipPlaying {
             clipSpeed = speed
         } else {
-            forcedVodSpeed = speed == store.vodSpeed ? nil : speed
+            forcedVodSpeed = speed
         }
+    }
+
+    /// Lecteur immersif revenu loin du bord d'un enregistrement en cours
+    /// (retour en arrière) : la vitesse d'avant le retour à 1× revient — la
+    /// préférence. Seulement si celle de la lecture est encore imposée : un
+    /// choix fait entre-temps dans le menu ⋯ l'emporte.
+    private func restoreChosenSpeed(_ held: Double) {
+        guard !isClipPlaying, forcedVodSpeed != nil else { return }
+        forcedVodSpeed = nil
     }
 
     // MARK: – Mini-barre (lecteur réduit)
@@ -1618,7 +1955,9 @@ struct MainTabView: View {
                     .font(.system(size: 13, weight: .bold))
                     .foregroundColor(.tWarning)
             } else {
-                Image(systemName: isLivePlaying ? "dot.radiowaves.left.and.right" : "play.fill")
+                // En PiP, l'image est dans la fenêtre : toucher la barre l'y reprend.
+                Image(systemName: pipState.active ? "pip"
+                      : isLivePlaying ? "dot.radiowaves.left.and.right" : "play.fill")
                     .font(.system(size: 13, weight: .bold))
                     .foregroundColor(isLivePlaying ? .tLive : .tPrimary)
             }
@@ -1646,9 +1985,16 @@ struct MainTabView: View {
             pull.y = 0
             withAnimation { playerVisible = true }
         }
+        // Onglets en colonne à gauche : la barre se pose à sa droite, au bas
+        // de l'écran (plus de barre d'onglets dessous).
+        .padding(.leading, sideTabs ? SideTabRail.width : 0)
         .padding(.horizontal, TSpace.md)
-        .padding(.bottom, 92)
+        .padding(.bottom, sideTabs ? Self.sideBarsBottom : 92)
     }
+
+    /// Bas de la mini-barre quand les onglets sont en colonne : juste
+    /// au-dessus de l'indicateur d'accueil.
+    private static let sideBarsBottom: CGFloat = TSpace.md
 
     /// Multi-live en préparation : les vidéos choisies, et « Regarder ».
     /// Au-dessus du mini-lecteur quand il est là.
@@ -1682,8 +2028,9 @@ struct MainTabView: View {
         .overlay(RoundedRectangle(cornerRadius: TRadius.card, style: .continuous)
             .stroke(Color.tPurple.opacity(0.35), lineWidth: 1))
         .contentShape(Rectangle())
+        .padding(.leading, sideTabs ? SideTabRail.width : 0)
         .padding(.horizontal, TSpace.md)
-        .padding(.bottom, miniShown ? 152 : 92)
+        .padding(.bottom, (sideTabs ? Self.sideBarsBottom : 92) + (miniShown ? 60 : 0))
     }
 
     /// Un seul son à la fois : le lecteur se ferme.
@@ -1727,7 +2074,20 @@ struct MainTabView: View {
               let i = vodQueue.firstIndex(where: { $0.id == id }) else { return }
         guard i + 1 < vodQueue.count else { vodQueue = []; return }
         let next = vodQueue[i + 1]
-        playVod(next.id, next.title, next.previewThumbnailURL, vodQueueStreamer, keepVisibility: true)
+        let soft = chainKeepsPiP
+        // Bascule douce : la vitesse imposée à la VOD finie n'est pas vidée
+        // par startPlayback, elle ne doit pas passer à la suivante.
+        if soft { forcedVodSpeed = nil }
+        playVod(next.id, next.title, next.previewThumbnailURL, vodQueueStreamer,
+                soft: soft, keepVisibility: true)
+    }
+
+    /// Enchaînement automatique (raid suivi, VOD suivante) pendant un PiP : la
+    /// nouvelle source passe par le lecteur en place (bascule douce), qui
+    /// change seulement d'élément. Un lecteur recréé fermait la fenêtre et le
+    /// son continuait en arrière-plan, sans image.
+    private var chainKeepsPiP: Bool {
+        pipState.active && qualityLinks != nil && errorMsg == nil && !loading
     }
     private func playClip(_ slug: String, _ title: String?) {
         vodQueue = []
@@ -1785,6 +2145,7 @@ struct MainTabView: View {
         }
         playerMode    = mode
         if !keepVisibility { playerVisible = true }
+        noticesSeenAtStart = store.seenNotices
         // Une fermeture en plein fondu est remplacée par cette lecture (voir
         // stopPlayer).
         closingPlayer = false
@@ -1847,7 +2208,8 @@ struct MainTabView: View {
 
         loadGeneration += 1
         let gen = loadGeneration
-        clipVodId = nil; clipOffset = 0; clipSpeed = 1
+        clipVodId = nil; clipOffset = 0; clipSpeed = 1; clipChannel = nil
+        vodStartedAt = nil; vodLength = 0
         vodChapters = []
         vodMuted = []
         vodUnmuted = 0
@@ -1868,6 +2230,7 @@ struct MainTabView: View {
                     statusTitle     = clip.title.isEmpty ? (title ?? "Clip") : clip.title
                     clipVodId       = clip.vodId
                     clipOffset      = clip.vodOffset ?? 0
+                    clipChannel     = clip.broadcasterLogin
                     loading         = false
                     switchingSource = false
                 }
@@ -1909,6 +2272,8 @@ struct MainTabView: View {
                         guard gen == loadGeneration else { return }
                         vodChapters     = markers.chapters
                         vodMuted        = markers.muted
+                        vodStartedAt    = markers.broadcastStart
+                        vodLength       = markers.length
                         qualityLinks    = links
                         linksContentID  = playerContentID
                         linksAreLive    = false
@@ -2007,11 +2372,12 @@ struct MainTabView: View {
                         loading           = false
                         switchingSource   = false
                         startLiveTimers(channel: channel)
+                        noteSourceNotice()
                         // Pub au début du flux du compte : annoncée, et retour
                         // prévu à sa fin.
                         if let hq, hq.live.onAdFree {
                             let q = hqQualityLabel(hq.live.adFree, hq.live.adFreeVariants)
-                            showHQNotice(store.t("hq_ad_fallback").replacingOccurrences(of: "{q}", with: q))
+                            showHQNotice(store.t("hq_ad_fallback").replacingOccurrences(of: "{q}", with: q), once: "hq_ad_fallback")
                             scheduleHQReturn(after: hq.wait + 1)
                         }
                     }
@@ -2022,6 +2388,10 @@ struct MainTabView: View {
                                                            token: store.twitchToken)
                         await MainActor.run { if gen == loadGeneration { liveAvatar = fallback } }
                     }
+                    // Image verticale (Dual Format) : cherchée une fois le direct
+                    // parti, jamais sur le chemin du lancement.
+                    let portrait = await portraitLive(login: channel.lowercased(), lowLatency: store.lowLatency)
+                    await MainActor.run { if gen == loadGeneration { portraitFound(portrait) } }
                 } else {
                     await MainActor.run {
                         guard gen == loadGeneration else { return }
@@ -2078,6 +2448,9 @@ struct MainTabView: View {
             pull.y             = 0
             liveAvatar         = nil
             clipVodId          = nil
+            clipChannel        = nil
+            vodStartedAt       = nil
+            vodLength          = 0
             clipOffset         = 0
             clipSpeed          = 1
             liveGame           = ""
@@ -2215,7 +2588,7 @@ struct MainTabView: View {
         qualityVariants = live.adFreeVariants
         liveSourceUsed = live.adFreeSource
         let q = hqQualityLabel(live.adFree, live.adFreeVariants)
-        showHQNotice(store.t("hq_ad_fallback").replacingOccurrences(of: "{q}", with: q))
+        showHQNotice(store.t("hq_ad_fallback").replacingOccurrences(of: "{q}", with: q), once: "hq_ad_fallback")
         logger.info("PUB", "Pause pub Twitch : source sans pub", "\(q) · \(left) s")
         if live.quickAds >= 2 {
             logger.warn("PUB", "Pubs répétées sur le flux du compte", "reste sur la source sans pub")
@@ -2305,7 +2678,7 @@ struct MainTabView: View {
         qualityVariants = live.accountVariants
         liveSourceUsed = "account"
         let q = hqQualityLabel(live.account, live.accountVariants)
-        showHQNotice(store.t("hq_ad_back").replacingOccurrences(of: "{q}", with: q))
+        showHQNotice(store.t("hq_ad_back").replacingOccurrences(of: "{q}", with: q), once: "hq_ad_back")
         logger.info("PUB", "Fin de la pause pub : retour au flux du compte", q)
     }
 
@@ -2395,8 +2768,14 @@ struct MainTabView: View {
         return qualityText(key, store.lang)
     }
 
-    /// Bascule annoncée dans le lecteur, 4 s.
-    private func showHQNotice(_ text: String) {
+    /// Bascule annoncée dans le lecteur, 4 s. `once` : avis des pauses pub,
+    /// montré la première fois seulement — on sait ensuite ce qu'il dit, il
+    /// revenait à chaque pub.
+    private func showHQNotice(_ text: String, once key: String? = nil) {
+        if let key {
+            guard !store.seenNotices.contains(key) else { return }
+            store.markNoticeSeen(key)
+        }
         hqNotice = text
         hqNoticeTask?.cancel()
         hqNoticeTask = Task { @MainActor in
@@ -2414,6 +2793,78 @@ struct MainTabView: View {
         hqNoticeTask?.cancel()
         hqNoticeTask = nil
         hqNotice = nil
+        // Image verticale : cherchée de nouveau par cette lecture.
+        portraitMaster = nil
+        verticalOn = false
+        verticalBackup = nil
+    }
+
+    // MARK: – Image verticale (Dual Format)
+    /// Préférence retenue : une fois l'image verticale choisie, les directs
+    /// suivants qui en ont une partent dessus (comme l'app de Twitch, téléphone
+    /// tenu droit), jusqu'à ce qu'on revienne à l'habituelle.
+    private static let verticalKey = "cfg_prefer_vertical"
+
+    /// Résultat de portraitLive pour le direct en cours : le bouton apparaît,
+    /// et l'image verticale est prise d'office si on l'avait choisie avant.
+    private func portraitFound(_ portrait: MasterPlaylist?) {
+        guard let portrait, linksAreLive, dvrSourceChannel == nil else { return }
+        portraitMaster = portrait
+        if UserDefaults.standard.bool(forKey: Self.verticalKey) {
+            setVertical(true)
+            showHQNotice(store.t("vertical_on"))
+        }
+    }
+
+    /// Bouton « vertical » : l'une ou l'autre image, et le choix retenu.
+    private func toggleVertical() {
+        setVertical(!verticalOn)
+        UserDefaults.standard.set(verticalOn, forKey: Self.verticalKey)
+        logger.settingChanged("Image verticale", value: verticalOn ? "oui" : "non")
+    }
+
+    /// Image verticale à la place de l'habituelle, ou retour. Comme un
+    /// changement de qualité : lecteur, chat et Live Activity restent. Les
+    /// qualités supérieures par le compte s'arrêtent (leurs bascules pendant
+    /// les pubs ne connaissent que l'image habituelle) ; elles reviennent au
+    /// prochain lancement.
+    private func setVertical(_ on: Bool) {
+        guard on != verticalOn, linksAreLive, dvrSourceChannel == nil, !switchingSource else { return }
+        if on {
+            guard let portrait = portraitMaster, let links = qualityLinks else { return }
+            // Retour prévu : l'image habituelle telle qu'elle est — sauf pendant
+            // les qualités supérieures sans abonnement, dont les liens du compte
+            // ont des pubs que plus rien ne contournerait (hqLive s'arrête ici) :
+            // le retour se fait alors sur la source sans pub, comme settleOnAdFree.
+            var backup = (links: links, variants: qualityVariants, source: liveSourceUsed)
+            if let live = hqLive {
+                hqReturnTask?.cancel()
+                hqReturnTask = nil
+                hqLive = nil
+                if !live.adFree.isEmpty {
+                    backup = (links: live.adFree, variants: live.adFreeVariants, source: live.adFreeSource)
+                }
+            }
+            verticalBackup = backup
+            qualityLinks = store.lowLatency ? LivePlaylistLoader.wrap(portrait.links) : portrait.links
+            qualityVariants = portrait.variants
+            liveSourceUsed = "twitch"
+            verticalOn = true
+            logger.info("LECTEUR", "Image verticale (Dual Format)", "\(portrait.links.count) qualités, par Twitch")
+        } else {
+            if let back = verticalBackup {
+                qualityLinks = back.links
+                qualityVariants = back.variants
+                liveSourceUsed = back.source
+            }
+            verticalBackup = nil
+            verticalOn = false
+            logger.info("LECTEUR", "Retour à l'image habituelle")
+        }
+        // Drops : l'image verticale vient d'un jeton anonyme, la pulsation doit
+        // relire les segments ; au retour, selon la source retrouvée (le compte
+        // d'un abonné lit déjà le flux).
+        if case .live(let channel)? = playerMode { startDropsHeartbeat(channel: channel) }
     }
 
     // MARK: – Live timers
@@ -2493,6 +2944,17 @@ struct CustomTabBar: View {
             .first?.windows.first(where: { $0.isKeyWindow })?.safeAreaInsets.bottom ?? 34
     }
 
+    /// Onglet touché, dans cette barre ou dans la colonne (SideTabRail).
+    /// Déjà affiché : sa liste remonte en haut, comme dans les apps d'iOS
+    /// (TabScrollView, Découvrir).
+    static func select(_ tab: MainTabView.TabName, in activeTab: Binding<MainTabView.TabName>) {
+        guard activeTab.wrappedValue != tab else {
+            NotificationCenter.default.post(name: .tuTabReselected, object: tab)
+            return
+        }
+        withAnimation(.easeOut(duration: 0.15)) { activeTab.wrappedValue = tab }
+    }
+
     var body: some View {
         if floating {
             tabs
@@ -2516,13 +2978,7 @@ struct CustomTabBar: View {
             ForEach(MainTabView.TabName.visible(store, all: !onboardingDone), id: \.self) { tab in
                 let isActive = activeTab == tab
                 Button {
-                    // Onglet déjà affiché : sa liste remonte en haut, comme
-                    // dans les apps d'iOS (TabScrollView, Découvrir).
-                    guard activeTab != tab else {
-                        NotificationCenter.default.post(name: .tuTabReselected, object: tab)
-                        return
-                    }
-                    withAnimation(.easeOut(duration: 0.15)) { activeTab = tab }
+                    Self.select(tab, in: $activeTab)
                 } label: {
                     VStack(spacing: 4) {
                         Image(systemName: isActive ? tab.iconFilled : tab.icon)

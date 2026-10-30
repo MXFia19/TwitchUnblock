@@ -62,6 +62,9 @@ struct OnboardingTour: View {
     /// Position de chaque élément signalé, en plein écran.
     let rects: [TourTarget: CGRect]
     let size: CGSize
+    /// Marges de sécurité de l'écran : bulles et cartes restent hors de la
+    /// colonne d'état de l'iPhone Duo (sur le côté). Le voile, lui, couvre tout.
+    var insets = EdgeInsets()
     @Binding var activeTab: MainTabView.TabName
     let onFinish: () -> Void
 
@@ -181,6 +184,8 @@ struct OnboardingTour: View {
                 Color.clear.frame(height: max(0, size.height - hole.minY + 12))
             }
         }
+        .padding(.leading, insets.leading)
+        .padding(.trailing, insets.trailing)
         .frame(width: size.width, height: size.height)
     }
 
@@ -190,6 +195,8 @@ struct OnboardingTour: View {
             content()
             Spacer(minLength: 0)
         }
+        .padding(.leading, insets.leading)
+        .padding(.trailing, insets.trailing)
         .frame(width: size.width, height: size.height)
     }
 
@@ -317,10 +324,11 @@ struct OnboardingTour: View {
         }
     }
 
-    /// Six langues sur deux lignes de trois, même sur un iPhone de 375 pt
-    /// (carte de 291 pt utiles) : la carte ne s'allonge pas et chaque nom
-    /// garde sa taille. Deux colonnes seulement sous 375 pt (zoom de
-    /// l'affichage), pour que les noms restent lisibles.
+    /// Sept langues sur trois colonnes (3, 3, puis 1), même sur un iPhone de
+    /// 375 pt (carte de 291 pt utiles, ~92 pt par nom : « 繁體中文 » et son
+    /// drapeau en prennent ~88) : chaque nom garde sa taille. Deux colonnes
+    /// seulement sous 375 pt (zoom de l'affichage), pour que les noms restent
+    /// lisibles.
     private var languageButtons: some View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 84), spacing: 8)], spacing: 8) {
             ForEach(Lang.allCases) { l in

@@ -143,19 +143,46 @@ struct CategoriesView: View {
     /// Feuille des chaînes et catégories masquées (ligne « N masqués · Gérer »).
     @State private var showHidden = false
 
-    /// Suivies : Twitch puis appareil, sans doublon.
+    /// Suivies : Twitch puis appareil, sans doublon, dans l'ordre choisi
+    /// (Réglages → Personnaliser : les plus regardées d'abord, ou A → Z).
     private var followedList: [TwitchCategory] {
         var seen = Set<String>()
-        return (twitchFollowed + store.followedCategories)
+        let list = (twitchFollowed + store.followedCategories)
             .filter { seen.insert($0.id).inserted }
             .map { c in var c = c; c.viewers = c.viewers ?? followedViewers[c.id]; return c }
-            .sorted { ($0.viewers ?? 0) > ($1.viewers ?? 0) }
+        return store.customization.followedCategoriesSort.apply(list)
     }
 
-    private let columns = [GridItem(.flexible()), GridItem(.flexible())]
+    /// Largeur de l'onglet (MainTabView) : nombre de colonnes des jaquettes.
+    @Environment(\.tContentWidth) private var contentWidth
+
+    /// Deux jaquettes par ligne sur iPhone (aux tailles d'accessibilité
+    /// aussi), davantage sur un écran plus large.
+    private var columns: [GridItem] {
+        TGrid.columns(width: contentWidth, minWidth: TGrid.cardMinWidth, base: 2)
+    }
+
+    /// Suivies en compact (réglage) : 3 jaquettes par ligne sur iPhone,
+    /// davantage sur un écran plus large (écran intérieur de l'iPhone Duo,
+    /// iPad) ; 2 aux tailles de texte d'accessibilité.
+    private var followedColumns: [GridItem] {
+        guard store.customization.compactFollowedCategories else { return columns }
+        let large = TType.isAccessibility
+        return TGrid.columns(width: contentWidth,
+                             minWidth: large ? TGrid.cardMinWidth : TGrid.compactMinWidth,
+                             base: large ? 2 : 3, limit: large ? 5 : 8,
+                             spacing: TSpace.sm)
+    }
 
     var body: some View {
-        Group {
+        // La grille reste dessous quand une catégorie est ouverte : le glissé
+        // retour depuis le bord gauche la découvre, comme sur iOS.
+        ZStack {
+            // Effacée : un type de vue trop imbriqué fait déborder la pile au
+            // décodage sur iOS 18 (comme les Réglages, voir sectionPage).
+            AnyView(browser)
+                .allowsHitTesting(selected == nil)
+                .accessibilityHidden(selected != nil)
             if let cat = selected {
                 CategoryStreamsView(category: cat,
                                     followedOnTwitch: twitchFollowed.contains { $0.id == cat.id }
@@ -163,8 +190,8 @@ struct CategoriesView: View {
                                     onBack: { selected = nil },
                                     onPlayStream: onPlayStream,
                                     onTwitchUnfollowed: { twitchFollowed.removeAll { $0.id == cat.id } })
-            } else {
-                browser
+                    .transition(.move(edge: .trailing))
+                    .zIndex(1)
             }
         }
         .onAppear {
@@ -219,10 +246,11 @@ struct CategoriesView: View {
                             message: store.t(store.twitchWebToken == nil ? "cat_followed_empty_msg_local" : "cat_followed_empty_msg"))
             }
         } else {
+            let compact = store.customization.compactFollowedCategories
             ScrollView {
-                LazyVGrid(columns: columns, spacing: TSpace.md) {
+                LazyVGrid(columns: followedColumns, spacing: compact ? TSpace.sm : TSpace.md) {
                     ForEach(list) { cat in
-                        CategoryCardView(category: cat) { selected = cat }
+                        CategoryCardView(category: cat, compact: compact) { selected = cat }
                     }
                 }
                 .padding(.horizontal, TSpace.lg)
@@ -497,7 +525,14 @@ struct CategoryStreamsView: View {
     /// Twitch a refusé de la retirer (ou la session web manque).
     @State private var unfollowFailed = false
 
-    private let columns = [GridItem(.flexible()), GridItem(.flexible())]
+    /// Largeur de l'onglet ou de la feuille : nombre de colonnes des cartes.
+    @Environment(\.tContentWidth) private var contentWidth
+
+    /// Deux cartes par ligne sur iPhone (aux tailles d'accessibilité aussi),
+    /// davantage sur un écran plus large.
+    private var columns: [GridItem] {
+        TGrid.columns(width: contentWidth, minWidth: TGrid.cardMinWidth, base: 2)
+    }
 
     /// Chaînes masquées écartées ; la catégorie, elle, reste consultable
     /// même masquée (on l'a ouverte exprès).
@@ -510,7 +545,7 @@ struct CategoryStreamsView: View {
             HStack(spacing: TSpace.sm) {
                 Button(action: onBack) {
                     HStack(spacing: TSpace.xs) {
-                        Image(systemName: "chevron.left").font(.system(size: 13, weight: .bold))
+                        Image(systemName: "chevron.left").font(.tSystem(size: 13, weight: .bold))
                         Text(store.t("categories")).font(.tLabel)
                     }
                     .foregroundColor(.tPrimary)
@@ -608,6 +643,9 @@ struct CategoryStreamsView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.tDark)
+        // Glissé depuis le bord gauche : retour, comme le bouton (la page
+        // suit le doigt et découvre la grille, ou les résultats).
+        .edgeSwipeBack { withAnimation(.easeOut(duration: 0.22)) { onBack() } }
         .onAppear { if streams.isEmpty { Task { await load() } } }
         .sheet(isPresented: $showHidden) {
             HiddenContentSheet().environmentObject(store)
@@ -641,7 +679,7 @@ struct CategoryStreamsView: View {
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: on ? "heart.fill" : "heart")
-                Text(store.t(on ? "following" : "follow")).font(.system(size: 13, weight: .bold))
+                Text(store.t(on ? "following" : "follow")).font(.tSystem(size: 13, weight: .bold))
             }
             .foregroundColor(on ? .tDanger : .tPrimary)
             .padding(.horizontal, 10).padding(.vertical, 6)
@@ -705,7 +743,7 @@ struct CategoryStreamsView: View {
                     HStack(spacing: 6) {
                         Image(systemName: "eye")
                         Text("\(store.t("hidden_badge")) · \(store.t("unhide"))")
-                            .font(.system(size: 13, weight: .bold))
+                            .font(.tSystem(size: 13, weight: .bold))
                             .lineLimit(1)
                             .minimumScaleFactor(0.8)
                     }
@@ -755,14 +793,15 @@ struct CategoryStreamsView: View {
             }
         } label: {
             HStack(spacing: TSpace.xs) {
-                Image(systemName: "globe").font(.system(size: 11, weight: .semibold))
+                Image(systemName: "globe").font(.tSystem(size: 11, weight: .semibold))
                 Text(current.map { TopLanguage.name($0, in: store.lang) } ?? store.t("cat_lang_all"))
                     .font(.tLabel).lineLimit(1)
-                Image(systemName: "chevron.down").font(.system(size: 8, weight: .bold))
+                Image(systemName: "chevron.down").font(.tSystem(size: 8, weight: .bold))
             }
             .foregroundColor(current == nil ? .tMuted : .white)
             .padding(.horizontal, TSpace.md)
-            .frame(height: 32)
+            .padding(.vertical, 4)
+            .frame(minHeight: 32)
             .background(current == nil ? Color.tSurface : Color.tPrimary)
             .cornerRadius(TRadius.chip)
         }

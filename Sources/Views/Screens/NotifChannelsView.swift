@@ -2,11 +2,9 @@ import SwiftUI
 
 // MARK: – Chaînes notifiées
 //
-// Les notifications de live (réveils de l'app par iOS, ntfy) couvrent les
-// chaînes suivies — compte Twitch et appareil —, moins celles coupées ici.
-// La liste reste sur l'appareil : le Worker ne reçoit que les chaînes à
-// notifier (NtfyNotifier.sync). Une chaîne suivie plus tard est notifiée
-// d'office.
+// Les notifications de live (réveils de l'app par iOS) couvrent les chaînes
+// suivies — compte Twitch et appareil —, moins celles coupées ici. La liste
+// reste sur l'appareil. Une chaîne suivie plus tard est notifiée d'office.
 enum NotifChannels {
     static let mutedKey = "notif_muted"
 
@@ -36,8 +34,8 @@ extension Notification.Name {
 
 /// Cloche d'une chaîne (sa page, la barre au-dessus du chat) : coupe ou
 /// rallume ses notifications de live, même réglage que « Chaînes notifiées ».
-/// Seulement si les notifications de live (réveils d'iOS ou ntfy) sont
-/// activées et que la chaîne est suivie (compte ou appareil).
+/// Seulement si les notifications de live (réveils d'iOS) sont activées et
+/// que la chaîne est suivie (compte ou appareil).
 struct NotifBellButton: View {
     let login: String
     let followed: Bool
@@ -46,17 +44,16 @@ struct NotifBellButton: View {
 
     @EnvironmentObject private var store: AppStore
     @AppStorage(LiveNotifier.enabledKey) private var liveNotifOn = false
-    @AppStorage(NtfyNotifier.enabledKey) private var ntfyOn = false
     @State private var muted = NotifChannels.muted
 
     private var key: String { login.lowercased() }
     private var on: Bool { !muted.contains(key) }
 
     var body: some View {
-        if (liveNotifOn || ntfyOn), followed, !key.isEmpty {
+        if liveNotifOn, followed, !key.isEmpty {
             Button(action: toggle) {
                 Image(systemName: on ? "bell.fill" : "bell.slash")
-                    .font(.system(size: compact ? 10 : 14, weight: .bold))
+                    .font(.tSystem(size: compact ? 10 : 14, weight: .bold))
                     .foregroundColor(on ? .tPrimary : .tMuted)
                     .padding(.horizontal, compact ? 7 : 12)
                     .padding(.vertical, compact ? 3 : 8)
@@ -86,9 +83,6 @@ struct NotifBellButton: View {
         muted = NotifChannels.muted
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
         logger.info("NOTIF", next ? "Cloche : notifications activées" : "Cloche : notifications coupées", "@\(key)")
-        // ntfy : la liste filtrée part au Worker (rien si elle n'a pas changé).
-        let lang = store.lang
-        Task { await NtfyNotifier.sync(lang: lang) }
     }
 }
 
@@ -121,7 +115,7 @@ struct NotifChannelsView: View {
                             Button(store.t("notif_channels_all_off")) { setAll(notify: false) }
                         }
                         .buttonStyle(.borderless)
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.tSystem(size: 14, weight: .semibold))
                         .foregroundColor(.tPrimary)
                     } footer: {
                         Text(store.t("notif_channels_sub"))
@@ -150,11 +144,6 @@ struct NotifChannelsView: View {
         // réécrivait l'ancienne liste et la rallumait.
         .onReceive(NotificationCenter.default.publisher(for: .notifChannelsChanged)) { _ in
             muted = NotifChannels.muted
-        }
-        // ntfy : la liste filtrée part au Worker (rien si elle n'a pas changé).
-        .onDisappear {
-            let lang = store.lang
-            Task { await NtfyNotifier.sync(lang: lang) }
         }
     }
 

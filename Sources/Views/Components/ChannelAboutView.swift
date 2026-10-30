@@ -42,7 +42,7 @@ struct ChannelAboutView: View {
                             Link(destination: s.url) {
                                 Label(s.title, systemImage: "link")
                                     .font(.tLabel).foregroundColor(.tText)
-                                    .padding(.horizontal, 12).frame(height: 32)
+                                    .padding(.horizontal, 12).padding(.vertical, 4).frame(minHeight: 32)
                                     .background(Color.tSurface)
                                     .clipShape(Capsule())
                             }

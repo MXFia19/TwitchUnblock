@@ -448,10 +448,10 @@ struct DiscoverView: View {
                 ProgressView().tint(.white)
             } else {
                 Text(store.t(failed ? "err_network" : "discover_empty"))
-                    .font(.system(size: 15)).foregroundColor(.tMuted)
+                    .font(.tSystem(size: 15)).foregroundColor(.tMuted)
                     .multilineTextAlignment(.center)
                 Button(store.t("retry"), action: retry)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.tSystem(size: 15, weight: .semibold))
                     .foregroundColor(.tPrimary)
             }
         }
@@ -476,7 +476,7 @@ struct DiscoverView: View {
             feed.mode = m
         } label: {
             Text(title)
-                .font(.system(size: 14, weight: .bold))
+                .font(.tSystem(size: 14, weight: .bold))
                 .foregroundColor(feed.mode == m ? .black : .white)
                 .padding(.horizontal, 16).padding(.vertical, 6)
                 .background(feed.mode == m ? Color.white : Color.clear)
@@ -560,30 +560,30 @@ private struct DiscoverLivePage: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 Text(store.t("live_badge"))
-                    .font(.system(size: 11, weight: .heavy)).foregroundColor(.white)
+                    .font(.tSystem(size: 11, weight: .heavy)).foregroundColor(.white)
                     .padding(.horizontal, 6).padding(.vertical, 2)
                     .background(Color.tLive).cornerRadius(4)
                 Text("● " + formatViewers(stream.viewerCount))
-                    .font(.system(size: 12, weight: .semibold)).foregroundColor(.white.opacity(0.85))
+                    .font(.tSystem(size: 12, weight: .semibold)).foregroundColor(.white.opacity(0.85))
             }
             HStack(spacing: 10) {
                 Button(action: onChannel) {
                     Text(stream.userName)
-                        .font(.system(size: 19, weight: .bold)).foregroundColor(.white).lineLimit(1)
+                        .font(.tSystem(size: 19, weight: .bold)).foregroundColor(.white).lineLimit(1)
                 }
                 .buttonStyle(.plain)
                 DiscoverFollowButton(login: login, name: stream.userName, channelId: stream.id)
             }
             if !stream.title.isEmpty {
                 Text(stream.title)
-                    .font(.system(size: 14)).foregroundColor(.white.opacity(0.9)).lineLimit(2)
+                    .font(.tSystem(size: 14)).foregroundColor(.white.opacity(0.9)).lineLimit(2)
             }
             let tags = stream.tags.prefix(3)
             if !tags.isEmpty {
                 HStack(spacing: 6) {
                     ForEach(Array(tags), id: \.self) { t in
                         Text(t)
-                            .font(.system(size: 11, weight: .semibold)).foregroundColor(.white)
+                            .font(.tSystem(size: 11, weight: .semibold)).foregroundColor(.white)
                             .padding(.horizontal, 8).padding(.vertical, 3)
                             .background(Color.white.opacity(0.16)).clipShape(Capsule())
                             .lineLimit(1)
@@ -592,7 +592,7 @@ private struct DiscoverLivePage: View {
             }
             if !stream.gameName.isEmpty {
                 Label(stream.gameName, systemImage: "gamecontroller")
-                    .font(.system(size: 12, weight: .medium)).foregroundColor(.white.opacity(0.8)).lineLimit(1)
+                    .font(.tSystem(size: 12, weight: .medium)).foregroundColor(.white.opacity(0.8)).lineLimit(1)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -632,11 +632,11 @@ private struct DiscoverClipPage: View {
             HStack(alignment: .bottom, spacing: 12) {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("▶ " + formatViewers(clip.viewCount) + " · " + durationText)
-                        .font(.system(size: 12, weight: .semibold)).foregroundColor(.white.opacity(0.85))
+                        .font(.tSystem(size: 12, weight: .semibold)).foregroundColor(.white.opacity(0.85))
                     HStack(spacing: 10) {
                         Button(action: onChannel) {
                             Text(clip.channelName)
-                                .font(.system(size: 19, weight: .bold)).foregroundColor(.white).lineLimit(1)
+                                .font(.tSystem(size: 19, weight: .bold)).foregroundColor(.white).lineLimit(1)
                         }
                         .buttonStyle(.plain)
                         DiscoverFollowButton(login: clip.login.lowercased(), name: clip.channelName,
@@ -644,11 +644,11 @@ private struct DiscoverClipPage: View {
                     }
                     if !clip.title.isEmpty {
                         Text(clip.title)
-                            .font(.system(size: 14)).foregroundColor(.white.opacity(0.9)).lineLimit(2)
+                            .font(.tSystem(size: 14)).foregroundColor(.white.opacity(0.9)).lineLimit(2)
                     }
                     if !clip.game.isEmpty {
                         Label(clip.game, systemImage: "gamecontroller")
-                            .font(.system(size: 12, weight: .medium)).foregroundColor(.white.opacity(0.8)).lineLimit(1)
+                            .font(.tSystem(size: 12, weight: .medium)).foregroundColor(.white.opacity(0.8)).lineLimit(1)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -719,7 +719,7 @@ private struct DiscoverScreen: View {
                     ProgressView().tint(.white)
                 } else if feed.preview[key] == .failed {
                     Text(store.t("discover_no_preview"))
-                        .font(.system(size: 12, weight: .semibold)).foregroundColor(.white)
+                        .font(.tSystem(size: 12, weight: .semibold)).foregroundColor(.white)
                         .padding(.horizontal, 10).padding(.vertical, 5)
                         .background(Color.black.opacity(0.6)).clipShape(Capsule())
                 }
@@ -849,7 +849,7 @@ private struct DiscoverFollowButton: View {
                         Image(systemName: on ? "heart.fill" : "heart")
                         Text(store.t(on ? "following" : "follow"))
                     }
-                    .font(.system(size: 13, weight: .bold))
+                    .font(.tSystem(size: 13, weight: .bold))
                     .foregroundColor(on ? .tDanger : .white)
                     .padding(.horizontal, 10).padding(.vertical, 6)
                     .background(Color.white.opacity(0.16))

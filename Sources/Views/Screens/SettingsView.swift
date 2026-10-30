@@ -12,18 +12,19 @@ struct SettingsView: View {
     @ObservedObject private var updater = UpdateChecker.shared
     @State private var checkingUpdate  = false
     @State private var upToDate        = false
+    /// Version et build copiés (À propos), le temps d'un « Version copiée ».
+    @State private var versionCopied   = false
     @State private var updateCheckFailed = false
     @State private var highlightDraft  = ""
     @State private var mutedDraft      = ""
     @State private var liveNotif       = LiveNotifier.isEnabled
     @State private var notifTestResult: String? = nil
-    @State private var ntfyOn          = NtfyNotifier.isEnabled
     @State private var showNotifChannels = false
-    @State private var ntfyResult: String? = nil
-    @State private var ntfyCopied      = false
-    @State private var ntfySynced      = !NtfyNotifier.isPending
     @State private var appIcon: AppIconChoice = .standard
     @State private var appIconError: String? = nil
+    /// Vrai après un refus d'iOS qui tient à l'installation ; nil : ce
+    /// qu'en sait AppIconChoice.blocked.
+    @State private var appIconBlocked: Bool? = nil
     // Réglages experts : Worker personnel.
     @AppStorage(APIConfig.customKey) private var customWorker = ""
     @AppStorage(APIConfig.allKey) private var customWorkerAll = false
@@ -54,6 +55,12 @@ struct SettingsView: View {
     @State private var showExporter    = false
     @State private var showImporter    = false
     @State private var backupMessage: String? = nil
+    /// Sauvegarde lue, en attente du choix « Tout » / « Chaînes seulement ».
+    @State private var pendingImport: Backup.File? = nil
+    @State private var showImportChoice = false
+    /// Résumé de l'import (ce qui a été repris), affiché dans une alerte.
+    @State private var importSummary   = ""
+    @State private var showImportSummary = false
     /// Page ouverte, nil = menu racine.
     @State private var page: Page? = nil
 
@@ -69,20 +76,33 @@ struct SettingsView: View {
             // juste sous notre en-tête. Deux barres l'une sur l'autre, dont une
             // qui ignore la charte. Ici l'en-tête se transforme : le titre
             // devient celui de la page et la croix cède la place à un chevron.
+            // Sans UINavigationController, pas non plus de glissé d'iOS pour
+            // revenir : edgeSwipeBack le rend, et chaque niveau reste sous la
+            // page qui le couvre (décalé, assombri), que le glissé découvre.
             ZStack {
-                if page == nil {
-                    rootMenu
-                        .transition(.asymmetric(
-                            insertion: .move(edge: .leading).combined(with: .opacity),
-                            removal:   .move(edge: .leading).combined(with: .opacity)))
-                } else if let page {
+                // Effacé lui aussi (voir sectionPage) : le type du ZStack ne
+                // porte plus que des boîtes, décodées chacune à part.
+                AnyView(rootMenu)
+                    .settingsCovered(page != nil)
+                // Page du menu (Général…), sous sa sous-page (Langue) s'il y en a une.
+                if let base = page.map({ $0.parent ?? $0 }) {
+                    sectionPage(base)
+                        .edgeSwipeBack(enabled: page == base) { goBack() }
+                        .settingsCovered(page != base)
+                        .id(base)
+                        .transition(.move(edge: .trailing))
+                        .zIndex(1)
+                }
+                if let page, page.parent != nil {
                     sectionPage(page)
-                        .transition(.asymmetric(
-                            insertion: .move(edge: .trailing).combined(with: .opacity),
-                            removal:   .move(edge: .trailing).combined(with: .opacity)))
+                        .edgeSwipeBack { goBack() }
+                        .id(page)
+                        .transition(.move(edge: .trailing))
+                        .zIndex(2)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .clipped()
         }
         .background(Color.tDark)
         .onAppear {
@@ -147,6 +167,7 @@ struct SettingsView: View {
                           context: feedbackContext)
                 .environmentObject(store)
                 .presentationDetents([.large])
+                .tTypeRoot()
         }
         // ── Minuteur de veille (préréglages + durée personnalisée) ───
         .sheet(isPresented: $showSleepSheet) {
@@ -158,11 +179,13 @@ struct SettingsView: View {
         .sheet(isPresented: $showHidden) {
             HiddenContentSheet().environmentObject(store)
                 .inAppNoticeHost()
+                .tTypeRoot()
         }
         // ── Personnaliser : onglets, accueil, lecteur, chat ──────────
         .sheet(isPresented: $showCustomize) {
             CustomizeView().environmentObject(store)
                 .inAppNoticeHost()
+                .tTypeRoot()
         }
         // ── Logs sheet ───────────────────────────────────────────────
         .sheet(isPresented: $showLogs) {
@@ -189,9 +212,15 @@ struct SettingsView: View {
 
 
     // MARK: – Pages de réglages
-    /// Les destinations du menu.
+    /// Les destinations du menu, et leurs sous-pages (Général → Langue).
     enum Page: Hashable {
         case account, general, player, chat, drops, points, labs, other, changelog
+        /// Général → Langue : la liste des langues, comme dans les réglages d'iOS.
+        case language
+
+        /// Page d'où l'on vient : le retour (bouton, glissé) y ramène ; nil :
+        /// le menu.
+        var parent: Page? { self == .language ? .general : nil }
 
         var titleKey: String {
             switch self {
@@ -204,6 +233,7 @@ struct SettingsView: View {
             case .labs:      return "debug_section"
             case .other:     return "sec_other"
             case .changelog: return "changelog"
+            case .language:  return "app_language"
             }
         }
         var subtitleKey: String {
@@ -217,6 +247,7 @@ struct SettingsView: View {
             case .labs:      return "sec_labs_sub"
             case .other:     return "sec_other_sub"
             case .changelog: return "changelog_sub"
+            case .language:  return "language"
             }
         }
         var icon: String {
@@ -230,6 +261,7 @@ struct SettingsView: View {
             case .labs:      return "flask.fill"
             case .other:     return "info.circle.fill"
             case .changelog: return "sparkles"
+            case .language:  return "globe"
             }
         }
         /// Une teinte par domaine : on repère la ligne à la couleur avant
@@ -245,8 +277,15 @@ struct SettingsView: View {
             case .labs:      return .tWarning
             case .other:     return .tMuted
             case .changelog: return .tVLC
+            case .language:  return .tPrimary
             }
         }
+    }
+
+    /// Retour (chevron, glissé depuis le bord gauche) : la page parente
+    /// (Langue → Général), sinon le menu.
+    private func goBack() {
+        withAnimation(.easeInOut(duration: 0.22)) { page = page?.parent }
     }
 
     /// En-tête unique, qui suit la navigation.
@@ -254,7 +293,7 @@ struct SettingsView: View {
         HStack(spacing: TSpace.md) {
             if let page {
                 Button {
-                    withAnimation(.easeInOut(duration: 0.22)) { self.page = nil }
+                    goBack()
                 } label: {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 15, weight: .bold))
@@ -396,7 +435,7 @@ struct SettingsView: View {
                 Spacer(minLength: 0)
                 if admin.awaitingCount > 0 {
                     Text("\(admin.awaitingCount)")
-                        .font(.system(size: 11, weight: .heavy))
+                        .font(.tSystem(size: 11, weight: .heavy))
                         .foregroundColor(.black)
                         .padding(.horizontal, 6)
                         .frame(minWidth: 18, minHeight: 18)
@@ -404,7 +443,7 @@ struct SettingsView: View {
                         .clipShape(Capsule())
                 }
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.tSystem(size: 13, weight: .semibold))
                     .foregroundColor(.tMuted.opacity(0.7))
             }
             .padding(.horizontal, TSpace.lg)
@@ -438,7 +477,7 @@ struct SettingsView: View {
                 Spacer(minLength: 0)
                 FeedbackUnreadBadge()
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.tSystem(size: 13, weight: .semibold))
                     .foregroundColor(.tMuted.opacity(0.7))
             }
             .padding(.horizontal, TSpace.lg)
@@ -477,11 +516,13 @@ struct SettingsView: View {
                         .font(.tCardTitle).foregroundColor(.tText)
                     Text(store.t(section.subtitleKey))
                         .font(.tMeta).foregroundColor(.tMuted)
-                        .lineLimit(1)
+                        // Grand texte (réglage d'iOS) : sur plusieurs lignes
+                        // plutôt que coupé au bout de quelques mots.
+                        .lineLimit(TType.isAccessibility ? nil : 1)
                 }
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.tSystem(size: 13, weight: .semibold))
                     .foregroundColor(.tMuted.opacity(0.7))
             }
             .padding(.horizontal, TSpace.lg)
@@ -491,51 +532,73 @@ struct SettingsView: View {
         .buttonStyle(.plain)
     }
 
-    @ViewBuilder
-    private func sectionPage(_ section: Page) -> some View {
-        ScrollView {
+    /// Page des Réglages, effacée en AnyView (chaque page aussi, voir
+    /// sectionContent). Son type complet, un switch sur toutes les pages dont
+    /// chacune empile ses cartes, était posé deux fois dans le ZStack de
+    /// `body` avec les modificateurs du glissé retour : à l'ouverture des
+    /// Réglages, le runtime de Swift débordait la pile du fil principal en le
+    /// décodant (iOS 18.3.1, iPhone 11 : EXC_BAD_ACCESS sur la garde de pile,
+    /// dans swift_getTypeByMangledName → TypeDecoder::decodeMangledType).
+    /// Effacé, chaque page n'est décodée que seule, et seulement ouverte.
+    private func sectionPage(_ section: Page) -> AnyView {
+        AnyView(ScrollView {
             VStack(spacing: 12) {
-                // Une vue par ligne : dans un ViewBuilder, deux vues séparées
-                // par un point-virgule sur la même ligne ne se composent pas.
-                switch section {
-                case .account:
-                    webSessionCard
-                    compteCard
-                    usageCard
-                case .general:
-                    langueCard
-                    customizeCard
-                    hiddenCard
-                    apparenceCard
-                    autoclaimCard
-                    veilleCard
-                    historiqueCard
-                    backupCard
-                    cacheCard
-                case .player:
-                    lecteurCard
-                case .chat:
-                    chatBehaviorCard
-                    persoCard
-                    tailleChatCard
-                case .drops:
-                    DropsPanel(onLogin: { startWebLogin() })
-                case .points:
-                    PointsTrackerPanel(onLogin: { startWebLogin() })
-                case .labs:
-                    debugCard
-                case .other:
-                    aboutCard
-                    expertCard
-                case .changelog:
-                    ChangelogList()
-                }
+                sectionContent(section)
                 Spacer(minLength: 32)
             }
             .padding(.horizontal, 12)
             .padding(.top, 12)
         }
-        .background(Color.tDark)
+        .background(Color.tDark))
+    }
+
+    /// Cartes d'une page, une boîte par page (voir sectionPage) : dans le
+    /// switch d'un ViewBuilder, les types de toutes les pages s'emboîtaient
+    /// en un seul. Une VStack par page garde l'espacement d'avant (12).
+    private func sectionContent(_ section: Page) -> AnyView {
+        switch section {
+        case .account:
+            return AnyView(VStack(spacing: 12) {
+                webSessionCard
+                compteCard
+                usageCard
+            })
+        case .general:
+            return AnyView(VStack(spacing: 12) {
+                langueCard
+                customizeCard
+                hiddenCard
+                apparenceCard
+                autoclaimCard
+                veilleCard
+                historiqueCard
+                backupCard
+                cacheCard
+            })
+        case .player:
+            return AnyView(lecteurCard)
+        case .chat:
+            return AnyView(VStack(spacing: 12) {
+                chatBehaviorCard
+                persoCard
+                tailleChatCard
+            })
+        case .drops:
+            return AnyView(DropsPanel(onLogin: { startWebLogin() }))
+        case .points:
+            return AnyView(PointsTrackerPanel(onLogin: { startWebLogin() }))
+        case .labs:
+            return AnyView(debugCard)
+        case .other:
+            return AnyView(VStack(spacing: 12) {
+                aboutCard
+                expertCard
+            })
+        case .changelog:
+            return AnyView(ChangelogList())
+        case .language:
+            return AnyView(languageListCard)
+        }
     }
 
     // ── Réglages experts : Worker personnel ──────────────────────────────
@@ -671,11 +734,30 @@ struct SettingsView: View {
         settingCard {
             VStack(alignment: .leading, spacing: 12) {
                 label("globe", store.t("language"))
-                VStack(spacing: 8) {
-                    ForEach(Lang.allCases) { lang in
-                        langButton(lang)
+                // Langue de l'app : une ligne qui ouvre la liste (Page.language),
+                // comme dans les réglages d'iOS ; la liste entière prenait la
+                // moitié de la page.
+                Button {
+                    withAnimation(.easeInOut(duration: 0.22)) { page = .language }
+                } label: {
+                    HStack(spacing: 8) {
+                        Text(store.t("app_language"))
+                            .font(.tCardTitle).foregroundColor(.tText)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 8)
+                        Text("\(store.lang.flag) \(store.lang.label)")
+                            .font(.tCardTitle).foregroundColor(.tMuted)
+                            .lineLimit(1)
+                        Image(systemName: "chevron.right")
+                            .font(.tSystem(size: 12, weight: .semibold))
+                            .foregroundColor(.tMuted)
                     }
+                    .padding(12)
+                    .background(Color.tSurface)
+                    .cornerRadius(10)
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
                 // Langue traduite avec l'IA : on le dit, et on invite à
                 // signaler ce qui sonne faux.
                 if store.lang.machineTranslated {
@@ -708,6 +790,18 @@ struct SettingsView: View {
         }
     }
 
+    /// Réglages → Général → Langue : toutes les langues de `Lang`, dans son
+    /// ordre (une langue ajoutée à l'énumération y apparaît d'elle-même).
+    @ViewBuilder private var languageListCard: some View {
+        settingCard {
+            VStack(spacing: 8) {
+                ForEach(Lang.allCases) { lang in
+                    langButton(lang)
+                }
+            }
+        }
+    }
+
     /// Chaînes et catégories masquées du top et des catégories : combien, et
     /// la feuille pour les réafficher.
     /// Réglages → Personnaliser : onglets, accueil, boutons du lecteur et
@@ -726,7 +820,7 @@ struct SettingsView: View {
                             .lineLimit(1)
                         Spacer(minLength: 0)
                         Image(systemName: "chevron.right")
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(.tSystem(size: 12, weight: .semibold))
                             .foregroundColor(.tMuted)
                     }
                     .padding(12)
@@ -762,7 +856,7 @@ struct SettingsView: View {
                                 .lineLimit(1)
                             Spacer(minLength: 0)
                             Image(systemName: "chevron.right")
-                                .font(.system(size: 12, weight: .semibold))
+                                .font(.tSystem(size: 12, weight: .semibold))
                                 .foregroundColor(.tMuted)
                         }
                         .padding(12)
@@ -841,63 +935,89 @@ struct SettingsView: View {
 
     /// Icône de l'app : « Contraste » reste nette en icônes transparentes ou
     /// teintées (iOS 26), toutes ont leurs versions sombre et teintée.
+    /// Impossible avec cette installation (LiveContainer, GBox, icônes
+    /// retirées…) : le choix laisse la place à une ligne qui dit pourquoi.
     @ViewBuilder private var appIconRow: some View {
+        let blocked = appIconBlocked ?? AppIconChoice.blocked
         VStack(alignment: .leading, spacing: 8) {
             Text(store.t("app_icon"))
-                .font(.tCardTitle).foregroundColor(.tText)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
-                    ForEach(AppIconChoice.allCases) { choice in
-                        let on = appIcon == choice
-                        Button {
-                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                            appIconError = nil
-                            choice.apply { error in
-                                guard let error else {
-                                    appIcon = choice
-                                    logger.settingChanged("Icône de l'app", value: choice.rawValue)
-                                    return
+                .font(.tCardTitle).foregroundColor(blocked ? Color.tMuted : Color.tText)
+            if blocked {
+                Text(appIconBlockedReason)
+                    .font(.tMeta).foregroundColor(.tMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 12) {
+                        ForEach(AppIconChoice.allCases) { choice in
+                            let on = appIcon == choice
+                            Button {
+                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                appIconError = nil
+                                choice.apply { error in
+                                    guard let error else {
+                                        appIcon = choice
+                                        logger.settingChanged("Icône de l'app", value: choice.rawValue)
+                                        return
+                                    }
+                                    // Refus qui tient à l'installation (retenu par
+                                    // AppIconChoice) : le choix se cache.
+                                    if error == AppIconChoice.unsupported {
+                                        withAnimation { appIconBlocked = true }
+                                        return
+                                    }
+                                    appIconError = store.t("app_icon_failed").replacingOccurrences(of: "{e}", with: error)
                                 }
-                                appIconError = error == AppIconChoice.unsupported
-                                    ? store.t("app_icon_unsupported")
-                                    : store.t("app_icon_failed").replacingOccurrences(of: "{e}", with: error)
+                            } label: {
+                                VStack(spacing: 6) {
+                                    Image(choice.previewName)
+                                        .resizable()
+                                        .frame(width: 58, height: 58)
+                                        .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+                                        .overlay(RoundedRectangle(cornerRadius: 13, style: .continuous)
+                                            .stroke(on ? Color.tPrimary : Color.tBorder, lineWidth: on ? 3 : 1))
+                                    Text(store.t(choice.labelKey))
+                                        .font(.tMeta)
+                                        .foregroundColor(on ? .tText : .tMuted)
+                                }
                             }
-                        } label: {
-                            VStack(spacing: 6) {
-                                Image(choice.previewName)
-                                    .resizable()
-                                    .frame(width: 58, height: 58)
-                                    .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
-                                    .overlay(RoundedRectangle(cornerRadius: 13, style: .continuous)
-                                        .stroke(on ? Color.tPrimary : Color.tBorder, lineWidth: on ? 3 : 1))
-                                Text(store.t(choice.labelKey))
-                                    .font(.tMeta)
-                                    .foregroundColor(on ? .tText : .tMuted)
-                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel(store.t(choice.labelKey))
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(store.t(choice.labelKey))
                     }
+                    .padding(.vertical, 3)
                 }
-                .padding(.vertical, 3)
-            }
-            if let appIconError {
-                Text(appIconError)
-                    .font(.tMeta).foregroundColor(.orange)
+                if let appIconError {
+                    Text(appIconError)
+                        .font(.tMeta).foregroundColor(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                // Signée avec l'identifiant générique d'un certificat (Feather sans
+                // « Merge Entitlements ») : iOS refuse le changement d'icône.
+                if SigningInfo.signedForOtherIdentifier, let id = SigningInfo.applicationIdentifier {
+                    Text(store.t("app_icon_wildcard").replacingOccurrences(of: "{id}", with: id))
+                        .font(.tMeta).foregroundColor(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Text(store.t("app_icon_sub"))
+                    .font(.tMeta).foregroundColor(.tMuted)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            // Signée avec l'identifiant générique d'un certificat (Feather sans
-            // « Merge Entitlements ») : iOS refuse le changement d'icône.
-            if SigningInfo.signedForOtherIdentifier, let id = SigningInfo.applicationIdentifier {
-                Text(store.t("app_icon_wildcard").replacingOccurrences(of: "{id}", with: id))
-                    .font(.tMeta).foregroundColor(.orange)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Text(store.t("app_icon_sub"))
-                .font(.tMeta).foregroundColor(.tMuted)
-                .fixedSize(horizontal: false, vertical: true)
         }
         .onAppear { appIcon = AppIconChoice.current }
+    }
+
+    /// Pourquoi l'icône ne se change pas avec cette installation.
+    private var appIconBlockedReason: String {
+        // Icônes au choix retirées de l'app par l'outil d'installation.
+        if !UIApplication.shared.supportsAlternateIcons { return store.t("app_icon_unsupported") }
+        // Signée avec l'identifiant générique d'un certificat : la cause
+        // probable, et ce qui la corrige (une autre signature fait revenir
+        // le choix).
+        if SigningInfo.signedForOtherIdentifier, let id = SigningInfo.applicationIdentifier {
+            return store.t("app_icon_wildcard").replacingOccurrences(of: "{id}", with: id)
+        }
+        return store.t("app_icon_blocked")
     }
 
     /// Langue des streamers dans « Top des lives » (appareil par défaut).
@@ -937,7 +1057,7 @@ struct SettingsView: View {
                     HStack(spacing: 4) {
                         Text(store.topLang.map { TopLanguage.name($0, in: store.lang) } ?? store.t("lang_auto"))
                             .font(.tCardTitle)
-                        Image(systemName: "chevron.up.chevron.down").font(.system(size: 11, weight: .semibold))
+                        Image(systemName: "chevron.up.chevron.down").font(.tSystem(size: 11, weight: .semibold))
                     }
                     .foregroundColor(.tPrimary)
                     .padding(.horizontal, 12).padding(.vertical, 8)
@@ -1016,8 +1136,8 @@ struct SettingsView: View {
                 }
             } label: {
                 HStack(spacing: 8) {
-                    Image(systemName: "bell.badge.fill").font(.system(size: 13, weight: .semibold))
-                    Text(store.t("notif_test")).font(.system(size: 14, weight: .semibold))
+                    Image(systemName: "bell.badge.fill").font(.tSystem(size: 13, weight: .semibold))
+                    Text(store.t("notif_test")).font(.tSystem(size: 14, weight: .semibold))
                 }
                 .foregroundColor(.tPrimary)
                 .padding(.horizontal, 12).padding(.vertical, 8)
@@ -1056,6 +1176,9 @@ struct SettingsView: View {
         settingCard {
             VStack(alignment: .leading, spacing: 14) {
                 label("bubble.left.and.bubble.right.fill", store.t("chat_behavior"))
+                toggleRow(store.t("cfg_chat_input"), store.t("cfg_chat_input_sub"),
+                          $store.chatShowInput, log: "Zone d'envoi du chat")
+                Divider().background(Color.tBorder)
                 toggleRow(store.t("cfg_recent"), store.t("cfg_recent_sub"),
                           $store.chatLoadRecent, log: "Messages récents")
                 Divider().background(Color.tBorder)
@@ -1085,14 +1208,14 @@ struct SettingsView: View {
                 Divider().background(Color.tBorder)
                 VStack(alignment: .leading, spacing: 6) {
                     Text(store.t("muted_words"))
-                        .font(.system(size: 14, weight: .semibold)).foregroundColor(.tText)
+                        .font(.tSystem(size: 14, weight: .semibold)).foregroundColor(.tText)
                     Text(store.t("muted_words_sub"))
-                        .font(.system(size: 12)).foregroundColor(.tMuted)
+                        .font(.tSystem(size: 12)).foregroundColor(.tMuted)
                         .fixedSize(horizontal: false, vertical: true)
                     TextField("spoiler", text: $mutedDraft)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
-                        .font(.system(size: 14))
+                        .font(.tSystem(size: 14))
                         .padding(.horizontal, 10).padding(.vertical, 8)
                         .background(Color.tSurface).cornerRadius(8)
                         .onAppear { mutedDraft = store.chatMutedWords.joined(separator: ", ") }
@@ -1108,27 +1231,30 @@ struct SettingsView: View {
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(store.t("hidden_users").replacingOccurrences(of: "{n}", with: "\(store.chatBlockedUsers.count)"))
-                                .font(.system(size: 14, weight: .semibold)).foregroundColor(.tText)
+                                .font(.tSystem(size: 14, weight: .semibold)).foregroundColor(.tText)
                             Text(store.chatBlockedUsers.suffix(6).joined(separator: ", "))
-                                .font(.system(size: 12)).foregroundColor(.tMuted).lineLimit(1)
+                                .font(.tSystem(size: 12)).foregroundColor(.tMuted).lineLimit(1)
                         }
                         Spacer()
                         Button(store.t("clear")) { store.chatBlockedUsers = [] }
-                            .font(.system(size: 13, weight: .bold)).foregroundColor(.tPrimary)
+                            .font(.tSystem(size: 13, weight: .bold)).foregroundColor(.tPrimary)
                     }
                 }
+                Divider().background(Color.tBorder)
+                // Emotes masquées : affichées comme le mot tapé (HiddenEmotes.swift).
+                HiddenEmotesRow()
                 Divider().background(Color.tBorder)
                 // Mots surlignés : en plus des mentions, séparés par des virgules.
                 VStack(alignment: .leading, spacing: 6) {
                     Text(store.t("highlight_words"))
-                        .font(.system(size: 14, weight: .semibold)).foregroundColor(.tText)
+                        .font(.tSystem(size: 14, weight: .semibold)).foregroundColor(.tText)
                     Text(store.t("highlight_words_sub"))
-                        .font(.system(size: 12)).foregroundColor(.tMuted)
+                        .font(.tSystem(size: 12)).foregroundColor(.tMuted)
                         .fixedSize(horizontal: false, vertical: true)
                     TextField("giveaway, tournoi", text: $highlightDraft)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
-                        .font(.system(size: 14))
+                        .font(.tSystem(size: 14))
                         .padding(.horizontal, 10).padding(.vertical, 8)
                         .background(Color.tSurface).cornerRadius(8)
                         .onAppear { highlightDraft = store.chatHighlightWords.joined(separator: ", ") }
@@ -1216,6 +1342,12 @@ struct SettingsView: View {
                 label("play.tv.fill", store.t("player_section"))
                 toggleRow(store.t("immersive_player"), store.t("immersive_player_sub"),
                           $store.immersivePlayer, log: "Lecteur immersif")
+                Divider().background(Color.tBorder)
+                // Lecteur immersif seulement : le natif ne sait pas lancer son PiP.
+                toggleRow(store.t("pip_on_leave"), store.t("pip_on_leave_sub"),
+                          $store.pipOnLeave, log: "PiP en quittant le lecteur")
+                Divider().background(Color.tBorder)
+                backgroundPlaybackRow
                 Divider().background(Color.tBorder)
                 toggleRow(store.t("low_latency"), store.t("low_latency_sub"),
                           $store.lowLatency, log: "Mode faible latence")
@@ -1313,6 +1445,30 @@ struct SettingsView: View {
         .padding(.top, 8)
     }
 
+    /// Écran verrouillé ou autre app, sans PiP : la lecture continue, passe au
+    /// son seul ou s'arrête (ImmersivePlayerModel.enteredBackground).
+    @ViewBuilder private var backgroundPlaybackRow: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(store.t("bg_playback"))
+                .font(.tCardTitle)
+                .foregroundColor(.tText)
+            Text(store.t("bg_playback_sub"))
+                .font(.tMeta)
+                .foregroundColor(.tMuted)
+                .fixedSize(horizontal: false, vertical: true)
+            Picker("", selection: $store.backgroundPlayback) {
+                Text(store.t("bg_playback_continue")).tag("continue")
+                Text(store.t("bg_playback_audio")).tag("audio")
+                Text(store.t("bg_playback_pause")).tag("pause")
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .onChange(of: store.backgroundPlayback) { value in
+                logger.settingChanged("Lecture en arrière-plan", value: value)
+            }
+        }
+    }
+
     /// Audio spatial (AirPods) : seul choix qu'iOS laisse aux apps (voir SpatialAudio).
     @ViewBuilder private var spatialAudioRow: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -1376,7 +1532,8 @@ struct SettingsView: View {
                     Text("\(index + 1)")
                         .font(.tBadge)
                         .foregroundColor(.tPrimary)
-                        .frame(width: 22, height: 22)
+                        // Grandit avec le texte (réglage d'iOS).
+                        .frame(width: 22 * TType.ratio(11), height: 22 * TType.ratio(11))
                         .background(Color.tPrimary.opacity(0.15))
                         .clipShape(Circle())
                     Text(store.t("src_\(id)"))
@@ -1548,7 +1705,7 @@ struct SettingsView: View {
                     Button { Task { await switchAccount() } } label: {
                         HStack(spacing: 8) {
                             Image(systemName: "arrow.left.arrow.right.circle.fill")
-                                .font(.system(size: 16))
+                                .font(.tSystem(size: 16))
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(store.t("switch_account")).font(.tLabel)
                                 Text(store.t("switch_account_sub"))
@@ -1581,9 +1738,7 @@ struct SettingsView: View {
                                                              : store.t("points_connect_btn")
                 ) {
                     if store.twitchWebToken != nil {
-                        logger.info("AUTH/WEB", "Déconnexion session web", nil)
-                        store.twitchWebToken = nil
-                        Task { await TwitchWebSession.clear() }
+                        store.logoutWebSession()
                     } else {
                         startWebLogin()
                     }
@@ -1633,29 +1788,98 @@ struct SettingsView: View {
                 if let backupMessage {
                     Text(backupMessage)
                         .font(.tMeta).foregroundColor(.tMuted)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
         .fileExporter(isPresented: $showExporter, document: exportDoc,
                       contentType: .json, defaultFilename: Backup.fileName()) { result in
-            if case .success = result { backupMessage = store.t("export_done") }
+            if case .success = result {
+                backupMessage = store.t("export_done")
+                logger.info("SAUVEGARDE", "Sauvegarde exportée", nil)
+            }
         }
         .fileImporter(isPresented: $showImporter, allowedContentTypes: [.json]) { result in
             guard case .success(let url) = result else { return }
             let scoped = url.startAccessingSecurityScopedResource()
             defer { if scoped { url.stopAccessingSecurityScopedResource() } }
             guard let data = try? Data(contentsOf: url),
-                  let result = try? Backup.importData(data, store: store) else {
+                  let file = try? Backup.read(data) else {
                 backupMessage = store.t("import_bad"); return
             }
-            var message = String(format: store.t("import_done"), result.added)
-            // Au-delà de 300 suivis sur l'appareil, le reste n'est pas pris :
-            // dit, plutôt que compté comme ajouté.
-            if result.skipped > 0 { message += " " + String(format: store.t("import_capped"), result.skipped) }
-            backupMessage = message
-            logger.info("SAUVEGARDE", "Import : \(result.added) chaîne(s) ajoutée(s)",
-                        result.skipped > 0 ? "\(result.skipped) ignorée(s) (limite de 300)" : nil)
+            backupMessage = nil
+            pendingImport = file
+            // Le sélecteur de fichiers se ferme encore : le choix attend un
+            // instant, sinon iOS refuse de l'ouvrir par-dessus.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { showImportChoice = true }
         }
+        // Tout, ou les chaînes seulement (suivies, épinglées, masquées).
+        .confirmationDialog(store.t("import_choice_title"), isPresented: $showImportChoice,
+                            titleVisibility: .visible, presenting: pendingImport) { file in
+            Button(store.t("import_all")) { runImport(file, scope: .all) }
+            Button(store.t("import_channels_only")) { runImport(file, scope: .channelsOnly) }
+            Button(store.t("cancel"), role: .cancel) { pendingImport = nil }
+        } message: { _ in
+            Text(store.t("import_choice_msg"))
+        }
+        .alert(store.t("import_sum_title"), isPresented: $showImportSummary) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(importSummary)
+        }
+    }
+
+    /// Applique la sauvegarde choisie, puis dit ce qui a été repris.
+    private func runImport(_ file: Backup.File, scope: Backup.Scope) {
+        pendingImport = nil
+        let summary = Backup.apply(file, scope: scope, store: store)
+        // Notifications de live de la sauvegarde : l'autorisation d'iOS est
+        // demandée ici, comme depuis l'interrupteur des réglages.
+        if let on = summary.liveNotifications, on != LiveNotifier.isEnabled {
+            liveNotif = on
+            if on {
+                Task {
+                    let ok = await LiveNotifier.enable()
+                    await MainActor.run { liveNotif = ok && LiveNotifier.isEnabled }
+                }
+            } else {
+                LiveNotifier.disable()
+            }
+        }
+        // Après l'import : dans la langue qu'il a peut-être changée.
+        importSummary = importSummaryText(summary, scope: scope)
+        backupMessage = importSummary
+        if scope == .all {
+            logger.info("SAUVEGARDE", "Import : \(summary.follows) chaîne(s) ajoutée(s)",
+                        "tout · \(summary.settings) réglage(s) repris, \(summary.settingsIgnored) ignoré(s), \(summary.continueWatching) vidéo(s) à reprendre")
+        } else {
+            logger.info("SAUVEGARDE", "Import : \(summary.follows) chaîne(s) ajoutée(s)", "chaînes seulement")
+        }
+        // La feuille du choix se ferme encore.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { showImportSummary = true }
+    }
+
+    /// Une ligne par sorte de chose reprise.
+    private func importSummaryText(_ s: Backup.Summary, scope: Backup.Scope) -> String {
+        func line(_ key: String, _ n: Int) -> String {
+            store.t(key).replacingOccurrences(of: "{n}", with: "\(n)")
+        }
+        var follows = line("import_sum_follows", s.follows)
+        // Au-delà de 300 suivis sur l'appareil, le reste n'est pas pris :
+        // dit, plutôt que compté comme ajouté.
+        if s.followsSkipped > 0 { follows += " " + String(format: store.t("import_capped"), s.followsSkipped) }
+        var lines = [follows,
+                     line("import_sum_categories", s.categories),
+                     line("import_sum_pinned", s.pinned),
+                     line("import_sum_hidden", s.hidden)]
+        if scope == .all {
+            lines.append(line("import_sum_settings", s.settings))
+            if s.settingsIgnored > 0 { lines.append(line("import_sum_ignored", s.settingsIgnored)) }
+            lines.append(line("import_sum_continue", s.continueWatching))
+        } else {
+            lines.append(store.t("import_sum_channels_only"))
+        }
+        return lines.joined(separator: "\n")
     }
 
     @ViewBuilder private var usageCard: some View {
@@ -1747,36 +1971,20 @@ struct SettingsView: View {
                               }
                           }), log: "Notifications de live")
                 if liveNotif { liveNotifTools }
-                Divider().background(Color.tBorder)
-                // Instantanées, même app fermée : par l'app ntfy.
-                toggleRow(store.t("ntfy_live"), store.t("ntfy_live_sub"),
-                          Binding(get: { ntfyOn }, set: { on in
-                              ntfyOn = on
-                              ntfyResult = nil
-                              Task {
-                                  if on {
-                                      // Reste activé même si le serveur ne répond pas
-                                      // encore : nouvel essai à chaque retour dans l'app.
-                                      let ok = await NtfyNotifier.enable(lang: store.lang)
-                                      await MainActor.run {
-                                          ntfySynced = ok
-                                          if !ok { ntfyResult = ntfyPendingText }
-                                      }
-                                  } else {
-                                      await NtfyNotifier.disable()
-                                  }
-                              }
-                          }), log: "Notifications ntfy")
-                if ntfyOn { ntfyTools }
-                // Lesquelles des chaînes suivies préviennent (les deux modes).
-                if liveNotif || ntfyOn {
+                // Lesquelles des chaînes suivies préviennent.
+                if liveNotif {
                     Divider().background(Color.tBorder)
                     notifChannelsRow
                 }
+                Divider().background(Color.tBorder)
+                // Instantanées, même app fermée : le site installé en web app
+                // (à la place de ntfy, retiré : voir NtfyNotifier).
+                pwaNotifRow
             }
         }
         .sheet(isPresented: $showNotifChannels) {
             NotifChannelsView().environmentObject(store)
+                .tTypeRoot()
         }
     }
 
@@ -1795,7 +2003,7 @@ struct SettingsView: View {
                 }
                 Spacer()
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.tSystem(size: 13, weight: .semibold))
                     .foregroundColor(.tMuted)
             }
             .contentShape(Rectangle())
@@ -1803,76 +2011,27 @@ struct SettingsView: View {
         .buttonStyle(.plain)
     }
 
-    /// Activé, mais pas encore accepté par le serveur : pourquoi, et la suite.
-    private var ntfyPendingText: String {
-        store.t(NtfyNotifier.serverNotReady ? "ntfy_not_ready" : "ntfy_pending")
-    }
-
-    /// ntfy : le sujet à ajouter dans l'app ntfy, l'installer, tester.
-    @ViewBuilder private var ntfyTools: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(store.t("ntfy_steps"))
+    /// Notifications instantanées, même app fermée : le site installé en web
+    /// app sur l'écran d'accueil (notifications web d'iOS 16.4 et plus). Le
+    /// lien ouvre ses étapes d'installation et d'activation (kNotifInstallURL).
+    private var pwaNotifRow: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(store.t("notif_pwa_title"))
+                .font(.tCardTitle)
+                .foregroundColor(.tText)
+            Text(store.t("notif_pwa_sub"))
                 .font(.tMeta).foregroundColor(.tMuted)
                 .fixedSize(horizontal: false, vertical: true)
-            HStack(spacing: 8) {
-                Text(NtfyNotifier.topic)
-                    .font(.system(size: 14, weight: .semibold, design: .monospaced))
-                    .foregroundColor(.tText)
-                    .lineLimit(1).minimumScaleFactor(0.6)
-                    .textSelection(.enabled)
-                Spacer(minLength: 4)
-                Button {
-                    UIPasteboard.general.string = NtfyNotifier.topic
-                    ntfyCopied = true
-                } label: {
-                    Label(store.t(ntfyCopied ? "ntfy_copied" : "ntfy_copy"),
-                          systemImage: ntfyCopied ? "checkmark" : "doc.on.doc")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(.tPrimary)
-                }
-                .buttonStyle(.plain)
+            Link(destination: kNotifInstallURL) {
+                notifPill(store.t("notif_pwa_open"), icon: "safari.fill")
             }
-            .padding(10)
-            .background(Color.tSurface)
-            .cornerRadius(10)
-            HStack(spacing: 8) {
-                Link(destination: NtfyNotifier.appStoreURL) {
-                    ntfyPill(store.t("ntfy_install"), icon: "arrow.down.app.fill")
-                }
-                Button {
-                    ntfyResult = nil
-                    Task {
-                        let result = await NtfyNotifier.sendTest(lang: store.lang)
-                        await MainActor.run { ntfyResult = store.t(result.textKey) }
-                    }
-                } label: {
-                    ntfyPill(store.t("notif_test"), icon: "bell.badge.fill")
-                }
-                .buttonStyle(.plain)
-            }
-            if let ntfyResult {
-                Text(ntfyResult).font(.tMeta).foregroundColor(.tMuted)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            if ntfySynced {
-                let count = UserDefaults.standard.integer(forKey: NtfyNotifier.countKey)
-                Text(store.tn("ntfy_status", count).replacingOccurrences(of: "{n}", with: "\(count)"))
-                    .font(.tMeta).foregroundColor(.tMuted)
-            } else if ntfyResult == nil {
-                Text(ntfyPendingText).font(.tMeta).foregroundColor(.orange)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Text(store.t("ntfy_privacy"))
-                .font(.tMeta).foregroundColor(.tMuted)
-                .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(.leading, 2)
     }
 
-    private func ntfyPill(_ title: String, icon: String) -> some View {
+    private func notifPill(_ title: String, icon: String) -> some View {
         HStack(spacing: 8) {
-            Image(systemName: icon).font(.system(size: 13, weight: .semibold))
-            Text(title).font(.system(size: 14, weight: .semibold)).lineLimit(1)
+            Image(systemName: icon).font(.tSystem(size: 13, weight: .semibold))
+            Text(title).font(.tSystem(size: 14, weight: .semibold)).lineLimit(1)
         }
         .foregroundColor(.tPrimary)
         .padding(.horizontal, 12).padding(.vertical, 8)
@@ -1881,22 +2040,40 @@ struct SettingsView: View {
     }
 
     private var versionLabel: String {
-        // Même numéro que la source et les versions GitHub (1.1.4…).
-        "\(store.t("version_label")) \(UpdateChecker.installedVersion)"
+        // Même numéro que la source et les versions GitHub (1.1.4…), et le
+        // build (CFBundleVersion) : un outil d'installation peut poser un
+        // vieil IPA sous un numéro récent, seul le build le montre.
+        store.t("version_build")
+            .replacingOccurrences(of: "{v}", with: UpdateChecker.installedVersion)
+            .replacingOccurrences(of: "{b}", with: UpdateChecker.installedBuildString)
+    }
+
+    /// Ce que copie un appui sur la version : nom de l'app (« TU Test » pour
+    /// les builds de test), version et build, à coller dans un signalement.
+    private func copyVersion() {
+        let name = Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String ?? "TwitchUnblock"
+        UIPasteboard.general.string =
+            "\(name) \(UpdateChecker.installedVersion) (build \(UpdateChecker.installedBuildString))"
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        withAnimation(.easeInOut(duration: 0.2)) { versionCopied = true }
+        Task {
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            withAnimation(.easeInOut(duration: 0.2)) { versionCopied = false }
+        }
     }
 
     /// Lien externe façon bouton (crédits).
     private func creditLink(icon: String, title: String, url: String) -> some View {
         Link(destination: URL(string: url)!) {
             HStack(spacing: TSpace.sm) {
-                Image(systemName: icon).font(.system(size: 13, weight: .semibold))
+                Image(systemName: icon).font(.tSystem(size: 13, weight: .semibold))
                 Text(title).font(.tLabel)
                 Spacer()
-                Image(systemName: "arrow.up.right").font(.system(size: 12, weight: .semibold))
+                Image(systemName: "arrow.up.right").font(.tSystem(size: 12, weight: .semibold))
             }
             .foregroundColor(.tText)
             .padding(.horizontal, TSpace.md)
-            .frame(height: 44)
+            .frame(minHeight: 44)
             .background(Color.tSurface)
             .cornerRadius(TRadius.control)
         }
@@ -1910,7 +2087,7 @@ struct SettingsView: View {
             Link(destination: url) {
                 HStack(spacing: TSpace.sm) {
                     Image(systemName: "person.crop.circle")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.tSystem(size: 13, weight: .semibold))
                     VStack(alignment: .leading, spacing: 1) {
                         Text(contributor.login)
                             .font(.tLabel)
@@ -1920,7 +2097,7 @@ struct SettingsView: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer()
-                    Image(systemName: "arrow.up.right").font(.system(size: 12, weight: .semibold))
+                    Image(systemName: "arrow.up.right").font(.tSystem(size: 12, weight: .semibold))
                 }
                 .foregroundColor(.tText)
                 .padding(.horizontal, TSpace.md)
@@ -1945,9 +2122,21 @@ struct SettingsView: View {
                         Text("TwitchUnblock")
                             .font(.tSection)
                             .foregroundColor(.tText)
-                        Text(versionLabel)
-                            .font(.tMeta)
-                            .foregroundColor(.tMuted)
+                        // Un appui la copie (version et build).
+                        Button(action: copyVersion) {
+                            HStack(spacing: 4) {
+                                Text(versionCopied ? store.t("version_copied") : versionLabel)
+                                    .font(.tMeta)
+                                    .foregroundColor(versionCopied ? .tSuccess : .tMuted)
+                                Image(systemName: versionCopied ? "checkmark" : "doc.on.doc")
+                                    .font(.tSystem(size: 10, weight: .semibold))
+                                    .foregroundColor(versionCopied ? Color.tSuccess : Color.tMuted.opacity(0.7))
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(versionLabel)
+                        .accessibilityHint(store.t("version_copy_hint"))
                     }
                     Spacer()
                     Circle().fill(Color.tPrimary).frame(width: 26, height: 26)
@@ -1955,22 +2144,35 @@ struct SettingsView: View {
 
                 // Mise à jour : disponible → bouton ; sinon, vérification manuelle.
                 if let up = updater.available {
-                    Button { UpdateChecker.openSource() } label: {
+                    // Installation ratée (vieil IPA sous le dernier numéro) :
+                    // l'IPA à réinstaller, et pourquoi.
+                    Button {
+                        if up.mislabeled { UpdateChecker.openDownload(up.downloadURL) }
+                        else { UpdateChecker.openSource() }
+                    } label: {
                         HStack(spacing: TSpace.sm) {
-                            Image(systemName: "arrow.down.circle.fill")
-                                .font(.system(size: 14, weight: .semibold))
-                            Text(store.t("update_available").replacingOccurrences(of: "{v}", with: up.version))
+                            Image(systemName: up.mislabeled ? "exclamationmark.triangle.fill" : "arrow.down.circle.fill")
+                                .font(.tSystem(size: 14, weight: .semibold))
+                            Text(store.t(up.mislabeled ? "update_stale_short" : "update_available")
+                                    .replacingOccurrences(of: "{v}", with: up.version))
                                 .font(.tLabel)
+                                .multilineTextAlignment(.leading)
                             Spacer()
-                            Image(systemName: "arrow.up.right").font(.system(size: 12, weight: .semibold))
+                            Image(systemName: "arrow.up.right").font(.tSystem(size: 12, weight: .semibold))
                         }
                         .foregroundColor(.white)
                         .padding(.horizontal, TSpace.md)
-                        .frame(height: 44)
+                        .padding(.vertical, TSpace.xs)
+                        .frame(minHeight: 44)
                         .background(Color.tPrimary)
                         .cornerRadius(TRadius.control)
                     }
                     .buttonStyle(.plain)
+                    if up.mislabeled {
+                        Text(UpdateChecker.staleInstallMessage(store))
+                            .font(.tMeta).foregroundColor(.tMuted)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 } else {
                     Button {
                         checkingUpdate = true
@@ -1986,14 +2188,14 @@ struct SettingsView: View {
                         HStack(spacing: TSpace.sm) {
                             Image(systemName: upToDate ? "checkmark.circle.fill"
                                   : updateCheckFailed ? "exclamationmark.triangle" : "arrow.triangle.2.circlepath")
-                                .font(.system(size: 13, weight: .semibold))
+                                .font(.tSystem(size: 13, weight: .semibold))
                             Text(store.t(upToDate ? "update_none" : updateCheckFailed ? "update_check_failed" : "update_check")).font(.tLabel)
                             Spacer()
                             if checkingUpdate { ProgressView().scaleEffect(0.8) }
                         }
                         .foregroundColor(.tText)
                         .padding(.horizontal, TSpace.md)
-                        .frame(height: 44)
+                        .frame(minHeight: 44)
                         .background(Color.tSurface)
                         .cornerRadius(TRadius.control)
                     }
@@ -2011,12 +2213,12 @@ struct SettingsView: View {
                     Link("MXFia19", destination: URL(string: "https://github.com/MXFia19")!)
                         .foregroundColor(.tPrimary)
                 }
-                .font(.system(size: 14, weight: .semibold))
+                .font(.tSystem(size: 14, weight: .semibold))
 
                 // Projet vibecodé : dit franchement.
                 HStack(alignment: .top, spacing: 8) {
                     Image(systemName: "sparkles")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.tSystem(size: 13, weight: .semibold))
                         .foregroundColor(.tPrimary)
                     Text(store.t("vibecoded"))
                         .font(.tMeta)
@@ -2056,13 +2258,13 @@ struct SettingsView: View {
                 Button { showFeedback = true } label: {
                     HStack(spacing: TSpace.sm) {
                         Image(systemName: "ladybug.fill")
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(.tSystem(size: 13, weight: .semibold))
                         Text(store.t("feedback")).font(.tLabel)
                         Spacer()
                     }
                     .foregroundColor(.tPrimary)
                     .padding(.horizontal, TSpace.md)
-                    .frame(height: 44)
+                    .frame(minHeight: 44)
                     .background(Color.tPrimary.opacity(0.12))
                     .cornerRadius(12)
                 }
@@ -2075,13 +2277,13 @@ struct SettingsView: View {
                 } label: {
                     HStack(spacing: TSpace.sm) {
                         Image(systemName: "graduationcap.fill")
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(.tSystem(size: 13, weight: .semibold))
                         Text(store.t("ob_replay")).font(.tLabel)
                         Spacer()
                     }
                     .foregroundColor(.tPrimary)
                     .padding(.horizontal, TSpace.md)
-                    .frame(height: 44)
+                    .frame(minHeight: 44)
                     .background(Color.tPrimary.opacity(0.12))
                     .cornerRadius(12)
                 }
@@ -2092,7 +2294,7 @@ struct SettingsView: View {
                 } label: {
                     HStack(spacing: TSpace.sm) {
                         Image(systemName: "terminal")
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(.tSystem(size: 13, weight: .semibold))
                         Text(store.t("show_logs")).font(.tLabel)
                         Spacer()
                         // Erreurs du journal : visibles avant même de l'ouvrir.
@@ -2114,7 +2316,7 @@ struct SettingsView: View {
                     }
                     .foregroundColor(.tPrimary)
                     .padding(.horizontal, TSpace.md)
-                    .frame(height: 44)
+                    .frame(minHeight: 44)
                     .background(Color.tPrimary.opacity(0.12))
                     .cornerRadius(TRadius.control)
                 }
@@ -2269,8 +2471,9 @@ struct SettingsView: View {
         }
         // Hauteur tenue à la main : un GeometryReader n'en propose aucune. Large
         // de quatre lignes, pour le cas où les deux messages passent à la ligne
-        // aux plus grosses tailles ; `clipped` évite tout débordement.
-        .frame(height: store.chatFontSize * 4 + store.chatSpacing * 2 + 20)
+        // aux plus grosses tailles ; `clipped` évite tout débordement. Taille du
+        // style, qui suit aussi la taille du texte d'iOS.
+        .frame(height: style.fontSize * 4 + store.chatSpacing * 2 + 20)
         .clipped()
         .padding(TSpace.sm)
         .background(Color.tDark)
@@ -2315,7 +2518,7 @@ struct SettingsView: View {
             }
             Spacer(minLength: 8)
             Text(store.chatSyncNudge == 0 ? "0 s" : String(format: "%+.0f s", store.chatSyncNudge))
-                .font(.system(size: 14, weight: .bold).monospacedDigit())
+                .font(.tSystem(size: 14, weight: .bold).monospacedDigit())
                 .foregroundColor(store.chatSyncNudge == 0 ? .tMuted : .tPrimary)
             Stepper("", value: $store.chatSyncNudge, in: -20...20, step: 1)
                 .labelsHidden()
@@ -2354,7 +2557,7 @@ struct SettingsView: View {
                            actionLabel: String, action: @escaping () -> Void) -> some View {
         HStack(spacing: 12) {
             Image(systemName: connected ? "checkmark.circle.fill" : "circle")
-                .font(.system(size: 17))
+                .font(.tSystem(size: 17))
                 .foregroundColor(connected ? .tSuccess : .tMuted)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
@@ -2392,10 +2595,11 @@ struct SettingsView: View {
             // Même pastille que dans le menu : les deux niveaux se répondent.
             RoundedRectangle(cornerRadius: 7)
                 .fill(Color.tPrimary.opacity(0.16))
-                .frame(width: 26, height: 26)
+                // Grandit avec le titre (taille du texte d'iOS).
+                .frame(width: 26 * TType.ratio(13), height: 26 * TType.ratio(13))
                 .overlay {
                     Image(systemName: icon)
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.tSystem(size: 13, weight: .semibold))
                         .foregroundColor(.tPrimary)
                 }
             Text(text)
@@ -2414,7 +2618,7 @@ struct SettingsView: View {
             store.lang = lang
         } label: {
             HStack(spacing: 12) {
-                Text(lang.flag).font(.system(size: 22))
+                Text(lang.flag).font(.tSystem(size: 22))
                 VStack(alignment: .leading, spacing: 1) {
                     Text(lang.label)
                         .font(.tCardTitle)
@@ -2429,7 +2633,7 @@ struct SettingsView: View {
                 if isSelected {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundColor(.tPrimary)
-                        .font(.system(size: 18))
+                        .font(.tSystem(size: 18))
                 }
             }
             .padding(.horizontal, 14).padding(.vertical, 12)
@@ -2444,10 +2648,10 @@ struct SettingsView: View {
     private func statBox(value: Int, label: String, icon: String) -> some View {
         VStack(spacing: TSpace.xs) {
             Image(systemName: icon)
-                .font(.system(size: 16))
+                .font(.tSystem(size: 16))
                 .foregroundColor(.tMuted)
             Text("\(value)")
-                .font(.system(size: 26, weight: .bold))
+                .font(.tSystem(size: 26, weight: .bold))
                 .foregroundColor(.tPrimary)
             Text(label)
                 .font(.tMeta)
@@ -2463,7 +2667,7 @@ struct SettingsView: View {
 // MARK: – Contributeurs
 /// Personnes qui ont contribué à l'app sur GitHub, dans Réglages → À propos.
 /// Pour en ajouter une : une ligne dans `all`, et la clé de son apport dans
-/// les six langues (Constants.swift et Localization/). Le pseudo GitHub ne se
+/// les sept langues (Constants.swift et Localization/). Le pseudo GitHub ne se
 /// traduit pas ; il donne aussi l'adresse de son profil.
 struct Contributor: Identifiable, Sendable {
     let login: String
@@ -2476,6 +2680,7 @@ struct Contributor: Identifiable, Sendable {
     static let all: [Contributor] = [
         Contributor(login: "Domenico-lel", contributionKey: "credits_contrib_it"),
         Contributor(login: "kinboy56", contributionKey: "credits_contrib_ja"),
+        Contributor(login: "trend0522", contributionKey: "credits_contrib_zhHant"),
         Contributor(login: "dwojc6", contributionKey: "credits_contrib_swipe"),
     ]
 }
@@ -2486,6 +2691,18 @@ struct Contributor: Identifiable, Sendable {
 // et objets observés suffisent à le tenir à jour (`.equatable()` à l'appel).
 extension SettingsView: Equatable {
     nonisolated static func == (lhs: SettingsView, rhs: SettingsView) -> Bool { true }
+}
+
+private extension View {
+    /// Niveau des Réglages couvert par une page : un peu décalé et assombri,
+    /// comme sous une page d'iOS (le glissé retour le découvre), sans
+    /// réagir aux touchers ni à VoiceOver.
+    func settingsCovered(_ covered: Bool) -> some View {
+        self.offset(x: covered ? -72 : 0)
+            .overlay { Color.black.opacity(covered ? 0.3 : 0).allowsHitTesting(false) }
+            .allowsHitTesting(!covered)
+            .accessibilityHidden(covered)
+    }
 }
 
 // MARK: – Minuteur de veille (ligne des Réglages)
@@ -2503,7 +2720,7 @@ private struct SleepTimerSettingRow: View {
                     Text(store.t("sleep_remaining"))
                         .font(.tMeta).foregroundColor(.tMuted)
                     Text(sleepTimer.label)
-                        .font(.system(size: 26, weight: .bold).monospacedDigit())
+                        .font(.tSystem(size: 26, weight: .bold).monospacedDigit())
                         .foregroundColor(.tPurple)
                 } else {
                     Text(store.t("sleep_timer_sub"))

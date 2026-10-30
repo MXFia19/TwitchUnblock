@@ -75,6 +75,35 @@ struct PlayerLayerView: UIViewRepresentable {
     }
 }
 
+/// Surface vidéo du lecteur immersif : agrandie et déplacée par le zoom à deux
+/// doigts, rognée à sa boîte, avec derrière elle le repère du pincement
+/// (PinchFocusAnchor : la boîte elle-même, jamais agrandie). Une vue à part :
+/// le corps du lecteur est déjà très imbriqué (iOS 18 plante sur les types
+/// trop profonds, voir SettingsView.sectionPage).
+private struct ZoomedVideoSurface: View {
+    let player: AVPlayer
+    let fill: Bool
+    let zoom: CGFloat
+    let pan: CGSize
+    let pinch: PinchFocus
+    let onLayer: (AVPlayerLayer) -> Void
+    /// Taille de la boîte, à l'apparition et à chaque changement.
+    let onSize: (CGSize) -> Void
+
+    var body: some View {
+        GeometryReader { geo in
+            PlayerLayerView(player: player, fill: fill, onLayer: onLayer)
+                .scaleEffect(zoom)
+                .offset(pan)
+                .frame(width: geo.size.width, height: geo.size.height)
+                .clipped()
+                .background(PinchFocusAnchor(focus: pinch))
+                .onAppear { onSize(geo.size) }
+                .onChange(of: geo.size) { onSize($0) }
+        }
+    }
+}
+
 // MARK: – Modèle (lecture, fenêtre seekable, PiP)
 final class ImmersivePlayerModel: NSObject, ObservableObject {
     let player = AVPlayer()
@@ -109,9 +138,9 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
     /// Rattrape le bord du direct quand la lecture a dérivé (mode faible latence).
     var lowLatency = false
 
-    /// Vitesse de lecture hors direct (cran de VodSpeed). Un direct joue
-    /// toujours à 1× : en direct, elle est seulement retenue pour la bascule
-    /// sur l'enregistrement.
+    /// Vitesse de lecture (cran de VodSpeed). Un direct joue à 1× : en direct,
+    /// elle ne sert qu'à rattraper le bord après un retour en arrière
+    /// (liveCatchUp), et elle est retenue pour la bascule sur l'enregistrement.
     @Published private(set) var speed: Double = 1
     /// Vitesse imposée par le lecteur (refus, AirPlay, bord du DVR rattrapé) :
     /// la vue la retient pour la lecture en cours (pas dans la préférence) et
@@ -123,6 +152,43 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
     }
     @Published private(set) var forcedSpeed: SpeedChange?
     private var rateObs: NSObjectProtocol?
+    /// Réglage « Lecture en arrière-plan » (AppStore.backgroundPlayback) :
+    /// qualité audio du contenu en cours, donnée par la vue (nil s'il n'y en a
+    /// pas, ou si c'est déjà elle) ; pendant le son seul, l'adresse lue avant
+    /// (rendue au retour) et celle de l'audio — un autre chargement entre-temps
+    /// annule le retour.
+    var backgroundAudioURL: URL?
+    /// « Aller à une heure » (.tuSeekTo).
+    private var seekObs: NSObjectProtocol?
+    private var urlBeforeBackground: URL?
+    private var audioInUse: URL?
+    /// Adresse du dernier élément chargé (load).
+    private var currentURL: URL?
+    private var backgroundObs: [NSObjectProtocol] = []
+    /// Vitesse d'avant le retour à 1× au bord d'un enregistrement en cours
+    /// (fait ici, ou par AVPlayer). Un retour en arrière la laissait à 1× pour
+    /// toute la lecture, et la choisir de nouveau près du bord la faisait
+    /// retomber aussitôt : elle est rendue dès que la lecture s'éloigne du bord.
+    private var edgeHeldSpeed: Double?
+    /// Vitesse d'avant le bord, à rendre : la vue la passe au parent, qui la
+    /// reprend si celle de la lecture est encore imposée (un choix fait
+    /// entre-temps l'emporte).
+    @Published private(set) var edgeRelease: SpeedChange?
+    /// Direct reculé exprès lu en accéléré (liveCatchUp). La vue annonce le
+    /// début (`liveCatchUpStarted`) et le bord rattrapé (`liveCaughtUp`).
+    /// Refusé par le lecteur : plus d'essai avant le prochain retour en
+    /// arrière, le prochain choix de vitesse ou le prochain élément.
+    private var liveCatchUpActive = false
+    private var liveCatchUpRefused = false
+    @Published private(set) var liveCatchUpStarted = 0
+    @Published private(set) var liveCaughtUp = 0
+    /// Vitesse réellement tenue (voir checkEffectiveRate) : fenêtres manquées
+    /// de suite, et vitesse déjà réappliquée une fois.
+    private var rateProbe = EffectiveRateProbe()
+    private var rateMisses = 0
+    private var rateReapplied = false
+    /// Saut de position (barre, PiP, reprise) : la mesure de la vitesse repart.
+    private var jumpObs: NSObjectProtocol?
 
     private let onProgress: (Double) -> Void
     private let onLatency:  (Double?) -> Void
@@ -170,6 +236,13 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
     /// toujours la fin, B9.1).
     private let pipOwner = "pip " + UUID().uuidString
     private var pipHoldsSession = false
+    /// PiP démarré : le parent réduit le lecteur ; bouton « agrandir » de la
+    /// fenêtre : il le rend en grand (MainTabView, voir PlayerPiP).
+    private let onPiPStart: () -> Void
+    private let onPiPRestore: () -> Void
+    /// Retour au lecteur demandé par la fenêtre PiP, en cours : AVKit arrête
+    /// lui-même le PiP, rien à arrêter de plus (stopPiPForPlayer).
+    private var restoringUI = false
     private var lastCatchUp = Date.distantPast
     private var latency = LiveLatencyController()
     private var sync = LiveSyncEstimator()
@@ -199,11 +272,15 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
     init(url: URL, isLive: Bool, savedTime: Double,
          onProgress: @escaping (Double) -> Void,
          onLatency:  @escaping (Double?) -> Void,
-         onBehind:   @escaping (Double?) -> Void = { _ in }) {
+         onBehind:   @escaping (Double?) -> Void = { _ in },
+         onPiPStart: @escaping () -> Void = {},
+         onPiPRestore: @escaping () -> Void = {}) {
         self.isLive     = isLive
         self.onProgress = onProgress
         self.onLatency  = onLatency
         self.onBehind   = onBehind
+        self.onPiPStart = onPiPStart
+        self.onPiPRestore = onPiPRestore
         super.init()
         // Le son continue écran verrouillé et dans une autre app : sans ça,
         // iOS mettait la vidéo en pause au verrouillage, et les commandes de
@@ -240,6 +317,9 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
         timeControlObs = player.observe(\.timeControlStatus, options: [.new]) { [weak self] p, _ in
             DispatchQueue.main.async {
                 guard let self, self.player.currentItem != nil else { return }
+                // Pause ou attente : la vitesse tenue ne se mesure que sur
+                // une lecture continue.
+                if p.timeControlStatus != .playing { self.rateProbe.reset() }
                 switch p.timeControlStatus {
                 case .paused where self.isPlaying:   self.isPlaying = false
                 case .playing where !self.isPlaying: self.isPlaying = true
@@ -255,6 +335,13 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
         rateObs = NotificationCenter.default.addObserver(
             forName: AVPlayer.rateDidChangeNotification, object: player, queue: .main
         ) { [weak self] note in self?.rateChanged(note) }
+        jumpObs = NotificationCenter.default.addObserver(
+            forName: AVPlayerItem.timeJumpedNotification, object: nil, queue: .main
+        ) { [weak self] note in
+            guard let self, let item = note.object as? AVPlayerItem,
+                  item === self.player.currentItem else { return }
+            self.rateProbe.reset()
+        }
         // AirPlay ne lit pas les playlists réécrites : retour à celle du CDN.
         externalObs = player.observe(\.isExternalPlaybackActive, options: [.new]) { [weak self] _, _ in
             DispatchQueue.main.async { self?.fallBackForAirPlay() }
@@ -274,10 +361,65 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
             guard let self, self.isLive else { return }
             self.goLive()
         }
+        seekObs = NotificationCenter.default.addObserver(
+            forName: .tuSeekTo, object: nil, queue: .main
+        ) { [weak self] note in
+            guard let self, !self.isLive, let s = note.object as? Double else { return }
+            self.seek(to: s)
+        }
         interruptions = PlaybackInterruptions(name: "lecteur") { [weak self] since in
             self?.resumeAfterInterruption(since: since)
         }
         interruptions?.watch(player)
+        // Écran verrouillé, autre app : le réglage « Lecture en arrière-plan ».
+        // Observé ici et pas par la vue : SwiftUI ne met plus rien à jour une
+        // fois l'app en arrière-plan.
+        backgroundObs = [
+            NotificationCenter.default.addObserver(
+                forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main
+            ) { [weak self] _ in self?.enteredBackground() },
+            NotificationCenter.default.addObserver(
+                forName: UIApplication.willEnterForegroundNotification, object: nil, queue: .main
+            ) { [weak self] _ in self?.returnedToForeground() },
+        ]
+    }
+
+    /// App passée en arrière-plan sans PiP : la lecture continue (réglage par
+    /// défaut), passe au son seul, ou s'arrête. Une seconde plus tard : le
+    /// PiP automatique démarre juste après le passage, et l'emporte.
+    private func enteredBackground() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
+            guard let self, !self.tornDown, !self.pipActive, !PlayerPiP.shared.active,
+                  self.isPlaying, !self.failed,
+                  UIApplication.shared.applicationState == .background else { return }
+            switch UserDefaults.standard.string(forKey: "cfg_background_playback") {
+            case "pause"?:
+                logger.info("LECTEUR", "Arrière-plan : lecture mise en pause", "réglage")
+                self.setPlaying(false, fromApp: false)
+            case "audio"?:
+                guard let audio = self.backgroundAudioURL, let now = self.currentURL, now != audio else { return }
+                logger.info("LECTEUR", "Arrière-plan : son seul", "réglage")
+                self.audioInUse = audio
+                self.urlBeforeBackground = now
+                self.switchQuality(to: audio)
+            default:
+                break
+            }
+        }
+    }
+
+    /// Retour au premier plan après le son seul : la qualité d'avant revient
+    /// (en pause si la lecture y a été mise entre-temps), sauf si un autre
+    /// chargement l'a remplacée.
+    private func returnedToForeground() {
+        guard !tornDown, let back = urlBeforeBackground, let audio = audioInUse,
+              currentURL == audio else { return }
+        urlBeforeBackground = nil
+        audioInUse = nil
+        let wasPlaying = isPlaying
+        logger.info("LECTEUR", "Retour au premier plan : image rétablie", nil)
+        switchQuality(to: back)
+        if !wasPlaying { setPlaying(false) }
     }
 
     /// Réglage « Audio spatial » changé : l'élément est recréé au même endroit
@@ -351,7 +493,17 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
     func load(url: URL, seek: Double = 0, isLive: Bool? = nil,
               resume: Bool = false, behind: Double? = nil, exact: Bool = false) {
         if let isLive { self.isLive = isLive }
+        // Autre chargement que le son seul : plus de retour prévu à l'image
+        // d'avant (autre qualité, source, contenu).
+        currentURL = url
+        if url != audioInUse { audioInUse = nil; urlBeforeBackground = nil }
         stallTimes = []
+        // Nouvel élément : la vitesse tenue se mesure de nouveau. La vitesse
+        // d'avant le bord d'un enregistrement reste à rendre (retour au
+        // direct puis nouveau retour en arrière).
+        resetRateCheck()
+        liveCatchUpActive = false
+        liveCatchUpRefused = false
         // Repart d'une fenêtre vierge : garder les bornes de la source
         // précédente affichait une barre fantaisiste le temps du chargement.
         startTime = 0; endTime = 0; currentDate = nil
@@ -566,10 +718,20 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
         if isLive { diagnostics?.tick(item: item) }
 
         // Enregistrement d'un direct en cours lu en accéléré : près de son bord,
-        // retour à 1× (rien ne le garantit avant iOS 26.4).
+        // retour à 1× (rien ne le garantit avant iOS 26.4). La vitesse d'avant
+        // revient quand la lecture s'en éloigne (retour en arrière).
         if speed > 1, player.rate > 1, nearRecordingEdge {
+            let held = speed
             force(speed: 1, notice: "speed_caught_up", why: "bord de l'enregistrement rattrapé")
+            edgeHeldSpeed = held
+        } else if let held = edgeHeldSpeed, clearOfRecordingEdge {
+            edgeHeldSpeed = nil
+            logger.info("LECTEUR", "Loin du bord de l'enregistrement : vitesse rendue", String(format: "×%g", held))
+            edgeRelease = SpeedChange(value: held, notice: "", id: (edgeRelease?.id ?? 0) + 1)
         }
+        // Direct reculé exprès : la vitesse retenue rattrape le bord.
+        liveCatchUp()
+        checkEffectiveRate()
 
         catchUpIfNeeded(item)
     }
@@ -600,12 +762,24 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
 
     func togglePlay() { setPlaying(!isPlaying) }
 
-    func setPlaying(_ on: Bool) {
+    /// Pause faite dans l'app (bouton, toucher sur l'image) : une reprise
+    /// venue de l'écran verrouillé ou des écouteurs la respecte. Une pause des
+    /// écouteurs (AirPod retiré), d'iOS ou du réglage d'arrière-plan ne la
+    /// pose pas.
+    private var pausedInApp = false
+
+    /// `fromApp` faux : commande de l'écran verrouillé, du centre de contrôle
+    /// ou des écouteurs (MPRemoteCommandCenter), ou pause du réglage
+    /// d'arrière-plan.
+    func setPlaying(_ on: Bool, fromApp: Bool = true) {
         // En échec (carte « Réessayer ») : rien ne relance un élément mort —
         // ni « lecture » de l'écran verrouillé ou des écouteurs, ni « Direct ».
         // Le croire en lecture gardait l'écran allumé sans fin, et l'écran
         // verrouillé affichait « en lecture ». « Réessayer » relit les liens.
         if on, failed { return }
+        if on, !fromApp, !pausedInApp { rejoinLiveEdgeIfBehind() }
+        // Vrai seulement pendant une pause faite dans l'app ; toute reprise l'efface.
+        pausedInApp = !on && fromApp
         if on { player.play() } else { player.pause() }
         // Pause voulue (bouton, écran verrouillé) : rien ne la relance seul,
         // ni la fin d'une interruption, ni la relance d'un direct en échec.
@@ -628,14 +802,36 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
                     toleranceBefore: exact ? .zero : .positiveInfinity,
                     toleranceAfter:  .zero)
         position = clamped
+        rateProbe.reset()
         // Recul voulu (barre, −10 s) : la tenue du direct ne doit pas le
-        // défaire. Près du bord, elle reprend la main.
-        if isLive { latency.hold(ceiling - clamped > 3) }
+        // défaire. Près du bord, elle reprend la main. Un rattrapage refusé
+        // peut être réessayé.
+        if isLive {
+            latency.hold(ceiling - clamped > 3)
+            liveCatchUpRefused = false
+        }
         refreshNowPlaying(force: true)
         updateActivity()
     }
 
     func seekBy(_ delta: Double) { seek(to: position + delta) }
+
+    /// Direct repris par les écouteurs ou l'écran verrouillé après une pause
+    /// qui ne venait pas de l'app : un AirPod retiré met en pause, remis il
+    /// envoie « lecture », et le direct repartait de l'endroit de la pause,
+    /// en retard d'autant (retour de Nostalgia). Il repart au bord, comme
+    /// après une interruption ; un recul voulu (barre, −10 s) reste où il est.
+    private func rejoinLiveEdgeIfBehind() {
+        guard isLive, !latency.holdingBehind, player.timeControlStatus == .paused,
+              let item = player.currentItem, item.status == .readyToPlay else { return }
+        // Bornes relues : en pause, `tick` ne tourne plus.
+        updateWindow(item)
+        guard !atLiveEdge else { return }
+        let behind = endTime - position
+        seek(to: endTime - latency.minBehind(for: item), exact: false)
+        latency.hold(false)
+        logger.info("LECTEUR", "Direct repris au bord après une pause", String(format: "%.0f s de retard", behind))
+    }
 
     func goLive() {
         // Bornes relues : en pause, `tick` ne tourne plus et le bord du direct
@@ -646,6 +842,8 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
         let back = player.currentItem.map { latency.minBehind(for: $0) } ?? 6
         seek(to: endTime - back, exact: false)
         latency.hold(false)
+        // Rattrapage en cours : fini, sans l'annoncer (« Direct » touché).
+        endLiveCatchUp(announce: false)
         if !isPlaying { togglePlay() }
     }
 
@@ -694,9 +892,17 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
     /// Vitesse voulue, ramenée au cran le plus proche. `defaultRate` d'abord :
     /// play() le restaure (écran verrouillé, PiP, repli AirPlay). L'état réel
     /// du lecteur (`rate ≠ 0`) plutôt que `isPlaying` pour l'appliquer tout de
-    /// suite, qui peut être en retard d'un événement.
-    func setSpeed(_ value: Double) {
+    /// suite, qui peut être en retard d'un événement. `chosen` faux : la vue
+    /// ne fait que renvoyer une vitesse imposée par le lecteur (echo).
+    func setSpeed(_ value: Double, chosen: Bool = true) {
         let v = VodSpeed.nearest(value)
+        // Choix de l'utilisateur : plus de vitesse d'avant le bord à rendre,
+        // et la vitesse tenue se mesure de nouveau.
+        if chosen {
+            edgeHeldSpeed = nil
+            resetRateCheck()
+            liveCatchUpRefused = false
+        }
         // Sous 1× : un élément prêt peut dire qu'il ne sait pas ralentir. Avant
         // qu'il le soit, la propriété n'a pas de sens : le refus éventuel
         // arrivera alors par rateDidChange.
@@ -706,11 +912,59 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
             return
         }
         speed = v
-        guard !isLive else { return }
+        // Direct : seulement pour rattraper le bord après un retour en
+        // arrière ; ramenée à 1× (ou moins), le rattrapage s'arrête là.
+        guard !isLive else {
+            if liveCatchingUp { liveCatchUp() } else { endLiveCatchUp(announce: false) }
+            return
+        }
         player.defaultRate = Float(v)
         if player.rate != 0 { player.rate = Float(v) }
         refreshNowPlaying(force: true)
         updateActivity()
+    }
+
+    /// Mesure de la vitesse tenue remise à zéro (nouvel élément, nouvelle
+    /// vitesse, vitesse imposée).
+    private func resetRateCheck() {
+        rateProbe.reset()
+        rateMisses = 0
+        rateReapplied = false
+    }
+
+    /// Vitesse réellement tenue, hors 1× (en direct : pendant un rattrapage) :
+    /// `player.rate` n'est que la vitesse demandée, et un lecteur peut
+    /// afficher 2× en lisant à 1×. Elle est d'abord réappliquée ; si la
+    /// lecture ne la suit toujours pas, la vitesse réelle devient celle du
+    /// lecteur — le menu montre ce qui joue, pas un « 2× » qui ne joue pas —,
+    /// et un rattrapage du direct s'arrête.
+    private func checkEffectiveRate() {
+        guard !isLive || liveCatchUpActive, speed != 1, pendingSeek == nil,
+              UIApplication.shared.applicationState == .active,
+              let measured = rateProbe.sample(player) else { return }
+        if abs(measured - speed) <= max(0.15, speed * 0.12) {
+            rateMisses = 0
+            return
+        }
+        rateMisses += 1
+        guard rateMisses >= 2 else { return }
+        rateMisses = 0
+        guard rateReapplied else {
+            rateReapplied = true
+            logger.warn("LECTEUR", "Vitesse non tenue : réappliquée",
+                        String(format: "×%.2f mesuré pour ×%g", measured, speed))
+            player.playImmediately(atRate: Float(speed))
+            rateProbe.reset()
+            return
+        }
+        if isLive {
+            liveCatchUpRefused = true
+            endLiveCatchUp(announce: false)
+            logger.warn("LECTEUR", "Rattrapage du direct non tenu", String(format: "×%.2f mesuré", measured))
+            return
+        }
+        force(speed: VodSpeed.nearest(measured), notice: "speed_unavailable",
+              why: String(format: "×%.2f mesuré", measured))
     }
 
     /// Changement de vitesse venu du lecteur. Les nôtres (setSpeed, play())
@@ -726,12 +980,83 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
         if pipActive, reason == AVPlayer.RateDidChangeReason.setRateCalled.rawValue {
             pausedByUser = rate == 0
         }
+        // Rattrapage du direct ramené à 1× par AVPlayer : au bord (iOS 26.4 et
+        // après, parfois avant notre seuil `atLiveEdge`), il est fini ; sinon
+        // refusé, sans nouvel essai à chaque relevé.
+        if isLive, liveCatchUpActive, rate > 0, rate <= 1.01,
+           reason != AVPlayer.RateDidChangeReason.setRateCalled.rawValue {
+            if reachedLiveEdge(reason) {
+                latency.hold(false)
+                endLiveCatchUp(announce: true)
+            } else {
+                liveCatchUpRefused = true
+                endLiveCatchUp(announce: false)
+                logger.warn("LECTEUR", "Rattrapage du direct refusé par le lecteur", reason)
+            }
+            return
+        }
         let v = VodSpeed.nearest(rate)
         guard !isLive, player.currentItem != nil, rate > 0, abs(v - speed) > 0.01 else { return }
+        // Ralenti par AVPlayer au bord d'un enregistrement en cours (iOS 26.4
+        // et après) : la vitesse d'avant est rendue loin du bord, comme quand
+        // c'est nous qui ralentissons.
+        let held = speed
+        let atEdge = nearRecordingEdge && v < held
         force(speed: v,
-              notice: nearRecordingEdge ? "speed_caught_up" : "speed_unavailable",
+              notice: atEdge ? "speed_caught_up" : "speed_unavailable",
               why: String(format: "×%.2f imposé par le lecteur · ", rate) + reason,
               apply: false)
+        if atEdge { edgeHeldSpeed = held }
+    }
+
+    /// AVPlayer revenu seul à 1× au bord du direct (playheadReachedLiveEdge).
+    private func reachedLiveEdge(_ reason: String) -> Bool {
+        if #available(iOS 26.4, *) {
+            return reason == AVPlayer.RateDidChangeReason.playheadReachedLiveEdge.rawValue
+        }
+        return false
+    }
+
+    /// Direct reculé exprès (barre, −10 s), loin du bord, avec une vitesse
+    /// au-delà de 1× : la lecture accélère pour le rattraper.
+    var liveCatchingUp: Bool {
+        isLive && speed > 1 && latency.holdingBehind && !atLiveEdge && !liveCatchUpRefused
+    }
+
+    /// Rattrapage d'un direct reculé, comme sur YouTube : la vitesse retenue
+    /// (2× au plus) jusqu'au bord, puis 1× et la tenue du direct reprend la
+    /// main. Avant, la barre affichait « 2× » et le direct restait à 1×
+    /// (retour d'un testeur, iOS 27). La tenue du direct ne passe que par des
+    /// sauts : elle ne se bat pas avec cette vitesse.
+    private func liveCatchUp() {
+        guard isLive else { return }
+        if liveCatchingUp {
+            guard isPlaying, player.rate > 0 else { return }
+            if !liveCatchUpActive {
+                liveCatchUpActive = true
+                resetRateCheck()
+                liveCatchUpStarted += 1
+                logger.info("LECTEUR", "Direct reculé : rattrapage en accéléré", String(format: "×%g", speed))
+            }
+            if abs(Double(player.rate) - speed) > 0.01 { player.rate = Float(speed) }
+        } else if liveCatchUpActive {
+            // Encore reculé exprès, vitesse au-delà de 1× : c'est le bord
+            // (atLiveEdge) qui arrête le rattrapage.
+            let reached = latency.holdingBehind && speed > 1 && !liveCatchUpRefused
+            if reached { latency.hold(false) }
+            endLiveCatchUp(announce: reached)
+        }
+    }
+
+    /// Fin du rattrapage : retour à 1×. `announce` quand le bord est atteint
+    /// en lisant (pas après « Direct », un choix de 1× ou un refus).
+    private func endLiveCatchUp(announce: Bool) {
+        guard liveCatchUpActive else { return }
+        liveCatchUpActive = false
+        if player.rate > 1 { player.rate = 1 }
+        guard announce else { return }
+        liveCaughtUp += 1
+        logger.info("LECTEUR", "Direct rattrapé : vitesse normale", nil)
     }
 
     /// Enregistrement d'un direct en cours (pas de fin déclarée) lu près de
@@ -742,12 +1067,25 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
         return endTime - position < 20
     }
 
+    /// Lecture assez loin du bord d'un enregistrement en cours (retour en
+    /// arrière) pour y reprendre de la vitesse — écart avec `nearRecordingEdge`
+    /// pour ne pas osciller —, ou enregistrement terminé entre-temps. Pas
+    /// pendant un départ en attente : `position` y est encore celle d'avant.
+    private var clearOfRecordingEdge: Bool {
+        guard !isLive, let item = player.currentItem, endTime > 0, pendingSeek == nil else { return false }
+        return item.duration.seconds.isFinite || endTime - position > 45
+    }
+
     /// Vitesse imposée : elle devient la vitesse retenue (la vue la garde
     /// pour la lecture en cours), sinon re-choisir la vitesse affichée dans le
     /// menu ne ferait rien. `apply` faux quand la vitesse vient du lecteur : elle
     /// est adoptée telle quelle, la reposer arrondie au cran relancerait
     /// rateDidChange sans fin s'il maintient la sienne.
     private func force(speed v: Double, notice: String, why: String, apply: Bool = true) {
+        // Plus rien à rendre ni à mesurer de la vitesse d'avant : l'appelant
+        // qui ralentit au bord d'un enregistrement la remet de côté après.
+        edgeHeldSpeed = nil
+        resetRateCheck()
         speed = v
         player.defaultRate = Float(v)
         if apply, player.rate != 0, abs(Double(player.rate) - v) > 0.01 { player.rate = Float(v) }
@@ -764,6 +1102,10 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
         p.delegate = self
         p.canStartPictureInPictureAutomaticallyFromInline = true
         pip = p
+        // Celui que « PiP en quittant le lecteur » et la mini-barre commandent.
+        PlayerPiP.shared.register(self,
+                                  start: { [weak self] in self?.startPiPOnLeave() ?? false },
+                                  stop: { [weak self] in self?.stopPiPForPlayer() })
         // Appelé depuis makeUIView, en pleine mise à jour des vues : publier
         // tout de suite donnait « Publishing changes from within view
         // updates » (bouton PiP absent jusqu'au rendu suivant).
@@ -779,6 +1121,25 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
         else { pip.startPictureInPicture() }
     }
 
+    /// Lecteur quitté avec « PiP en quittant le lecteur » (PlayerPiP) : PiP
+    /// seulement pendant une lecture, et si AVKit le permet maintenant (couche
+    /// à l'écran). false sinon : le lecteur se réduit comme avant.
+    func startPiPOnLeave() -> Bool {
+        guard let pip, !tornDown, !failed, isPlaying,
+              !pip.isPictureInPictureActive, pip.isPictureInPicturePossible else { return false }
+        logger.info("LECTEUR", "PiP demandé en quittant le lecteur", nil)
+        pip.startPictureInPicture()
+        return true
+    }
+
+    /// Lecteur rouvert en grand (mini-barre, notification…) pendant un PiP :
+    /// l'image revient dans le lecteur. Rien pendant un retour demandé par la
+    /// fenêtre elle-même : AVKit s'en charge.
+    func stopPiPForPlayer() {
+        guard let pip, pip.isPictureInPictureActive, !restoringUI else { return }
+        pip.stopPictureInPicture()
+    }
+
     /// Session audio prise par le PiP (début) ou rendue (fin, démontage).
     private func holdSessionForPiP(_ on: Bool) {
         guard on != pipHoldsSession else { return }
@@ -789,10 +1150,13 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
     /// Fin du PiP, rappelée par AVKit ou faite au démontage (une seule fois) :
     /// le chat peut de nouveau se couper, la session audio est rendue.
     private func pipEnded() {
+        restoringUI = false
         guard pipActive else { return }
         pipActive = false
         PlayerFullscreen.isActive = false
         holdSessionForPiP(false)
+        PlayerPiP.shared.ended(by: self)
+        logger.info("LECTEUR", "PiP arrêté", nil)
     }
 
     /// Vue fermée (croix, mini-barre, autre vidéo, chat seul, autre
@@ -819,12 +1183,17 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
         player.replaceCurrentItem(with: nil)
         adBreaks.detach()
         pip = nil
+        PlayerPiP.shared.unregister(self)
         holdSessionForPiP(false)
         if let o = spatialObs { NotificationCenter.default.removeObserver(o); spatialObs = nil }
         if let o = goLiveObs { NotificationCenter.default.removeObserver(o); goLiveObs = nil }
         if let o = rateObs { NotificationCenter.default.removeObserver(o); rateObs = nil }
+        if let o = jumpObs { NotificationCenter.default.removeObserver(o); jumpObs = nil }
         if let o = failObs { NotificationCenter.default.removeObserver(o); failObs = nil }
         if let o = stallObs { NotificationCenter.default.removeObserver(o); stallObs = nil }
+        for o in backgroundObs { NotificationCenter.default.removeObserver(o) }
+        backgroundObs = []
+        if let o = seekObs { NotificationCenter.default.removeObserver(o); seekObs = nil }
         mutedObs = nil
         clearNowPlaying()
     }
@@ -834,7 +1203,10 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
         if let o = spatialObs { NotificationCenter.default.removeObserver(o) }
         if let o = goLiveObs { NotificationCenter.default.removeObserver(o) }
         if let o = rateObs { NotificationCenter.default.removeObserver(o) }
+        if let o = jumpObs { NotificationCenter.default.removeObserver(o) }
         if let o = failObs { NotificationCenter.default.removeObserver(o) }
+        for o in backgroundObs { NotificationCenter.default.removeObserver(o) }
+        if let o = seekObs { NotificationCenter.default.removeObserver(o) }
         for (command, target) in remoteTargets { command.removeTarget(target) }
         // Libéré pendant un PiP (lecteur fermé sans démontage) : la session
         // n'est plus tenue par personne d'ici.
@@ -844,7 +1216,12 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
         // entre-temps garde les siens (le lien faible vers celui-ci vaut déjà
         // nil ; vers l'autre, non).
         guard !tornDown else { return }
-        if pipActive { PlayerFullscreen.isActive = false }
+        if pipActive {
+            PlayerFullscreen.isActive = false
+            // Lien faible vers ce lecteur déjà nul : la fenêtre n'est plus à
+            // personne, sauf si un autre lecteur l'a prise entre-temps.
+            PlayerPiP.shared.ended(by: nil)
+        }
         if Self.nowPlayingOwner == nil {
             MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
             PlayerActivity.end()
@@ -861,9 +1238,13 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
             command.isEnabled = true
             remoteTargets.append((command, command.addTarget(handler: handler)))
         }
-        add(center.playCommand)  { [weak self] _ in self?.setPlaying(true);  return .success }
-        add(center.pauseCommand) { [weak self] _ in self?.setPlaying(false); return .success }
-        add(center.togglePlayPauseCommand) { [weak self] _ in self?.togglePlay(); return .success }
+        add(center.playCommand)  { [weak self] _ in self?.setPlaying(true, fromApp: false);  return .success }
+        add(center.pauseCommand) { [weak self] _ in self?.setPlaying(false, fromApp: false); return .success }
+        add(center.togglePlayPauseCommand) { [weak self] _ in
+            guard let self else { return .success }
+            self.setPlaying(!self.isPlaying, fromApp: false)
+            return .success
+        }
         center.skipBackwardCommand.preferredIntervals = [10]
         center.skipForwardCommand.preferredIntervals  = [10]
         add(center.skipBackwardCommand) { [weak self] _ in self?.seekBy(-10); return .success }
@@ -925,6 +1306,9 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
     /// contrôle (audio spatial compris) ne la règle pas.
     private func refreshNowPlaying(force: Bool = false) {
         guard player.currentItem != nil else { return }
+        // Place laissée à une autre app (PlaybackYield) : rien n'est
+        // republié tant que la lecture ne reprend pas.
+        guard isPlaying || !PlaybackYield.nowPlayingYielded else { return }
         guard force || Date().timeIntervalSince(lastNowPlayingUpdate) > 5 else { return }
         lastNowPlayingUpdate = Date()
         Self.nowPlayingOwner = self
@@ -969,9 +1353,38 @@ extension ImmersivePlayerModel: AVPictureInPictureControllerDelegate {
         // montrer, et ne doit rien retenir.
         guard !tornDown else { c.stopPictureInPicture(); return }
         pipActive = true
+        restoringUI = false
         PlayerFullscreen.isActive = true   // garde l'IRC et les points actifs
         holdSessionForPiP(true)
+        logger.info("LECTEUR", "PiP démarré", nil)
+        PlayerPiP.shared.started(by: self)
+        // Le lecteur se réduit (MainTabView) : il restait en grand et noir,
+        // l'image partie dans la fenêtre, et il fallait le fermer à la main.
+        onPiPStart()
     }
+
+    func pictureInPictureController(_ c: AVPictureInPictureController,
+                                    failedToStartPictureInPictureWithError error: Error) {
+        logger.warn("LECTEUR", "PiP impossible", error.localizedDescription)
+        PlayerPiP.shared.failed()
+    }
+
+    /// Bouton « agrandir » de la fenêtre, ou PiP arrêté pour rouvrir le
+    /// lecteur : le lecteur revient en grand (MainTabView), puis AVKit y
+    /// ramène l'image — le même AVPlayer, rien n'est rechargé. Sans ce
+    /// rappel, l'image retournait dans le lecteur réduit, donc invisible : il
+    /// fallait toucher la mini-barre.
+    func pictureInPictureController(_ c: AVPictureInPictureController,
+                                    restoreUserInterfaceForPictureInPictureStopWithCompletionHandler completionHandler: @escaping (Bool) -> Void) {
+        guard !tornDown else { completionHandler(false); return }
+        restoringUI = true
+        logger.info("LECTEUR", "PiP : retour au lecteur", nil)
+        onPiPRestore()
+        // Le temps que le lecteur réapparaisse : AVKit anime alors la fenêtre
+        // jusqu'à sa couche.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { completionHandler(true) }
+    }
+
     func pictureInPictureControllerDidStopPictureInPicture(_ c: AVPictureInPictureController) {
         pipEnded()
     }
@@ -1002,6 +1415,13 @@ struct ImmersivePlayer: View {
     /// Marge droite des barres de commande : en chat superposé, le calque
     /// occupe cette largeur, et les boutons doivent rester à sa gauche.
     var controlsInset: CGFloat = 0
+    /// Image verticale d'un direct, en portrait, chat posé dessus (comme
+    /// « Affichage vertical » dans l'app de Twitch) : l'image remplit la
+    /// boîte, et le double-tap ou le bouton Chat montre ou masque le chat.
+    var verticalLayout: Bool = false
+    /// Hauteur du chat posé sur le bas de l'image (image verticale) : les
+    /// commandes remontent d'autant pour rester entièrement visibles.
+    var controlsBottomInset: CGFloat = 0
     /// Recadrer pour remplir l'écran au lieu de laisser des bandes noires.
     /// Coupe le haut et le bas de l'image : c'est le compromis, d'où le réglage.
     var fillScreen: Bool = false
@@ -1027,16 +1447,30 @@ struct ImmersivePlayer: View {
     var multiLiveOn = false
     var multiLiveFull = false
     var onRewind: (() -> Void)? = nil
+    /// Direct en « Dual Format » : passer à son image verticale ou en revenir
+    /// (bouton de la barre, seulement pour ces directs).
+    var onVertical: (() -> Void)? = nil
+    var verticalOn = false
     /// Titre, chaîne et image affichés sur l'écran verrouillé.
     var nowPlaying = NowPlayingMeta()
     /// Vitesse voulue hors direct : celle des VODs, retenue (store.vodSpeed),
     /// ou celle du clip en cours. Ignorée en direct.
     var speed: Double = 1
     /// Vitesse imposée par le lecteur (refus, AirPlay, bord du DVR) : le parent
-    /// la réécrit dans la préférence, seule source de vérité.
+    /// la garde pour la lecture en cours (MainTabView.forcedVodSpeed).
     var onSpeedChange: (Double) -> Void = { _ in }
+    /// Loin du bord d'un enregistrement en cours (retour en arrière) : la
+    /// vitesse d'avant le retour à 1×, que le parent rend si celle de la
+    /// lecture est encore imposée.
+    var onSpeedRestore: (Double) -> Void = { _ in }
     /// Annonce brève au lancement (direct servi par le compte, sans pub).
     var notice: String? = nil
+    /// Qualité audio du contenu, pour le son seul en arrière-plan (réglage
+    /// « Lecture en arrière-plan ») ; nil si le réglage ne la demande pas.
+    var backgroundAudioURL: URL? = nil
+    /// Archive d'un direct : début de la diffusion, pour l'heure réelle de
+    /// l'instant lu (« 22:15 ») à côté de la position.
+    var vodStartedAt: Date? = nil
 
     var onProgress: (Double) -> Void = { _ in }
     var onLatency:  (Double?) -> Void = { _ in }
@@ -1069,6 +1503,9 @@ struct ImmersivePlayer: View {
     @StateObject private var model: ImmersivePlayerModel
     @State private var showControls = true
     @State private var hideTask: Task<Void, Never>? = nil
+    /// iOS a refusé de tourner l'écran (app en fenêtre : écran intérieur de
+    /// l'iPhone Duo) : le bouton de rotation disparaît pour cette lecture.
+    @State private var rotationRefused = false
     /// Touchers sur l'image (voir `tap`) : le précédent, l'état des commandes
     /// avant lui, et une série de doubles-tapes en cours.
     @State private var lastTapAt = Date.distantPast
@@ -1108,13 +1545,15 @@ struct ImmersivePlayer: View {
     /// près des bords.
     @State private var bubbleWidth: CGFloat = 0
     /// Zoom à deux doigts sur l'image (1 = taille normale) et décalage de
-    /// l'image agrandie. Les valeurs « base » sont celles d'avant le geste en
+    /// l'image agrandie. `panBase` : décalage d'avant le glissé à un doigt en
     /// cours, qui s'y ajoute.
     @State private var zoom: CGFloat = 1
-    @State private var zoomBase: CGFloat = 1
     @State private var pan: CGSize = .zero
     @State private var panBase: CGSize = .zero
     @State private var surfaceSize: CGSize = .zero
+    /// Doigts posés sur l'image et pincement en cours (voir PinchFocus) :
+    /// le zoom part du point entre les doigts.
+    @State private var pinch = PinchFocus()
     /// Glissé vers le bas pour réduire le lecteur : décidé au début du geste
     /// (nil tant qu'on ne sait pas si le doigt descend ou va de côté).
     @State private var pulling: Bool? = nil
@@ -1138,6 +1577,8 @@ struct ImmersivePlayer: View {
          chatMode: LandscapeChat = .column,
          isLandscape: Bool = false,
          controlsInset: CGFloat = 0,
+         verticalLayout: Bool = false,
+         controlsBottomInset: CGFloat = 0,
          fillScreen: Bool = false,
          canReturnToLive: Bool = false,
          streamStartedAt: Date? = nil,
@@ -1148,7 +1589,10 @@ struct ImmersivePlayer: View {
          nowPlaying: NowPlayingMeta = NowPlayingMeta(),
          speed: Double = 1,
          onSpeedChange: @escaping (Double) -> Void = { _ in },
+         onSpeedRestore: @escaping (Double) -> Void = { _ in },
          notice: String? = nil,
+         backgroundAudioURL: URL? = nil,
+         vodStartedAt: Date? = nil,
          onProgress: @escaping (Double) -> Void = { _ in },
          onLatency:  @escaping (Double?) -> Void = { _ in },
          onBehind:   @escaping (Double?) -> Void = { _ in },
@@ -1168,8 +1612,12 @@ struct ImmersivePlayer: View {
          multiLiveOn: Bool = false,
          multiLiveFull: Bool = false,
          onRewind: (() -> Void)? = nil,
+         onVertical: (() -> Void)? = nil,
+         verticalOn: Bool = false,
          onAdBreak: @escaping (Int?) -> Void = { _ in },
-         onFailed: @escaping () -> Void = {}) {
+         onFailed: @escaping () -> Void = {},
+         onPiPStart: @escaping () -> Void = {},
+         onPiPRestore: @escaping () -> Void = {}) {
         self.url = url; self.isLive = isLive; self.dvrEnabled = dvrEnabled
         self.savedTime = savedTime; self.contentID = contentID
         self.info = info; self.onChannel = onChannel
@@ -1178,10 +1626,14 @@ struct ImmersivePlayer: View {
         self.onPull = onPull; self.onPullEnd = onPullEnd
         self.sleepLabel = sleepLabel; self.chatMode = chatMode
         self.isLandscape = isLandscape; self.controlsInset = controlsInset
+        self.verticalLayout = verticalLayout; self.controlsBottomInset = controlsBottomInset
         self.fillScreen = fillScreen; self.canReturnToLive = canReturnToLive
         self.streamStartedAt = streamStartedAt; self.archiveAvailable = archiveAvailable
         self.chapters = chapters; self.nowPlaying = nowPlaying
         self.speed = speed; self.onSpeedChange = onSpeedChange; self.notice = notice
+        self.backgroundAudioURL = backgroundAudioURL
+        self.vodStartedAt = vodStartedAt
+        self.onSpeedRestore = onSpeedRestore
         self.mutedRanges = mutedRanges; self.unmutedCount = unmutedCount
         self.onReduce = onReduce; self.onClose = onClose
         self.onMenu = onMenu; self.onRefresh = onRefresh
@@ -1190,10 +1642,14 @@ struct ImmersivePlayer: View {
         self.onBackToLive = onBackToLive; self.onSeekToArchive = onSeekToArchive
         self.onMultiLive = onMultiLive; self.multiLiveOn = multiLiveOn
         self.multiLiveFull = multiLiveFull; self.onRewind = onRewind
+        self.onVertical = onVertical; self.verticalOn = verticalOn
         self.onAdBreak = onAdBreak; self.onFailed = onFailed
+        // PiP : démarré, le parent réduit le lecteur ; agrandi depuis la
+        // fenêtre, il le rend en grand. Rappels du modèle (délégué d'AVKit).
         _model = StateObject(wrappedValue: ImmersivePlayerModel(
             url: url, isLive: isLive, savedTime: savedTime,
-            onProgress: onProgress, onLatency: onLatency, onBehind: onBehind))
+            onProgress: onProgress, onLatency: onLatency, onBehind: onBehind,
+            onPiPStart: onPiPStart, onPiPRestore: onPiPRestore))
     }
 
     /// Un direct sans DVR n'est pas rembobinable : la barre reste décorative.
@@ -1201,8 +1657,10 @@ struct ImmersivePlayer: View {
 
     /// Le recadrage est réservé au paysage. En portrait la boîte fait déjà
     /// 16:9, comme l'image : il n'y a rien à remplir, et agrandir ne faisait
-    /// que couper les côtés.
-    private var croppingFill: Bool { fillScreen && isLandscape }
+    /// que couper les côtés. Sauf l'image verticale, qui remplit l'écran comme
+    /// dans l'app de Twitch (le streamer la compose pour : un peu des côtés
+    /// coupé sur les téléphones plus allongés que du 9:16).
+    private var croppingFill: Bool { (fillScreen && isLandscape) || verticalLayout }
 
     /// Repères de la barre « toute la diffusion », en secondes depuis le début.
     /// Tout est exprimé par rapport à l'horloge réelle : la base de temps HLS
@@ -1263,21 +1721,14 @@ struct ImmersivePlayer: View {
             // Rognée à sa propre boîte : agrandie, l'image débordait sinon sur
             // le chat en portrait. Cette boîte ignore déjà la zone sûre en
             // paysage (plus bas) : « remplir l'écran » n'y perd rien.
-            GeometryReader { geo in
-                PlayerLayerView(player: model.player, fill: croppingFill) { layer in
-                    model.attachPiP(layer: layer)
-                }
-                .scaleEffect(zoom)
-                .offset(pan)
-                .frame(width: geo.size.width, height: geo.size.height)
-                .clipped()
-                .onAppear { surfaceSize = geo.size }
-                .onChange(of: geo.size) { size in
-                    surfaceSize = size
-                    pan = clampedPan(pan)
-                    panBase = pan
-                }
-            }
+            ZoomedVideoSurface(player: model.player, fill: croppingFill, zoom: zoom, pan: pan,
+                               pinch: pinch,
+                               onLayer: { model.attachPiP(layer: $0) },
+                               onSize: { size in
+                                   surfaceSize = size
+                                   pan = clampedPan(pan)
+                                   panBase = pan
+                               })
             // En paysage la surface va jusqu'en haut et en bas de l'écran
             // (indicateur d'accueil compris) : l'image reste centrée sur l'écran
             // réel. Sur les côtés, elle s'arrête à la zone sûre : jusqu'au bord
@@ -1300,7 +1751,7 @@ struct ImmersivePlayer: View {
                     tapZone(.back)
                     tapZone(.forward)
                 }
-            } else if isLandscape {
+            } else if isLandscape || verticalLayout {
                 tapZone(.chat)
             }
 
@@ -1315,6 +1766,7 @@ struct ImmersivePlayer: View {
                     // prend la place (chat superposé) ; un long message se
                     // replie dans cette largeur au lieu de passer sous le chat.
                     .padding(.trailing, controlsInset)
+                    .padding(.bottom, controlsBottomInset)
                     .transition(.opacity)
             }
 
@@ -1353,9 +1805,10 @@ struct ImmersivePlayer: View {
         // image à ses propres limites, y compris en `resizeAspectFill`.
         .contentShape(Rectangle())
         .onTapGesture { tap(.plain) }
-        // Zoom à deux doigts, comme sur l'app Twitch ; une fois agrandie,
-        // l'image se déplace au doigt. À taille normale, glisser vers le bas
-        // réduit le lecteur, comme la flèche en haut à gauche.
+        // Zoom à deux doigts, comme sur l'app Twitch : il part du point entre
+        // les doigts, qui déplacent aussi l'image ; une fois agrandie, elle
+        // se déplace au doigt. À taille normale, glisser vers le bas réduit
+        // le lecteur, comme la flèche en haut à gauche.
         .simultaneousGesture(zoomGesture)
         // Simultané : le glissé suit le doigt dès le premier point, sans
         // attendre que le toucher (commandes, ±10 s) renonce.
@@ -1366,6 +1819,10 @@ struct ImmersivePlayer: View {
                 if pulling == true { onPull(0) }
                 pulling = nil
                 PlayerPull.noteEnd()
+                pinch.drag = .zero
+                // Pincement interrompu avec lui (Centre de contrôle, appel) :
+                // sans onEnded, il se termine ici.
+                if pinch.start != nil, !pinching { finishPinch(showScale: false) }
             }
         }
         // Changement de source (direct ↔ enregistrement) : la position voulue
@@ -1400,6 +1857,7 @@ struct ImmersivePlayer: View {
             // bord ne joue qu'en direct). Fixé à faux par une vue ouverte sur
             // l'enregistrement, il le restait au retour au direct.
             model.lowLatency = store.lowLatency
+            model.backgroundAudioURL = backgroundAudioURL
             model.setNowPlaying(nowPlaying)
             // L'élément se charge encore : rien n'a joué à 1×. Une vitesse
             // retenue est annoncée, elle ne doit pas surprendre.
@@ -1423,15 +1881,27 @@ struct ImmersivePlayer: View {
         // réécriture d'une vitesse imposée, déjà annoncée.
         .onChange(of: speed) { v in
             let echo = VodSpeed.nearest(v) == model.speed
-            model.setSpeed(v)
-            if !echo, !isLive { flash(speedFlash) }
+            model.setSpeed(v, chosen: !echo)
+            if !echo, !isLive || model.liveCatchingUp { flash(speedFlash) }
+        }
+        // Direct reculé lu en accéléré, puis bord rattrapé (liveCatchUp).
+        .onChange(of: model.liveCatchUpStarted) { _ in flash(speedFlash) }
+        .onChange(of: model.liveCaughtUp) { _ in
+            flash(store.t("speed_caught_up"), duration: 2_500_000_000)
         }
         .onChange(of: model.forcedSpeed) { change in
             guard let change else { return }
             onSpeedChange(change.value)
             flash(store.t(change.notice), duration: 2_500_000_000)
         }
+        // Retour en arrière loin du bord d'un enregistrement en cours : la
+        // vitesse d'avant revient (annoncée par le changement de `speed`).
+        .onChange(of: model.edgeRelease) { release in
+            guard let release else { return }
+            onSpeedRestore(release.value)
+        }
         .onChange(of: nowPlaying) { model.setNowPlaying($0) }
+        .onChange(of: backgroundAudioURL) { model.backgroundAudioURL = $0 }
         // Son rétabli sur des passages coupés : on le signale une fois.
         .onChange(of: unmutedCount) { n in
             if n > 0 { flash(store.t("vod_unmuted"), duration: 2_500_000_000) }
@@ -1619,7 +2089,7 @@ struct ImmersivePlayer: View {
                         .tGlass(in: Circle(), fallback: Color.black.opacity(0.45), clear: true)
                 }
                 .buttonStyle(.plain)
-                .offset(x: -controlsInset / 2)
+                .offset(x: -controlsInset / 2, y: -controlsBottomInset / 2)
             }
 
             VStack(spacing: 0) {
@@ -1628,6 +2098,9 @@ struct ImmersivePlayer: View {
                 bottomBar
             }
             .padding(TSpace.sm)
+            // Image verticale : la barre du bas passe au-dessus du chat posé
+            // sur le bas de l'image.
+            .padding(.bottom, controlsBottomInset)
             // Un peu d'air sous la barre du bas en paysage : les commandes y
             // descendent jusqu'au bord physique, et le trait de la barre
             // d'accueil passerait sinon au ras des boutons.
@@ -1862,134 +2335,184 @@ struct ImmersivePlayer: View {
                     .frame(height: 28)
             }
 
-            HStack(spacing: TSpace.md) {
-                if isLive {
-                    // Au bord : point rouge et durée du live. En retard (pause,
-                    // coupure, retour en arrière), un vrai bouton « Direct » avec
-                    // le retard, qui ramène au bord — le point grisé d'avant
-                    // passait inaperçu.
-                    Button {
-                        PlayerPull.guarded { model.goLive(); scheduleAutoHide() }
-                    } label: {
-                        if model.atLiveEdge && model.isPlaying {
-                            HStack(spacing: TSpace.xs) {
-                                Circle().fill(Color.tLive).frame(width: 7, height: 7)
-                                Text(info.uptime.isEmpty ? store.t("live_on") : info.uptime)
-                                    .font(.system(size: 12, weight: .semibold).monospacedDigit())
-                            }
-                            .foregroundColor(.white)
-                        } else {
-                            HStack(spacing: TSpace.xs) {
-                                Image(systemName: "forward.end.fill").font(.system(size: 10, weight: .bold))
-                                Text(store.t("back_to_live") + lateLabel(model.endTime - model.position))
-                                    .font(.system(size: 12, weight: .bold).monospacedDigit())
-                            }
-                            .foregroundColor(.white)
-                            .padding(.horizontal, TSpace.sm)
-                            .frame(height: 28)
-                            .background(Color.tLive.opacity(0.85))
-                            .clipShape(Capsule())
-                        }
+            // Une ligne si tout tient ; sinon (portrait, image verticale : deux
+            // boutons de plus) les boutons passent sous l'état du flux. Sur une
+            // ligne, la durée du live s'écrasait jusqu'à une lettre par ligne.
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: TSpace.md) {
+                    barStatus
+                    Spacer(minLength: 0)
+                    barActions
+                }
+                VStack(alignment: .leading, spacing: TSpace.sm) {
+                    HStack(spacing: TSpace.md) {
+                        barStatus
+                        Spacer(minLength: 0)
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(store.t("back_to_live"))
-
-                    if info.viewers > 0 {
-                        overlayMeta(icon: "eye.fill", text: formatViewers(info.viewers))
-                    }
-                    // Un appui sur la latence ramène au bord, comme « Direct ».
-                    if store.showLatency, let l = info.latency {
-                        Button { PlayerPull.guarded { model.goLive(); scheduleAutoHide() } } label: {
-                            overlayMeta(icon: "waveform.path.ecg",
-                                        text: String(format: "%.0f s", max(0, l)))
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(store.t("back_to_live"))
-                    }
-                } else {
-                    // Pendant un glissement, l'instant visé plutôt que la
-                    // position courante (en violet : ce n'est pas encore lu).
-                    HStack(spacing: 0) {
-                        Text("\(timeLabel(dragging ? dragValue : model.position)) / \(timeLabel(model.endTime))")
-                            .foregroundColor(dragging ? .tPurple : .white)
-                        // Vitesse retenue d'une VOD à l'autre : toujours visible
-                        // quand elle n'est pas normale.
-                        if model.speed != 1 {
-                            Text(" · " + VodSpeed.label(model.speed, store.lang))
-                                .foregroundColor(.white)
-                                .accessibilityLabel(store.t("speed") + " " + VodSpeed.label(model.speed, store.lang))
-                        }
-                    }
-                    .font(.system(size: 12, weight: .semibold).monospacedDigit())
-                    // Chapitre en cours ; un appui liste les chapitres pour y sauter.
-                    if chapters.count > 1 {
-                        Button {
-                            PlayerPull.guarded {
-                                hideTask?.cancel()
-                                showChapters = true
-                            }
-                        } label: {
-                            HStack(spacing: 3) {
-                                Image(systemName: "list.bullet").font(.system(size: 10, weight: .bold))
-                                Text(currentChapter?.title ?? "")
-                                    .font(.system(size: 12, weight: .semibold)).lineLimit(1)
-                            }
-                            .foregroundColor(.white)
-                            .padding(.horizontal, TSpace.sm)
-                            .frame(height: 28)
-                            .background(Color.black.opacity(0.4))
-                            .clipShape(Capsule())
-                        }
-                        .buttonStyle(.plain)
+                    HStack(spacing: TSpace.md) {
+                        Spacer(minLength: 0)
+                        barActions
                     }
                 }
+            }
+        }
+    }
 
-                Spacer(minLength: 0)
-
-                // Minuteur de veille : visible pendant la lecture, pas seulement
-                // dans les Réglages. Un appui ouvre le réglage rapide.
-                if let sleep = sleepLabel {
-                    Button { PlayerPull.guarded { onSleep(); scheduleAutoHide() } } label: {
-                        HStack(spacing: 3) {
-                            Image(systemName: "moon.zzz.fill").font(.system(size: 10))
-                            Text(sleep)
+    /// État du flux, à gauche de la barre du bas : point rouge et durée du
+    /// live (ou « Direct » et le retard), spectateurs, latence ; position et
+    /// chapitre d'une VOD. Type effacé : la barre le pose deux fois
+    /// (ViewThatFits), et ce lecteur est déjà profond.
+    private var barStatus: AnyView {
+        AnyView(HStack(spacing: TSpace.md) {
+            if isLive {
+                // Au bord : point rouge et durée du live. En retard (pause,
+                // coupure, retour en arrière), un vrai bouton « Direct » avec
+                // le retard, qui ramène au bord — le point grisé d'avant
+                // passait inaperçu.
+                Button {
+                    PlayerPull.guarded { model.goLive(); scheduleAutoHide() }
+                } label: {
+                    if model.atLiveEdge && model.isPlaying {
+                        HStack(spacing: TSpace.xs) {
+                            Circle().fill(Color.tLive).frame(width: 7, height: 7)
+                            Text(info.uptime.isEmpty ? store.t("live_on") : info.uptime)
                                 .font(.system(size: 12, weight: .semibold).monospacedDigit())
+                                .lineLimit(1)
+                        }
+                        .foregroundColor(.white)
+                    } else {
+                        HStack(spacing: TSpace.xs) {
+                            Image(systemName: "forward.end.fill").font(.system(size: 10, weight: .bold))
+                            Text(store.t("back_to_live") + lateLabel(model.endTime - model.position))
+                                .font(.system(size: 12, weight: .bold).monospacedDigit())
                         }
                         .foregroundColor(.white)
                         .padding(.horizontal, TSpace.sm)
-                        .frame(height: 32)
+                        .frame(height: 28)
+                        .background(Color.tLive.opacity(0.85))
+                        .clipShape(Capsule())
+                    }
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(store.t("back_to_live"))
+
+                if info.viewers > 0 {
+                    overlayMeta(icon: "eye.fill", text: formatViewers(info.viewers))
+                }
+                // Un appui sur la latence ramène au bord, comme « Direct ».
+                if store.showLatency, let l = info.latency {
+                    Button { PlayerPull.guarded { model.goLive(); scheduleAutoHide() } } label: {
+                        overlayMeta(icon: "waveform.path.ecg",
+                                    text: String(format: "%.0f s", max(0, l)))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(store.t("back_to_live"))
+                }
+            } else {
+                // Pendant un glissement, l'instant visé plutôt que la
+                // position courante (en violet : ce n'est pas encore lu).
+                HStack(spacing: 0) {
+                    Text("\(timeLabel(dragging ? dragValue : model.position)) / \(timeLabel(model.endTime))")
+                        .foregroundColor(dragging ? .tPurple : .white)
+                    // Heure réelle de la diffusion à cet instant (archives).
+                    if let clock = clockLabel(dragging ? dragValue : model.position) {
+                        Text(" · " + clock)
+                            .foregroundColor(.white.opacity(0.7))
+                    }
+                    // Vitesse retenue d'une VOD à l'autre : toujours visible
+                    // quand elle n'est pas normale. En direct, seulement
+                    // pendant un rattrapage (elle ne joue pas sinon).
+                    if model.speed != 1, !model.isLive || model.liveCatchingUp {
+                        Text(" · " + VodSpeed.label(model.speed, store.lang))
+                            .foregroundColor(.white)
+                            .accessibilityLabel(store.t("speed") + " " + VodSpeed.label(model.speed, store.lang))
+                    }
+                }
+                .font(.system(size: 12, weight: .semibold).monospacedDigit())
+                // Chapitre en cours ; un appui liste les chapitres pour y sauter.
+                if chapters.count > 1 {
+                    Button {
+                        PlayerPull.guarded {
+                            hideTask?.cancel()
+                            showChapters = true
+                        }
+                    } label: {
+                        HStack(spacing: 3) {
+                            Image(systemName: "list.bullet").font(.system(size: 10, weight: .bold))
+                            Text(currentChapter?.title ?? "")
+                                .font(.system(size: 12, weight: .semibold)).lineLimit(1)
+                        }
+                        .foregroundColor(.white)
+                        .padding(.horizontal, TSpace.sm)
+                        .frame(height: 28)
                         .background(Color.black.opacity(0.4))
                         .clipShape(Capsule())
                     }
                     .buttonStyle(.plain)
                 }
-
-                // On regarde l'enregistrement d'un direct en cours : le retour
-                // au direct était enfoui dans le menu « ⋯ », alors que c'est
-                // l'action qu'on cherche en premier.
-                if canReturnToLive {
-                    Button { PlayerPull.guarded { onBackToLive() } } label: {
-                        HStack(spacing: TSpace.xs) {
-                            Circle().fill(Color.tLive).frame(width: 7, height: 7)
-                            Text(store.t("back_to_live"))
-                                .font(.system(size: 12, weight: .bold))
-                        }
-                        .foregroundColor(.white)
-                        .padding(.horizontal, TSpace.sm)
-                        .frame(height: 32)
-                        .background(Color.tLive.opacity(0.35))
-                        .clipShape(Capsule())
-                    }
-                    .buttonStyle(.plain)
-                }
-
-                // Son, PiP, recharger, chat, rotation… dans l'ordre choisi
-                // (Réglages → Personnaliser), chacun seulement quand il sert.
-                ForEach(barButtons, id: \.self) { key in
-                    barButton(key)
-                }
             }
-        }
+        })
+    }
+
+    /// Boutons de la barre du bas : minuteur, retour au direct, image
+    /// verticale, puis ceux choisis (Réglages → Personnaliser).
+    private var barActions: AnyView {
+        AnyView(HStack(spacing: TSpace.md) {
+            // Minuteur de veille : visible pendant la lecture, pas seulement
+            // dans les Réglages. Un appui ouvre le réglage rapide.
+            if let sleep = sleepLabel {
+                Button { PlayerPull.guarded { onSleep(); scheduleAutoHide() } } label: {
+                    HStack(spacing: 3) {
+                        Image(systemName: "moon.zzz.fill").font(.system(size: 10))
+                        Text(sleep)
+                            .font(.system(size: 12, weight: .semibold).monospacedDigit())
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, TSpace.sm)
+                    .frame(height: 32)
+                    .background(Color.black.opacity(0.4))
+                    .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+
+            // On regarde l'enregistrement d'un direct en cours : le retour
+            // au direct était enfoui dans le menu « ⋯ », alors que c'est
+            // l'action qu'on cherche en premier.
+            if canReturnToLive {
+                Button { PlayerPull.guarded { onBackToLive() } } label: {
+                    HStack(spacing: TSpace.xs) {
+                        Circle().fill(Color.tLive).frame(width: 7, height: 7)
+                        Text(store.t("back_to_live"))
+                            .font(.system(size: 12, weight: .bold))
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, TSpace.sm)
+                    .frame(height: 32)
+                    .background(Color.tLive.opacity(0.35))
+                    .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+
+            // Direct en « Dual Format » : son image verticale, ou retour à
+            // l'habituelle. Seulement pour ces directs, hors personnalisation
+            // (comme le retour au direct).
+            if let onVertical {
+                overlayButton(icon: verticalOn ? "rectangle" : "rectangle.portrait") {
+                    onVertical()
+                    flash(store.t(verticalOn ? "vertical_off" : "vertical_on"))
+                    scheduleAutoHide()
+                }
+                .accessibilityLabel(store.t("vertical_format"))
+            }
+
+            // Son, PiP, recharger, chat, rotation… dans l'ordre choisi
+            // (Réglages → Personnaliser), chacun seulement quand il sert.
+            ForEach(barButtons, id: \.self) { key in
+                barButton(key)
+            }
+        })
     }
 
     // MARK: – Briques d'interface
@@ -2060,7 +2583,7 @@ struct ImmersivePlayer: View {
         .background(Color.black.opacity(0.72))
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         // Centrée sur la partie visible de l'image, comme ▶ (chat superposé).
-        .offset(x: -controlsInset / 2)
+        .offset(x: -controlsInset / 2, y: -controlsBottomInset / 2)
         .transition(.opacity)
     }
 
@@ -2073,7 +2596,7 @@ struct ImmersivePlayer: View {
                 tapZone(.forward)
             }
         } else {
-            tapZone(isLandscape ? .chat : .plain)
+            tapZone(isLandscape || verticalLayout ? .chat : .plain)
         }
     }
 
@@ -2160,13 +2683,23 @@ struct ImmersivePlayer: View {
                     flash(store.t(chatMode.next.labelKey))
                     scheduleAutoHide()
                 }
+            } else if verticalLayout {
+                // Image verticale : chat posé dessus, ou masqué.
+                overlayButton(icon: chatMode.icon) {
+                    toggleChatVisibility()
+                    scheduleAutoHide()
+                }
             }
         case "rotate":
             // Bascule portrait / paysage. Le même bouton fait l'aller ET le
             // retour : sans ça, un téléphone dont la rotation est verrouillée
-            // reste coincé en paysage.
-            overlayButton(icon: isLandscape ? "rectangle.portrait.rotate" : "rectangle.landscape.rotate") {
-                toggleOrientation(); scheduleAutoHide()
+            // reste coincé en paysage. Retiré quand iOS refuse de tourner
+            // (app en fenêtre, écran intérieur de l'iPhone Duo) : il ne
+            // faisait plus rien.
+            if !rotationRefused {
+                overlayButton(icon: isLandscape ? "rectangle.portrait.rotate" : "rectangle.landscape.rotate") {
+                    toggleOrientation(); scheduleAutoHide()
+                }
             }
         case "sleep":
             // Minuteur en cours : sa pastille, plus à gauche, en tient lieu.
@@ -2246,9 +2779,17 @@ struct ImmersivePlayer: View {
 
     /// « 1:23:45 · Just Chatting » : l'instant, et le chapitre où il tombe.
     private func scrubLabel(_ t: Double) -> String {
-        guard chapters.count > 1, let c = chapter(at: t) else { return timeLabel(t) }
+        let time = clockLabel(t).map { "\(timeLabel(t)) · \($0)" } ?? timeLabel(t)
+        guard chapters.count > 1, let c = chapter(at: t) else { return time }
         let title = c.title.count > 28 ? String(c.title.prefix(27)) + "…" : c.title
-        return "\(timeLabel(t)) · \(title)"
+        return "\(time) · \(title)"
+    }
+
+    /// Heure réelle d'un instant d'une archive (« 22:15 », réglages de
+    /// l'appareil) ; nil hors archive.
+    private func clockLabel(_ t: Double) -> String? {
+        guard !isLive, let start = vodStartedAt, t.isFinite else { return nil }
+        return start.addingTimeInterval(max(0, t)).formatted(date: .omitted, time: .shortened)
     }
 
     private func chapter(at t: Double) -> VodChapter? {
@@ -2258,23 +2799,61 @@ struct ImmersivePlayer: View {
     }
 
     // MARK: – Zoom à deux doigts
+    /// Comme sur l'app Twitch : le zoom part du point entre les doigts, et
+    /// les déplacer pendant le pincement déplace l'image. Le point de l'image
+    /// pris entre les doigts au départ reste sous eux, autant que les bords le
+    /// permettent. Doigts pas relevés (PinchFocus) : zoom depuis le milieu,
+    /// comme avant.
     private var zoomGesture: some Gesture {
         MagnificationGesture()
-            .updating($pinching) { _, active, _ in active = true }
+            .updating($pinching) { _, active, _ in
+                // Nouveau pincement : le départ d'un précédent, interrompu
+                // sans fin (Centre de contrôle, appel), ne compte plus.
+                if !active { pinch.start = nil }
+                active = true
+            }
             .onChanged { value in
-                zoom = min(max(zoomBase * value, 1), 4)
-                pan = clampedPan(pan)
-            }
-            .onEnded { _ in
-                // Rapetissée jusqu'au bout, l'image reprend sa place.
-                if zoom < 1.05 {
-                    resetZoom()
-                } else {
-                    zoomBase = zoom
-                    panBase = pan
-                    flash(String(format: "%.1f×", Double(zoom)))
+                if pinch.start == nil {
+                    pinch.start = (focus: pinch.point, fingers: pinch.fingers, zoom: zoom, pan: pan, scale: 1)
+                } else if let s = pinch.start, pinch.fingersChanged(since: s.fingers) {
+                    // Doigt levé puis reposé (ou un troisième) pendant le
+                    // geste : le point entre les doigts saute d'un coup, et
+                    // l'image sautait avec lui. Départ repris d'ici (zoom,
+                    // décalage et échelle d'à présent).
+                    pinch.start = (focus: pinch.point, fingers: pinch.fingers, zoom: zoom, pan: pan,
+                                   scale: max(value, 0.01))
                 }
+                guard let start = pinch.start else { return }
+                let z = min(max(start.zoom * value / start.scale, 1), 4)
+                zoom = z
+                guard let f0 = start.focus, let f = pinch.point else {
+                    pan = clampedPan(pan, zoom: z)
+                    return
+                }
+                // Sous les doigts au départ : le point de l'image f0, décalé
+                // de start.pan et agrandi start.zoom fois autour du milieu c.
+                // Il doit arriver en f, agrandi z fois.
+                let c = CGPoint(x: surfaceSize.width / 2, y: surfaceSize.height / 2)
+                let k = z / start.zoom
+                pan = clampedPan(CGSize(width:  f.x - c.x - (f0.x - c.x - start.pan.width)  * k,
+                                        height: f.y - c.y - (f0.y - c.y - start.pan.height) * k),
+                                 zoom: z)
             }
+            .onEnded { _ in finishPinch(showScale: true) }
+    }
+
+    /// Fin du pincement, ou geste interrompu : rapetissée jusqu'au bout,
+    /// l'image reprend sa place ; sinon son décalage devient la base du glissé
+    /// à un doigt — celui d'un doigt resté posé compte depuis son départ,
+    /// avant le pincement, d'où le retrait de son déplacement.
+    private func finishPinch(showScale: Bool) {
+        pinch.start = nil
+        if zoom < 1.05 {
+            resetZoom()
+        } else {
+            panBase = CGSize(width: pan.width - pinch.drag.width, height: pan.height - pinch.drag.height)
+            if showScale { flash(String(format: "%.1f×", Double(zoom))) }
+        }
     }
 
     /// Repère global : pendant le glissé vers le bas, le lecteur descend avec
@@ -2284,10 +2863,19 @@ struct ImmersivePlayer: View {
         DragGesture(minimumDistance: 1, coordinateSpace: CoordinateSpace.global)
             .updating($panActive) { _, active, _ in active = true }
             .onChanged { value in
+                // Gardé pour la fin d'un pincement (voir finishPinch).
+                pinch.drag = value.translation
                 // Un glissement sur la barre de lecture ne déplace rien. Le
                 // geste partant dès le premier point, il a pu commencer avant
                 // que la barre ne prenne la main : le lecteur reprend sa place.
                 guard !dragging else {
+                    if pulling == true { onPull(0) }
+                    pulling = false
+                    return
+                }
+                // Deux doigts : c'est un zoom, le lecteur reste en place, et
+                // l'image suit le point entre les doigts (zoomGesture).
+                if pinching {
                     if pulling == true { onPull(0) }
                     pulling = false
                     return
@@ -2299,12 +2887,6 @@ struct ImmersivePlayer: View {
                     if pulling == true { onPull(0); pulling = false }
                     pan = clampedPan(CGSize(width: panBase.width + value.translation.width,
                                             height: panBase.height + value.translation.height))
-                    return
-                }
-                // Deux doigts : c'est un zoom, le lecteur reste en place.
-                if pinching {
-                    if pulling == true { onPull(0) }
-                    pulling = false
                     return
                 }
                 // Taille normale : seul un geste qui part vers le bas compte ;
@@ -2324,6 +2906,7 @@ struct ImmersivePlayer: View {
                     pulling = nil
                     PlayerPull.noteEnd()
                 }
+                pinch.drag = .zero
                 if zoom > 1 {
                     if pulling == true { onPull(0) }
                     panBase = pan
@@ -2337,10 +2920,12 @@ struct ImmersivePlayer: View {
     }
 
     /// L'image agrandie ne laisse jamais apparaître de vide : le décalage est
-    /// borné à ce qui dépasse de la boîte.
-    private func clampedPan(_ p: CGSize) -> CGSize {
-        let maxX = surfaceSize.width  * (zoom - 1) / 2
-        let maxY = surfaceSize.height * (zoom - 1) / 2
+    /// borné à ce qui dépasse de la boîte. `zoom` : celui qui va s'appliquer
+    /// (pincement en cours), sinon l'actuel.
+    private func clampedPan(_ p: CGSize, zoom z: CGFloat? = nil) -> CGSize {
+        let scale = z ?? zoom
+        let maxX = max(0, surfaceSize.width  * (scale - 1) / 2)
+        let maxY = max(0, surfaceSize.height * (scale - 1) / 2)
         return CGSize(width:  min(max(p.width,  -maxX), maxX),
                       height: min(max(p.height, -maxY), maxY))
     }
@@ -2350,8 +2935,8 @@ struct ImmersivePlayer: View {
             zoom = 1
             pan = .zero
         }
-        zoomBase = 1
         panBase = .zero
+        pinch.start = nil
     }
 
     /// Retard sur le direct, à côté de « Direct » : « · −45 s », « · −2:05 » ;
@@ -2435,6 +3020,12 @@ struct ImmersivePlayer: View {
         PlayerOrientation.forcedLandscape = target == .landscapeRight
         scene.requestGeometryUpdate(.iOS(interfaceOrientations: target)) { error in
             logger.warn("LECTEUR", "Rotation refusée", error.localizedDescription)
+            // Refus (mode de fenêtre qui interdit de choisir l'orientation) :
+            // rien de forcé à défaire à la fermeture, et plus de bouton.
+            DispatchQueue.main.async {
+                PlayerOrientation.forcedLandscape = false
+                rotationRefused = true
+            }
         }
         // Sans ça, iOS peut garder l'ancienne orientation tant qu'aucune vue
         // ne redemande la mise à jour.
@@ -2449,6 +3040,22 @@ struct ImmersivePlayer: View {
 /// seulement depuis l'interface (fil principal).
 enum PlayerOrientation {
     static var forcedLandscape = false
+    /// Paysage forcé quand le PiP a réduit le lecteur (réduction qui l'a
+    /// perdu) : remis quand la fenêtre le rouvre (pipRestore de MainTabView).
+    static var landscapeBeforePiP = false
+
+    /// Paysage du bouton de rotation, remis au retour d'un PiP. iPhone
+    /// seulement, une fois le paysage permis (lecteur en grand).
+    static func forceLandscape() {
+        guard UIDevice.current.userInterfaceIdiom == .phone,
+              let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first else { return }
+        forcedLandscape = true
+        scene.requestGeometryUpdate(.iOS(interfaceOrientations: .landscapeRight)) { error in
+            logger.warn("LECTEUR", "Rotation refusée", error.localizedDescription)
+            DispatchQueue.main.async { forcedLandscape = false }
+        }
+        UIViewController.attemptRotationToDeviceOrientation()
+    }
 
     static func restorePortraitIfForced() {
         guard forcedLandscape else { return }

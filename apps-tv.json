@@ -25,6 +25,69 @@
       },
       "versions": [
         {
+          "version": "0.1.41",
+          "buildVersion": "41",
+          "date": "2026-10-26",
+          "localizedDescription": "- Menu now closes an open category instead of quitting the app",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-test-41/TwitchUnblockTV.ipa",
+          "size": 2722508,
+          "commit": "31ad47a7796a8851b1e1a6fbfc0a34d3dd897a8a"
+        },
+        {
+          "version": "0.1.40",
+          "buildVersion": "40",
+          "date": "2026-10-25",
+          "localizedDescription": "- Improvements and fixes",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-test-40/TwitchUnblockTV.ipa",
+          "size": 2716764,
+          "commit": "6c598fd87cb8288cf3b163ce9afcdf740ddc8684"
+        },
+        {
+          "version": "0.1.39",
+          "buildVersion": "39",
+          "date": "2026-10-25",
+          "localizedDescription": "- Other improvements and fixes",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-test-39/TwitchUnblockTV.ipa",
+          "size": 2716343,
+          "commit": "5b1bdfe558579fc8f676103cc5006fc232d92485"
+        },
+        {
+          "version": "0.1.38",
+          "buildVersion": "38",
+          "date": "2026-10-25",
+          "localizedDescription": "- A channel's page only shows the Collections tab when the channel has collections (loaded with the page), instead of an empty tab\n- In Following, moving down from the tab bar now lands on the first card of the first row, and up and down always reach the neighbouring row (Continue watching, Live, Offline), even when it has fewer cards\n- Other improvements and fixes",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-test-38/TwitchUnblockTV.ipa",
+          "size": 2714948,
+          "commit": "217a75c467a74a2afec8621e75c6cbb5788dca44"
+        },
+        {
+          "version": "0.1.37",
+          "buildVersion": "37",
+          "date": "2026-10-22",
+          "localizedDescription": "- Improvements and fixes",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-test-37/TwitchUnblockTV.ipa",
+          "size": 2706663,
+          "commit": "153d416e8aa8cac62c7d1a396f08ebaf815d5a8e"
+        },
+        {
+          "version": "0.1.36",
+          "buildVersion": "36",
+          "date": "2026-10-22",
+          "localizedDescription": "- Traditional Chinese interface language (thanks to trend0522)\n- Other improvements and fixes",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-test-36/TwitchUnblockTV.ipa",
+          "size": 2704307,
+          "commit": "871fa433f31d8386f343ae6dc5e93ce9f4b341aa"
+        },
+        {
+          "version": "0.1.35",
+          "buildVersion": "35",
+          "date": "2026-10-22",
+          "localizedDescription": "- Account → About shows the app's version and build number\n- Choose where the \"Continue watching\" row goes in Following (above the live channels, below them, or hidden) in Account → Settings; a \"Live\" title now heads the live channels\n- Press and hold a \"Continue watching\" video to resume it or remove it from the list\n- A channel's page now has Videos, Clips and Collections tabs, like the iPhone; a clip plays with its broadcast's chat\n- Menu on a channel's page always goes back to the list, even on an offline channel without videos (it used to quit the app)",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-test-35/TwitchUnblockTV.ipa",
+          "size": 2660282,
+          "commit": "4040bba54215de59a78c4f897ab193ed8fc63d32"
+        },
+        {
           "version": "0.1.33",
           "buildVersion": "33",
           "date": "2026-10-20",
@@ -140,75 +203,12 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-test-20/TwitchUnblockTV.ipa",
           "size": 2448068,
           "commit": "5a576edaf32ad79ca29af01fa92909a0b58b67be"
-        },
-        {
-          "version": "0.1.19",
-          "buildVersion": "19",
-          "date": "2026-10-18",
-          "localizedDescription": "- Account → Recent errors lists the latest warnings and errors, and failed lives or VODs are logged",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-test-19/TwitchUnblockTV.ipa",
-          "size": 2432299,
-          "commit": "0419353b6041cfa41e2fd49a71de5d7c176949d5"
-        },
-        {
-          "version": "0.1.18",
-          "buildVersion": "18",
-          "date": "2026-10-18",
-          "localizedDescription": "- A live source that doesn't answer no longer leaves you on a checked source that isn't playing (the current one keeps playing and a notice says so), and changing quality while paused stays paused\n- Chat reconnects within 2 seconds after a drop, says \"Chat connected\" on quiet channels, retries BTTV/FFZ/7TV emotes after a failed first load, and VOD chat shows emotes from the very first messages\n- Signing in with a code keeps waiting when you switch tabs (with a Cancel button), and a network hiccup at launch no longer signs you out\n- Russian wording for followed channels fixed",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-test-18/TwitchUnblockTV.ipa",
-          "size": 2362373,
-          "commit": "c91dbbed694d1196ed819b11b036c4b4aed41ca0"
-        },
-        {
-          "version": "0.1.17",
-          "buildVersion": "17",
-          "date": "2026-10-18",
-          "localizedDescription": "- When the account couldn't load at launch, the Following tab loads it again instead of showing \"No live\" all session",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-test-17/TwitchUnblockTV.ipa",
-          "size": 2356231,
-          "commit": "fd5015e425cac43a5f78e783b3dfefdbf4da2d1f"
-        },
-        {
-          "version": "0.1.16",
-          "buildVersion": "16",
-          "date": "2026-10-18",
-          "localizedDescription": "- The Following tab refreshes on its own (when you come back to it or to the app, every 2 minutes while it's shown, and when you pick the tab again), so ended lives no longer linger",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-test-16/TwitchUnblockTV.ipa",
-          "size": 2354923,
-          "commit": "f0f73f5e29d67f3d87b6462d38973216097857ba"
-        },
-        {
-          "version": "0.1.15",
-          "buildVersion": "15",
-          "date": "2026-10-17",
-          "localizedDescription": "- On a channel page, the Watch live button can now be reached by pressing up from any video in the first row\n- Anonymous usage count for the stats page, like the iPhone app (Account → Share my usage to turn it off and erase it)",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-test-15/TwitchUnblockTV.ipa",
-          "size": 2342832,
-          "commit": "739946f10ca39ecd829c77525f47cffdf61e14d0"
-        },
-        {
-          "version": "0.1.14",
-          "buildVersion": "14",
-          "date": "2026-10-17",
-          "localizedDescription": "- Showing or hiding the chat is now remembered per channel, like its position (handy for streamers who already show their chat on screen); Account → Chat by default sets it for the others",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-test-14/TwitchUnblockTV.ipa",
-          "size": 2327050,
-          "commit": "b3af975cfe7f313f986080298b834c5f03299fd2"
-        },
-        {
-          "version": "0.1.13",
-          "buildVersion": "13",
-          "date": "2026-10-17",
-          "localizedDescription": "- The channel page opened from the player now has its own background instead of showing the Following tab through it",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-test-13/TwitchUnblockTV.ipa",
-          "size": 2324379,
-          "commit": "9528b3bd88332de8f57ae95c3dd95d5078756422"
         }
       ],
-      "version": "0.1.33",
-      "versionDate": "2026-10-20",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-test-33/TwitchUnblockTV.ipa",
-      "size": 2589185
+      "version": "0.1.41",
+      "versionDate": "2026-10-26",
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-test-41/TwitchUnblockTV.ipa",
+      "size": 2722508
     }
   ]
 }

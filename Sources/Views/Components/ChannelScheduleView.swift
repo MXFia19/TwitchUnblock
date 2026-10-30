@@ -66,7 +66,7 @@ struct ChannelScheduleView: View {
             if let v = schedule.activeVacation(at: now) {
                 HStack(spacing: TSpace.sm) {
                     Image(systemName: "airplane")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.tSystem(size: 14, weight: .semibold))
                     Text(vacationText(v, store: store))
                         .font(.tLabel)
                         .fixedSize(horizontal: false, vertical: true)
@@ -150,10 +150,11 @@ private struct ScheduleSegmentRow: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
                 Text(format("d"))
-                    .font(.system(size: 19, weight: .bold).monospacedDigit())
+                    .font(.tSystem(size: 19, weight: .bold).monospacedDigit())
                     .foregroundColor(.tText)
             }
-            .frame(width: 44, height: 48)
+            // Grandit avec le texte (réglage d'iOS) au lieu de le couper.
+            .frame(minWidth: 44, minHeight: 48)
             .background(Color.tSurface)
             .cornerRadius(TRadius.chip)
 
@@ -173,7 +174,7 @@ private struct ScheduleSegmentRow: View {
                 // Catégorie sous le titre, si le titre n'est pas déjà elle.
                 if !segment.category.isEmpty, title != segment.category {
                     HStack(spacing: 4) {
-                        Image(systemName: "gamecontroller.fill").font(.system(size: 10))
+                        Image(systemName: "gamecontroller.fill").font(.tSystem(size: 10))
                         Text(segment.category).font(.tMeta).lineLimit(1)
                     }
                     .foregroundColor(.tPurple)

@@ -73,6 +73,17 @@ final class AppStore: ObservableObject {
     /// aller-retour. Oublié à la connexion suivante (adoptToken).
     @Published var oauthExpired = false
 
+    /// Avis du lecteur déjà montrés une fois (direct par le compte, pauses
+    /// pub des qualités supérieures) : on sait ce qu'ils disent, ils ne
+    /// reviennent plus à chaque direct ni à chaque pub.
+    private(set) var seenNotices: Set<String> =
+        Set(UserDefaults.standard.stringArray(forKey: "cfg_seen_notices") ?? [])
+
+    func markNoticeSeen(_ key: String) {
+        guard seenNotices.insert(key).inserted else { return }
+        UserDefaults.standard.set(Array(seenNotices).sorted(), forKey: "cfg_seen_notices")
+    }
+
     /// Vérifie la session web : effacée si Twitch la refuse, ou si elle est à
     /// un autre compte que celui de l'app. Une panne réseau ne l'efface pas :
     /// couper la session sur un wifi capricieux serait pire que de la laisser
@@ -128,6 +139,21 @@ final class AppStore: ObservableObject {
         return twitchWebToken != nil
     }
 
+    /// Déconnexion de la session web (réglages). Sans compte OAuth, le pseudo
+    /// venait de cette session : il part avec elle, sinon la connexion d'un
+    /// autre compte était ensuite refusée comme « autre compte ».
+    @MainActor
+    func logoutWebSession() {
+        logger.info("AUTH/WEB", "Déconnexion session web", nil)
+        twitchWebToken = nil
+        webSessionMismatch = nil
+        if (twitchToken ?? "").isEmpty {
+            twitchLogin = nil
+            twitchAvatar = nil
+        }
+        Task { await TwitchWebSession.clear() }
+    }
+
     /// Session web d'un autre compte : effacée (jeton et cookies twitch.tv),
     /// pour que la prochaine connexion demande le bon compte.
     @MainActor
@@ -171,9 +197,30 @@ final class AppStore: ObservableObject {
     @Published var showDropsNotice: Bool = true {
         didSet { UserDefaults.standard.set(showDropsNotice, forKey: "cfg_drops_notice") }
     }
+    /// Sous la carte des drops : celles des campagnes de Twitch rangées dans
+    /// la catégorie « Special Events » (« 1 Month of Apple TV »…), masquables
+    /// sans perdre les drops de la chaîne. Coupées avec eux.
+    @Published var showSpecialEvents: Bool = true {
+        didSet { UserDefaults.standard.set(showSpecialEvents, forKey: "cfg_special_events") }
+    }
     /// Afficher le bouton Suivre / Ne plus suivre.
     @Published var showFollowButton: Bool = true {
         didSet { UserDefaults.standard.set(showFollowButton, forKey: "cfg_follow") }
+    }
+    /// Cloche des notifications de live en haut à droite du chat. Masquée,
+    /// celle de la page de la chaîne reste.
+    @Published var showChatBell: Bool = true {
+        didSet { UserDefaults.standard.set(showChatBell, forKey: "cfg_chat_bell") }
+    }
+    /// Pastilles des modes du salon (« Followers depuis 10 h », mode lent…)
+    /// au-dessus du champ. Masquées, un message refusé dit toujours pourquoi.
+    @Published var showChatModes: Bool = true {
+        didSet { UserDefaults.standard.set(showChatModes, forKey: "cfg_chat_modes") }
+    }
+    /// Bouton couronne des points de la chaîne, à gauche du champ. Masqué,
+    /// les points s'ouvrent depuis le menu ⋯ du chat.
+    @Published var showChatPoints: Bool = true {
+        didSet { UserDefaults.standard.set(showChatPoints, forKey: "cfg_chat_points") }
     }
     /// Afficher le badge de série de visionnage (streak).
     @Published var showWatchStreak: Bool = true {
@@ -272,7 +319,7 @@ final class AppStore: ObservableObject {
     @Published var liveActivity: Bool = true {
         didSet {
             UserDefaults.standard.set(liveActivity, forKey: PlayerActivity.key)
-            if !liveActivity { PlayerActivity.end() }
+            if !liveActivity { PlayerActivity.end(playerClosed: false) }
         }
     }
 
@@ -348,6 +395,22 @@ final class AppStore: ObservableObject {
     /// paysage (≈2.16) ne peut pas à la fois tout montrer et tout remplir.
     @Published var fillScreen: Bool = false {
         didSet { UserDefaults.standard.set(fillScreen, forKey: "cfg_fill_screen") }
+    }
+
+    /// Quitter le lecteur (glissé vers le bas, flèche) ouvre l'image dans
+    /// l'image au lieu du mini-lecteur, quand c'est possible (lecteur
+    /// immersif, vidéo en lecture). Coupé par défaut : le mini-lecteur reste
+    /// la règle. Propre à l'appareil (pas synchronisé, voir SettingsSync).
+    @Published var pipOnLeave: Bool = false {
+        didSet { UserDefaults.standard.set(pipOnLeave, forKey: "cfg_pip_on_leave") }
+    }
+
+    /// Écran verrouillé ou autre app, sans PiP (lecteur immersif) :
+    /// "continue" (la lecture continue, comme avant), "audio" (qualité audio
+    /// le temps de l'arrière-plan, l'image revient au retour) ou "pause".
+    /// Propre à l'appareil.
+    @Published var backgroundPlayback: String = "continue" {
+        didSet { UserDefaults.standard.set(backgroundPlayback, forKey: "cfg_background_playback") }
     }
 
     /// Place du chat en paysage : colonne, superposé à l'image, ou replié.
@@ -436,13 +499,22 @@ final class AppStore: ObservableObject {
     @Published var chatShowDeleted: Bool = false {
         didSet { UserDefaults.standard.set(chatShowDeleted, forKey: "cfg_chat_deleted") }
     }
+    /// Zone d'envoi du chat (champ, emotes, envoyer, points, menu ⋯). Coupée,
+    /// pour qui ne fait que lire : la place revient aux messages, en portrait
+    /// comme en paysage ; le menu ⋯ (et les points) restent à portée par de
+    /// petits boutons posés sur le bas du chat (ChatView).
+    @Published var chatShowInput: Bool = true {
+        didSet { UserDefaults.standard.set(chatShowInput, forKey: "cfg_chat_input") }
+    }
 
     /// Construit la présentation du chat : les réglages de l'utilisateur pour la
     /// taille, la disposition en cours pour le décor et la transparence.
+    /// La taille du texte d'iOS (TType) s'applique par-dessus celle du chat,
+    /// bornée à 30 pt : au-delà, une ligne ne tient plus que deux ou trois mots.
     func chatStyle(chrome: Bool, translucent: Bool) -> ChatStyle {
         ChatStyle(showsChrome: chrome,
                   showsTimestamp: chatTimestamps,
-                  fontSize: CGFloat(chatFontSize),
+                  fontSize: min(max(CGFloat(chatFontSize), TType.scaled(CGFloat(chatFontSize))), 30),
                   rowPadding: CGFloat(chatSpacing) / 2,
                   badgeScale: CGFloat(chatBadgeScale),
                   emoteScale: CGFloat(chatEmoteScale),
@@ -667,9 +739,10 @@ final class AppStore: ObservableObject {
     /// comme au premier lancement.
     func resetCustomization() {
         customization = UICustomization()
-        showPinnedMessages = true; showDropsNotice = true
+        showPinnedMessages = true; showDropsNotice = true; showSpecialEvents = true
         showLiveEvents = true; showPolls = true; showPredictions = true; showHypeTrain = true
         enableRaids = true; showWatchStreak = true; showFollowButton = true
+        showChatBell = true; showChatModes = true; showChatPoints = true
     }
 
     /// Langue du top des lives ; nil = celle de l'appareil.
@@ -806,10 +879,55 @@ final class AppStore: ObservableObject {
         didSet { UserDefaults.standard.set(chatHighlightWords, forKey: "chat_highlight_words") }
     }
 
+    /// Emotes masquées, par leur code exact (la casse compte : « KEKW » et
+    /// « kekw » sont deux emotes), 200 au plus, la plus récente à la fin :
+    /// dans le chat, elles s'affichent comme le mot tapé. Toutes sources
+    /// (Twitch, BTTV, FFZ, 7TV), direct, VODs et multi-live. Même clé que le
+    /// site (« hiddenEmotes »), dans la synchro des réglages et la sauvegarde.
+    @Published var hiddenEmotes: [String] = [] {
+        didSet {
+            UserDefaults.standard.set(hiddenEmotes, forKey: "chat_hidden_emotes")
+            hiddenEmoteSet = Set(hiddenEmotes)
+        }
+    }
+    /// Les mêmes, pour la recherche faite à chaque emote affichée.
+    private(set) var hiddenEmoteSet: Set<String> = []
+    static let maxHiddenEmotes = 200
+
+    func hidesEmote(_ code: String) -> Bool { hiddenEmoteSet.contains(code) }
+
+    /// Masque l'emote, ou la réaffiche si elle l'était déjà. Au-delà de 200,
+    /// les plus anciennes repartent.
+    func toggleHiddenEmote(_ code: String) {
+        guard let c = Self.emoteCodes([code]).first else { return }
+        if let i = hiddenEmotes.firstIndex(of: c) {
+            hiddenEmotes.remove(at: i)
+            logger.settingChanged("Emote réaffichée", value: c)
+        } else {
+            hiddenEmotes = Array((hiddenEmotes + [c]).suffix(Self.maxHiddenEmotes))
+            logger.settingChanged("Emote masquée", value: c)
+        }
+    }
+
+    /// Codes d'emotes valides (sauvegarde, synchro, site) : sans espace ni
+    /// retour à la ligne, 100 caractères au plus, sans doublon, 200 au plus
+    /// (les derniers, les plus récents).
+    static func emoteCodes(_ list: [String]) -> [String] {
+        var seen = Set<String>()
+        let valid = list
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty && $0.count <= 100 && !$0.contains(where: \.isWhitespace) }
+            .filter { seen.insert($0).inserted }
+        return Array(valid.suffix(maxHiddenEmotes))
+    }
+
     // MARK: – Init
     init() {
         let ud = UserDefaults.standard
         chatHighlightWords = ud.stringArray(forKey: "chat_highlight_words") ?? []
+        // Assignations de l'init : didSet n'y est pas appelé, l'ensemble suit à la main.
+        hiddenEmotes       = Self.emoteCodes(ud.stringArray(forKey: "chat_hidden_emotes") ?? [])
+        hiddenEmoteSet     = Set(hiddenEmotes)
         chatHideBots       = ud.bool(forKey: "chat_hide_bots")
         chatHideCommands   = ud.bool(forKey: "chat_hide_commands")
         chatMutedWords     = ud.stringArray(forKey: "chat_muted_words") ?? []
@@ -823,7 +941,11 @@ final class AppStore: ObservableObject {
         autoClaimChest = ud.object(forKey: "auto_claim_chest") as? Bool ?? true
         showPinnedMessages = ud.object(forKey: "cfg_pinned") as? Bool ?? true
         showDropsNotice    = ud.object(forKey: "cfg_drops_notice") as? Bool ?? true
+        showSpecialEvents  = ud.object(forKey: "cfg_special_events") as? Bool ?? true
         showFollowButton   = ud.object(forKey: "cfg_follow") as? Bool ?? true
+        showChatBell       = ud.object(forKey: "cfg_chat_bell") as? Bool ?? true
+        showChatModes      = ud.object(forKey: "cfg_chat_modes") as? Bool ?? true
+        showChatPoints     = ud.object(forKey: "cfg_chat_points") as? Bool ?? true
         showWatchStreak    = ud.object(forKey: "cfg_streak") as? Bool ?? true
         showLiveEvents     = ud.object(forKey: "cfg_events") as? Bool ?? true
         enableRaids        = ud.object(forKey: "cfg_raids")  as? Bool ?? true
@@ -849,6 +971,9 @@ final class AppStore: ObservableObject {
         autoClaimDrops     = ud.object(forKey: "cfg_drops_autoclaim") as? Bool ?? true
         dropsNotify        = ud.object(forKey: "cfg_drops_notify")    as? Bool ?? true
         fillScreen         = ud.object(forKey: "cfg_fill_screen") as? Bool ?? false
+        pipOnLeave         = ud.object(forKey: "cfg_pip_on_leave") as? Bool ?? false
+        backgroundPlayback = ["audio", "pause"].contains(ud.string(forKey: "cfg_background_playback") ?? "")
+                             ? ud.string(forKey: "cfg_background_playback")! : "continue"
         landscapeChat      = LandscapeChat(rawValue: ud.string(forKey: "cfg_landscape_chat") ?? "")
                              ?? .column
         if landscapeChat != .hidden { lastShownLandscapeChat = landscapeChat }
@@ -866,6 +991,7 @@ final class AppStore: ObservableObject {
         chatKeyboardSuggestions = ud.object(forKey: "cfg_chat_kbd_suggest") as? Bool ?? true
         chatReturnSends = ud.object(forKey: "cfg_chat_return_sends") as? Bool ?? false
         chatShowDeleted    = ud.object(forKey: "cfg_chat_deleted")      as? Bool ?? false
+        chatShowInput      = ud.object(forKey: "cfg_chat_input")        as? Bool ?? true
         shareUsage         = ud.object(forKey: "cfg_share_usage") as? Bool ?? true
         syncSettings       = ud.object(forKey: "cfg_sync_settings") as? Bool ?? true
         // « zh_hk » importé du site par une version d'avant : ramené à « zh-hk ».
@@ -1097,6 +1223,54 @@ final class AppStore: ObservableObject {
         // Borné aux 500 VODs les plus récentes (identifiants croissants).
         if vodProgress.count > 500 { vodProgress = Self.cappedProgress(vodProgress) }
         progressChanged()
+    }
+
+    /// « Continuer à regarder » d'une sauvegarde (Backup) : les VODs absentes
+    /// de l'historique y entrent à leur date (le plus récent d'abord, 50 au
+    /// plus, comme saveToHistory), et la position la plus avancée l'emporte.
+    /// Rend le nombre de VODs ajoutées ou avancées.
+    func importContinueWatching(_ items: [HistoryItem], progress incoming: [String: Double]) -> Int {
+        var changed = Set<String>()
+        var list = history
+        let known = Set(list.map { $0.term.lowercased() })
+        for item in items where !known.contains(item.term.lowercased()) {
+            list.append(item)
+            changed.insert(item.term)
+        }
+        var positions = vodProgress
+        for (id, t) in incoming where t.isFinite && t > (positions[id] ?? 0) + 1 {
+            positions[id] = t
+            changed.insert(id)
+        }
+        guard !changed.isEmpty else { return 0 }
+        let sorted = Array(list.enumerated()
+            .sorted { a, b in
+                a.element.addedAt != b.element.addedAt
+                    ? a.element.addedAt > b.element.addedAt
+                    : a.offset < b.offset
+            }
+            .map(\.element)
+            .prefix(50))
+        if sorted != history { history = sorted }
+        if positions != vodProgress {
+            vodProgress = Self.cappedProgress(positions)
+            progressChanged()
+        }
+        // Celles restées dans l'historique : la rangée de l'accueil en vient.
+        let kept = Set(sorted.map(\.term))
+        return changed.filter { kept.contains($0) }.count
+    }
+
+    /// « Continuer à regarder » → Retirer de la liste : la position de
+    /// reprise de cette VOD est oubliée (elle reste dans l'historique et
+    /// repart du début). Comme une suppression, elle part tout de suite ; la
+    /// relecture ne la ramène pas tant que le serveur n'a pas bougé
+    /// (mergeProgress).
+    func forgetVodProgress(_ vodId: String) {
+        guard vodProgress[vodId] != nil else { return }
+        vodProgress[vodId] = nil
+        progressChanged()
+        sendDeletion()
     }
 
     private func progressChanged() {
@@ -1744,9 +1918,11 @@ final class BackgroundTaskBox {
     }
 }
 
-/// Vitesses de lecture proposées pour les VODs : la même liste que le site.
-/// Plafond à 2× : sans playlist I-frame (Twitch n'en publie pas), AVPlayer ne
-/// garantit pas mieux.
+/// Vitesses de lecture des VODs (et du rattrapage d'un direct reculé) : la
+/// même liste que le site. Plafond à 2× : sans playlist I-frame (Twitch n'en
+/// publie pas), `canPlayFastForward` est faux et AVPlayer ne lit les flux
+/// HLS que de 1× à 2× (AVPlayerItem.h). 2,25×, 2,5× et 3× ont été proposés
+/// en essai (TU Test, octobre 2026) : jamais tenus, retirés.
 enum VodSpeed {
     static let all: [Double] = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2]
 
@@ -1757,10 +1933,10 @@ enum VodSpeed {
     }
 
     /// « 1,5× » : virgule en français, espagnol, russe et italien, point en
-    /// anglais et en japonais.
+    /// anglais, en japonais et en chinois (Taïwan écrit « 1.5 »).
     static func label(_ v: Double, _ lang: Lang) -> String {
         var s = String(format: "%g", v)
-        if lang != .en && lang != .ja { s = s.replacingOccurrences(of: ".", with: ",") }
+        if lang != .en && lang != .ja && lang != .zhHant { s = s.replacingOccurrences(of: ".", with: ",") }
         return s + "×"
     }
 }

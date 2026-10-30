@@ -59,13 +59,21 @@ struct TVPlayerScreen: View {
             switch item {
             case .live(let login, _): chat.start(login)
             case .vod(let id, _, _):  chat.startVod(id)
+            // Clip : le chat de sa VOD d'origine, connue une fois le clip chargé.
+            case .clip:               break
             }
             await model.load(item, session: session)
+            if case .clip = item, let vod = model.clipVodId { chat.startVod(vod) }
         }
-        // VOD : le chat suit la lecture (commentaires rejoués à leur instant).
+        // VOD : le chat suit la lecture (commentaires rejoués à leur instant) ;
+        // clip : celui de sa VOD, décalé de l'instant du clip (comme l'iPhone).
         .onReceive(Timer.publish(every: 1, on: .main, in: .common).autoconnect()) { _ in
-            guard case .vod = item, let time = model.player?.currentTime().seconds else { return }
-            chat.update(offset: time)
+            guard let time = model.player?.currentTime().seconds else { return }
+            switch item {
+            case .live: break
+            case .vod:  chat.update(offset: time)
+            case .clip: if model.clipVodId != nil { chat.update(offset: model.clipOffset + time) }
+            }
         }
         .onDisappear {
             model.stop()
@@ -100,6 +108,12 @@ final class TVPlayerModel: ObservableObject {
     private var title = ""
     private var subtitle = ""
     private var vodId: String?
+    /// Clip : sa VOD d'origine et l'instant du clip dans celle-ci, pour
+    /// rejouer le chat de ce moment-là. nil : VOD supprimée, pas de chat.
+    private(set) var clipVodId: String?
+    private(set) var clipOffset: Double = 0
+    /// Un chat à montrer : direct, VOD, ou clip dont la VOD existe encore.
+    var hasChat: Bool { isLive || vodId != nil || clipVodId != nil }
     private var statusObs: NSKeyValueObservation?
     private var timeObs: Any?
     /// Siri, FaceTime… : la lecture mise en pause par tvOS repart à la fin
@@ -129,6 +143,8 @@ final class TVPlayerModel: ObservableObject {
     func load(_ item: TVPlayback, session: TVSession) async -> Bool {
         current = item
         error = nil
+        clipVodId = nil
+        clipOffset = 0
         switch item {
         case .live(let login, let name):
             isLive = true
@@ -176,6 +192,23 @@ final class TVPlayerModel: ObservableObject {
             // peut-être encore sur le CDN (VodUnmuteLoader).
             links = VodUnmuteLoader.worthTrying(markers) ? VodUnmuteLoader.wrap(data.links) : data.links
             variants = data.variants
+        case .clip(let slug, let clipTitle, _):
+            isLive = false
+            title = clipTitle
+            subtitle = ""
+            // Pas de position gardée : un clip repart du début.
+            vodId = nil
+            guard let clip = await getClip(slug: slug) else {
+                logger.error("TV/LECTEUR", "Clip impossible à lire : \(slug)")
+                error = session.t("err_clip")
+                return false
+            }
+            if !clip.title.isEmpty { title = clip.title }
+            // MP4 signés, lus tels quels ; leur nom donne la hauteur (« 720p60 »).
+            links = clip.links
+            variants = [:]
+            clipVodId = clip.vodId
+            clipOffset = clip.vodOffset ?? 0
         }
         // Qualité préférée, sinon la plus proche en dessous (même règle que l'iPhone).
         quality = preferredQualityKey(Array(links.keys), pref: session.qualityPref, variants: variants)
@@ -336,7 +369,8 @@ struct TVPlayerController: UIViewControllerRepresentable {
 
     private func showChat(_ context: Context) {
         guard let host = context.coordinator.chatHost else { return }
-        host.view.isHidden = !session.chatShown(for: channel)
+        // Clip dont la VOD n'existe plus : pas de chat (« Chargement » sans fin).
+        host.view.isHidden = !model.hasChat || !session.chatShown(for: channel)
         host.rootView = overlay()
     }
 
@@ -374,7 +408,7 @@ struct TVPlayerController: UIViewControllerRepresentable {
                                 image: UIImage(systemName: "antenna.radiowaves.left.and.right"),
                                 children: sources))
         }
-        items.append(chatMenu())
+        if model.hasChat { items.append(chatMenu()) }
         if let onChannel {
             items.append(UIAction(title: session.t("tv_open_channel"),
                                   image: UIImage(systemName: "person.crop.rectangle")) { _ in
@@ -435,9 +469,10 @@ struct TVPlayerController: UIViewControllerRepresentable {
                       children: children)
     }
 
-    /// Libellé commun avec l'iPhone ; l'audio seul garde le texte de la TV.
+    /// Libellé commun avec l'iPhone (« 1440p (Source) » quand la hauteur de
+    /// Source est connue) ; l'audio seul garde le texte de la TV.
     private func label(_ key: String) -> String {
-        isAudioQuality(key) ? session.t("tv_audio") : qualityText(key, session.lang)
+        isAudioQuality(key) ? session.t("tv_audio") : qualityText(key, session.lang, variants: model.variants)
     }
 }
 

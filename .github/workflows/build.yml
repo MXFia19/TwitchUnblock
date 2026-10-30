@@ -37,7 +37,12 @@ concurrency:
 jobs:
   build-ios:
     name: Build iOS IPA
-    runs-on: macos-latest
+    # Xcode 27.1 (SDK iOS 27.1, Xcode par défaut de cette image GitHub, encore
+    # en préversion) : sur l'écran intérieur de l'iPhone Duo, une app liée à
+    # un SDK d'avant iOS 27 reste dans un cadre noir à la taille d'un iPhone ;
+    # avec le SDK iOS 27.1, elle prend tout l'écran. macos-latest donnait
+    # Xcode 26.6. Le minimum d'iOS 16 reste accepté (Xcode 27 : iOS 15 et plus).
+    runs-on: xcode-27
     permissions:
       contents: write
     steps:
@@ -166,7 +171,7 @@ jobs:
             plutil -replace CFBundleIdentifier -string "com.mxfia19.TwitchUnblock.test" "$APP_PLIST"
             plutil -replace CFBundleDisplayName -string "TU Test" "$APP_PLIST"
             # Son propre schéma de lien : avec le même que l'app, iOS ouvrait
-            # l'une ou l'autre au toucher d'une notification ntfy.
+            # l'une ou l'autre au toucher d'un lien twitchunblock://.
             plutil -replace CFBundleURLTypes.0.CFBundleURLSchemes.0 -string "twitchunblock-test" "$APP_PLIST"
             plutil -replace CFBundleURLTypes.0.CFBundleURLName -string "com.mxfia19.TwitchUnblock.test" "$APP_PLIST"
           else

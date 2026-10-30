@@ -7,8 +7,13 @@ import SwiftUI
 // ═══════════════════════════════════════════════════════════════════════════
 
 /// Hauteur du bloc texte des cartes en grille : deux lignes de titre + une
-/// ligne de méta. Figée pour garantir l'alignement des colonnes.
-private let cardTextHeight: CGFloat = 56
+/// ligne de méta. Figée pour garantir l'alignement des colonnes ; elle suit
+/// la taille du texte d'iOS (TType), sinon un grand texte serait coupé.
+private var cardTextHeight: CGFloat { 56 * TType.ratio(13) }
+
+/// Pastille posée sur une miniature (durée, vues) : taille fixe, un grand
+/// texte couvrirait l'image.
+private let thumbBadgeFont = Font.system(size: 11, weight: .bold)
 
 // MARK: – Vignette 16/9
 private struct Thumbnail: View {
@@ -121,7 +126,7 @@ struct StreamCardView: View {
                         HStack {
                             Spacer()
                             TMeta(icon: "eye.fill", text: formatViewers(stream.viewerCount),
-                                  tint: .white)
+                                  tint: .white, onImage: true)
                                 .padding(.horizontal, 6).padding(.vertical, 3)
                                 .background(Color.black.opacity(0.65))
                                 .cornerRadius(4)
@@ -162,7 +167,7 @@ struct StreamCardView: View {
                 }
                 // Place des tags réservée sur toutes les cartes : la grille
                 // reste alignée, qu'un live en ait ou non.
-                .frame(height: cardTextHeight + 14 + 22, alignment: .top)
+                .frame(height: cardTextHeight + 14 * TType.ratio(12) + 22, alignment: .top)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(TSpace.md)
             }
@@ -245,7 +250,7 @@ struct PinnedMark: View {
 
     var body: some View {
         Image(systemName: "pin.fill")
-            .font(.system(size: 10, weight: .bold))
+            .font(.tSystem(size: 10, weight: .bold))
             .foregroundColor(.tPrimary)
             .accessibilityLabel(store.t("pinned_short"))
     }
@@ -284,7 +289,7 @@ struct VodCardView: View {
                         HStack {
                             Spacer()
                             Text(formatDuration(vod.lengthSeconds))
-                                .font(.tBadge)
+                                .font(thumbBadgeFont)
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 5).padding(.vertical, 2)
                                 .background(Color.black.opacity(0.65))
@@ -368,7 +373,7 @@ struct UnlistedVodCardView: View {
                     VStack(spacing: 0) {
                         HStack(spacing: TSpace.xs) {
                             Text(store.t(gone ? "unlisted_gone" : "unlisted_vod"))
-                                .font(.tBadge)
+                                .font(thumbBadgeFont)
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 5).padding(.vertical, 2)
                                 .background(gone ? Color.tDanger.opacity(0.85) : Color.tPrimary.opacity(0.9))
@@ -376,7 +381,7 @@ struct UnlistedVodCardView: View {
                             Spacer(minLength: 0)
                             if stream.duration > 0 {
                                 Text(formatDuration(stream.duration))
-                                    .font(.tBadge)
+                                    .font(thumbBadgeFont)
                                     .foregroundColor(.white)
                                     .padding(.horizontal, 5).padding(.vertical, 2)
                                     .background(Color.black.opacity(0.65))
@@ -446,7 +451,7 @@ struct ClipCardView: View {
                                 Image(systemName: "eye.fill").font(.system(size: 8))
                                 Text(formatViewers(clip.viewCount))
                             }
-                            .font(.tBadge).foregroundColor(.white)
+                            .font(thumbBadgeFont).foregroundColor(.white)
                             .padding(.horizontal, 5).padding(.vertical, 2)
                             .background(Color.black.opacity(0.65)).cornerRadius(4)
                             Spacer()
@@ -455,7 +460,7 @@ struct ClipCardView: View {
                         HStack {
                             Spacer()
                             Text(durationText)
-                                .font(.tBadge).foregroundColor(.white)
+                                .font(thumbBadgeFont).foregroundColor(.white)
                                 .padding(.horizontal, 5).padding(.vertical, 2)
                                 .background(Color.black.opacity(0.65)).cornerRadius(4)
                         }
@@ -486,6 +491,9 @@ struct CategoryCardView: View {
     /// de la réafficher), et une catégorie masquée montrée par la recherche
     /// est atténuée.
     var hideable = false
+    /// Grille compacte des suivies (Réglages → Personnaliser) : 3 ou 4 par
+    /// ligne, nom et audience plus petits.
+    var compact = false
     let onPress: () -> Void
     @EnvironmentObject private var store: AppStore
 
@@ -501,7 +509,7 @@ struct CategoryCardView: View {
                 } placeholder: {
                     Rectangle().fill(Color.tSurface).aspectRatio(3/4, contentMode: .fill)
                         .overlay(Image(systemName: "gamecontroller")
-                            .font(.system(size: 20)).foregroundColor(.tMuted.opacity(0.5)))
+                            .font(.system(size: compact ? 16 : 20)).foregroundColor(.tMuted.opacity(0.5)))
                 }
                 .clipped()
                 .overlay(alignment: .topLeading) {
@@ -511,26 +519,28 @@ struct CategoryCardView: View {
                 // Nom puis audience, sous la jaquette : l'affiche reste lisible.
                 // L'audience arrive après la grille (requête séparée) : sa
                 // ligne garde sa place pour que les cartes ne sautent pas.
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: compact ? 2 : 4) {
                     Text(category.name)
-                        .font(.tCardTitle)
+                        .font(compact ? Font.tSystem(size: 12, weight: .semibold) : Font.tCardTitle)
                         .foregroundColor(.tText)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
-                        .frame(height: 36, alignment: .top)
-                    HStack(spacing: 4) {
-                        Circle().fill(Color.tLive).frame(width: 6, height: 6)
+                        .frame(height: compact ? 31 * TType.ratio(12) : 36 * TType.ratio(14), alignment: .top)
+                    HStack(spacing: compact ? 3 : 4) {
+                        Circle().fill(Color.tLive).frame(width: compact ? 5 : 6, height: compact ? 5 : 6)
                         Text(category.viewers.map { formatViewers($0) } ?? " ")
-                            .font(.tMeta).foregroundColor(.tMuted)
+                            .font(compact ? Font.tSystem(size: 10, weight: .medium) : Font.tMeta)
+                            .foregroundColor(.tMuted)
+                            .lineLimit(1)
                     }
                     .opacity(category.viewers == nil ? 0 : 1)
                     .animation(.easeOut(duration: 0.2), value: category.viewers)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(TSpace.md)
+                .padding(compact ? TSpace.sm : TSpace.md)
             }
             .background(Color.tCard)
-            .cornerRadius(TRadius.card)
+            .cornerRadius(compact ? TRadius.control : TRadius.card)
             .opacity(isHidden ? 0.5 : 1)
         }
         .buttonStyle(.plain)
@@ -634,7 +644,7 @@ struct ChannelHeroView: View {
                 Button { onNextLive?() } label: {
                     HStack(spacing: TSpace.sm) {
                         Image(systemName: nextLiveIcon)
-                            .font(.system(size: 13, weight: .bold))
+                            .font(.tSystem(size: 13, weight: .bold))
                         Text(next)
                             .font(.tLabel)
                             .lineLimit(2)
@@ -642,7 +652,7 @@ struct ChannelHeroView: View {
                         Spacer(minLength: 0)
                         if onNextLive != nil {
                             Image(systemName: "chevron.right")
-                                .font(.system(size: 11, weight: .bold))
+                                .font(.tSystem(size: 11, weight: .bold))
                         }
                     }
                     .foregroundColor(.tPrimary)
@@ -684,8 +694,15 @@ struct StreamRowView: View {
     }
 
     var body: some View {
+        // Tailles de texte d'accessibilité (réglage d'iOS) : la miniature
+        // au-dessus et les infos sur toute la largeur. À côté d'elle, le
+        // pseudo ne tenait qu'en quelques lettres.
+        let stacked = TType.isAccessibility
+        let layout = stacked
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: TSpace.sm))
+            : AnyLayout(HStackLayout(alignment: .top, spacing: TSpace.md))
         Button(action: onPress) {
-            HStack(alignment: .top, spacing: TSpace.md) {
+            layout {
                 ZStack(alignment: .bottomLeading) {
                     Thumbnail(url: thumbURL)
                         .frame(width: 136, height: 76.5)
@@ -701,25 +718,31 @@ struct StreamRowView: View {
                     .cornerRadius(4)
                     .padding(5)
                 }
+                .overlay(alignment: .topTrailing) {
+                    if stacked {
+                        MultiLiveCardToggle(login: stream.userLogin, name: stream.userName)
+                            .padding(4)
+                    }
+                }
                 VStack(alignment: .leading, spacing: 2) {
                     Button { store.openChannelPage(stream.userLogin) } label: {
                         HStack(spacing: 4) {
                             if pinnable && store.isPinned(stream.userLogin) { PinnedMark() }
                             Text(stream.userName)
-                                .font(.system(size: 15, weight: .bold))
+                                .font(.tSystem(size: 15, weight: .bold))
                                 .foregroundColor(.tText)
                                 .lineLimit(1)
                         }
                     }
                     .buttonStyle(.plain)
                     Text(stream.title)
-                        .font(.system(size: 13))
+                        .font(.tSystem(size: 13))
                         .foregroundColor(.tMuted)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
                     if !stream.gameName.isEmpty {
                         Text(stream.gameName)
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(.tSystem(size: 12, weight: .semibold))
                             .foregroundColor(.tPurple)
                             .lineLimit(1)
                     }
@@ -727,9 +750,12 @@ struct StreamRowView: View {
                         TagChips(tags: stream.tags).padding(.top, 2)
                     }
                 }
-                Spacer(minLength: 0)
-                MultiLiveCardToggle(login: stream.userLogin, name: stream.userName)
+                if !stacked {
+                    Spacer(minLength: 0)
+                    MultiLiveCardToggle(login: stream.userLogin, name: stream.userName)
+                }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

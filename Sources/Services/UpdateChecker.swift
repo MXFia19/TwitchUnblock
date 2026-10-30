@@ -18,6 +18,13 @@ final class UpdateChecker: ObservableObject {
         /// Nouveautés de chaque build manquant, du plus récent au plus ancien :
         /// deux builds de retard → les notes des deux.
         let changes: [Changes]
+        /// Installation ratée : le numéro installé est celui de la dernière
+        /// version, mais avec un build plus ancien, que la source ne connaît
+        /// pas sous ce numéro. Cas réel : un outil d'installation (GBox) a
+        /// posé un vieil IPA (build 254, une 1.2.x) sous le numéro « 1.6.0 »,
+        /// et l'alerte annonçait une 1.6.0 qu'on croyait déjà avoir. Il faut
+        /// supprimer l'app et réinstaller l'IPA (`downloadURL`).
+        var mislabeled = false
     }
     struct Changes: Equatable, Identifiable {
         let version: String
@@ -69,7 +76,11 @@ final class UpdateChecker: ObservableObject {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
     }
     static var installedBuild: Int {
-        Int(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "") ?? 0
+        Int(installedBuildString) ?? 0
+    }
+    /// Numéro de build tel qu'écrit dans l'app (Réglages → À propos).
+    static var installedBuildString: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"
     }
 
     /// Issue d'une vérification : « Rechercher une mise à jour » affichait
@@ -94,14 +105,31 @@ final class UpdateChecker: ObservableObject {
         ud.set(Date().timeIntervalSince1970, forKey: lastCheckKey)
 
         guard build > Self.installedBuild else { available = nil; return .upToDate }
-        // Notes de tous les builds plus récents que celui installé.
-        let changes = versions.compactMap(Changes.init(entry:)).filter { $0.build > Self.installedBuild }
-        let update = Update(version: latest["version"] as? String ?? "build \(build)",
+        let version = latest["version"] as? String ?? "build \(build)"
+        // Même numéro que la dernière version, build plus ancien : une vraie
+        // installation de ce numéro a un build que la source liste sous lui
+        // (chaque build a son propre numéro) ; sinon, c'est un vieil IPA
+        // renuméroté par l'outil d'installation (voir Update.mislabeled).
+        let mislabeled = version == Self.installedVersion && !versions.contains {
+            $0["version"] as? String == Self.installedVersion
+                && Int($0["buildVersion"] as? String ?? "") == Self.installedBuild
+        }
+        // Notes de tous les builds plus récents que celui installé ; aucune
+        // pour une installation ratée : on croirait les avoir déjà.
+        let changes: [Changes] = mislabeled ? []
+            : versions.compactMap(Changes.init(entry:)).filter { $0.build > Self.installedBuild }
+        let update = Update(version: version,
                             build: build,
                             downloadURL: latest["downloadURL"] as? String,
-                            changes: changes)
+                            changes: changes,
+                            mislabeled: mislabeled)
         available = update
-        logger.info("UPDATE", "Mise à jour disponible", "\(Self.installedVersion) → \(update.version)")
+        if mislabeled {
+            logger.warn("UPDATE", "Ancien build installé sous le numéro de la dernière version",
+                        "\(Self.installedVersion) (build \(Self.installedBuild)) au lieu du build \(build)")
+        } else {
+            logger.info("UPDATE", "Mise à jour disponible", "\(Self.installedVersion) → \(update.version)")
+        }
         if ud.integer(forKey: dismissedKey) < build { showAlert = true }
         return .available
     }
@@ -127,12 +155,31 @@ final class UpdateChecker: ObservableObject {
     }
 
     /// Ouvre l'app de sideload installée (Feather, SideStore, AltStore) pour
-    /// faire la mise à jour ; à défaut, la page des versions sur GitHub.
+    /// faire la mise à jour ; à défaut, la page « Mettre à jour l'app » du
+    /// site, qui dit quoi faire selon l'outil (ESign, GBox, Scarlet, KSign,
+    /// TrollStore…). La page des versions sur GitHub ne l'expliquait pas.
     static func openSource() {
         let candidates = ["feather://", "sidestore://", "altstore://"]
             .compactMap(URL.init(string:))
             .filter { UIApplication.shared.canOpenURL($0) }
         let target = candidates.first
+            ?? URL(string: "https://twitchunblock.vercel.app/?update=ios")!
+        UIApplication.shared.open(target)
+    }
+
+    /// Ce qu'il faut faire d'une installation ratée (Update.mislabeled), dans
+    /// la langue de l'app : alerte et Réglages → À propos.
+    static func staleInstallMessage(_ store: AppStore) -> String {
+        store.t("update_stale_msg")
+            .replacingOccurrences(of: "{b}", with: installedBuildString)
+            .replacingOccurrences(of: "{v}", with: installedVersion)
+    }
+
+    /// Installation ratée (Update.mislabeled) : l'IPA de la dernière version,
+    /// à installer après avoir supprimé l'app ; à défaut, la page des
+    /// versions sur GitHub.
+    static func openDownload(_ link: String?) {
+        let target = link.flatMap(URL.init(string:))
             ?? URL(string: "https://github.com/MXFia19/TwitchUnblock/releases")!
         UIApplication.shared.open(target)
     }

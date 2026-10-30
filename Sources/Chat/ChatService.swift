@@ -459,7 +459,7 @@ final class ChatService: NSObject, ObservableObject {
         // Emotes Twitch de notre propre message : l'écho n'a pas de balises,
         // elles s'affichaient en texte (« Kappa » choisi dans les suggestions).
         for i in tokens.indices {
-            if case .text(let word) = tokens[i], let e = await EmoteService.shared.twitchEmote(named: word) {
+            if case .text(let word) = tokens[i], let e = await EmoteService.shared.twitchEmote(named: word, channelId: channelId) {
                 tokens[i] = .emote(e)
             }
         }
@@ -638,8 +638,9 @@ final class ChatService: NSObject, ObservableObject {
         if let hex  = irc.tags["color"], !hex.isEmpty {
             localColor = Color.readableChat(hex: hex.trimmingCharacters(in: CharacterSet(charactersIn: "#")))
         }
-        // Jeux d'emotes du compte (abonnements, Turbo…) : le sélecteur grise
-        // les emotes d'abonné de la chaîne qui n'en font pas partie.
+        // Jeux d'emotes du compte (abonnements, Turbo…) : le sélecteur les
+        // montre dans « Mes emotes » et grise les emotes d'abonné de la chaîne
+        // qui n'en font pas partie.
         if let raw = irc.tags["emote-sets"], !raw.isEmpty, !localLogin.isEmpty {
             let sets = Set(raw.split(separator: ",").map(String.init))
             let login = localLogin

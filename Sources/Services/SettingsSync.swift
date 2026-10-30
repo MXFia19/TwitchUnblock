@@ -45,9 +45,10 @@ enum SettingsSync {
     ///  - qualityPref : qualité, selon l'écran et la connexion ;
     ///  - shareUsage : comptage anonyme, consentement donné sur chaque appareil ;
     ///  - homeList : accueil en grille ou en liste, selon la taille de l'écran.
+    /// « hiddenEmotes » : emotes masquées, codes exacts (200 au plus).
     static let commonKeys = ["topLang", "showRecent", "timestamps", "timeFormat", "keepDeleted",
                              "loadHistory", "hideBots", "hideCommands", "mutedWords", "blockedUsers",
-                             "highlightWords", "vodSpeed"]
+                             "highlightWords", "vodSpeed", "hiddenEmotes"]
 
     /// Propres à l'app : la personnalisation (onglets, accueil, boutons du
     /// lecteur, bandeaux du chat) et ce qui suit le compte plutôt que
@@ -62,6 +63,8 @@ enum SettingsSync {
     ///    ios_chatBadgeScale, ios_chatEmoteScale, ios_chatWidthRatio) :
     ///    apparence, selon l'écran ;
     ///  - ios_immersivePlayer : le lecteur natif sert de repli sur un appareil ;
+    ///  - ios_pipOnLeave : PiP en quittant le lecteur, selon l'écran (téléphone,
+    ///    iPad) ;
     ///  - ios_lowLatency : selon le réseau de l'appareil ;
     ///  - ios_chatSync : le retard du chat suit le lecteur de l'appareil ;
     ///  - ios_autoPurgeCache : stockage de l'appareil ;
@@ -73,7 +76,14 @@ enum SettingsSync {
                           "ios_showDropsNotice", "ios_showFollowButton", "ios_showWatchStreak",
                           "ios_showLiveEvents", "ios_showPolls", "ios_showPredictions",
                           "ios_showHypeTrain", "ios_enableRaids", "ios_subAdFree",
-                          "ios_chatAutocomplete", "ios_chatKeyboardSuggestions"]
+                          "ios_chatAutocomplete", "ios_chatKeyboardSuggestions",
+                          "ios_chatShowInput", "ios_showSpecialEvents", "ios_showChatBell",
+                          "ios_showChatModes", "ios_showChatPoints"]
+
+    /// Réglages de l'app ajoutés après coup, affichés (vrai) par défaut :
+    /// hors de l'empreinte tant qu'ils le restent (voir digestible).
+    static let iosLateDefaultOn = ["ios_chatShowInput", "ios_showSpecialEvents", "ios_showChatBell",
+                                   "ios_showChatModes", "ios_showChatPoints"]
 
     /// Délai entre le dernier changement et l'envoi.
     static let delay: TimeInterval = 4
@@ -138,6 +148,30 @@ enum SettingsSync {
         return out
     }
 
+    /// Contenu d'une section pour son empreinte : sans les réglages ajoutés
+    /// après coup tant qu'ils sont à leur valeur par défaut. Sinon la mise à
+    /// jour de l'app changeait l'empreinte (nouvelle clé dans les données),
+    /// datait la section de l'instant, et ces réglages jamais touchés
+    /// l'emportaient sur ce que le site ou un autre appareil avait changé
+    /// entre-temps. Les données envoyées, elles, les gardent.
+    static func digestible(_ name: String, _ data: Any) -> Any {
+        guard var dict = data as? [String: Any] else { return data }
+        if name == "common", (dict["hiddenEmotes"] as? [Any])?.isEmpty == true { dict["hiddenEmotes"] = nil }
+        if name == "ios" {
+            for key in iosLateDefaultOn where dict[key] as? Bool == true { dict[key] = nil }
+        }
+        // Pareil dans la personnalisation (« ios_customization ») : catégories
+        // suivies en jaquettes normales, par spectateurs.
+        if name == "ios", var c = dict["ios_customization"] as? [String: Any] {
+            if c["compactFollowedCategories"] as? Bool == false { c["compactFollowedCategories"] = nil }
+            if c["followedCategoriesSort"] as? String == FollowedCategorySort.viewers.rawValue {
+                c["followedCategoriesSort"] = nil
+            }
+            dict["ios_customization"] = c
+        }
+        return dict
+    }
+
     /// Empreinte d'un contenu JSON (FNV-1a, clés triées), stable d'un
     /// lancement à l'autre : de quoi voir qu'une section a changé.
     static func digest(_ value: Any) -> String {
@@ -168,10 +202,12 @@ enum SettingsSync {
     }
 
     /// Première rencontre, section commune : celle du serveur, plus les
-    /// listes du chat d'ici (mots et personnes masqués, mots surlignés).
+    /// listes du chat d'ici (mots et personnes masqués, mots surlignés,
+    /// emotes masquées).
     static func firstCommon(here: [String: Any], there: Any) -> [String: Any] {
         var out = there as? [String: Any] ?? [:]
-        for (key, max) in [("mutedWords", 50), ("highlightWords", 30), ("blockedUsers", 500)] {
+        for (key, max) in [("mutedWords", 50), ("highlightWords", 30), ("blockedUsers", 500),
+                           ("hiddenEmotes", AppStore.maxHiddenEmotes)] {
             var seen = Set<String>()
             let theirs: [String] = ((out[key] as? [Any]) ?? []).compactMap { $0 as? String }
             let mine: [String] = (here[key] as? [String]) ?? []
@@ -399,14 +435,15 @@ extension AppStore {
         case "hidden": return hidden.isEmpty
         case "ios":
             return customization == UICustomization() && autoClaimChest && showPinnedMessages
-                && showDropsNotice && showFollowButton && showWatchStreak && showLiveEvents
-                && showPolls && showPredictions && showHypeTrain && enableRaids && subAdFree
-                && chatAutocomplete && chatKeyboardSuggestions
+                && showDropsNotice && showSpecialEvents && showFollowButton && showWatchStreak
+                && showLiveEvents && showPolls && showPredictions && showHypeTrain && enableRaids
+                && subAdFree && chatAutocomplete && chatKeyboardSuggestions && chatShowInput
+                && showChatBell && showChatModes && showChatPoints
         default:
             return topLang == nil && showRecentChannels && chatTimestamps && timeFormat == "auto"
                 && !chatShowDeleted && chatLoadRecent && !chatHideBots && !chatHideCommands
                 && chatMutedWords.isEmpty && chatBlockedUsers.isEmpty && chatHighlightWords.isEmpty
-                && vodSpeed == 1
+                && vodSpeed == 1 && hiddenEmotes.isEmpty
         }
     }
 
@@ -454,7 +491,7 @@ extension AppStore {
         var dated = false
         for name in SettingsSync.sections {
             var s = prefsSync.saved.sections[name] ?? SettingsSync.Section()
-            let sum = SettingsSync.digest(settingsSectionData(name, settings))
+            let sum = SettingsSync.digest(SettingsSync.digestible(name, settingsSectionData(name, settings)))
             guard s.sum != sum else { continue }
             if s.sum != nil {
                 s.at = max(HiddenContent.now(), s.srv + 1)
@@ -576,10 +613,11 @@ extension AppStore {
             applySettingsSection(name, next)
             applied.append(name)
             let after = settingsSectionData(name)
-            s.sum = SettingsSync.digest(after)
+            s.sum = SettingsSync.digest(SettingsSync.digestible(name, after))
             s.srv = r.at
             setSettingsBase(&s, name, r.data)
-            if SettingsSync.digest(next) == SettingsSync.digest(r.data) {
+            if SettingsSync.digest(SettingsSync.digestible(name, next))
+                == SettingsSync.digest(SettingsSync.digestible(name, r.data)) {
                 s.at = r.at
             } else {
                 // Ce qui vient d'ici s'y est ajouté (première rencontre,

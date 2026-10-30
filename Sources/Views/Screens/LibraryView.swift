@@ -190,6 +190,7 @@ struct LibraryView: View {
             Spacer(minLength: 0)
         }
         .lineLimit(1)
-        .frame(height: 16)
+        // Hauteur réservée, à la taille du texte d'iOS.
+        .frame(height: 16 * TType.ratio(12))
     }
 }

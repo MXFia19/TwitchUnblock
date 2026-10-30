@@ -11,10 +11,16 @@ struct PlayerMenuSheet: View {
     let canRewind: Bool
     /// On regarde déjà le DVR d'un direct : proposer le retour au direct.
     let isDvr: Bool
+    /// Hauteur et cadence de chaque qualité : « 1440p (Source) » plutôt que
+    /// « Source » quand on la connaît.
+    var variants: [String: VariantInfo] = [:]
 
     var onSelectQuality: (String) -> Void = { _ in }
-    /// Vitesse de lecture en cours ; nil masque la section (direct).
+    /// Vitesse de lecture en cours ; nil masque la section.
     var speed: Double? = nil
+    /// Direct : la vitesse ne sert qu'à rattraper le bord après un retour en
+    /// arrière (crans de 1× à 2×, note qui le dit).
+    var liveCatchUp = false
     var onSelectSpeed: (Double) -> Void = { _ in }
     var onRewind:      () -> Void = {}
     var onBackToLive:  () -> Void = {}
@@ -41,6 +47,13 @@ struct PlayerMenuSheet: View {
     var shareDetail: String? = nil
     /// Direct (pas son rembobinage) : en créer un clip.
     var onCreateClip: (() -> Void)? = nil
+    /// Archive d'un direct : aller à une heure de la diffusion (« 22 h 15 »).
+    var onGotoTime: (() -> Void)? = nil
+    /// Clip : sa VOD d'origine, à l'instant lu (position dans la VOD à droite).
+    var onClipToVod: (() -> Void)? = nil
+    var clipToVodDetail: String? = nil
+    /// Clip : le télécharger (feuille de partage d'iOS).
+    var onDownloadClip: (() -> Void)? = nil
 
     @EnvironmentObject private var store: AppStore
     @Environment(\.dismiss) private var dismiss
@@ -87,7 +100,8 @@ struct PlayerMenuSheet: View {
                         divider
                     }
 
-                    // Vitesse : VODs et clips. Un direct reste à 1×.
+                    // Vitesse : VODs et clips ; en direct, celle qui rattrape
+                    // le bord après un retour en arrière.
                     if let speed {
                         HStack(spacing: TSpace.md) {
                             Image(systemName: "speedometer")
@@ -102,7 +116,9 @@ struct PlayerMenuSheet: View {
                         ScrollViewReader { proxy in
                             ScrollView(.horizontal, showsIndicators: false) {
                                 HStack(spacing: TSpace.sm) {
-                                    ForEach(VodSpeed.all, id: \.self) { s in
+                                    // Un direct ne se lit pas au ralenti : il
+                                    // prendrait du retard sans fin.
+                                    ForEach(liveCatchUp ? VodSpeed.all.filter { $0 >= 1 } : VodSpeed.all, id: \.self) { s in
                                         TChip(title: s == 1 ? store.t("speed_normal") : VodSpeed.label(s, store.lang),
                                               isOn: abs(s - speed) < 0.01) {
                                             onSelectSpeed(s)
@@ -116,7 +132,18 @@ struct PlayerMenuSheet: View {
                             // cours (souvent « Normale ») reste en vue.
                             .onAppear { proxy.scrollTo(VodSpeed.nearest(speed), anchor: .center) }
                         }
-                        .padding(.vertical, TSpace.sm)
+                        .padding(.top, TSpace.sm)
+                        .padding(.bottom, liveCatchUp ? 0 : TSpace.sm)
+
+                        if liveCatchUp {
+                            Text(store.t("speed_live_note"))
+                                .font(.tMeta).foregroundColor(.tMuted)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, TSpace.lg)
+                                .padding(.top, TSpace.xs)
+                                .padding(.bottom, TSpace.sm)
+                        }
 
                         divider
                     }
@@ -168,6 +195,23 @@ struct PlayerMenuSheet: View {
                         divider
                     }
 
+                    if let onGotoTime {
+                        row(icon: "clock", title: store.t("vod_goto_time"), action: onGotoTime)
+                        divider
+                    }
+
+                    if let onClipToVod {
+                        row(icon: "film.stack", title: store.t("clip_full_vod"),
+                            detail: clipToVodDetail, action: onClipToVod)
+                        divider
+                    }
+
+                    if let onDownloadClip {
+                        row(icon: "arrow.down.circle", title: store.t("clip_download"),
+                            detail: store.t("clip_download_sub"), action: onDownloadClip)
+                        divider
+                    }
+
                     if let onDownload {
                         row(icon: "arrow.down.circle", title: store.t("dl_download"),
                             detail: store.t("dl_download_sub"), action: onDownload)
@@ -212,7 +256,7 @@ struct PlayerMenuSheet: View {
         .background(Color.tDark)
     }
 
-    private func label(_ q: String) -> String { qualityText(q, store.lang) }
+    private func label(_ q: String) -> String { qualityText(q, store.lang, variants: variants) }
 
     private var divider: some View {
         Divider().background(Color.tBorder).padding(.leading, 56)

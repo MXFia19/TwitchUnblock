@@ -1,0 +1,19 @@
+{
+ "traduites": {
+  "HISTORIQUE": ["HISTORY", "HISTORIAL", "ИСТОРИЯ"],
+  "LECTEUR": ["PLAYER", "REPRODUCTOR", "ПЛЕЕР"],
+  "MASQUÉS": ["HIDDEN", "OCULTOS", "СКРЫТЫЕ"],
+  "PLANNING": ["SCHEDULE", "HORARIO", "РАСПИСАНИЕ"],
+  "PUB": ["ADS", "ANUNCIOS", "РЕКЛАМА"],
+  "RECHERCHE": ["SEARCH", "BÚSQUEDA", "ПОИСК"],
+  "RÉSEAU": ["NETWORK", "RED", "СЕТЬ"],
+  "SAUVEGARDE": ["BACKUP", "COPIA", "РЕЗЕРВНАЯ КОПИЯ"]
+ },
+ "telles_quelles": [
+  "ACTIVITY", "ADMIN", "APP", "AUTH", "BADGES", "CACHE", "CHAT", "CLIP", "CRASH", "DOWNLOAD", "DROPS",
+  "EMOTES", "EVENTS", "EXPORT", "FEEDBACK", "FOLLOW", "GQL", "HELIX", "ICON", "INTEGRITY", "LIVE", "M3U8",
+  "MULTI", "NAV", "NOTIF", "NTFY", "PINNED", "POINTS", "RAID", "RECOVER", "SESSION", "SETTINGS", "SLEEP",
+  "STORYBOARD", "SYNC", "TOKEN", "TV", "UNMUTE", "UPDATE", "USAGE", "VIDEOS", "VOD", "VODCHAT", "WATCH",
+  "WEB", "WORKER"
+ ]
+}

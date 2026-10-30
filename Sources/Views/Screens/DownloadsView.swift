@@ -247,7 +247,7 @@ struct VodDownloadSheet: View {
         }
     }
 
-    private func label(_ q: String) -> String { qualityText(q, store.lang) }
+    private func label(_ q: String) -> String { qualityText(q, store.lang, variants: context.variants) }
 
     /// Durée de la VOD (playlist de la qualité choisie), débit de cette
     /// qualité (annoncé par la playlist principale, sinon estimé d'après la
@@ -376,7 +376,8 @@ struct DownloadRow: View {
                         .font(.tCardTitle).foregroundColor(.tText)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
-                    Text([item.streamer, item.quality.isEmpty ? "" : qualityText(item.quality, store.lang)]
+                    Text([item.streamer, item.quality.isEmpty ? ""
+                            : qualityText(item.quality, store.lang, variants: item.variants)]
                             .filter { !$0.isEmpty }.joined(separator: " · "))
                         .font(.tMeta).foregroundColor(.tPurple).lineLimit(1)
                     Text(detail)

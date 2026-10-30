@@ -173,6 +173,9 @@ struct PinnedBanner: View {
     /// Version posée dans la mise en page : toujours repliée (la version
     /// dépliée s'affiche par-dessus le chat, sans le pousser).
     var layoutOnly = false
+    /// Chat posé sur l'image : fond transparent, comme le reste du chat. La
+    /// version dépliée, par-dessus les messages, garde le sien.
+    var translucent = false
     let onDismiss: () -> Void
     @EnvironmentObject private var store: AppStore
     /// Largeur réelle du bandeau (mesurée), et hauteur du message déplié.
@@ -249,7 +252,7 @@ struct PinnedBanner: View {
                 .onChange(of: g.size.width) { measuredWidth = $0 }
         })
         .clipped()
-        .background(Color.tCard)
+        .background(translucent ? Color.black.opacity(0.45) : Color.tCard)
         .overlay(alignment: .bottom) {
             if let start = pin.startsAt, let end = pin.endsAt, end > start {
                 TimelineView(.periodic(from: .now, by: 1)) { ctx in
@@ -261,7 +264,7 @@ struct PinnedBanner: View {
                     }
                     .frame(height: 2)
                 }
-            } else {
+            } else if !translucent {
                 Divider().background(Color.tBorder)
             }
         }

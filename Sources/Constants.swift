@@ -3,6 +3,9 @@ import SwiftUI
 // MARK: – API
 let kAPIURL          = "https://test2.kurzmathis4.workers.dev"
 let kDiscordURL      = "https://discord.gg/cEsMRdxsVq"
+/// Notifications de live instantanées : le site installé en web app (à la
+/// place de ntfy). Ce lien ouvre ses étapes d'installation et d'activation.
+let kNotifInstallURL = URL(string: "https://twitchunblock.vercel.app/?install=notifications")!
 let kHelixClientID   = "1e68ku2ehgzy5cy0di3xvfy82sxpf6"
 let kGQLClientID     = "kimne78kx3ncx6brgo4mv6wki5h1ko"
 /// Client-ID public de l'app Android de Twitch (technique d'Xtra). Twitch
@@ -14,7 +17,7 @@ let kGQLNextClientID = "kd1unb4b3q4t58fwlpcbzcbnm76a8fp"
 let kRedirectURI     = "https://mxfia19.github.io/TwitchUnblock/auth.html"
 /// Schéma des liens de l'app, lu dans l'Info.plist : « twitchunblock », ou
 /// « twitchunblock-test » pour TU Test (changé par la CI : avec le même, iOS
-/// ouvrait l'une ou l'autre app au toucher d'une notification ntfy).
+/// ouvrait l'une ou l'autre app au toucher d'un lien twitchunblock://).
 let kAppURLScheme: String = {
     let types = Bundle.main.object(forInfoDictionaryKey: "CFBundleURLTypes") as? [[String: Any]]
     return (types?.first?["CFBundleURLSchemes"] as? [String])?.first ?? "twitchunblock"
@@ -31,8 +34,7 @@ let kAPIFallbackURLs: [String] = ["https://test2-fallback.vxcraftmanpetit.worker
 /// depuis le dépôt du site, sur Cloudflare ou avec Docker), essayé en premier
 /// pour la lecture — si les Workers officiels tombent, ou si le projet
 /// disparaît, l'app continue de lire. Et, s'il le demande, pour tout le reste
-/// aussi : sauvegarde (avec son jeton Twitch), retours, annonces, comptage,
-/// notifications ntfy.
+/// aussi : sauvegarde (avec son jeton Twitch), retours, annonces, comptage.
 enum APIConfig {
     static let customKey = "cfg_custom_worker"
     static let allKey = "cfg_custom_worker_all"
@@ -134,27 +136,51 @@ enum APIConfig {
     }
 }
 
-/// Miroirs Luminous, essayés dans l'ordre : si l'un est indisponible on passe
-/// au suivant. as = Asie (historique), eu/eu2/eu3 = Europe (recommandés pour
-/// le mobile). Pas « sans pub » : les pré-rolls et les pauses pub de la chaîne
-/// y arrivent comme sur Twitch (mesuré le 2026-10-14).
-let kLuminousHosts = [
-    "as.luminous.dev",
-    "eu.luminous.dev",
-    "eu2.luminous.dev",
-    "eu3.luminous.dev"
+/// Proxys au format Luminous (/live/<chaîne>) : un serveur par source
+/// (sondés le 2026-10-27 sur trois directs, sans pré-roll). Pas « sans pub »
+/// pour autant : les pauses pub de la chaîne y arrivent comme sur Twitch
+/// (mesuré le 2026-10-14). as = Luminous Asie (sortie Ouzbékistan), pp =
+/// PerfProd Asie (Maurice), al2 = l'autre serveur de nadeko
+/// (twitch.zzls.xyz n'est qu'une redirection vers lui), eu / eu2 = Luminous
+/// Europe et Europe 2 (eu3 ne répondait plus).
+let kLiveProxyHosts = [
+    "as": "as.luminous.dev",
+    "pp": "lb-as.cdn-perfprod.com",
+    "al2": "twitch.nadeko.net",
+    "eu": "eu.luminous.dev",
+    "eu2": "eu2.luminous.dev"
 ]
 
-/// Proxys au format TTV.LOL v1, essayés après Luminous. Celui-ci est en
-/// Albanie ; ses variantes se lisent de n'importe quelle adresse et annoncent
-/// leurs segments d'avance. Les pauses pub de la chaîne y passent aussi.
+/// Proxys au format TTV.LOL v1 (source « al »). Celui-ci est en Albanie ; ses
+/// variantes se lisent de n'importe quelle adresse et annoncent leurs
+/// segments d'avance. Les pauses pub de la chaîne y passent aussi.
 let kTTVLOLHosts = ["twitch-al.nadeko.net"]
 
 /// Sources du direct proposées dans les réglages et le menu du lecteur.
-let kLiveSourceChoices = ["auto", "as", "al", "eu", "twitch"]
-/// Sources du direct, dans l'ordre automatique : Luminous Asie, proxy
-/// albanais (TTV.LOL), Luminous Europe, Twitch officiel (avec ses pubs).
-let kLiveSources = ["as", "al", "eu", "twitch"]
+let kLiveSourceChoices = ["auto", "as", "pp", "al", "al2", "eu", "eu2", "twitch"]
+/// Sources du direct, dans l'ordre automatique : Luminous Asie, PerfProd
+/// Asie, proxy albanais (TTV.LOL) et son second serveur, Luminous Europe et
+/// Europe 2, Twitch officiel (avec ses pubs).
+let kLiveSources = ["as", "pp", "al", "al2", "eu", "eu2", "twitch"]
+/// Source ajoutée → celle qu'elle secourt : un ordre enregistré avant elle
+/// la reçoit juste après (comme le site et le Worker).
+let kLiveSourceBackupOf = ["pp": "as", "al2": "al", "eu2": "eu"]
+
+/// Ordre complet des sources : celles de `saved` connues, sans doublon ;
+/// une source qui manque va juste après celle qu'elle secourt, sinon à la
+/// fin, dans l'ordre automatique.
+func completeLiveSourceOrder(_ saved: [String]) -> [String] {
+    var order: [String] = []
+    for id in saved where kLiveSources.contains(id) && !order.contains(id) { order.append(id) }
+    for id in kLiveSources where !order.contains(id) {
+        if let parent = kLiveSourceBackupOf[id], let i = order.firstIndex(of: parent) {
+            order.insert(id, at: i + 1)
+        } else {
+            order.append(id)
+        }
+    }
+    return order
+}
 
 /// Récupération de VODs supprimées : distributions CloudFront où Twitch range
 /// les VODs (les plus fréquentes d'abord), plus des hôtes historiques. Le
@@ -237,21 +263,25 @@ extension Color {
 // MARK: – Language
 enum Lang: String, CaseIterable, Identifiable {
     case fr, en, es, ru, it, ja
+    /// Code de locale explicite : `rawValue` sert d'identifiant à
+    /// `Locale(identifier:)` (formats de date) et au site (« zh-Hant »).
+    case zhHant = "zh-Hant"
     var id: String { rawValue }
     var flag: String {
         switch self {
         case .fr: "🇫🇷"; case .en: "🇬🇧"; case .es: "🇪🇸"; case .ru: "🇷🇺"; case .it: "🇮🇹"; case .ja: "🇯🇵"
+        case .zhHant: "🇹🇼"
         }
     }
     var label: String {
         switch self {
         case .fr: "Français"; case .en: "English"; case .es: "Español"; case .ru: "Русский"
-        case .it: "Italiano"; case .ja: "日本語"
+        case .it: "Italiano"; case .ja: "日本語"; case .zhHant: "繁體中文"
         }
     }
     /// Traduite avec l'IA, sans relecture : on le dit à côté du choix de
     /// langue, avec un lien pour signaler les erreurs.
-    var machineTranslated: Bool { self == .ru || self == .it || self == .ja }
+    var machineTranslated: Bool { self == .ru || self == .it || self == .ja || self == .zhHant }
 }
 
 // ✨ NOUVEAU : Les sources se traduisent automatiquement !
@@ -318,12 +348,25 @@ private let translations: [Lang: [String: String]] = [
         "pb_chat": "Disposition du chat (paysage)", "pb_rotate": "Portrait / paysage", "pb_airplay": "AirPlay (en haut)",
         "cust_chat": "Chat · bandeaux", "cust_live_events": "Événements du live",
         "cust_polls": "Sondages", "cust_predictions": "Prédictions",
+        "cust_special_events": "Special Events",
+        "cust_special_events_foot": "Special Events : les campagnes de récompenses de Twitch elle-même (« 1 Month of Apple TV »…), en carte comme des drops sur beaucoup de chaînes. Si tu les masques, les drops de la chaîne restent.",
+        "cust_chat_bell": "Cloche des notifications",
+        "cust_chat_modes": "Mode du chat (followers, lent…)",
+        "cust_chat_points": "Bouton des points (couronne)",
+        "cust_chat_buttons_foot": "Si tu les masques ici, la cloche reste sur la page de la chaîne et les points dans le menu ⋯ du chat ; un message refusé dit toujours pourquoi.",
+        "menu_points_sub": "Solde, récompenses et coffres de la chaîne.",
         "cust_reset": "Rétablir la disposition d'origine",
         "cust_reset_confirm": "Onglets, accueil, boutons du lecteur et bandeaux du chat reviennent comme au premier lancement.",
         "cust_channel_tabs": "Page d'une chaîne · onglets",
         "cust_channel_tabs_foot": "La page s'ouvre sur le premier onglet affiché. Le planning n'apparaît que si la chaîne en a un.",
         "cust_pinned_viewers": "Épinglées triées par spectateurs",
         "cust_pinned_viewers_foot": "Les directs des chaînes épinglées restent en tête des Suivies, la plus regardée d'abord. Désactivé : dans l'ordre où tu les as épinglées.",
+        "cust_followed_cats": "Catégories suivies",
+        "cust_cat_size": "Taille des jaquettes",
+        "cust_cat_normal": "Normale",
+        "cust_cat_compact": "Compacte",
+        "cust_cat_sort": "Ordre",
+        "cust_followed_cats_foot": "Accueil → Catégories → Suivies. Compacte : 3 jaquettes par ligne sur iPhone, davantage sur un écran plus large.",
         "multi_added": "Ajouté au multi-live", "multi_removed": "Retiré du multi-live",
         "tab_direct": "Lien / ID", "settings": "Paramètres",
         "tab_history": "VODs",
@@ -343,6 +386,10 @@ private let translations: [Lang: [String: String]] = [
         "err_network": "Erreur réseau.", "err_live": "Erreur Live.",
         "err_conn": "Erreur connexion.", "err_loading": "Erreur lors du chargement.",
         "err_no_source": "Aucune source n'a répondu pour ce direct.",
+        "err_geo_blocked": "Ce direct n'est pas disponible dans votre région : Twitch le réserve à certains pays (droits de diffusion), et aucune de nos sources n'y a accès.",
+        "vertical_format": "Image verticale",
+        "vertical_on": "Image verticale du streamer",
+        "vertical_off": "Image habituelle",
         "err_vod_unavailable": "VOD introuvable ou réservée aux abonnés.",
         "login_prompt": "Connectez-vous pour retrouver vos chaînes préférées.",
         "login_required": "Connectez-vous pour voir les streams en cours.",
@@ -374,6 +421,7 @@ private let translations: [Lang: [String: String]] = [
         "proxy_sub": "Désactiver pour économiser le serveur (utile pour VLC)",
         "proxy_enable": "Activer le proxy", "twitch_account": "Compte Twitch",
         "language": "Langue",
+        "app_language": "Langue de l'app",
         "settings_source": "Serveur / Source Vidéo",
         
         // Traductions sources
@@ -392,10 +440,10 @@ private let translations: [Lang: [String: String]] = [
         "chat_follow": "Suivre", "chat_first_message": "Premier message",
         "poll_results": "Résultats", "poll_multi": "Plusieurs choix possibles", "poll_votes": "votes", "pred_result": "Résultat", "pred_tap_to_bet": "Touche une issue pour parier", "pred_bet_on": "Miser sur « {o} »", "pred_bet": "Parier", "pred_balance": "Solde", "pred_all": "Max", "pred_my_bet": "Ton pari : {n} pts sur « {o} »", "pred_need_login": "Pour parier, connecte ta session Twitch avec le bouton des points de chaîne", "pred_bet_failed": "Pari non envoyé, réessaie", "pred_closed": "Paris fermés", "pred_one_outcome": "Tu as déjà parié sur une autre issue", "pred_max": "Mise maximale : 250 000 pts par prédiction", "pred_min": "Mise minimale : 10 pts", "pred_potential": "gain possible : {n} pts", "points_tracker": "Points de chaîne", "points_tracker_sub": "Temps regardé et points gagnés", "pt_now": "En ce moment", "pt_total": "Total", "pt_since": "depuis le {d}", "pt_watched": "Regardé", "pt_earned": "Gagnés", "pt_chests": "Coffres", "pt_channels": "Par chaîne", "pt_empty": "Rien de compté pour l'instant : regarde un live avec ta session web connectée.", "pt_note": "Compté sur cet appareil quand la session web est connectée : les minutes que Twitch compte pour les points, et les points gagnés en regardant (passifs, séries, coffres), sans les gains de prédictions.", "pt_reset": "Remettre à zéro", "pt_reset_confirm": "Effacer le temps et les points comptés ?", "pt_login": "Les points se gagnent et se comptent avec la session web connectée (comme les drops).", "poll_vote": "Voter", "poll_change": "Changer mon vote", "poll_single_hint": "Un seul choix", "poll_multi_hint": "Plusieurs choix possibles", "poll_until": "fin dans {time}", "poll_ended": "Sondage terminé", "poll_voter": "{n} votant", "poll_voters": "{n} votants", "poll_closed": "Ce sondage est terminé.", "poll_failed": "Vote non envoyé, réessaie.", "player_muted": "Son coupé", "player_unmuted": "Son remis", "cfg_time_format": "Format de l’heure", "cfg_time_format_sub": "Heure des messages du chat et du journal. Auto suit le réglage de ton appareil.", "time_auto": "Auto", "logs_all": "Tout ({n})", "logs_share": "📤 Partager", "logs_file": "📄 Fichier .txt", "logs_clear": "🗑 Effacer", "logs_count": "{n} logs", "logs_no_match": "Aucun résultat pour ce filtre", "logs_empty_hint": "Lance une VOD ou un stream pour voir les logs", "logs_clear_title": "Effacer les logs", "logs_clear_btn": "Effacer", "logs_clear_confirm": "Confirmer ?", "logs_details": "▼ Détails",
         "hide_bots": "Masquer les bots", "hide_bots_sub": "Nightbot, StreamElements, Fossabot…", "hide_commands": "Masquer les commandes", "hide_commands_sub": "Les messages qui commencent par « ! ».", "muted_words": "Mots masqués", "muted_words_sub": "Séparés par des virgules : les messages qui les contiennent ne s’affichent pas.", "hidden_users": "{n} personne(s) masquée(s)", "clear": "Effacer", "hide_user": "Masquer dans le chat", "unhide_user": "Réafficher dans le chat",
-        "clips": "Clips", "no_clips": "Aucun clip sur cette période", "highlights": "Highlights", "no_highlights": "Aucun highlight", "backup": "Sauvegarde", "backup_sub": "Exporte tes chaînes et catégories suivies et tes réglages dans un fichier, pour les importer ailleurs (app ou site).", "export_data": "Exporter", "import_data": "Importer", "export_done": "Fichier exporté", "import_done": "Import terminé : %d chaîne(s) ajoutée(s)", "import_bad": "Ce fichier n’est pas une sauvegarde TwitchUnblock", "playlists": "Playlists", "play_all": "Tout lire", "videos_count": "%d vidéo(s)", "no_playlists": "Aucune playlist", "err_clip": "Ce clip est introuvable", "period_day": "24 h", "period_week": "7 j", "period_month": "30 j", "period_all": "Tout",
+        "clips": "Clips", "no_clips": "Aucun clip sur cette période", "highlights": "Highlights", "no_highlights": "Aucun highlight", "backup": "Sauvegarde", "backup_sub": "Exporte tes chaînes (suivies, épinglées, masquées), tes réglages, ta personnalisation et « Continuer à regarder » dans un fichier, pour les reprendre ailleurs : l'app de test TU Test, une réinstallation, le site. Tes connexions Twitch n'y sont jamais.", "export_data": "Exporter", "import_data": "Importer", "export_done": "Fichier exporté", "import_done": "Import terminé : %d chaîne(s) ajoutée(s)", "import_bad": "Ce fichier n’est pas une sauvegarde TwitchUnblock", "playlists": "Playlists", "play_all": "Tout lire", "videos_count": "%d vidéo(s)", "no_playlists": "Aucune playlist", "err_clip": "Ce clip est introuvable", "period_day": "24 h", "period_week": "7 j", "period_month": "30 j", "period_all": "Tout",
         "notif_live": "Notifications de live", "notif_live_sub": "Prévient quand une chaîne suivie commence un live (vérifié en arrière-plan quand iOS le permet ; suivis Twitch et suivis sur cet appareil).", "notif_test": "Envoyer une notification de test", "notif_test_title": "TwitchUnblock", "notif_test_body": "Les notifications fonctionnent 🎉", "notif_test_sent": "Envoyée : elle arrive dans 3 s (quitte l'app pour la voir comme une vraie).", "notif_test_denied": "Notifications refusées : autorise-les dans Réglages iOS → TwitchUnblock.", "notif_last_never": "Aucune vérification en arrière-plan pour l'instant. iOS choisit le moment : laisse l'app en arrière-plan (sans la fermer) quelques heures.", "notif_last_run": "Dernière vérification en arrière-plan : {t}", "notif_last_failed": "échec (connexion ou jeton)", "notif_bg_off": "« Actualisation en arrière-plan » est coupée (ou le mode économie d'énergie est actif) : iOS ne réveillera pas l'app. Réglages iOS → Général → Actualisation en arrière-plan.", "notif_bg_refused": "iOS a refusé de programmer la vérification", "web_banner_title": "Connecte ta session web", "web_banner_msg": "Pour les points de chaîne, les coffres récupérés tout seuls et les prédictions : connecte-toi une fois sur twitch.tv dans l'app.", "web_banner_btn": "Connecter", "announcement_open": "Ouvrir", "dont_show_again": "Ne plus afficher", "notif_live_title": "{u} est en live",
         "notif_channels": "Chaînes notifiées",
-        "notif_channels_sub": "Les notifications de live (réveils de l'app et ntfy) ne concernent que les chaînes allumées ici. Une chaîne suivie plus tard est allumée d'office.",
+        "notif_channels_sub": "Les notifications de live (réveils de l'app) ne concernent que les chaînes allumées ici. Une chaîne suivie plus tard est allumée d'office.",
         "notif_channels_all": "Toutes tes chaînes suivies",
         "notif_channels_muted": "{n} chaîne(s) sans notification",
         "notif_channels_all_on": "Tout activer",
@@ -404,7 +452,7 @@ private let translations: [Lang: [String: String]] = [
         "notif_channels_error": "Impossible de charger tes chaînes suivies. Réessaie dans un instant.",
         "chapters": "Chapitres", "close": "Fermer",
         "made_by": "Fait par", "source_ios": "Code source de l'app", "web_version": "Version web", "credits_thanks": "Merci à BetterTTV, FrankerFaceZ, 7TV, recent-messages et Luminous.", "not_affiliated": "Projet indépendant, non affilié à Twitch.",
-        "credits_contributors": "Contributeurs", "credits_contrib_it": "Traduction italienne", "credits_contrib_ja": "Traduction japonaise", "credits_contrib_swipe": "Glissé vers le bas du lecteur plus réactif",
+        "credits_contributors": "Contributeurs", "credits_contrib_it": "Traduction italienne", "credits_contrib_ja": "Traduction japonaise", "credits_contrib_zhHant": "Traduction en chinois traditionnel", "credits_contrib_swipe": "Glissé vers le bas du lecteur plus réactif",
         "update_title": "Mise à jour disponible", "update_msg": "La version {v} est sortie (tu as la {c}). Mets-la à jour depuis Feather, SideStore ou AltStore.", "update_whats_new": "Voici ce qui a changé depuis ta version :", "update_open": "Mettre à jour", "later": "Plus tard", "update_available": "Mise à jour disponible : {v}", "update_check": "Vérifier les mises à jour", "update_none": "L'app est à jour", "version_label": "Version", "discord_join": "Rejoindre le Discord",
         "discord_title": "Rejoins le Discord", "discord_msg": "Nouveautés, bugs, idées : la communauté TwitchUnblock est sur Discord. Tu peux aussi le retrouver plus tard dans Réglages → À propos.",
         "update_msg_short": "Une nouvelle version de TwitchUnblock est disponible. Installe-la depuis Feather, SideStore ou AltStore.",
@@ -420,7 +468,7 @@ private let translations: [Lang: [String: String]] = [
         "raid_bonus": "Bonus de raid",
         "logs_count_one": "{n} log",
         "dl_chat_count_one": "chat : {n} message",
-        "ntfy_status_one": "{n} chaîne suivie prise en compte (compte Twitch et cet appareil).",
+        
         "viewers_one": "spectateur",
         "followers_one": "follower",
         "poll_votes_one": "vote",
@@ -433,12 +481,20 @@ private let translations: [Lang: [String: String]] = [
         "cfg_drops_notice": "Drops de la chaîne", "cfg_drops_notice_sub": "Une carte en haut du chat quand la chaîne a des drops (à fermer)",
         "drops_notice_title": "Regarde {m} min pour obtenir {r}", "drops_notice_ends": "Jusqu'au {d}", "drops_notice_details": "Détails", "drops_notice_more": "+{n} récompenses",
         "chat_info_copy": "Copier le nom", "chat_info_copied": "Copié", "chat_info_insert": "Ajouter au message", "chat_info_badge": "Badge",
+        "emote_hide": "Masquer cette emote",
+        "emote_unhide": "Réafficher cette emote",
+        "emote_hidden_note": "Masquée : le chat l'affiche comme le mot tapé.",
+        "hidden_emotes": "Emotes masquées",
+        "hidden_emotes_empty": "Aucune. Appui long sur une emote dans le chat, ou sa fiche → « Masquer cette emote » : elle s'affichera comme le mot tapé.",
+        "hidden_emotes_sub": "Dans le chat (direct, VODs, multi-live), elles s'affichent comme le mot tapé. Elles suivent ton compte, site compris.",
+        "hidden_emotes_clear": "Tout réafficher",
         "emote_src_twitch": "Emote Twitch", "emote_src_bttv_personal": "BetterTTV · emote personnelle (Pro)",
         "emote_scope_global": "Emote globale", "emote_scope_channel": "Emote de la chaîne", "emote_by": "Par {u}", "emote_original": "Nom d'origine : {n}",
-        "emote_zero_width": "Se superpose à l'emote précédente", "emote_modifier": "Modificateur : change l'apparence d'une autre emote", "emote_view_on": "Voir sur {p}",
+        "emote_zero_width": "Se superpose à l'emote précédente", "emote_modifier": "Modificateur : change l'apparence d'une autre emote", "emote_view_on": "Voir sur {p}", "chat_gif_source": "GIF de GIPHY, envoyé avec le clavier GIF de Twitch", "chat_gif_by": "par {a}",
         "emote_type_global": "Emote globale Twitch", "emote_type_sub": "Emote d'abonné · niveau {n}", "emote_type_points": "Emote débloquée avec les points de chaîne", "emote_sub_count": "Emotes d'abonné de {c} : {n}",
         "chat_info_open": "Voir la fiche", "emote_search_ph": "Chercher une emote", "emotes_channel": "Cette chaîne", "emote_results": "Résultats pour « {q} » : {n}",
         "emote_locked": "Réservée aux abonnés",
+        "emotes_mine": "Mes emotes",
         "emotes_loading": "Chargement des emotes…", "emotes_none": "Aucune emote disponible", "emotes_no_result": "Aucun résultat", "emotes_open_live": "Ouvre un live pour charger les emotes de la chaîne",
         "cfg_follow": "Bouton Suivre au-dessus du chat", "cfg_follow_sub": "Dans le lecteur, au-dessus des messages. La page de la chaîne garde le sien.",
         "unfollow": "Ne plus suivre", "unfollow_confirm": "Ne plus suivre {c} ?", "follow_hide_button": "Masquer ce bouton dans le lecteur", "follow_hide_hint": "Il se réactive dans Paramètres → Chat → Personnalisation.",
@@ -484,6 +540,8 @@ private let translations: [Lang: [String: String]] = [
         "ob_tip_more": "Image dans l’image, minuteur de veille, et le chat avec les points de chaîne.",
         "switching_source": "Changement de source…",
         "loading_source": "Essai : {s}…",
+        "pip_on_leave": "PiP en quittant le lecteur",
+        "pip_on_leave_sub": "Réduire un direct ou une VOD (glissé vers le bas, flèche retour) l'ouvre en image dans l'image au lieu du mini-lecteur, si la vidéo joue. Lecteur immersif seulement.",
         "fill_screen": "Remplir l'écran (paysage)",
         "fill_screen_sub": "Agrandit l'image jusqu'aux bords en paysage, au prix du haut et du bas. Désactivé, l'image reste entière et laisse des bandes égales sur les côtés. Sans effet en portrait.",
         "web_expired": "Session web expirée",
@@ -538,6 +596,8 @@ private let translations: [Lang: [String: String]] = [
         "cfg_kbd_suggest": "Suggestions du clavier",
         "cfg_kbd_suggest_sub": "Mots proposés au-dessus du clavier et correction automatique d'iOS. Coupe-les si iOS corrige tes emotes.",
         "cfg_return_sends": "Entrée envoie le message", "cfg_return_sends_sub": "Sinon, la touche Entrée ferme le clavier et le bouton ➤ envoie.",
+        "cfg_chat_input": "Afficher la zone d'envoi",
+        "cfg_chat_input_sub": "Champ, emotes et bouton Envoyer sous le chat. Masquée, pour qui ne fait que lire : la place revient aux messages, en direct comme en paysage ; les points et le menu ⋯ restent en bas à droite du chat.",
         "cfg_chat_sync": "Chat synchronisé avec la vidéo",
         "cfg_chat_sync_sub": "Les messages du direct attendent que l'image les rattrape : le retard suit le lecteur (calage, retour au direct). Les tiens s'affichent tout de suite. La pastille ⏱ au-dessus du chat coupe ou rallume la synchro.",
         "chat_sync_on": "Chat retardé de {s} s pour suivre l'image. Toucher pour le remettre en temps réel.",
@@ -602,6 +662,7 @@ private let translations: [Lang: [String: String]] = [
         "speed": "Vitesse",
         "speed_normal": "Normale",
         "speed_caught_up": "Direct rattrapé : vitesse normale",
+        "speed_live_note": "En direct : sert à rattraper le direct après un retour en arrière ; retour à 1× au bord.",
         "speed_unavailable": "Vitesse indisponible ici",
         "rewind_sub": "Revenir en arrière dans le direct",
         "menu_chat_only": "Chat seul",
@@ -700,6 +761,9 @@ private let translations: [Lang: [String: String]] = [
         "src_as": "Luminous Asie",
         "src_al": "Proxy Albanie (TTV.LOL)",
         "src_eu": "Luminous Europe",
+        "src_pp": "PerfProd Asie",
+        "src_al2": "Proxy Albanie 2",
+        "src_eu2": "Luminous Europe 2",
         "src_twitch": "Twitch officiel (pubs)",
         "src_worker": "Serveur TwitchUnblock",
         "chat_unreachable": "Le chat ne répond pas. Vérifie ta connexion (VPN, réseau filtré) ou touche « Reconnecter le chat » dans le menu du chat.",
@@ -720,6 +784,19 @@ private let translations: [Lang: [String: String]] = [
         "spatial_audio_sub": "« Désactivé » coupe l'audio spatial, et donc le suivi de la tête, dans l'app. iOS ne laisse pas une app choisir « Fixe » : Centre de contrôle → appui long sur le volume → Audio spatial, ou, pour toutes les apps, désactive « Suivre l'iPhone » dans les réglages Accessibilité des AirPods.",
         "spatial_auto": "Automatique",
         "spatial_off": "Désactivé",
+        "bg_playback": "Lecture en arrière-plan",
+        "bg_playback_sub": "Écran verrouillé ou autre app, sans PiP : la lecture continue, passe au son seul (moins de données) ou se met en pause.",
+        "bg_playback_continue": "Continuer",
+        "bg_playback_audio": "Son seul",
+        "bg_playback_pause": "Pause",
+        "vod_goto_time": "Aller à une heure",
+        "vod_goto_time_sub": "Diffusé de {a} à {b}. Choisis l'heure réelle d'un moment du direct.",
+        "vod_goto_btn": "Aller",
+        "clip_full_vod": "Voir dans la VOD",
+        "clip_download": "Télécharger le clip",
+        "clip_download_sub": "Photos, Fichiers…",
+        "clip_dl_started": "Téléchargement du clip…",
+        "clip_dl_failed": "Téléchargement du clip impossible",
         "drops": "Drops",
         "drops_sub": "Progression et récompenses",
         "drops_progress": "Faire progresser les drops",
@@ -813,26 +890,22 @@ private let translations: [Lang: [String: String]] = [
         "multi_chat_sub": "Le chat de la vidéo qui a le son (rejoué pour une VOD), à droite de la mosaïque (iPad, ou grand iPhone en paysage).",
         "multi_swap": "Échanger avec {n}",
         "multi_move": "Changer de place",
+        "multi_volume": "Volume",
+        "multi_sound_on": "Entendre aussi cette vidéo",
+        "multi_sound_off": "Couper le son de cette vidéo",
         "live_activity": "Activité en direct",
         "live_activity_sub": "La vidéo en cours sur l'écran verrouillé et dans la Dynamic Island (chaîne, titre, lecture). Coupée, elle disparaît aussitôt.",
-        "ntfy_live": "Notifications instantanées (ntfy)",
-        "ntfy_live_sub": "Même app fermée, dans la minute ou les deux qui suivent : par l'app gratuite ntfy, qui a le droit aux notifications d'Apple. Les notifications de l'app elle-même s'arrêtent alors, pour éviter les doublons.",
-        "ntfy_steps": "1. Installe ntfy (App Store). 2. Dans ntfy : + → colle ce sujet → S'abonner (serveur ntfy.sh par défaut). 3. Envoie une notification de test. La toucher ouvrira le live ici.",
-        "ntfy_copy": "Copier",
-        "ntfy_copied": "Copié",
-        "ntfy_install": "Installer ntfy",
-        "ntfy_test_sent": "Envoyée : elle arrive dans ntfy dans quelques secondes.",
-        "ntfy_failed": "Impossible de joindre le serveur pour l'instant : réessaie plus tard.",
-        "ntfy_limited": "ntfy.sh n'accepte plus de messages pour l'instant (limite d'envoi atteinte) : réessaie plus tard.",
-        "ntfy_not_ready": "Activé, mais le serveur ne gère pas encore ces notifications : elles arrivent avec la prochaine mise à jour du site. L'app réessaie toute seule à chaque fois que tu reviens dedans.",
-        "ntfy_pending": "Activé, mais le serveur n'a pas répondu : l'app réessaie toute seule à chaque fois que tu reviens dedans.",
-        "ntfy_status": "{n} chaînes suivies prises en compte (compte Twitch et cet appareil).",
-        "ntfy_privacy": "Les messages passent par ntfy.sh (service tiers gratuit). Ton sujet est secret : ne le partage pas.",
+        "notif_pwa_title": "Notifications instantanées : le site en web app",
+        "notif_pwa_sub": "Même app fermée, dans la minute : ajoute le site à l'écran d'accueil (dans Safari : Partager → Sur l'écran d'accueil, iOS 16.4 ou plus), ouvre-le depuis son icône, puis Réglages → Notifications → « Lives des chaînes suivies ». Connecte-toi avec ton compte Twitch pour retrouver tes chaînes.",
+        "notif_pwa_open": "Ouvrir le site",
+        "ntfy_retired_title": "Fin des notifications ntfy",
+        "ntfy_retired_body": "L'app ne passe plus par ntfy : tu peux le désinstaller. Pour être prévenu quand une chaîne passe en live, installe le site en web app : il envoie lui-même les notifications, sans app tierce.",
         "app_icon": "Icône de l'app",
         "app_icon_sub": "« Contraste » reste la plus nette avec les icônes transparentes ou teintées d'iOS 26.",
         "app_icon_failed": "iOS a refusé de changer l'icône : {e}",
         "app_icon_wildcard": "L'app a été signée avec l'identifiant générique de ton certificat (« {id} ») : c'est très probablement pour ça qu'iOS refuse de changer l'icône (erreur -54). Feather 2.9 ne sait pas encore corriger ça ; sa prochaine version ajoute l'option « Merge Entitlements » : active-la alors, puis re-signe et réinstalle l'app.",
         "app_icon_unsupported": "Cette installation ne permet pas de changer d'icône : l'outil qui a installé l'app en a peut-être retiré les icônes au choix.",
+        "app_icon_blocked": "L'outil qui a installé l'app (LiveContainer, GBox…) ne permet pas de changer son icône.",
         "icon_default": "Classique",
         "icon_purple": "Violet",
         "icon_night": "Nuit",
@@ -918,7 +991,7 @@ private let translations: [Lang: [String: String]] = [
         "expert_quota": "Ce Worker a atteint son quota (Cloudflare) : réessaie plus tard (le quota du jour repart à minuit UTC).",
         "expert_reset": "Revenir aux Workers officiels",
         "expert_all": "Tout passer par ce Worker",
-        "expert_all_sub": "Aussi la sauvegarde de l'historique, les retours, les annonces, les notifications ntfy et le comptage. Ton jeton Twitch lui est alors envoyé (sauvegarde) : n'active ça que pour un Worker que tu héberges toi-même.",
+        "expert_all_sub": "Aussi la sauvegarde de l'historique, les retours, les annonces et le comptage. Ton jeton Twitch lui est alors envoyé (sauvegarde) : n'active ça que pour un Worker que tu héberges toi-même.",
         "expert_all_no_db": "Ce Worker n'a pas de base D1 : la sauvegarde, les retours et les notifications n'y marcheraient pas. L'option reste coupée.",
         "expert_using": "En service : {u}",
         "chat_mode_followers": "Followers uniquement",
@@ -1000,6 +1073,28 @@ private let translations: [Lang: [String: String]] = [
         "sched_vacation_range": "En vacances du {a} au {b}",
         "sched_none": "Aucun live prévu pour l'instant",
         "sched_local_hint": "Jours et heures de ton appareil.",
+        "version_build": "Version {v} (build {b})",
+        "version_copied": "Version copiée",
+        "version_copy_hint": "Touche pour copier",
+        "update_stale_title": "Installation à refaire",
+        "update_stale_msg": "Ton outil d'installation a installé un ancien build ({b}) sous le numéro {v} : tu n'as pas vraiment la {v}. Supprime l'app et réinstalle-la depuis GitHub. Pour garder tes chaînes et tes réglages, exporte d'abord une sauvegarde (Paramètres → Général → Sauvegarde).",
+        "update_stale_download": "Télécharger l'IPA",
+        "update_stale_short": "Ancien build installé : réinstaller la {v}",
+        "continue_resume": "Reprendre",
+        "continue_remove": "Retirer de la liste",
+        "import_choice_title": "Que reprendre de cette sauvegarde ?",
+        "import_choice_msg": "Tout : chaînes, réglages (langue, qualités, chat, lecteur, apparence, notifications, téléchargements, personnalisation) et « Continuer à regarder ». Chaînes seulement : chaînes suivies, épinglées et masquées, et catégories suivies. Rien n'est retiré.",
+        "import_all": "Tout",
+        "import_channels_only": "Chaînes seulement",
+        "import_sum_title": "Sauvegarde importée",
+        "import_sum_follows": "Chaînes suivies ajoutées : {n}",
+        "import_sum_categories": "Catégories suivies ajoutées : {n}",
+        "import_sum_pinned": "Chaînes épinglées ajoutées : {n}",
+        "import_sum_hidden": "Chaînes et catégories masquées ajoutées : {n}",
+        "import_sum_settings": "Réglages repris : {n}",
+        "import_sum_ignored": "Réglages ignorés (inconnus de cette version ou invalides) : {n}",
+        "import_sum_continue": "Vidéos de « Continuer à regarder » : {n}",
+        "import_sum_channels_only": "Réglages laissés tels quels (chaînes seulement).",
     ],
     .en: [
         "title": "Watch Twitch No Sub",
@@ -1024,12 +1119,25 @@ private let translations: [Lang: [String: String]] = [
         "pb_chat": "Chat layout (landscape)", "pb_rotate": "Portrait / landscape", "pb_airplay": "AirPlay (top)",
         "cust_chat": "Chat · banners", "cust_live_events": "Live events",
         "cust_polls": "Polls", "cust_predictions": "Predictions",
+        "cust_special_events": "Special Events",
+        "cust_special_events_foot": "Special Events: Twitch’s own reward campaigns (“1 Month of Apple TV”…), shown as a card like drops on many channels. Hide them and the channel’s drops still show.",
+        "cust_chat_bell": "Notification bell",
+        "cust_chat_modes": "Chat mode (followers, slow…)",
+        "cust_chat_points": "Channel points button (crown)",
+        "cust_chat_buttons_foot": "If you hide them here, the bell stays on the channel page and the points in the chat’s ⋯ menu; a refused message still says why.",
+        "menu_points_sub": "The channel’s balance, rewards and bonus chests.",
         "cust_reset": "Restore the default layout",
         "cust_reset_confirm": "Tabs, home, player buttons and chat banners go back to how they were at first launch.",
         "cust_channel_tabs": "Channel page · tabs",
         "cust_channel_tabs_foot": "The page opens on the first tab shown. Schedule only appears when the channel has one.",
         "cust_pinned_viewers": "Pinned sorted by viewers",
         "cust_pinned_viewers_foot": "Pinned channels' streams stay at the top of Following, most watched first. Off: in the order you pinned them.",
+        "cust_followed_cats": "Followed categories",
+        "cust_cat_size": "Cover size",
+        "cust_cat_normal": "Normal",
+        "cust_cat_compact": "Compact",
+        "cust_cat_sort": "Order",
+        "cust_followed_cats_foot": "Home → Categories → Followed. Compact: 3 covers per row on iPhone, more on a wider screen.",
         "multi_added": "Added to multi-live", "multi_removed": "Removed from multi-live",
         "tab_direct": "Link / ID", "settings": "Settings",
         "tab_history": "VODs",
@@ -1049,6 +1157,10 @@ private let translations: [Lang: [String: String]] = [
         "err_network": "Network error.", "err_live": "Live error.",
         "err_conn": "Connection error.", "err_loading": "Error loading data.",
         "err_no_source": "No source answered for this live stream.",
+        "err_geo_blocked": "This live stream isn't available in your region: Twitch limits it to certain countries (broadcast rights), and none of our sources can reach it.",
+        "vertical_format": "Vertical video",
+        "vertical_on": "Streamer's vertical video",
+        "vertical_off": "Regular video",
         "err_vod_unavailable": "VOD not found or for subscribers only.",
         "login_prompt": "Log in to find your favorite channels.",
         "login_required": "Please log in to view live streams.",
@@ -1080,6 +1192,7 @@ private let translations: [Lang: [String: String]] = [
         "proxy_sub": "Disable to save server resources (useful for VLC)",
         "proxy_enable": "Enable proxy", "twitch_account": "Twitch Account",
         "language": "Language",
+        "app_language": "App language",
         "settings_source": "Video Server / Source",
         
         // Traductions sources
@@ -1098,10 +1211,10 @@ private let translations: [Lang: [String: String]] = [
         "chat_follow": "Follow", "chat_first_message": "First message",
         "poll_results": "Results", "poll_multi": "Multiple choices allowed", "poll_votes": "votes", "pred_result": "Result", "pred_tap_to_bet": "Tap an outcome to predict", "pred_bet_on": "Predict “{o}”", "pred_bet": "Predict", "pred_balance": "Balance", "pred_all": "Max", "pred_my_bet": "Your prediction: {n} pts on “{o}”", "pred_need_login": "To predict, connect your Twitch session with the channel points button", "pred_bet_failed": "Prediction not sent, try again", "pred_closed": "Predictions closed", "pred_one_outcome": "You already predicted another outcome", "pred_max": "Maximum: 250,000 pts per prediction", "pred_min": "Minimum: 10 pts", "pred_potential": "potential win: {n} pts", "points_tracker": "Channel points", "points_tracker_sub": "Watch time and points earned", "pt_now": "Right now", "pt_total": "Total", "pt_since": "since {d}", "pt_watched": "Watched", "pt_earned": "Earned", "pt_chests": "Chests", "pt_channels": "By channel", "pt_empty": "Nothing counted yet: watch a live stream with your web session connected.", "pt_note": "Counted on this device while your web session is connected: the minutes Twitch counts for points, and the points earned by watching (passive, streaks, chests), not prediction winnings.", "pt_reset": "Reset", "pt_reset_confirm": "Clear the counted time and points?", "pt_login": "Points are earned and counted with your web session connected (like drops).", "poll_vote": "Vote", "poll_change": "Change my vote", "poll_single_hint": "One choice", "poll_multi_hint": "Several choices allowed", "poll_until": "ends in {time}", "poll_ended": "Poll ended", "poll_voter": "{n} voter", "poll_voters": "{n} voters", "poll_closed": "This poll has ended.", "poll_failed": "Vote not sent, try again.", "player_muted": "Sound off", "player_unmuted": "Sound on", "cfg_time_format": "Time format", "cfg_time_format_sub": "Time of chat messages and of the log. Auto follows your device’s setting.", "time_auto": "Auto", "logs_all": "All ({n})", "logs_share": "📤 Share", "logs_file": "📄 .txt file", "logs_clear": "🗑 Clear", "logs_count": "{n} logs", "logs_no_match": "Nothing for this filter", "logs_empty_hint": "Start a VOD or a stream to see the logs", "logs_clear_title": "Clear the logs", "logs_clear_btn": "Clear", "logs_clear_confirm": "Are you sure?", "logs_details": "▼ Details",
         "hide_bots": "Hide bots", "hide_bots_sub": "Nightbot, StreamElements, Fossabot…", "hide_commands": "Hide commands", "hide_commands_sub": "Messages starting with “!”.", "muted_words": "Muted words", "muted_words_sub": "Comma-separated: messages containing them are not shown.", "hidden_users": "{n} hidden user(s)", "clear": "Clear", "hide_user": "Hide in chat", "unhide_user": "Show in chat again",
-        "clips": "Clips", "no_clips": "No clips for this period", "highlights": "Highlights", "no_highlights": "No highlights", "backup": "Backup", "backup_sub": "Export your followed channels, categories and settings to a file, to import them elsewhere (app or website).", "export_data": "Export", "import_data": "Import", "export_done": "File exported", "import_done": "Import done: %d channel(s) added", "import_bad": "This file is not a TwitchUnblock backup", "playlists": "Playlists", "play_all": "Play all", "videos_count": "%d video(s)", "no_playlists": "No playlists", "err_clip": "This clip could not be found", "period_day": "24h", "period_week": "7d", "period_month": "30d", "period_all": "All",
+        "clips": "Clips", "no_clips": "No clips for this period", "highlights": "Highlights", "no_highlights": "No highlights", "backup": "Backup", "backup_sub": "Export your channels (followed, pinned, hidden), settings, customization and Continue watching to a file, to bring them elsewhere: the TU Test app, a reinstall, the website. Your Twitch sign-ins are never in it.", "export_data": "Export", "import_data": "Import", "export_done": "File exported", "import_done": "Import done: %d channel(s) added", "import_bad": "This file is not a TwitchUnblock backup", "playlists": "Playlists", "play_all": "Play all", "videos_count": "%d video(s)", "no_playlists": "No playlists", "err_clip": "This clip could not be found", "period_day": "24h", "period_week": "7d", "period_month": "30d", "period_all": "All",
         "notif_live": "Live notifications", "notif_live_sub": "Get notified when a followed channel goes live (checked in the background when iOS allows it; Twitch follows and follows on this device).", "notif_test": "Send a test notification", "notif_test_title": "TwitchUnblock", "notif_test_body": "Notifications are working 🎉", "notif_test_sent": "Sent: it arrives in 3 s (leave the app to see it like a real one).", "notif_test_denied": "Notifications denied: allow them in iOS Settings → TwitchUnblock.", "notif_last_never": "No background check yet. iOS picks the moment: leave the app in the background (without closing it) for a few hours.", "notif_last_run": "Last background check: {t}", "notif_last_failed": "failed (network or token)", "notif_bg_off": "“Background App Refresh” is off (or Low Power Mode is on): iOS won’t wake the app. iOS Settings → General → Background App Refresh.", "notif_bg_refused": "iOS refused to schedule the check", "web_banner_title": "Connect your web session", "web_banner_msg": "For channel points, auto-claimed chests and predictions: sign in once to twitch.tv inside the app.", "web_banner_btn": "Connect", "announcement_open": "Open", "dont_show_again": "Don’t show again", "notif_live_title": "{u} is live",
         "notif_channels": "Notified channels",
-        "notif_channels_sub": "Live notifications (app wake-ups and ntfy) only cover the channels switched on here. A channel you follow later is on by default.",
+        "notif_channels_sub": "Live notifications (app wake-ups) only cover the channels switched on here. A channel you follow later is on by default.",
         "notif_channels_all": "All the channels you follow",
         "notif_channels_muted": "{n} channel(s) without notifications",
         "notif_channels_all_on": "Turn all on",
@@ -1110,7 +1223,7 @@ private let translations: [Lang: [String: String]] = [
         "notif_channels_error": "Couldn't load the channels you follow. Try again in a moment.",
         "chapters": "Chapters", "close": "Close",
         "made_by": "Made by", "source_ios": "App source code", "web_version": "Web version", "credits_thanks": "Thanks to BetterTTV, FrankerFaceZ, 7TV, recent-messages and Luminous.", "not_affiliated": "Independent project, not affiliated with Twitch.",
-        "credits_contributors": "Contributors", "credits_contrib_it": "Italian translation", "credits_contrib_ja": "Japanese translation", "credits_contrib_swipe": "More responsive swipe-down on the player",
+        "credits_contributors": "Contributors", "credits_contrib_it": "Italian translation", "credits_contrib_ja": "Japanese translation", "credits_contrib_zhHant": "Traditional Chinese translation", "credits_contrib_swipe": "More responsive swipe-down on the player",
         "update_title": "Update available", "update_msg": "Version {v} is out (you have {c}). Update it from Feather, SideStore or AltStore.", "update_whats_new": "Here’s what’s new since your version:", "update_open": "Update", "later": "Later", "update_available": "Update available: {v}", "update_check": "Check for updates", "update_none": "The app is up to date", "version_label": "Version", "discord_join": "Join the Discord",
         "discord_title": "Join the Discord", "discord_msg": "News, bugs, ideas: the TwitchUnblock community is on Discord. You can also find it later in Settings → About.",
         "update_msg_short": "A new version of TwitchUnblock is available. Install it from Feather, SideStore or AltStore.",
@@ -1126,7 +1239,7 @@ private let translations: [Lang: [String: String]] = [
         "raid_bonus": "Raid bonus",
         "logs_count_one": "{n} log",
         "dl_chat_count_one": "chat: {n} message",
-        "ntfy_status_one": "{n} followed channel taken into account (Twitch account and this device).",
+        
         "viewers_one": "viewer",
         "followers_one": "follower",
         "poll_votes_one": "vote",
@@ -1139,12 +1252,20 @@ private let translations: [Lang: [String: String]] = [
         "cfg_drops_notice": "Channel drops", "cfg_drops_notice_sub": "A card at the top of the chat when the channel has drops (dismissable)",
         "drops_notice_title": "Watch {m} min to get {r}", "drops_notice_ends": "Until {d}", "drops_notice_details": "Details", "drops_notice_more": "+{n} rewards",
         "chat_info_copy": "Copy name", "chat_info_copied": "Copied", "chat_info_insert": "Add to message", "chat_info_badge": "Badge",
+        "emote_hide": "Hide this emote",
+        "emote_unhide": "Show this emote again",
+        "emote_hidden_note": "Hidden: the chat shows it as the typed word.",
+        "hidden_emotes": "Hidden emotes",
+        "hidden_emotes_empty": "None. Long-press an emote in the chat, or open its card → “Hide this emote”: it will show as the typed word.",
+        "hidden_emotes_sub": "In the chat (live, VODs, multi-live), they show as the typed word. They follow your account, website included.",
+        "hidden_emotes_clear": "Show them all again",
         "emote_src_twitch": "Twitch emote", "emote_src_bttv_personal": "BetterTTV · personal emote (Pro)",
         "emote_scope_global": "Global emote", "emote_scope_channel": "Channel emote", "emote_by": "By {u}", "emote_original": "Original name: {n}",
-        "emote_zero_width": "Overlays the previous emote", "emote_modifier": "Modifier: changes how another emote looks", "emote_view_on": "View on {p}",
+        "emote_zero_width": "Overlays the previous emote", "emote_modifier": "Modifier: changes how another emote looks", "emote_view_on": "View on {p}", "chat_gif_source": "GIPHY GIF, sent with Twitch's GIF keyboard", "chat_gif_by": "by {a}",
         "emote_type_global": "Twitch global emote", "emote_type_sub": "Tier {n} sub emote", "emote_type_points": "Unlocked with channel points", "emote_sub_count": "{c} sub emotes: {n}",
         "chat_info_open": "View details", "emote_search_ph": "Search emotes", "emotes_channel": "This channel", "emote_results": "Results for “{q}”: {n}",
         "emote_locked": "Subscribers only",
+        "emotes_mine": "Mine",
         "emotes_loading": "Loading emotes…", "emotes_none": "No emotes available", "emotes_no_result": "No results", "emotes_open_live": "Open a stream to load the channel's emotes",
         "cfg_follow": "Follow button above the chat", "cfg_follow_sub": "In the player, above the messages. The channel page keeps its own.",
         "unfollow": "Unfollow", "unfollow_confirm": "Unfollow {c}?", "follow_hide_button": "Hide this button in the player", "follow_hide_hint": "You can bring it back in Settings → Chat → Customization.",
@@ -1190,6 +1311,8 @@ private let translations: [Lang: [String: String]] = [
         "ob_tip_more": "Picture in picture, sleep timer, and the chat with channel points.",
         "switching_source": "Switching source…",
         "loading_source": "Trying: {s}…",
+        "pip_on_leave": "PiP when leaving the player",
+        "pip_on_leave_sub": "Minimizing a live stream or VOD (swipe down, back arrow) opens it in Picture in Picture instead of the mini player, while the video is playing. Immersive player only.",
         "fill_screen": "Fill the screen (landscape)",
         "fill_screen_sub": "Zooms the picture to the edges in landscape, at the cost of the top and bottom. Left off, the whole picture shows with even bars on the sides. No effect in portrait.",
         "web_expired": "Web session expired",
@@ -1244,6 +1367,8 @@ private let translations: [Lang: [String: String]] = [
         "cfg_kbd_suggest": "Keyboard suggestions",
         "cfg_kbd_suggest_sub": "Predicted words above the keyboard and iOS autocorrect. Turn them off if iOS keeps correcting your emotes.",
         "cfg_return_sends": "Return sends the message", "cfg_return_sends_sub": "Otherwise the Return key hides the keyboard and the ➤ button sends.",
+        "cfg_chat_input": "Show the message box",
+        "cfg_chat_input_sub": "Text field, emotes and Send button under the chat. Hidden, for those who only read: the room goes to the messages, live and in landscape; points and the ⋯ menu stay at the bottom right of the chat.",
         "cfg_chat_sync": "Chat synced with the video",
         "cfg_chat_sync_sub": "Live messages wait for the video to catch up: the delay follows the player (stalls, back to live). Yours show right away. The ⏱ badge above the chat turns sync off or on.",
         "chat_sync_on": "Chat delayed by {s} s to match the video. Tap for real-time chat.",
@@ -1308,6 +1433,7 @@ private let translations: [Lang: [String: String]] = [
         "speed": "Speed",
         "speed_normal": "Normal",
         "speed_caught_up": "Caught up with the live: normal speed",
+        "speed_live_note": "During a live: used to catch up after going back; back to 1× at the live edge.",
         "speed_unavailable": "Speed not available here",
         "rewind_sub": "Go back within the live stream",
         "menu_chat_only": "Chat only",
@@ -1406,6 +1532,9 @@ private let translations: [Lang: [String: String]] = [
         "src_as": "Luminous Asia",
         "src_al": "Albania proxy (TTV.LOL)",
         "src_eu": "Luminous Europe",
+        "src_pp": "PerfProd Asia",
+        "src_al2": "Albania proxy 2",
+        "src_eu2": "Luminous Europe 2",
         "src_twitch": "Official Twitch (ads)",
         "src_worker": "TwitchUnblock server",
         "chat_unreachable": "The chat isn't responding. Check your connection (VPN, filtered network) or tap “Reconnect chat” in the chat menu.",
@@ -1426,6 +1555,19 @@ private let translations: [Lang: [String: String]] = [
         "spatial_audio_sub": "“Off” turns spatial audio, and so head tracking, off in the app. iOS doesn't let an app pick “Fixed”: Control Center → touch and hold the volume → Spatial Audio, or, for every app, turn off “Follow iPhone” in the AirPods Accessibility settings.",
         "spatial_auto": "Automatic",
         "spatial_off": "Off",
+        "bg_playback": "Background playback",
+        "bg_playback_sub": "Screen locked or another app, without PiP: playback continues, switches to audio only (less data) or pauses.",
+        "bg_playback_continue": "Keep playing",
+        "bg_playback_audio": "Audio only",
+        "bg_playback_pause": "Pause",
+        "vod_goto_time": "Go to a time of day",
+        "vod_goto_time_sub": "Streamed from {a} to {b}. Pick the real time of a moment of the stream.",
+        "vod_goto_btn": "Go",
+        "clip_full_vod": "Watch in the VOD",
+        "clip_download": "Download the clip",
+        "clip_download_sub": "Photos, Files…",
+        "clip_dl_started": "Downloading the clip…",
+        "clip_dl_failed": "Couldn't download the clip",
         "drops": "Drops",
         "drops_sub": "Progress and rewards",
         "drops_progress": "Earn drops while watching",
@@ -1519,26 +1661,22 @@ private let translations: [Lang: [String: String]] = [
         "multi_chat_sub": "The chat of the video you hear (replayed for a VOD), next to the mosaic (iPad, or a large iPhone in landscape).",
         "multi_swap": "Swap with {n}",
         "multi_move": "Move",
+        "multi_volume": "Volume",
+        "multi_sound_on": "Also hear this video",
+        "multi_sound_off": "Mute this video",
         "live_activity": "Live Activity",
         "live_activity_sub": "What's playing on the Lock Screen and in the Dynamic Island (channel, title, playback). Turned off, it goes away right away.",
-        "ntfy_live": "Instant notifications (ntfy)",
-        "ntfy_live_sub": "Even with the app closed, within a minute or two: through the free ntfy app, which is allowed to use Apple's notifications. The app's own notifications then stop, to avoid duplicates.",
-        "ntfy_steps": "1. Install ntfy (App Store). 2. In ntfy: + → paste this topic → Subscribe (default ntfy.sh server). 3. Send a test notification. Tapping it will open the stream here.",
-        "ntfy_copy": "Copy",
-        "ntfy_copied": "Copied",
-        "ntfy_install": "Install ntfy",
-        "ntfy_test_sent": "Sent: it shows up in ntfy within a few seconds.",
-        "ntfy_failed": "Couldn't reach the server right now: try again later.",
-        "ntfy_limited": "ntfy.sh isn't accepting messages right now (sending limit reached): try again later.",
-        "ntfy_not_ready": "On, but the server doesn't handle these notifications yet: they come with the next site update. The app retries by itself every time you come back to it.",
-        "ntfy_pending": "On, but the server didn't answer: the app retries by itself every time you come back to it.",
-        "ntfy_status": "{n} followed channels taken into account (Twitch account and this device).",
-        "ntfy_privacy": "Messages go through ntfy.sh (a free third-party service). Your topic is secret: don't share it.",
+        "notif_pwa_title": "Instant notifications: the website as a web app",
+        "notif_pwa_sub": "Even with the app closed, within a minute: add the website to your Home Screen (in Safari: Share → Add to Home Screen, iOS 16.4 or later), open it from its icon, then Settings → Notifications → “Followed channels going live”. Log in with your Twitch account to get your channels.",
+        "notif_pwa_open": "Open the website",
+        "ntfy_retired_title": "ntfy notifications are over",
+        "ntfy_retired_body": "The app no longer goes through ntfy: you can uninstall it. To know when a channel goes live, install the website as a web app: it sends the notifications itself, with no third-party app.",
         "app_icon": "App icon",
         "app_icon_sub": "“Contrast” stays the sharpest with iOS 26's clear or tinted icons.",
         "app_icon_failed": "iOS refused to change the icon: {e}",
         "app_icon_wildcard": "The app was signed with your certificate's generic identifier (“{id}”): that's most likely why iOS refuses to change its icon (error -54). Feather 2.9 can't fix that yet; its next version adds a “Merge Entitlements” option: turn it on then, and sign and install the app again.",
         "app_icon_unsupported": "This install can't change its icon: the tool that installed the app may have removed the alternate icons.",
+        "app_icon_blocked": "The tool that installed the app (LiveContainer, GBox…) doesn't allow changing its icon.",
         "icon_default": "Classic",
         "icon_purple": "Purple",
         "icon_night": "Night",
@@ -1624,7 +1762,7 @@ private let translations: [Lang: [String: String]] = [
         "expert_quota": "This Worker has reached its quota (Cloudflare): try again later (the daily quota resets at midnight UTC).",
         "expert_reset": "Back to the official Workers",
         "expert_all": "Send everything through this Worker",
-        "expert_all_sub": "Also history backups, feedback, announcements, ntfy notifications and the usage count. Your Twitch token is then sent to it (backups): only turn this on for a Worker you host yourself.",
+        "expert_all_sub": "Also history backups, feedback, announcements and the usage count. Your Twitch token is then sent to it (backups): only turn this on for a Worker you host yourself.",
         "expert_all_no_db": "This Worker has no D1 database: backups, feedback and notifications wouldn't work on it. The option stays off.",
         "expert_using": "In use: {u}",
         "chat_mode_followers": "Followers only",
@@ -1706,6 +1844,28 @@ private let translations: [Lang: [String: String]] = [
         "sched_vacation_range": "On vacation from {a} to {b}",
         "sched_none": "No stream scheduled for now",
         "sched_local_hint": "Days and times in your device's time zone.",
+        "version_build": "Version {v} (build {b})",
+        "version_copied": "Version copied",
+        "version_copy_hint": "Tap to copy",
+        "update_stale_title": "Reinstall needed",
+        "update_stale_msg": "Your install tool put an old build ({b}) under the number {v}: you don't actually have {v}. Delete the app and reinstall it from GitHub. To keep your channels and settings, export a backup first (Settings → General → Backup).",
+        "update_stale_download": "Download the IPA",
+        "update_stale_short": "Old build installed: reinstall {v}",
+        "continue_resume": "Resume",
+        "continue_remove": "Remove from the list",
+        "import_choice_title": "What should this backup restore?",
+        "import_choice_msg": "Everything: channels, settings (language, qualities, chat, player, appearance, notifications, downloads, customization) and Continue watching. Channels only: followed, pinned and hidden channels, and followed categories. Nothing is removed.",
+        "import_all": "Everything",
+        "import_channels_only": "Channels only",
+        "import_sum_title": "Backup imported",
+        "import_sum_follows": "Followed channels added: {n}",
+        "import_sum_categories": "Followed categories added: {n}",
+        "import_sum_pinned": "Pinned channels added: {n}",
+        "import_sum_hidden": "Hidden channels and categories added: {n}",
+        "import_sum_settings": "Settings restored: {n}",
+        "import_sum_ignored": "Settings skipped (unknown to this version or invalid): {n}",
+        "import_sum_continue": "Continue watching videos: {n}",
+        "import_sum_channels_only": "Settings left as they were (channels only).",
     ],
     .es: [
         "title": "Ver Twitch sin Sub",
@@ -1730,12 +1890,25 @@ private let translations: [Lang: [String: String]] = [
         "pb_chat": "Disposición del chat (horizontal)", "pb_rotate": "Vertical / horizontal", "pb_airplay": "AirPlay (arriba)",
         "cust_chat": "Chat · avisos", "cust_live_events": "Eventos del directo",
         "cust_polls": "Encuestas", "cust_predictions": "Predicciones",
+        "cust_special_events": "Special Events",
+        "cust_special_events_foot": "Special Events: las campañas de recompensas de la propia Twitch («1 Month of Apple TV»…), en una tarjeta como los drops en muchos canales. Si las ocultas, los drops del canal siguen apareciendo.",
+        "cust_chat_bell": "Campana de notificaciones",
+        "cust_chat_modes": "Modo del chat (seguidores, lento…)",
+        "cust_chat_points": "Botón de puntos (corona)",
+        "cust_chat_buttons_foot": "Si los ocultas aquí, la campana sigue en la página del canal y los puntos en el menú ⋯ del chat; un mensaje rechazado sigue diciendo por qué.",
+        "menu_points_sub": "Saldo, recompensas y cofres del canal.",
         "cust_reset": "Restablecer la disposición original",
         "cust_reset_confirm": "Pestañas, inicio, botones del reproductor y avisos del chat vuelven a como estaban al principio.",
         "cust_channel_tabs": "Página de un canal · pestañas",
         "cust_channel_tabs_foot": "La página se abre en la primera pestaña mostrada. El horario solo aparece si el canal tiene uno.",
         "cust_pinned_viewers": "Fijados ordenados por espectadores",
         "cust_pinned_viewers_foot": "Los directos de los canales fijados quedan arriba en Seguidos, el más visto primero. Desactivado: en el orden en que los fijaste.",
+        "cust_followed_cats": "Categorías seguidas",
+        "cust_cat_size": "Tamaño de las portadas",
+        "cust_cat_normal": "Normal",
+        "cust_cat_compact": "Compacto",
+        "cust_cat_sort": "Orden",
+        "cust_followed_cats_foot": "Inicio → Categorías → Seguidas. Compacto: 3 portadas por fila en iPhone, más en una pantalla más ancha.",
         "multi_added": "Añadido al multi-live", "multi_removed": "Quitado del multi-live",
         "tab_direct": "Enlace / ID", "settings": "Ajustes",
         "tab_history": "VODs",
@@ -1755,6 +1928,10 @@ private let translations: [Lang: [String: String]] = [
         "err_network": "Error de red.", "err_live": "Error de directo.",
         "err_conn": "Error de conexión.", "err_loading": "Error al cargar.",
         "err_no_source": "Ninguna fuente respondió para este directo.",
+        "err_geo_blocked": "Este directo no está disponible en tu región: Twitch lo limita a algunos países (derechos de emisión) y ninguna de nuestras fuentes tiene acceso.",
+        "vertical_format": "Vídeo vertical",
+        "vertical_on": "Vídeo vertical del streamer",
+        "vertical_off": "Vídeo habitual",
         "err_vod_unavailable": "VOD no encontrado o solo para suscriptores.",
         "login_prompt": "Inicia sesión para encontrar tus canales favoritos.",
         "login_required": "Inicia sesión para ver los streams.",
@@ -1786,6 +1963,7 @@ private let translations: [Lang: [String: String]] = [
         "proxy_sub": "Desactivar para ahorrar el servidor (útil para VLC)",
         "proxy_enable": "Activar proxy", "twitch_account": "Cuenta de Twitch",
         "language": "Idioma",
+        "app_language": "Idioma de la app",
         "settings_source": "Servidor / Fuente de Video",
         
         // Traducciones fuentes
@@ -1804,10 +1982,10 @@ private let translations: [Lang: [String: String]] = [
         "chat_follow": "Seguir", "chat_first_message": "Primer mensaje",
         "poll_results": "Resultados", "poll_multi": "Varias opciones posibles", "poll_votes": "votos", "pred_result": "Resultado", "pred_tap_to_bet": "Toca un resultado para apostar", "pred_bet_on": "Apostar por «{o}»", "pred_bet": "Apostar", "pred_balance": "Saldo", "pred_all": "Máx", "pred_my_bet": "Tu apuesta: {n} pts por «{o}»", "pred_need_login": "Para apostar, conecta tu sesión de Twitch con el botón de puntos del canal", "pred_bet_failed": "Apuesta no enviada, inténtalo de nuevo", "pred_closed": "Apuestas cerradas", "pred_one_outcome": "Ya apostaste por otro resultado", "pred_max": "Máximo: 250 000 pts por predicción", "pred_min": "Mínimo: 10 pts", "pred_potential": "ganancia posible: {n} pts", "points_tracker": "Puntos de canal", "points_tracker_sub": "Tiempo visto y puntos ganados", "pt_now": "Ahora mismo", "pt_total": "Total", "pt_since": "desde el {d}", "pt_watched": "Visto", "pt_earned": "Ganados", "pt_chests": "Cofres", "pt_channels": "Por canal", "pt_empty": "Nada contado todavía: mira un directo con tu sesión web conectada.", "pt_note": "Contado en este dispositivo mientras tu sesión web está conectada: los minutos que Twitch cuenta para los puntos y los puntos ganados viendo (pasivos, rachas, cofres), sin las ganancias de predicciones.", "pt_reset": "Restablecer", "pt_reset_confirm": "¿Borrar el tiempo y los puntos contados?", "pt_login": "Los puntos se ganan y se cuentan con la sesión web conectada (como los drops).", "poll_vote": "Votar", "poll_change": "Cambiar mi voto", "poll_single_hint": "Una opción", "poll_multi_hint": "Varias opciones posibles", "poll_until": "termina en {time}", "poll_ended": "Encuesta terminada", "poll_voter": "{n} votante", "poll_voters": "{n} votantes", "poll_closed": "Esta encuesta ha terminado.", "poll_failed": "Voto no enviado, inténtalo de nuevo.", "player_muted": "Sonido desactivado", "player_unmuted": "Sonido activado", "cfg_time_format": "Formato de hora", "cfg_time_format_sub": "Hora de los mensajes del chat y del registro. Auto sigue el ajuste de tu dispositivo.", "time_auto": "Auto", "logs_all": "Todo ({n})", "logs_share": "📤 Compartir", "logs_file": "📄 Archivo .txt", "logs_clear": "🗑 Borrar", "logs_count": "{n} registros", "logs_no_match": "Nada para este filtro", "logs_empty_hint": "Inicia un VOD o un directo para ver los registros", "logs_clear_title": "Borrar los registros", "logs_clear_btn": "Borrar", "logs_clear_confirm": "¿Confirmar?", "logs_details": "▼ Detalles",
         "hide_bots": "Ocultar bots", "hide_bots_sub": "Nightbot, StreamElements, Fossabot…", "hide_commands": "Ocultar comandos", "hide_commands_sub": "Los mensajes que empiezan por «!».", "muted_words": "Palabras silenciadas", "muted_words_sub": "Separadas por comas: los mensajes que las contienen no se muestran.", "hidden_users": "{n} persona(s) oculta(s)", "clear": "Borrar", "hide_user": "Ocultar en el chat", "unhide_user": "Mostrar en el chat",
-        "clips": "Clips", "no_clips": "No hay clips en este periodo", "highlights": "Destacados", "no_highlights": "Sin destacados", "backup": "Copia de seguridad", "backup_sub": "Exporta tus canales y categorías seguidos y tus ajustes a un archivo, para importarlos en otro lugar (app o web).", "export_data": "Exportar", "import_data": "Importar", "export_done": "Archivo exportado", "import_done": "Importación terminada: %d canal(es) añadido(s)", "import_bad": "Este archivo no es una copia de TwitchUnblock", "playlists": "Listas", "play_all": "Reproducir todo", "videos_count": "%d vídeo(s)", "no_playlists": "Sin listas", "err_clip": "No se encontró este clip", "period_day": "24 h", "period_week": "7 d", "period_month": "30 d", "period_all": "Todo",
+        "clips": "Clips", "no_clips": "No hay clips en este periodo", "highlights": "Destacados", "no_highlights": "Sin destacados", "backup": "Copia de seguridad", "backup_sub": "Exporta tus canales (seguidos, fijados, ocultos), tus ajustes, tu personalización y «Seguir viendo» a un archivo, para recuperarlos en otro lugar: la app de pruebas TU Test, una reinstalación, la web. Tus sesiones de Twitch nunca se incluyen.", "export_data": "Exportar", "import_data": "Importar", "export_done": "Archivo exportado", "import_done": "Importación terminada: %d canal(es) añadido(s)", "import_bad": "Este archivo no es una copia de TwitchUnblock", "playlists": "Listas", "play_all": "Reproducir todo", "videos_count": "%d vídeo(s)", "no_playlists": "Sin listas", "err_clip": "No se encontró este clip", "period_day": "24 h", "period_week": "7 d", "period_month": "30 d", "period_all": "Todo",
         "notif_live": "Notificaciones de directo", "notif_live_sub": "Avisa cuando un canal seguido empieza un directo (se comprueba en segundo plano cuando iOS lo permite; canales seguidos en Twitch y en este dispositivo).", "notif_test": "Enviar una notificación de prueba", "notif_test_title": "TwitchUnblock", "notif_test_body": "Las notificaciones funcionan 🎉", "notif_test_sent": "Enviada: llega en 3 s (sal de la app para verla como una real).", "notif_test_denied": "Notificaciones denegadas: permítelas en Ajustes de iOS → TwitchUnblock.", "notif_last_never": "Aún no hay comprobación en segundo plano. iOS elige el momento: deja la app en segundo plano (sin cerrarla) unas horas.", "notif_last_run": "Última comprobación en segundo plano: {t}", "notif_last_failed": "error (conexión o token)", "notif_bg_off": "«Actualización en segundo plano» está desactivada (o el modo de bajo consumo está activo): iOS no despertará la app. Ajustes de iOS → General → Actualización en segundo plano.", "notif_bg_refused": "iOS se negó a programar la comprobación", "web_banner_title": "Conecta tu sesión web", "web_banner_msg": "Para los puntos del canal, los cofres recogidos solos y las predicciones: inicia sesión una vez en twitch.tv dentro de la app.", "web_banner_btn": "Conectar", "announcement_open": "Abrir", "dont_show_again": "No volver a mostrar", "notif_live_title": "{u} está en directo",
         "notif_channels": "Canales notificados",
-        "notif_channels_sub": "Las notificaciones de directo (despertares de la app y ntfy) solo cubren los canales activados aquí. Un canal que sigas más tarde se activa por defecto.",
+        "notif_channels_sub": "Las notificaciones de directo (despertares de la app) solo cubren los canales activados aquí. Un canal que sigas más tarde se activa por defecto.",
         "notif_channels_all": "Todos los canales que sigues",
         "notif_channels_muted": "{n} canal(es) sin notificaciones",
         "notif_channels_all_on": "Activar todo",
@@ -1816,7 +1994,7 @@ private let translations: [Lang: [String: String]] = [
         "notif_channels_error": "No se pudieron cargar los canales que sigues. Vuelve a intentarlo en un momento.",
         "chapters": "Capítulos", "close": "Cerrar",
         "made_by": "Hecho por", "source_ios": "Código fuente de la app", "web_version": "Versión web", "credits_thanks": "Gracias a BetterTTV, FrankerFaceZ, 7TV, recent-messages y Luminous.", "not_affiliated": "Proyecto independiente, no afiliado a Twitch.",
-        "credits_contributors": "Colaboradores", "credits_contrib_it": "Traducción al italiano", "credits_contrib_ja": "Traducción al japonés", "credits_contrib_swipe": "Gesto de deslizar hacia abajo del reproductor más ágil",
+        "credits_contributors": "Colaboradores", "credits_contrib_it": "Traducción al italiano", "credits_contrib_ja": "Traducción al japonés", "credits_contrib_zhHant": "Traducción al chino tradicional", "credits_contrib_swipe": "Gesto de deslizar hacia abajo del reproductor más ágil",
         "update_title": "Actualización disponible", "update_msg": "Ya salió la versión {v} (tienes la {c}). Actualízala desde Feather, SideStore o AltStore.", "update_whats_new": "Esto es lo nuevo desde tu versión:", "update_open": "Actualizar", "later": "Más tarde", "update_available": "Actualización disponible: {v}", "update_check": "Buscar actualizaciones", "update_none": "La app está al día", "version_label": "Versión", "discord_join": "Unirse al Discord",
         "discord_title": "Únete al Discord", "discord_msg": "Novedades, bugs, ideas: la comunidad de TwitchUnblock está en Discord. También lo encontrarás en Ajustes → Acerca de.",
         "update_msg_short": "Hay una nueva versión de TwitchUnblock. Instálala desde Feather, SideStore o AltStore.",
@@ -1832,7 +2010,7 @@ private let translations: [Lang: [String: String]] = [
         "raid_bonus": "Bonificación de raid",
         "logs_count_one": "{n} registro",
         "dl_chat_count_one": "chat: {n} mensaje",
-        "ntfy_status_one": "{n} canal seguido tenido en cuenta (cuenta de Twitch y este dispositivo).",
+        
         "viewers_one": "espectador",
         "followers_one": "seguidor",
         "poll_votes_one": "voto",
@@ -1845,12 +2023,20 @@ private let translations: [Lang: [String: String]] = [
         "cfg_drops_notice": "Drops del canal", "cfg_drops_notice_sub": "Una tarjeta arriba del chat cuando el canal tiene drops (se puede cerrar)",
         "drops_notice_title": "Mira {m} min para conseguir {r}", "drops_notice_ends": "Hasta el {d}", "drops_notice_details": "Detalles", "drops_notice_more": "+{n} recompensas",
         "chat_info_copy": "Copiar el nombre", "chat_info_copied": "Copiado", "chat_info_insert": "Añadir al mensaje", "chat_info_badge": "Insignia",
+        "emote_hide": "Ocultar este emote",
+        "emote_unhide": "Volver a mostrar este emote",
+        "emote_hidden_note": "Oculto: el chat lo muestra como la palabra escrita.",
+        "hidden_emotes": "Emotes ocultos",
+        "hidden_emotes_empty": "Ninguno. Mantén pulsado un emote en el chat, o abre su ficha → «Ocultar este emote»: se mostrará como la palabra escrita.",
+        "hidden_emotes_sub": "En el chat (directo, VODs, multi-live), se muestran como la palabra escrita. Siguen a tu cuenta, web incluida.",
+        "hidden_emotes_clear": "Volver a mostrarlos todos",
         "emote_src_twitch": "Emote de Twitch", "emote_src_bttv_personal": "BetterTTV · emote personal (Pro)",
         "emote_scope_global": "Emote global", "emote_scope_channel": "Emote del canal", "emote_by": "Por {u}", "emote_original": "Nombre original: {n}",
-        "emote_zero_width": "Se superpone al emote anterior", "emote_modifier": "Modificador: cambia el aspecto de otro emote", "emote_view_on": "Ver en {p}",
+        "emote_zero_width": "Se superpone al emote anterior", "emote_modifier": "Modificador: cambia el aspecto de otro emote", "emote_view_on": "Ver en {p}", "chat_gif_source": "GIF de GIPHY, enviado con el teclado de GIF de Twitch", "chat_gif_by": "de {a}",
         "emote_type_global": "Emote global de Twitch", "emote_type_sub": "Emote de suscriptor · nivel {n}", "emote_type_points": "Emote desbloqueado con puntos del canal", "emote_sub_count": "Emotes de suscriptor de {c}: {n}",
         "chat_info_open": "Ver detalles", "emote_search_ph": "Buscar emotes", "emotes_channel": "Este canal", "emote_results": "Resultados para «{q}»: {n}",
         "emote_locked": "Solo para suscriptores",
+        "emotes_mine": "Mis emotes",
         "emotes_loading": "Cargando emotes…", "emotes_none": "No hay emotes disponibles", "emotes_no_result": "Sin resultados", "emotes_open_live": "Abre un directo para cargar los emotes del canal",
         "cfg_follow": "Botón Seguir encima del chat", "cfg_follow_sub": "En el reproductor, encima de los mensajes. La página del canal conserva el suyo.",
         "unfollow": "Dejar de seguir", "unfollow_confirm": "¿Dejar de seguir a {c}?", "follow_hide_button": "Ocultar este botón en el reproductor", "follow_hide_hint": "Puedes volver a mostrarlo en Ajustes → Chat → Personalización.",
@@ -1896,6 +2082,8 @@ private let translations: [Lang: [String: String]] = [
         "ob_tip_more": "Imagen en imagen, temporizador de apagado y el chat con los puntos del canal.",
         "switching_source": "Cambiando de fuente…",
         "loading_source": "Probando: {s}…",
+        "pip_on_leave": "PiP al salir del reproductor",
+        "pip_on_leave_sub": "Al minimizar un directo o un VOD (deslizar hacia abajo, flecha atrás), se abre en imagen en imagen en lugar del minirreproductor, si el vídeo se está reproduciendo. Solo con el reproductor inmersivo.",
         "fill_screen": "Rellenar la pantalla (horizontal)",
         "fill_screen_sub": "Amplía la imagen hasta los bordes en horizontal, a costa de la parte superior e inferior. Desactivado, se ve la imagen completa con franjas iguales a los lados. Sin efecto en vertical.",
         "web_expired": "Sesión web caducada",
@@ -1950,6 +2138,8 @@ private let translations: [Lang: [String: String]] = [
         "cfg_kbd_suggest": "Sugerencias del teclado",
         "cfg_kbd_suggest_sub": "Palabras sugeridas sobre el teclado y autocorrección de iOS. Desactívalas si iOS corrige tus emotes.",
         "cfg_return_sends": "Intro envía el mensaje", "cfg_return_sends_sub": "Si no, la tecla Intro cierra el teclado y el botón ➤ envía.",
+        "cfg_chat_input": "Mostrar el cuadro de envío",
+        "cfg_chat_input_sub": "Campo, emotes y botón Enviar bajo el chat. Oculto, para quien solo lee: el espacio vuelve a los mensajes, en directo y en horizontal; los puntos y el menú ⋯ quedan abajo a la derecha del chat.",
         "cfg_chat_sync": "Chat sincronizado con el vídeo",
         "cfg_chat_sync_sub": "Los mensajes del directo esperan a que la imagen los alcance: el retraso sigue al reproductor (parones, vuelta al directo). Los tuyos aparecen al instante. La etiqueta ⏱ encima del chat desactiva o reactiva la sincronía.",
         "chat_sync_on": "Chat retrasado {s} s para seguir la imagen. Toca para verlo en tiempo real.",
@@ -2014,6 +2204,7 @@ private let translations: [Lang: [String: String]] = [
         "speed": "Velocidad",
         "speed_normal": "Normal",
         "speed_caught_up": "Directo alcanzado: velocidad normal",
+        "speed_live_note": "En directo: sirve para alcanzar el directo tras retroceder; vuelve a 1× al llegar al borde.",
         "speed_unavailable": "Velocidad no disponible aquí",
         "rewind_sub": "Retroceder dentro del directo",
         "menu_chat_only": "Solo chat",
@@ -2112,6 +2303,9 @@ private let translations: [Lang: [String: String]] = [
         "src_as": "Luminous Asia",
         "src_al": "Proxy de Albania (TTV.LOL)",
         "src_eu": "Luminous Europa",
+        "src_pp": "PerfProd Asia",
+        "src_al2": "Proxy de Albania 2",
+        "src_eu2": "Luminous Europa 2",
         "src_twitch": "Twitch oficial (anuncios)",
         "src_worker": "Servidor de TwitchUnblock",
         "chat_unreachable": "El chat no responde. Revisa tu conexión (VPN, red filtrada) o toca «Reconectar el chat» en el menú del chat.",
@@ -2132,6 +2326,19 @@ private let translations: [Lang: [String: String]] = [
         "spatial_audio_sub": "«Desactivado» quita el audio espacial, y con él el seguimiento de la cabeza, en la app. iOS no deja que una app elija «Fijo»: Centro de control → mantén pulsado el volumen → Audio espacial, o, para todas las apps, desactiva «Seguir al iPhone» en los ajustes de Accesibilidad de los AirPods.",
         "spatial_auto": "Automático",
         "spatial_off": "Desactivado",
+        "bg_playback": "Reproducción en segundo plano",
+        "bg_playback_sub": "Pantalla bloqueada u otra app, sin PiP: la reproducción continúa, pasa a solo audio (menos datos) o se pausa.",
+        "bg_playback_continue": "Continuar",
+        "bg_playback_audio": "Solo audio",
+        "bg_playback_pause": "Pausa",
+        "vod_goto_time": "Ir a una hora",
+        "vod_goto_time_sub": "Emitido de {a} a {b}. Elige la hora real de un momento del directo.",
+        "vod_goto_btn": "Ir",
+        "clip_full_vod": "Ver en el VOD",
+        "clip_download": "Descargar el clip",
+        "clip_download_sub": "Fotos, Archivos…",
+        "clip_dl_started": "Descargando el clip…",
+        "clip_dl_failed": "No se pudo descargar el clip",
         "drops": "Drops",
         "drops_sub": "Progreso y recompensas",
         "drops_progress": "Avanzar en los drops",
@@ -2225,26 +2432,22 @@ private let translations: [Lang: [String: String]] = [
         "multi_chat_sub": "El chat del vídeo que suena (repetido para un VOD), junto al mosaico (iPad, o un iPhone grande en horizontal).",
         "multi_swap": "Intercambiar con {n}",
         "multi_move": "Cambiar de lugar",
+        "multi_volume": "Volumen",
+        "multi_sound_on": "Oír también este vídeo",
+        "multi_sound_off": "Silenciar este vídeo",
         "live_activity": "Actividad en directo",
         "live_activity_sub": "Lo que se reproduce en la pantalla bloqueada y en la Dynamic Island (canal, título, reproducción). Si la desactivas, desaparece al instante.",
-        "ntfy_live": "Notificaciones instantáneas (ntfy)",
-        "ntfy_live_sub": "Incluso con la app cerrada, en uno o dos minutos: mediante la app gratuita ntfy, que puede usar las notificaciones de Apple. Las notificaciones de la propia app se detienen entonces, para evitar duplicados.",
-        "ntfy_steps": "1. Instala ntfy (App Store). 2. En ntfy: + → pega este tema → Suscribirse (servidor ntfy.sh por defecto). 3. Envía una notificación de prueba. Al tocarla se abrirá el directo aquí.",
-        "ntfy_copy": "Copiar",
-        "ntfy_copied": "Copiado",
-        "ntfy_install": "Instalar ntfy",
-        "ntfy_test_sent": "Enviada: llega a ntfy en unos segundos.",
-        "ntfy_failed": "No se pudo contactar con el servidor: inténtalo más tarde.",
-        "ntfy_limited": "ntfy.sh no acepta mensajes por ahora (límite de envío alcanzado): inténtalo más tarde.",
-        "ntfy_not_ready": "Activado, pero el servidor aún no gestiona estas notificaciones: llegan con la próxima actualización del sitio. La app lo reintenta sola cada vez que vuelves a ella.",
-        "ntfy_pending": "Activado, pero el servidor no respondió: la app lo reintenta sola cada vez que vuelves a ella.",
-        "ntfy_status": "{n} canales seguidos tenidos en cuenta (cuenta de Twitch y este dispositivo).",
-        "ntfy_privacy": "Los mensajes pasan por ntfy.sh (un servicio gratuito de terceros). Tu tema es secreto: no lo compartas.",
+        "notif_pwa_title": "Notificaciones instantáneas: el sitio como app web",
+        "notif_pwa_sub": "Incluso con la app cerrada, en menos de un minuto: añade el sitio a la pantalla de inicio (en Safari: Compartir → Añadir a pantalla de inicio, iOS 16.4 o posterior), ábrelo desde su icono y luego Ajustes → Notificaciones → «Directos de los canales seguidos». Inicia sesión con tu cuenta de Twitch para tener tus canales.",
+        "notif_pwa_open": "Abrir el sitio",
+        "ntfy_retired_title": "Se acabaron las notificaciones de ntfy",
+        "ntfy_retired_body": "La app ya no pasa por ntfy: puedes desinstalarlo. Para saber cuándo un canal empieza un directo, instala el sitio como app web: envía las notificaciones él mismo, sin app de terceros.",
         "app_icon": "Icono de la app",
         "app_icon_sub": "«Contraste» es el más nítido con los iconos transparentes o teñidos de iOS 26.",
         "app_icon_failed": "iOS se negó a cambiar el icono: {e}",
         "app_icon_wildcard": "La app se firmó con el identificador genérico de tu certificado («{id}»): muy probablemente por eso iOS se niega a cambiar el icono (error -54). Feather 2.9 aún no puede corregirlo; su próxima versión añade la opción «Merge Entitlements»: actívala entonces y vuelve a firmar e instalar la app.",
         "app_icon_unsupported": "Esta instalación no permite cambiar el icono: la herramienta que instaló la app quizá quitó los iconos alternativos.",
+        "app_icon_blocked": "La herramienta que instaló la app (LiveContainer, GBox…) no permite cambiar su icono.",
         "icon_default": "Clásico",
         "icon_purple": "Violeta",
         "icon_night": "Noche",
@@ -2330,7 +2533,7 @@ private let translations: [Lang: [String: String]] = [
         "expert_quota": "Este Worker alcanzó su cuota (Cloudflare): inténtalo más tarde (la cuota diaria se reinicia a medianoche UTC).",
         "expert_reset": "Volver a los Workers oficiales",
         "expert_all": "Pasar todo por este Worker",
-        "expert_all_sub": "También las copias del historial, los comentarios, los anuncios, las notificaciones ntfy y el recuento. Tu token de Twitch se le envía entonces (copias): actívalo solo para un Worker que alojes tú mismo.",
+        "expert_all_sub": "También las copias del historial, los comentarios, los anuncios y el recuento. Tu token de Twitch se le envía entonces (copias): actívalo solo para un Worker que alojes tú mismo.",
         "expert_all_no_db": "Este Worker no tiene base de datos D1: las copias, los comentarios y las notificaciones no funcionarían en él. La opción sigue desactivada.",
         "expert_using": "En uso: {u}",
         "chat_mode_followers": "Solo seguidores",
@@ -2412,12 +2615,36 @@ private let translations: [Lang: [String: String]] = [
         "sched_vacation_range": "De vacaciones del {a} al {b}",
         "sched_none": "Ningún directo previsto por ahora",
         "sched_local_hint": "Días y horas de tu dispositivo.",
+        "version_build": "Versión {v} (build {b})",
+        "version_copied": "Versión copiada",
+        "version_copy_hint": "Toca para copiar",
+        "update_stale_title": "Hay que reinstalar",
+        "update_stale_msg": "Tu herramienta de instalación puso una compilación antigua ({b}) con el número {v}: en realidad no tienes la {v}. Borra la app y vuelve a instalarla desde GitHub. Para conservar tus canales y ajustes, exporta antes una copia de seguridad (Ajustes → General → Copia de seguridad).",
+        "update_stale_download": "Descargar el IPA",
+        "update_stale_short": "Compilación antigua instalada: reinstalar la {v}",
+        "continue_resume": "Reanudar",
+        "continue_remove": "Quitar de la lista",
+        "import_choice_title": "¿Qué restaurar de esta copia?",
+        "import_choice_msg": "Todo: canales, ajustes (idioma, calidades, chat, reproductor, apariencia, notificaciones, descargas, personalización) y «Seguir viendo». Solo canales: canales seguidos, fijados y ocultos, y categorías seguidas. No se quita nada.",
+        "import_all": "Todo",
+        "import_channels_only": "Solo canales",
+        "import_sum_title": "Copia importada",
+        "import_sum_follows": "Canales seguidos añadidos: {n}",
+        "import_sum_categories": "Categorías seguidas añadidas: {n}",
+        "import_sum_pinned": "Canales fijados añadidos: {n}",
+        "import_sum_hidden": "Canales y categorías ocultos añadidos: {n}",
+        "import_sum_settings": "Ajustes restaurados: {n}",
+        "import_sum_ignored": "Ajustes omitidos (desconocidos en esta versión o no válidos): {n}",
+        "import_sum_continue": "Vídeos de «Seguir viendo»: {n}",
+        "import_sum_channels_only": "Ajustes sin cambios (solo canales).",
     ],
     // Russe : dans son propre fichier (Localization/RussianStrings.swift).
     .ru: kRussianStrings,
     .it: kItalianStrings,
     // Japonais : dans son propre fichier (Localization/JapaneseStrings.swift).
     .ja: kJapaneseStrings,
+    // Chinois traditionnel (Taïwan) : Localization/TraditionalChineseStrings.swift.
+    .zhHant: kTraditionalChineseStrings,
 ]
 
 /// Une clé absente d'une langue retombe sur l'anglais, puis sur la clé

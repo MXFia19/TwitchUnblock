@@ -65,9 +65,18 @@ struct VodDownload: Identifiable, Codable, Equatable {
     var chatCount: Int? = nil
     /// Pourquoi il s'est arrêté (VodDownloadFailure, ou « http:403 »…).
     var reason: String? = nil
+    /// Hauteur et cadence de la qualité, retenues au départ (inconnues pour
+    /// un téléchargement d'avant) : « 1080p60 (Source) » dans « Mes VODs ».
+    var height: Int? = nil
+    var fps: Double? = nil
 
     var duration: Double { max(0, end - start) }
     var progress: Double { total > 0 ? min(1, Double(done) / Double(total)) : 0 }
+    /// Pour qualityText : la qualité téléchargée, si sa hauteur est connue.
+    var variants: [String: VariantInfo] {
+        guard let height, height > 0 else { return [:] }
+        return [quality: VariantInfo(height: height, fps: fps ?? 0, bandwidth: 0)]
+    }
 }
 
 /// Ce qu'il faut pour proposer le téléchargement de la VOD en cours.
@@ -289,6 +298,11 @@ final class VodDownloads: ObservableObject {
                                   restoreAudio: restoreAudio, start: start, end: end, created: Date())
             // Une VOD supprimée retrouvée n'a plus de chat.
             new.withChat = withChat && Self.hasChat(ctx.vodId)
+            new.height = ctx.variants[quality]?.height
+            // Finie seulement : JSONEncoder refuse NaN et l'infini (« FRAME-RATE=nan »
+            // se lit avec Double(…)), et la liste des téléchargements ne
+            // s'enregistrait plus du tout tant que celui-ci y restait.
+            if let fps = ctx.variants[quality]?.fps, fps.isFinite { new.fps = fps }
             items.insert(new, at: 0)
         }
         resume(id)

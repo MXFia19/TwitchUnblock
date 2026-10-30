@@ -66,6 +66,12 @@ func parseMaster(_ content: String, baseURL: URL? = nil) -> MasterPlaylist {
     for i in 0..<lines.count {
         let line = lines[i].trimmingCharacters(in: .whitespaces)
         guard line.hasPrefix("#EXT-X-STREAM-INF") else { continue }
+        // Image verticale (Dual Format : IVS-GROUPS="portrait", liste v2
+        // d'usher avec multigroup_video) : jamais parmi les qualités
+        // habituelles, elle a sa bascule (portraitLive). Aucune source ne la
+        // renvoie aujourd'hui ; un proxy passé à la v2 ne l'y mêlerait pas.
+        let groups = (m3u8Attr(line, "IVS-GROUPS") ?? "").lowercased().split(separator: ",")
+        if groups.contains("portrait"), !groups.contains("landscape") { continue }
         // Deux formats : VIDEO="chunked" (l'ancien) et STABLE-VARIANT-ID="1080p60"
         // + IVS-VARIANT-SOURCE="source" (serveurs IVS, que renvoie le miroir
         // européen de Luminous). Sans ce dernier, la résolution servait de nom
@@ -145,6 +151,44 @@ private func getAccessToken(id: String, isLive: Bool) async -> (value: String, s
     return (value, sig)
 }
 
+// MARK: – Blocage par pays
+/// Raison d'un blocage par pays écrite par Twitch dans un jeton de lecture
+/// (`geoblock_reason`, ou une lecture refusée dont la raison parle de pays) ;
+/// nil sinon. Le jeton vaut pour l'adresse qui l'a demandé : celui de
+/// l'iPhone dit si SON pays est bloqué (droits de diffusion d'un événement,
+/// « contenu premium » dans l'app de Twitch).
+func tokenGeoBlock(_ value: String) -> String? {
+    guard let data = value.data(using: .utf8),
+          let flags = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+    if let reason = flags["geoblock_reason"] as? String, !reason.isEmpty { return reason }
+    let auth = flags["authorization"] as? [String: Any]
+    if auth?["forbidden"] as? Bool == true, let reason = (auth?["reason"] as? String)?.lowercased(),
+       reason.contains("geo") || reason.contains("region") {
+        return reason
+    }
+    return nil
+}
+
+/// Refus d'usher pour cause de pays :
+/// `[{"url":"…","error":"Content Restricted In Region","error_code":"content_geoblocked",…}]`.
+/// Seuls `error_code` et `error` comptent : `url` recopie l'adresse demandée,
+/// jeton compris, et le jeton contient toujours `geoblock_reason` (même vide)
+/// — un refus de signature ou de jeton (403 nauth_…) passait pour un blocage
+/// par pays (vu le 26/10).
+private func usherGeoBlocked(_ data: Data) -> Bool {
+    guard let json = try? JSONSerialization.jsonObject(with: data) else { return false }
+    let entries = (json as? [[String: Any]]) ?? [json as? [String: Any]].compactMap { $0 }
+    return entries.contains { e in
+        ((e["error_code"] as? String)?.lowercased().contains("geo") ?? false)
+            || ((e["error"] as? String)?.lowercased().contains("restricted in region") ?? false)
+    }
+}
+
+/// Blocage par pays vu pendant getLive (jetons, réponse d'usher) : sa raison.
+private final class GeoBlockFlag: @unchecked Sendable {
+    var reason: String?
+}
+
 // MARK: – Jeton de lecture du compte
 /// Identifiant d'appareil gardé pour la session web (points, drops, jeton de
 /// lecture du compte) : même clé que ChannelPointsService et TwitchGQL.
@@ -166,6 +210,8 @@ struct AccountPlaybackToken {
     let subscriber: Bool?
     /// Lecture refusée à ce compte (géoblocage…) : les proxys prennent la main.
     let forbidden: Bool
+    /// Blocage par pays d'après ce jeton (tokenGeoBlock), nil sinon.
+    var geoBlock: String? = nil
 }
 
 enum AccountPlayback {
@@ -228,7 +274,8 @@ func accountPlaybackToken(login: String, webToken: String,
                 "abonné \(flag(subscriber)) · turbo \(flag(turbo)) · hide_ads \(flag(hideAds)) · show_ads \(flag(showAds))"
                 + maxRes + (forbidden ? " · lecture refusée" : ""))
     return .token(AccountPlaybackToken(value: value, signature: signature, adFree: adFree,
-                                       subscriber: subscriber, forbidden: forbidden))
+                                       subscriber: subscriber, forbidden: forbidden,
+                                       geoBlock: tokenGeoBlock(value)))
 }
 
 /// Requête GQL au nom du compte, 6 s au plus. Pour le direct, getLive borne
@@ -488,6 +535,7 @@ func apiErrorKey(_ code: String) -> String {
     case "not_found":       return "not_found"
     case "network":         return "err_network"
     case "no_source":       return "err_no_source"
+    case "geo_blocked":     return "err_geo_blocked"
     case "vod_unavailable": return "err_vod_unavailable"
     case "offline":         return "offline_msg"
     default:                return code
@@ -583,6 +631,15 @@ func getLive(channelName: String, webToken: String? = nil,
     // on la coupe pour éviter des coupures.
     let lowLatency = UserDefaults.standard.object(forKey: "cfg_low_latency") as? Bool ?? true
 
+    // Blocage par pays (droits de diffusion) : dit par les jetons de l'iPhone
+    // ou par usher. Les proxys, ailleurs, peuvent quand même y avoir accès :
+    // seulement le message si aucune source ne répond.
+    let geo = GeoBlockFlag()
+    if let reason = token.flatMap({ tokenGeoBlock($0.value) }) {
+        geo.reason = reason
+        logger.warn("LIVE", "🌍 Twitch : direct bloqué dans ce pays", reason)
+    }
+
     var found: MasterPlaylist = ([:], [:])
     var usedSource: String? = nil
     var webSessionExpired = false
@@ -595,10 +652,14 @@ func getLive(channelName: String, webToken: String? = nil,
     switch await accountTask {
     case .token(let pat):
         subscriber = pat.subscriber
+        if geo.reason == nil, let reason = pat.geoBlock {
+            geo.reason = reason
+            logger.warn("LIVE", "🌍 Twitch : direct bloqué dans ce pays", reason)
+        }
         if pat.adFree && !pat.forbidden {
             // Jeton lié au compte : le seul que Twitch serve au-dessus de 1080p.
             found = await usherLiveLinks(login: login, token: (value: pat.value, signature: pat.signature),
-                                         lowLatency: lowLatency, codecs: HigherQualities.requested)
+                                         lowLatency: lowLatency, codecs: HigherQualities.requested, geo: geo)
             if !found.links.isEmpty {
                 usedSource = "account"
                 logger.success("LIVE", "✅ Direct par le compte (sans pub)", "\(found.links.count) qualités")
@@ -632,11 +693,10 @@ func getLive(channelName: String, webToken: String? = nil,
     for src in steps where found.links.isEmpty {
         onSource?(src)
         switch src {
-        case "as":     found = await luminousLiveLinks(hosts: ["as.luminous.dev"], login: login, lowLatency: lowLatency)
         case "al":     found = await ttvlolLiveLinks(login: login, lowLatency: lowLatency)
-        case "eu":     found = await luminousLiveLinks(hosts: kLuminousHosts.filter { $0 != "as.luminous.dev" },
-                                                       login: login, lowLatency: lowLatency)
-        case "twitch": if let token { found = await usherLiveLinks(login: login, token: token, lowLatency: lowLatency) }
+        case "twitch": if let token { found = await usherLiveLinks(login: login, token: token, lowLatency: lowLatency, geo: geo) }
+        case let id where kLiveProxyHosts[id] != nil:
+            found = await luminousLiveLinks(hosts: [kLiveProxyHosts[id]!], login: login, lowLatency: lowLatency)
         default:
             let worker = await workerLiveLinks(login: login)
             found = worker.master
@@ -673,13 +733,21 @@ func getLive(channelName: String, webToken: String? = nil,
     }
 
     // Aucune source n'a répondu alors que Twitch dit « en direct » : on le
-    // dit, au lieu de laisser croire la chaîne hors ligne. Sans réponse de
-    // Twitch non plus, c'est le réseau.
+    // dit, au lieu de laisser croire la chaîne hors ligne — et pourquoi, si
+    // Twitch bloque le direct dans ce pays (l'app de Twitch dit alors
+    // « geo_blocked »). Sans réponse de Twitch non plus, c'est le réseau.
     var error: String? = nil
     if found.links.isEmpty {
-        error = user == nil ? "network" : "no_source"
-        logger.error("LIVE", user == nil ? "❌ Ni Twitch ni aucune source n'ont répondu"
-                                         : "❌ Aucune source n'a répondu", login)
+        if user == nil {
+            error = "network"
+            logger.error("LIVE", "❌ Ni Twitch ni aucune source n'ont répondu", login)
+        } else if let reason = geo.reason {
+            error = "geo_blocked"
+            logger.error("LIVE", "❌ Direct bloqué dans ce pays par Twitch", "\(login) · \(reason)")
+        } else {
+            error = "no_source"
+            logger.error("LIVE", "❌ Aucune source n'a répondu", login)
+        }
     }
 
     return LiveData(title: title, game: game, thumbnail: thumbnail, avatar: avatar,
@@ -784,24 +852,23 @@ private final class AccountPlaybackGate: @unchecked Sendable {
 // MARK: – Sources du direct
 /// Ordre des sources du direct : celui des réglages (« liveSourceOrder »),
 /// sinon la source préférée d'avant (« liveSource », celle que garde l'app
-/// Apple TV) en tête de l'ordre automatique — Luminous Asie, proxy albanais,
-/// Luminous Europe, Twitch officiel (avec ses pubs). Une source inconnue est
-/// ignorée, une oubliée ajoutée à la fin ; le Worker toujours en dernier.
+/// Apple TV) en tête de l'ordre automatique (kLiveSources). Une source
+/// inconnue est ignorée, une oubliée ajoutée juste après celle qu'elle
+/// secourt, sinon à la fin (completeLiveSourceOrder) ; le Worker toujours en
+/// dernier.
 func liveSourceSteps() -> [String] {
     let ud = UserDefaults.standard
     let saved = ud.stringArray(forKey: "liveSourceOrder") ?? [ud.string(forKey: "liveSource") ?? "auto"]
-    var order: [String] = []
-    for id in saved where kLiveSources.contains(id) && !order.contains(id) { order.append(id) }
-    return order + kLiveSources.filter { !order.contains($0) } + ["worker"]
+    return completeLiveSourceOrder(saved) + ["worker"]
 }
 
-/// Miroirs Luminous, essayés dans l'ordre ; vide si aucun ne répond. Pas
-/// « sans pub » : les pré-rolls et les pauses pub de la chaîne y arrivent
-/// comme sur Twitch (écran « Commercial break in progress » ou vraie pub,
-/// cousus dans la playlist ; voir AdBreakMonitor).
+/// Proxys au format Luminous (/live/<chaîne>), essayés dans l'ordre ; vide
+/// si aucun ne répond. Pas « sans pub » : les pré-rolls et les pauses pub
+/// de la chaîne y arrivent comme sur Twitch (écran « Commercial break in
+/// progress » ou vraie pub, cousus dans la playlist ; voir AdBreakMonitor).
 private func luminousLiveLinks(hosts: [String], login: String, lowLatency: Bool) async -> MasterPlaylist {
     for host in hosts {
-        logger.info("LIVE", "Tentative Luminous…", host)
+        logger.info("LIVE", "Tentative proxy…", host)
         guard var comps = URLComponents(string: "https://\(host)/live/\(login)") else { continue }
         comps.queryItems = [
             .init(name: "allow_source",     value: "true"),
@@ -820,15 +887,15 @@ private func luminousLiveLinks(hosts: [String], login: String, lowLatency: Bool)
             if code == 200, let body = String(data: data, encoding: .utf8) {
                 let master = parseMaster(body, baseURL: url)
                 if !master.links.isEmpty {
-                    logger.success("LIVE", "✅ Luminous OK (\(host))", "\(master.links.count) qualités")
+                    logger.success("LIVE", "✅ Proxy OK (\(host))", "\(master.links.count) qualités")
                     return master
                 }
-                logger.warn("LIVE", "⚠️ Luminous \(host) : playlist vide", "miroir suivant…")
+                logger.warn("LIVE", "⚠️ Proxy \(host) : playlist vide", "serveur suivant…")
             } else {
-                logger.warn("LIVE", "⚠️ Luminous \(host) échec (\(code))", "miroir suivant…")
+                logger.warn("LIVE", "⚠️ Proxy \(host) échec (\(code))", "serveur suivant…")
             }
         } catch {
-            logger.error("LIVE", "❌ Erreur Luminous \(host)", error.localizedDescription)
+            logger.error("LIVE", "❌ Erreur proxy \(host)", error.localizedDescription)
         }
     }
     return ([:], [:])
@@ -901,9 +968,10 @@ enum HigherQualities {
 /// plus courts, playlist rafraîchie plus souvent). `codecs` :
 /// `supported_codecs`, pour le jeton du compte seulement (HigherQualities) ;
 /// nil, la demande ne change pas. `timeout` : voir higherQualitiesMaster.
+/// `geo` : noté si usher refuse le direct pour cause de pays.
 private func usherLiveLinks(login: String, token: (value: String, signature: String),
                             lowLatency wantsLowLatency: Bool, codecs: String? = nil,
-                            timeout: TimeInterval = 8) async -> MasterPlaylist {
+                            timeout: TimeInterval = 8, geo: GeoBlockFlag? = nil) async -> MasterPlaylist {
     guard login.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "_" }), !login.isEmpty,
           var comps = URLComponents(string: "https://usher.ttvnw.net/api/channel/hls/\(login).m3u8")
     else { return ([:], [:]) }
@@ -928,12 +996,81 @@ private func usherLiveLinks(login: String, token: (value: String, signature: Str
     // 8 s au plus par défaut (au lieu des 60 s d'URLSession) : réseau
     // filtré, la source suivante doit prendre le relais sans faire attendre.
     guard let url = comps.url,
-          let (data, resp) = try? await URLSession.shared.data(for: URLRequest(url: url, timeoutInterval: timeout)),
-          (resp as? HTTPURLResponse)?.statusCode == 200,
-          let body = String(data: data, encoding: .utf8) else { return ([:], [:]) }
+          let (data, resp) = try? await URLSession.shared.data(for: URLRequest(url: url, timeoutInterval: timeout))
+    else { return ([:], [:]) }
+    let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
+    guard status == 200, let body = String(data: data, encoding: .utf8) else {
+        if let geo, usherGeoBlocked(data) {
+            geo.reason = geo.reason ?? "usher \(status)"
+            logger.warn("LIVE", "🌍 Twitch : direct bloqué dans ce pays", "usher \(status)")
+        }
+        return ([:], [:])
+    }
     let master = parseMaster(body, baseURL: url)
     logger.success("LIVE", "✅ Twitch officiel : \(master.links.count) qualités")
     return master
+}
+
+// MARK: – Lives verticaux (Dual Format)
+/// Image verticale d'un direct en « Dual Format » (le streamer envoie aussi
+/// une image 9:16, que l'app de Twitch montre téléphone tenu droit). Seule la
+/// liste maîtresse v2 d'usher la donne, avec `multigroup_video` ; la v1, celle
+/// des proxys et du flux officiel, jamais (essai du 26/10 sur mortenroyale).
+/// Jeton anonyme demandé depuis l'iPhone : cette image vient de Twitch
+/// lui-même, pauses pub comprises (coupées et annoncées comme ailleurs).
+/// nil : pas d'image verticale, ou Twitch injoignable. Jamais sur le chemin
+/// du lancement : MainTabView la cherche une fois le direct parti.
+func portraitLive(login: String, lowLatency: Bool) async -> MasterPlaylist? {
+    guard login.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "_" }), !login.isEmpty,
+          let token = await getAccessToken(id: login, isLive: true),
+          var comps = URLComponents(string: "https://usher.ttvnw.net/api/v2/channel/hls/\(login).m3u8")
+    else { return nil }
+    comps.queryItems = [
+        .init(name: "allow_source",               value: "true"),
+        .init(name: "allow_audio_only",           value: "true"),
+        .init(name: "fast_bread",                 value: lowLatency ? "true" : "false"),
+        .init(name: "multigroup_video",           value: "true"),
+        .init(name: "platform",                   value: "web"),
+        .init(name: "player_backend",             value: "mediaplayer"),
+        .init(name: "playlist_include_framerate", value: "true"),
+        .init(name: "p",                          value: String(Int.random(in: 0..<999_999))),
+        .init(name: "sig",                        value: token.signature),
+        .init(name: "token",                      value: token.value),
+    ]
+    guard let url = comps.url,
+          let (data, resp) = try? await URLSession.shared.data(for: URLRequest(url: url, timeoutInterval: 6)),
+          (resp as? HTTPURLResponse)?.statusCode == 200,
+          let body = String(data: data, encoding: .utf8) else { return nil }
+    let master = parsePortraitMaster(body, baseURL: url)
+    guard master.variants.values.contains(where: { $0.height > 0 }) else { return nil }
+    logger.success("LIVE", "Image verticale disponible (Dual Format)", "\(master.links.count) qualités")
+    return master
+}
+
+/// Variantes « portrait » d'une liste maîtresse v2 (`IVS-GROUPS="portrait"`),
+/// nommées comme les autres (« 720p60 », IVS-NAME), avec pour hauteur le petit
+/// côté (720 pour 720x1280) : la qualité préférée s'y retrouve, et rien ne
+/// passe pour du 1440p. L'audio seul (« landscape,portrait ») est gardé.
+func parsePortraitMaster(_ content: String, baseURL: URL? = nil) -> MasterPlaylist {
+    var links: QualityLinks = [:]
+    var variants: [String: VariantInfo] = [:]
+    let lines = content.components(separatedBy: "\n").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+    for (i, line) in lines.enumerated() where line.hasPrefix("#EXT-X-STREAM-INF") {
+        let groups = (m3u8Attr(line, "IVS-GROUPS") ?? "").lowercased().split(separator: ",")
+        guard groups.contains("portrait"), i + 1 < lines.count else { continue }
+        let next = lines[i + 1]
+        guard !next.isEmpty, !next.hasPrefix("#"),
+              let name = m3u8Attr(line, "IVS-NAME")
+                  ?? m3u8Attr(line, "STABLE-VARIANT-ID").map({ $0.replacingOccurrences(of: "-portrait", with: "") })
+        else { continue }
+        let sides = m3u8Plain(line, "RESOLUTION")?.split(separator: "x").compactMap { Int($0) } ?? []
+        links[name] = next.hasPrefix("http") ? next
+            : baseURL.flatMap { URL(string: next, relativeTo: $0)?.absoluteString } ?? next
+        variants[name] = VariantInfo(height: sides.count == 2 ? sides.min() ?? 0 : 0,
+                                     fps: m3u8Plain(line, "FRAME-RATE").flatMap { Double($0) } ?? 0,
+                                     bandwidth: m3u8Plain(line, "BANDWIDTH").flatMap { Int($0) } ?? 0)
+    }
+    return (links, variants)
 }
 
 /// Worker Cloudflare : sa propre chaîne de sources, en dernier recours.
@@ -1844,11 +1981,22 @@ func qualityPreference(for key: String, among keys: [String], variants: [String:
 }
 
 /// Nom d'une qualité dans les menus (iPhone et Apple TV) : « Source »
-/// (chunked compris), « Audio seul » traduit, « 720p » pour « 720p30 » (la
-/// cadence ordinaire), « 1080p » pour « 1920x1080 ». Les noms de fichiers
-/// des téléchargements gardent la clé brute.
-func qualityText(_ key: String, _ lang: Lang) -> String {
-    if isSourceQuality(key) { return "Source" }
+/// (chunked compris) avec sa résolution quand la liste maîtresse ou le
+/// Worker la donnent (`variants` : « 1440p (Source) », « 1080p60 (Source) »),
+/// « Audio seul » traduit, « 720p » pour « 720p30 » (la cadence ordinaire),
+/// « 1080p » pour « 1920x1080 ». Seul l'affichage change : la clé reste
+/// « Source » (qualité préférée, liens, synchro). Les noms de fichiers des
+/// téléchargements gardent la clé brute.
+func qualityText(_ key: String, _ lang: Lang, variants: [String: VariantInfo] = [:]) -> String {
+    if isSourceQuality(key) {
+        guard let v = variants[key], v.height > 0 else { return "Source" }
+        // La cadence au-delà de 30 i/s, comme le nom des autres qualités.
+        // Bornée avant Int(…) : une valeur aberrante de la liste maîtresse ou
+        // du Worker (FRAME-RATE=1e30) faisait planter l'app (Int hors
+        // bornes) à chaque affichage du menu, iPhone et Apple TV.
+        let rate = v.fps.isFinite && v.fps > 30 && v.fps < 1000 ? Int(v.fps.rounded()) : 0
+        return "\(v.height)p" + (rate > 30 ? "\(rate)" : "") + " (Source)"
+    }
     if isAudioQuality(key) { return translate("q_audio", lang) }
     if key.hasSuffix("p30") { return String(key.dropLast(2)) }
     if key.range(of: #"^\d+x\d+$"#, options: .regularExpression) != nil, let h = nameHeight(key) { return "\(h)p" }
@@ -1896,8 +2044,13 @@ func webSessionIdentity(token: String) async -> WebSessionCheck {
           let payload = json["data"] as? [String: Any] else {
         return .unknown   // réponse inattendue : on ne tranche pas
     }
-    // `currentUser` à null = jeton rejeté, même avec un HTTP 200.
+    // `currentUser` à null = jeton rejeté, même avec un HTTP 200. Sauf si GQL
+    // joint des `errors` : panne passagère de Twitch, la session reste en place.
     guard let user = payload["currentUser"] as? [String: Any] else {
+        if let errors = json["errors"] as? [Any], !errors.isEmpty {
+            logger.debug("AUTH/WEB", "Vérification impossible", "erreur GQL — session conservée")
+            return .unknown
+        }
         logger.warn("AUTH/WEB", "Session web expirée", "currentUser vide")
         return .invalid
     }
@@ -2974,7 +3127,7 @@ func getClip(slug: String) async -> ClipPlayback? {
 func getVodMarkers(vodId: String) async -> VodMarkers {
     let q = """
     query($id: ID!) { video(id: $id) {
-      createdAt
+      createdAt broadcastType lengthSeconds
       moments(first: 50, momentRequestType: VIDEO_CHAPTER_MARKERS) {
         edges { node { positionMilliseconds durationMilliseconds description } }
       }
@@ -3019,5 +3172,7 @@ func getVodMarkers(vodId: String) async -> VodMarkers {
             return df.date(from: s)
         }()
     }
+    if (v["broadcastType"] as? String)?.uppercased() == "ARCHIVE" { out.broadcastStart = out.createdAt }
+    out.length = num(v["lengthSeconds"]) ?? 0
     return out
 }

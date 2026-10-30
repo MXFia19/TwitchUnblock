@@ -56,7 +56,7 @@ func panelText(_ raw: String) -> AttributedString {
             line.replaceSubrange(r, with: "• ")
         }
         var part = richText(line, markdown: true)
-        if heading { part.font = Font.system(size: 14, weight: .bold) }
+        if heading { part.font = Font.tSystem(size: 14, weight: .bold) }
         out += part
         if i < lines.count - 1 { out += AttributedString("\n") }
     }

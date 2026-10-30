@@ -171,7 +171,8 @@ struct LogsView: View {
                 Text(entry.timestamp)
                     .font(.system(size: 10, design: .monospaced))
                     .foregroundColor(.tMuted)
-                Text(entry.category)
+                // Catégorie traduite elle aussi (« LECTEUR » → « PLAYER »).
+                Text(LogTranslator.category(entry.category, lang))
                     .font(.system(size: 10, weight: .bold))
                     .foregroundColor(color)
                 // Même ligne arrivée plusieurs fois de suite.
@@ -251,7 +252,7 @@ struct LogsExport: Transferable {
         header + entries
             .map { e in
                 let times = e.repeats > 1 ? " (×\(e.repeats))" : ""
-                return "[\(e.timestamp)] [\(e.level.rawValue.uppercased())] [\(e.category)] \(LogTranslator.translate(e.message, lang))\(times)"
+                return "[\(e.timestamp)] [\(e.level.rawValue.uppercased())] [\(LogTranslator.category(e.category, lang))] \(LogTranslator.translate(e.message, lang))\(times)"
                     + (e.detail.map { "\n  → \(LogTranslator.translate($0, lang))" } ?? "")
             }
             .joined(separator: "\n")

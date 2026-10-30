@@ -382,6 +382,8 @@ let kJapaneseStrings: [String: String] = [
     "emote_zero_width": "直前のエモートに重ねて表示",
     "emote_modifier": "修飾子: 他のエモートの見た目を変えます",
     "emote_view_on": "{p} で見る",
+    "chat_gif_source": "GIPHY の GIF（Twitch の GIF キーボードから送信）",
+    "chat_gif_by": "作成：{a}",
     "emote_type_global": "Twitch グローバルエモート",
     "emote_type_sub": "Tier {n} サブスクエモート",
     "emote_type_points": "チャンネルポイントで解除",

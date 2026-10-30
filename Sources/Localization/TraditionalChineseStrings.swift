@@ -366,6 +366,8 @@ let kTraditionalChineseStrings: [String: String] = [
     "emote_zero_width": "疊在前一個表情符號上",
     "emote_modifier": "修飾符：改變另一個表情符號的外觀",
     "emote_view_on": "在 {p} 查看",
+    "chat_gif_source": "GIPHY 的 GIF，透過 Twitch 的 GIF 鍵盤傳送",
+    "chat_gif_by": "作者：{a}",
     "emote_type_global": "Twitch 全域表情符號",
     "emote_type_sub": "第 {n} 級訂閱表情符號",
     "emote_type_points": "以小奇點解鎖",

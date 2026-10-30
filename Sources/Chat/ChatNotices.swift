@@ -354,23 +354,28 @@ struct NoticesHideStrip: View {
 }
 
 // MARK: – Fiche d'une emote ou d'un badge
-/// Ce qu'on touche dans un message : une emote ou un badge.
+/// Ce qu'on touche dans un message : une emote, un badge, ou un GIF du
+/// clavier GIF de Twitch (adresse GIPHY et texte « [… GIF by …] »).
 enum ChatInfoItem: Identifiable {
     case emote(TwitchEmote)
     case badge(TwitchBadge)
+    case gif(url: String, alt: String)
 
     var id: String {
         switch self {
         case .emote(let e): return "emote:\(e.source.rawValue):\(e.id)"
         case .badge(let b): return "badge:\(b.id)"
+        case .gif(let url, _): return "gif:\(url)"
         }
     }
 
-    /// Ce que VoiceOver annonce : nom de l'emote, ou nom du jeu de badges.
+    /// Ce que VoiceOver annonce : nom de l'emote, nom du jeu de badges, ou
+    /// titre du GIF.
     var accessibilityName: String {
         switch self {
         case .emote(let e): return e.name
         case .badge(let b): return ChatInfoSheet.fallbackTitle(b)
+        case .gif(_, let alt): return ChatInfoSheet.gifParts(alt).title
         }
     }
 }
@@ -447,6 +452,7 @@ struct ChatInfoSheet: View {
                 switch item {
                 case .emote(let e): emoteContent(e)
                 case .badge(let b): badgeContent(b)
+                case .gif(let url, let alt): gifContent(url: url, alt: alt)
                 }
             }
             .padding(20)
@@ -473,12 +479,87 @@ struct ChatInfoSheet: View {
                 // celle d'avant, sans message d'erreur.
                 let info = await EmoteInfoService.shared.twitch(id: e.id)
                 if !Task.isCancelled { twitchInfo = info }
+            case .gif:
+                // Tout est dans le message : rien à lire de plus.
+                return
             }
         }
         // Un peu de marge : selon le système, la barre d'accueil est comptée
         // dans la hauteur demandée.
         .presentationDetents([.height(max(200, contentHeight + 16))])
         .presentationDragIndicator(.visible)
+    }
+
+    // MARK: GIF du clavier GIF de Twitch
+    /// Le GIF en grand, son titre et son auteur (lus dans le texte que Twitch
+    /// joint, « [Titre GIF by Auteur] »), d'où il vient, sa page GIPHY et son
+    /// lien à copier. Il n'avait pas de fiche : le toucher allait au message,
+    /// qui ouvrait l'historique de son auteur (retour de dave).
+    @ViewBuilder
+    private func gifContent(url: String, alt: String) -> some View {
+        let parts = Self.gifParts(alt)
+        CachedEmoteImage(url: url, name: alt, height: 160, maxWidth: 300)
+        Text(parts.title)
+            .font(.system(size: 18, weight: .bold))
+            .foregroundColor(.tText)
+            .textSelection(.enabled)
+            .multilineTextAlignment(.center)
+        VStack(spacing: 4) {
+            Text(store.t("chat_gif_source")).font(.system(size: 13)).foregroundColor(.tMuted)
+            if let author = parts.author {
+                Text(store.t("chat_gif_by").replacingOccurrences(of: "{a}", with: author))
+                    .font(.system(size: 12)).foregroundColor(.tMuted)
+            }
+        }
+        .multilineTextAlignment(.center)
+        if let page = Self.giphyPage(url) {
+            Button { UIApplication.shared.open(page) } label: {
+                Label(store.t("emote_view_on").replacingOccurrences(of: "{p}", with: "GIPHY"),
+                      systemImage: "arrow.up.right.square")
+            }
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundColor(.tPrimary)
+            .buttonStyle(.plain)
+        }
+        Button {
+            UIPasteboard.general.string = url
+            copied = true
+        } label: {
+            Label(store.t(copied ? "chat_info_copied" : "copy_link"),
+                  systemImage: copied ? "checkmark" : "link")
+        }
+        .buttonStyle(.borderedProminent).tint(.tPrimary)
+        .font(.system(size: 14, weight: .semibold))
+    }
+
+    /// « [Happy Dance GIF by Someone] » → titre « Happy Dance », auteur
+    /// « Someone » ; un texte d'une autre forme reste le titre tel quel.
+    static func gifParts(_ alt: String) -> (title: String, author: String?) {
+        var s = alt.trimmingCharacters(in: .whitespaces)
+        if s.hasPrefix("[") && s.hasSuffix("]") { s = String(s.dropFirst().dropLast()) }
+        if let r = s.range(of: " GIF by ", options: .backwards) {
+            let title = String(s[..<r.lowerBound]).trimmingCharacters(in: .whitespaces)
+            let author = String(s[r.upperBound...]).trimmingCharacters(in: .whitespaces)
+            return (title.isEmpty ? "GIF" : title, author.isEmpty ? nil : author)
+        }
+        if s.hasSuffix(" GIF") { s = String(s.dropLast(4)) }
+        return (s.isEmpty ? "GIF" : s, nil)
+    }
+
+    /// Page GIPHY d'un GIF servi par son CDN (…giphy.com/media/<id>/…) ;
+    /// nil pour une autre adresse.
+    static func giphyPage(_ raw: String) -> URL? {
+        guard let u = URL(string: raw), let host = u.host?.lowercased(),
+              host == "giphy.com" || host.hasSuffix(".giphy.com") else { return nil }
+        let parts = u.path.split(separator: "/")
+        guard var i = parts.firstIndex(of: "media") else { return nil }
+        i += 1
+        // Les adresses récentes glissent un segment « v1.… » après « media ».
+        if i < parts.count, parts[i].hasPrefix("v1.") { i += 1 }
+        guard i < parts.count else { return nil }
+        let id = parts[i]
+        guard !id.isEmpty, id.allSatisfy({ $0.isLetter || $0.isNumber }) else { return nil }
+        return URL(string: "https://giphy.com/gifs/\(id)")
     }
 
     // MARK: Emote

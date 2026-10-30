@@ -1581,8 +1581,10 @@ struct WrappingHStack: View {
                 case .gif(let url, let alt):
                     // GIF du clavier GIF de Twitch : sur sa propre ligne,
                     // comme dans l'app Twitch (son texte, s'il ne charge pas).
+                    // Un toucher ouvre sa fiche, comme pour une emote.
                     CachedEmoteImage(url: url, name: alt, height: min(140, availableWidth * 0.45),
                                      maxWidth: availableWidth)
+                        .chatInfoTap(infoAction, .gif(url: url, alt: alt))
                         .frame(width: availableWidth, alignment: .leading)
                 }
             }

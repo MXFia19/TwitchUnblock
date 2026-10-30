@@ -379,6 +379,8 @@ let kItalianStrings: [String: String] = [
     "emote_zero_width": "Si sovrappone all’emote precedente",
     "emote_modifier": "Modificatore: cambia l’aspetto di un’altra emote",
     "emote_view_on": "Visualizza su {p}",
+    "chat_gif_source": "GIF di GIPHY, inviata con la tastiera GIF di Twitch",
+    "chat_gif_by": "di {a}",
     "emote_type_global": "Emote globale di Twitch",
     "emote_type_sub": "Emote per abbonati di livello {n}",
     "emote_type_points": "Sbloccata con i punti canale",

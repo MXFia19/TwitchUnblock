@@ -330,7 +330,7 @@ let kRussianStrings: [String: String] = [
     "hidden_emotes_clear": "Снова показывать все",
     "emote_src_twitch": "Эмоут Twitch", "emote_src_bttv_personal": "BetterTTV · личный эмоут (Pro)",
     "emote_scope_global": "Глобальный эмоут", "emote_scope_channel": "Эмоут канала", "emote_by": "Автор: {u}", "emote_original": "Исходное название: {n}",
-    "emote_zero_width": "Накладывается на предыдущий эмоут", "emote_modifier": "Модификатор: меняет вид другого эмоута", "emote_view_on": "Открыть на {p}",
+    "emote_zero_width": "Накладывается на предыдущий эмоут", "emote_modifier": "Модификатор: меняет вид другого эмоута", "emote_view_on": "Открыть на {p}", "chat_gif_source": "GIF из GIPHY, отправлен через клавиатуру GIF в Twitch", "chat_gif_by": "автор: {a}",
     "emote_type_global": "Глобальный эмоут Twitch", "emote_type_sub": "Эмоут подписчика · уровень {n}", "emote_type_points": "Эмоут за баллы канала", "emote_sub_count": "Эмоуты подписчиков {c}: {n}",
     "chat_info_open": "Подробнее", "emote_search_ph": "Поиск эмоутов", "emotes_channel": "Этот канал", "emote_results": "Результаты для «{q}»: {n}",
     "emote_locked": "Только для подписчиков",

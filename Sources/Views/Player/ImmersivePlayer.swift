@@ -387,7 +387,7 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
             switch UserDefaults.standard.string(forKey: "cfg_background_playback") {
             case "pause"?:
                 logger.info("LECTEUR", "Arrière-plan : lecture mise en pause", "réglage")
-                self.setPlaying(false)
+                self.setPlaying(false, fromApp: false)
             case "audio"?:
                 guard let audio = self.backgroundAudioURL, let now = self.currentURL, now != audio else { return }
                 logger.info("LECTEUR", "Arrière-plan : son seul", "réglage")
@@ -754,12 +754,24 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
 
     func togglePlay() { setPlaying(!isPlaying) }
 
-    func setPlaying(_ on: Bool) {
+    /// Pause faite dans l'app (bouton, toucher sur l'image) : une reprise
+    /// venue de l'écran verrouillé ou des écouteurs la respecte. Une pause des
+    /// écouteurs (AirPod retiré), d'iOS ou du réglage d'arrière-plan ne la
+    /// pose pas.
+    private var pausedInApp = false
+
+    /// `fromApp` faux : commande de l'écran verrouillé, du centre de contrôle
+    /// ou des écouteurs (MPRemoteCommandCenter), ou pause du réglage
+    /// d'arrière-plan.
+    func setPlaying(_ on: Bool, fromApp: Bool = true) {
         // En échec (carte « Réessayer ») : rien ne relance un élément mort —
         // ni « lecture » de l'écran verrouillé ou des écouteurs, ni « Direct ».
         // Le croire en lecture gardait l'écran allumé sans fin, et l'écran
         // verrouillé affichait « en lecture ». « Réessayer » relit les liens.
         if on, failed { return }
+        if on, !fromApp, !pausedInApp { rejoinLiveEdgeIfBehind() }
+        // Vrai seulement pendant une pause faite dans l'app ; toute reprise l'efface.
+        pausedInApp = !on && fromApp
         if on { player.play() } else { player.pause() }
         // Pause voulue (bouton, écran verrouillé) : rien ne la relance seul,
         // ni la fin d'une interruption, ni la relance d'un direct en échec.
@@ -791,6 +803,23 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
     }
 
     func seekBy(_ delta: Double) { seek(to: position + delta) }
+
+    /// Direct repris par les écouteurs ou l'écran verrouillé après une pause
+    /// qui ne venait pas de l'app : un AirPod retiré met en pause, remis il
+    /// envoie « lecture », et le direct repartait de l'endroit de la pause,
+    /// en retard d'autant (retour de Nostalgia). Il repart au bord, comme
+    /// après une interruption ; un recul voulu (barre, −10 s) reste où il est.
+    private func rejoinLiveEdgeIfBehind() {
+        guard isLive, !latency.holdingBehind, player.timeControlStatus == .paused,
+              let item = player.currentItem, item.status == .readyToPlay else { return }
+        // Bornes relues : en pause, `tick` ne tourne plus.
+        updateWindow(item)
+        guard !atLiveEdge else { return }
+        let behind = endTime - position
+        seek(to: endTime - latency.minBehind(for: item), exact: false)
+        latency.hold(false)
+        logger.info("LECTEUR", "Direct repris au bord après une pause", String(format: "%.0f s de retard", behind))
+    }
 
     func goLive() {
         // Bornes relues : en pause, `tick` ne tourne plus et le bord du direct
@@ -1124,9 +1153,13 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
             command.isEnabled = true
             remoteTargets.append((command, command.addTarget(handler: handler)))
         }
-        add(center.playCommand)  { [weak self] _ in self?.setPlaying(true);  return .success }
-        add(center.pauseCommand) { [weak self] _ in self?.setPlaying(false); return .success }
-        add(center.togglePlayPauseCommand) { [weak self] _ in self?.togglePlay(); return .success }
+        add(center.playCommand)  { [weak self] _ in self?.setPlaying(true, fromApp: false);  return .success }
+        add(center.pauseCommand) { [weak self] _ in self?.setPlaying(false, fromApp: false); return .success }
+        add(center.togglePlayPauseCommand) { [weak self] _ in
+            guard let self else { return .success }
+            self.setPlaying(!self.isPlaying, fromApp: false)
+            return .success
+        }
         center.skipBackwardCommand.preferredIntervals = [10]
         center.skipForwardCommand.preferredIntervals  = [10]
         add(center.skipBackwardCommand) { [weak self] _ in self?.seekBy(-10); return .success }

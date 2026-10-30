@@ -149,6 +149,11 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   (in multi-live, a **Play** button on each tile that stopped). A video you
   paused stays paused, and unplugging headphones pauses without resuming.
   Multi-live and Apple TV too, their live streams always back at the edge.
+  A live paused by your earphones or iOS (an AirPod taken out, the
+  background setting) and resumed from them, the lock screen or Control
+  Center picks up at the live edge too, not where it stopped; one you paused
+  in the app's player still picks up where you were (with **Live · −45 s**
+  to jump back), and so does a moment you rewound to.
 * ⚙️ **Quality selector and preferred quality** — every resolution the channel
   broadcasts, Source included, sorted by height then frame rate. Source shows
   its own resolution when the stream gives it — “1440p (Source)”, “1080p60
@@ -387,7 +392,9 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   their type (global, Tier 1/2/3 sub, channel points), the channel they belong
   to (live or not, with "See channel") and a preview of that channel's other
   sub emotes of the same tier — one public Twitch request, no account needed.
-  A badge shows its title ("3-Month Subscriber"…) in high resolution. In the
+  A badge shows its title ("3-Month Subscriber"…) in high resolution. A GIF
+  from Twitch's GIF keyboard shows in large with its title and author, where
+  it comes from (GIPHY), a link to its GIPHY page and its link to copy. In the
   live chat, the multistream, the pinned message, a message thread and the
   VOD and clip chat; VoiceOver can open it too.
 * 🙅 **Hide an emote** — long-press it in the chat, or **Hide this emote** on

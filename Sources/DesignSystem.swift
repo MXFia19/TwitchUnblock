@@ -788,7 +788,9 @@ struct TPromptCard: View {
 /// geste le rend. Il ne part qu'à moins de 24 pt du bord gauche de la vue,
 /// vers la droite et plus à l'horizontale qu'à la verticale ; simultané, il
 /// laisse défiler les listes, et les gestes du lecteur, de Découvrir ou des
-/// feuilles, posés sur d'autres vues, ne le reçoivent pas.
+/// feuilles, posés sur d'autres vues, ne le reçoivent pas. Une fois le retour
+/// reconnu, les listes de la page ne défilent plus jusqu'au lever du doigt :
+/// la page montait et descendait sous le doigt pendant le glissé.
 private struct EdgeSwipeBack: ViewModifier {
     let enabled: Bool
     /// La vue suit le doigt (une page posée sur ce qu'elle découvre).
@@ -809,6 +811,8 @@ private struct EdgeSwipeBack: ViewModifier {
 
     func body(content: Content) -> some View {
         content
+            // Seulement couper, jamais rétablir un défilement coupé plus haut.
+            .transformEnvironment(\.isScrollEnabled) { if drag.back { $0 = false } }
             .offset(x: follows ? drag.dx : 0)
             .simultaneousGesture(
                 DragGesture(minimumDistance: 12)

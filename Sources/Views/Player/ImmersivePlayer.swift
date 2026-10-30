@@ -138,9 +138,9 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
     /// Rattrape le bord du direct quand la lecture a dérivé (mode faible latence).
     var lowLatency = false
 
-    /// Vitesse de lecture hors direct (cran de VodSpeed). Un direct joue
-    /// toujours à 1× : en direct, elle est seulement retenue pour la bascule
-    /// sur l'enregistrement.
+    /// Vitesse de lecture (cran de VodSpeed). Un direct joue à 1× : en direct,
+    /// elle ne sert qu'à rattraper le bord après un retour en arrière
+    /// (liveCatchUp), et elle est retenue pour la bascule sur l'enregistrement.
     @Published private(set) var speed: Double = 1
     /// Vitesse imposée par le lecteur (refus, AirPlay, bord du DVR rattrapé) :
     /// la vue la retient pour la lecture en cours (pas dans la préférence) et
@@ -174,6 +174,14 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
     /// reprend si celle de la lecture est encore imposée (un choix fait
     /// entre-temps l'emporte).
     @Published private(set) var edgeRelease: SpeedChange?
+    /// Direct reculé exprès lu en accéléré (liveCatchUp). La vue annonce le
+    /// début (`liveCatchUpStarted`) et le bord rattrapé (`liveCaughtUp`).
+    /// Refusé par le lecteur : plus d'essai avant le prochain retour en
+    /// arrière, le prochain choix de vitesse ou le prochain élément.
+    private var liveCatchUpActive = false
+    private var liveCatchUpRefused = false
+    @Published private(set) var liveCatchUpStarted = 0
+    @Published private(set) var liveCaughtUp = 0
     /// Vitesse réellement tenue (voir checkEffectiveRate) : fenêtres manquées
     /// de suite, et vitesse déjà réappliquée une fois.
     private var rateProbe = EffectiveRateProbe()
@@ -467,10 +475,6 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
     /// deux signaux) : MainTabView passe en « Auto » ou un cran en dessous.
     private func stalled() {
         if isLive { latency.noteStall() }
-        // Vitesse expérimentale qui cale : elle n'est pas tenue, retour à 2×.
-        if !isLive, VodSpeed.isExperimental(speed) {
-            force(speed: VodSpeed.maxSafe, notice: "speed_fast_unavailable", why: "calage")
-        }
         let now = Date()
         stallTimes = stallTimes.filter { now.timeIntervalSince($0) < 60 } + [now]
         // Le calage lui-même est noté par PlaybackDiagnostics.
@@ -498,6 +502,8 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
         // d'avant le bord d'un enregistrement reste à rendre (retour au
         // direct puis nouveau retour en arrière).
         resetRateCheck()
+        liveCatchUpActive = false
+        liveCatchUpRefused = false
         // Repart d'une fenêtre vierge : garder les bornes de la source
         // précédente affichait une barre fantaisiste le temps du chargement.
         startTime = 0; endTime = 0; currentDate = nil
@@ -723,6 +729,8 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
             logger.info("LECTEUR", "Loin du bord de l'enregistrement : vitesse rendue", String(format: "×%g", held))
             edgeRelease = SpeedChange(value: held, notice: "", id: (edgeRelease?.id ?? 0) + 1)
         }
+        // Direct reculé exprès : la vitesse retenue rattrape le bord.
+        liveCatchUp()
         checkEffectiveRate()
 
         catchUpIfNeeded(item)
@@ -796,8 +804,12 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
         position = clamped
         rateProbe.reset()
         // Recul voulu (barre, −10 s) : la tenue du direct ne doit pas le
-        // défaire. Près du bord, elle reprend la main.
-        if isLive { latency.hold(ceiling - clamped > 3) }
+        // défaire. Près du bord, elle reprend la main. Un rattrapage refusé
+        // peut être réessayé.
+        if isLive {
+            latency.hold(ceiling - clamped > 3)
+            liveCatchUpRefused = false
+        }
         refreshNowPlaying(force: true)
         updateActivity()
     }
@@ -830,6 +842,8 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
         let back = player.currentItem.map { latency.minBehind(for: $0) } ?? 6
         seek(to: endTime - back, exact: false)
         latency.hold(false)
+        // Rattrapage en cours : fini, sans l'annoncer (« Direct » touché).
+        endLiveCatchUp(announce: false)
         if !isPlaying { togglePlay() }
     }
 
@@ -887,6 +901,7 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
         if chosen {
             edgeHeldSpeed = nil
             resetRateCheck()
+            liveCatchUpRefused = false
         }
         // Sous 1× : un élément prêt peut dire qu'il ne sait pas ralentir. Avant
         // qu'il le soit, la propriété n'a pas de sens : le refus éventuel
@@ -897,7 +912,12 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
             return
         }
         speed = v
-        guard !isLive else { return }
+        // Direct : seulement pour rattraper le bord après un retour en
+        // arrière ; ramenée à 1× (ou moins), le rattrapage s'arrête là.
+        guard !isLive else {
+            if liveCatchingUp { liveCatchUp() } else { endLiveCatchUp(announce: false) }
+            return
+        }
         player.defaultRate = Float(v)
         if player.rate != 0 { player.rate = Float(v) }
         refreshNowPlaying(force: true)
@@ -912,23 +932,18 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
         rateReapplied = false
     }
 
-    /// Vitesse réellement tenue, hors direct et hors 1× : `player.rate` n'est
-    /// que la vitesse demandée, et un lecteur peut afficher 2× en lisant à 1×.
-    /// Une vitesse expérimentale qui ne tient pas revient à 2× tout de suite.
-    /// Une autre est d'abord réappliquée ; si la lecture ne la suit toujours
-    /// pas, la vitesse réelle devient celle du lecteur : le menu montre ce qui
-    /// joue, pas un « 2× » qui ne joue pas.
+    /// Vitesse réellement tenue, hors 1× (en direct : pendant un rattrapage) :
+    /// `player.rate` n'est que la vitesse demandée, et un lecteur peut
+    /// afficher 2× en lisant à 1×. Elle est d'abord réappliquée ; si la
+    /// lecture ne la suit toujours pas, la vitesse réelle devient celle du
+    /// lecteur — le menu montre ce qui joue, pas un « 2× » qui ne joue pas —,
+    /// et un rattrapage du direct s'arrête.
     private func checkEffectiveRate() {
-        guard !isLive, speed != 1, pendingSeek == nil,
+        guard !isLive || liveCatchUpActive, speed != 1, pendingSeek == nil,
               UIApplication.shared.applicationState == .active,
               let measured = rateProbe.sample(player) else { return }
         if abs(measured - speed) <= max(0.15, speed * 0.12) {
             rateMisses = 0
-            return
-        }
-        if VodSpeed.isExperimental(speed) {
-            force(speed: VodSpeed.maxSafe, notice: "speed_fast_unavailable",
-                  why: String(format: "×%.2f mesuré", measured))
             return
         }
         rateMisses += 1
@@ -942,7 +957,13 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
             rateProbe.reset()
             return
         }
-        force(speed: VodSpeed.nearestSafe(measured), notice: "speed_unavailable",
+        if isLive {
+            liveCatchUpRefused = true
+            endLiveCatchUp(announce: false)
+            logger.warn("LECTEUR", "Rattrapage du direct non tenu", String(format: "×%.2f mesuré", measured))
+            return
+        }
+        force(speed: VodSpeed.nearest(measured), notice: "speed_unavailable",
               why: String(format: "×%.2f mesuré", measured))
     }
 
@@ -959,19 +980,83 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
         if pipActive, reason == AVPlayer.RateDidChangeReason.setRateCalled.rawValue {
             pausedByUser = rate == 0
         }
+        // Rattrapage du direct ramené à 1× par AVPlayer : au bord (iOS 26.4 et
+        // après, parfois avant notre seuil `atLiveEdge`), il est fini ; sinon
+        // refusé, sans nouvel essai à chaque relevé.
+        if isLive, liveCatchUpActive, rate > 0, rate <= 1.01,
+           reason != AVPlayer.RateDidChangeReason.setRateCalled.rawValue {
+            if reachedLiveEdge(reason) {
+                latency.hold(false)
+                endLiveCatchUp(announce: true)
+            } else {
+                liveCatchUpRefused = true
+                endLiveCatchUp(announce: false)
+                logger.warn("LECTEUR", "Rattrapage du direct refusé par le lecteur", reason)
+            }
+            return
+        }
         let v = VodSpeed.nearest(rate)
         guard !isLive, player.currentItem != nil, rate > 0, abs(v - speed) > 0.01 else { return }
         // Ralenti par AVPlayer au bord d'un enregistrement en cours (iOS 26.4
         // et après) : la vitesse d'avant est rendue loin du bord, comme quand
-        // c'est nous qui ralentissons. Une vitesse expérimentale refusée : 2×.
+        // c'est nous qui ralentissons.
         let held = speed
         let atEdge = nearRecordingEdge && v < held
         force(speed: v,
-              notice: VodSpeed.isExperimental(held) ? "speed_fast_unavailable"
-                  : atEdge ? "speed_caught_up" : "speed_unavailable",
+              notice: atEdge ? "speed_caught_up" : "speed_unavailable",
               why: String(format: "×%.2f imposé par le lecteur · ", rate) + reason,
               apply: false)
         if atEdge { edgeHeldSpeed = held }
+    }
+
+    /// AVPlayer revenu seul à 1× au bord du direct (playheadReachedLiveEdge).
+    private func reachedLiveEdge(_ reason: String) -> Bool {
+        if #available(iOS 26.4, *) {
+            return reason == AVPlayer.RateDidChangeReason.playheadReachedLiveEdge.rawValue
+        }
+        return false
+    }
+
+    /// Direct reculé exprès (barre, −10 s), loin du bord, avec une vitesse
+    /// au-delà de 1× : la lecture accélère pour le rattraper.
+    var liveCatchingUp: Bool {
+        isLive && speed > 1 && latency.holdingBehind && !atLiveEdge && !liveCatchUpRefused
+    }
+
+    /// Rattrapage d'un direct reculé, comme sur YouTube : la vitesse retenue
+    /// (2× au plus) jusqu'au bord, puis 1× et la tenue du direct reprend la
+    /// main. Avant, la barre affichait « 2× » et le direct restait à 1×
+    /// (retour d'un testeur, iOS 27). La tenue du direct ne passe que par des
+    /// sauts : elle ne se bat pas avec cette vitesse.
+    private func liveCatchUp() {
+        guard isLive else { return }
+        if liveCatchingUp {
+            guard isPlaying, player.rate > 0 else { return }
+            if !liveCatchUpActive {
+                liveCatchUpActive = true
+                resetRateCheck()
+                liveCatchUpStarted += 1
+                logger.info("LECTEUR", "Direct reculé : rattrapage en accéléré", String(format: "×%g", speed))
+            }
+            if abs(Double(player.rate) - speed) > 0.01 { player.rate = Float(speed) }
+        } else if liveCatchUpActive {
+            // Encore reculé exprès, vitesse au-delà de 1× : c'est le bord
+            // (atLiveEdge) qui arrête le rattrapage.
+            let reached = latency.holdingBehind && speed > 1 && !liveCatchUpRefused
+            if reached { latency.hold(false) }
+            endLiveCatchUp(announce: reached)
+        }
+    }
+
+    /// Fin du rattrapage : retour à 1×. `announce` quand le bord est atteint
+    /// en lisant (pas après « Direct », un choix de 1× ou un refus).
+    private func endLiveCatchUp(announce: Bool) {
+        guard liveCatchUpActive else { return }
+        liveCatchUpActive = false
+        if player.rate > 1 { player.rate = 1 }
+        guard announce else { return }
+        liveCaughtUp += 1
+        logger.info("LECTEUR", "Direct rattrapé : vitesse normale", nil)
     }
 
     /// Enregistrement d'un direct en cours (pas de fin déclarée) lu près de
@@ -1797,7 +1882,12 @@ struct ImmersivePlayer: View {
         .onChange(of: speed) { v in
             let echo = VodSpeed.nearest(v) == model.speed
             model.setSpeed(v, chosen: !echo)
-            if !echo, !isLive { flash(speedFlash) }
+            if !echo, !isLive || model.liveCatchingUp { flash(speedFlash) }
+        }
+        // Direct reculé lu en accéléré, puis bord rattrapé (liveCatchUp).
+        .onChange(of: model.liveCatchUpStarted) { _ in flash(speedFlash) }
+        .onChange(of: model.liveCaughtUp) { _ in
+            flash(store.t("speed_caught_up"), duration: 2_500_000_000)
         }
         .onChange(of: model.forcedSpeed) { change in
             guard let change else { return }
@@ -2330,8 +2420,9 @@ struct ImmersivePlayer: View {
                             .foregroundColor(.white.opacity(0.7))
                     }
                     // Vitesse retenue d'une VOD à l'autre : toujours visible
-                    // quand elle n'est pas normale.
-                    if model.speed != 1 {
+                    // quand elle n'est pas normale. En direct, seulement
+                    // pendant un rattrapage (elle ne joue pas sinon).
+                    if model.speed != 1, !model.isLive || model.liveCatchingUp {
                         Text(" · " + VodSpeed.label(model.speed, store.lang))
                             .foregroundColor(.white)
                             .accessibilityLabel(store.t("speed") + " " + VodSpeed.label(model.speed, store.lang))

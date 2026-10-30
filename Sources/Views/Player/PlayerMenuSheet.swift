@@ -16,8 +16,11 @@ struct PlayerMenuSheet: View {
     var variants: [String: VariantInfo] = [:]
 
     var onSelectQuality: (String) -> Void = { _ in }
-    /// Vitesse de lecture en cours ; nil masque la section (direct).
+    /// Vitesse de lecture en cours ; nil masque la section.
     var speed: Double? = nil
+    /// Direct : la vitesse ne sert qu'à rattraper le bord après un retour en
+    /// arrière (crans de 1× à 2×, note qui le dit).
+    var liveCatchUp = false
     var onSelectSpeed: (Double) -> Void = { _ in }
     var onRewind:      () -> Void = {}
     var onBackToLive:  () -> Void = {}
@@ -97,7 +100,8 @@ struct PlayerMenuSheet: View {
                         divider
                     }
 
-                    // Vitesse : VODs et clips. Un direct reste à 1×.
+                    // Vitesse : VODs et clips ; en direct, celle qui rattrape
+                    // le bord après un retour en arrière.
                     if let speed {
                         HStack(spacing: TSpace.md) {
                             Image(systemName: "speedometer")
@@ -112,23 +116,14 @@ struct PlayerMenuSheet: View {
                         ScrollViewReader { proxy in
                             ScrollView(.horizontal, showsIndicators: false) {
                                 HStack(spacing: TSpace.sm) {
-                                    ForEach(VodSpeed.all, id: \.self) { s in
+                                    // Un direct ne se lit pas au ralenti : il
+                                    // prendrait du retard sans fin.
+                                    ForEach(liveCatchUp ? VodSpeed.all.filter { $0 >= 1 } : VodSpeed.all, id: \.self) { s in
                                         TChip(title: s == 1 ? store.t("speed_normal") : VodSpeed.label(s, store.lang),
                                               isOn: abs(s - speed) < 0.01) {
                                             onSelectSpeed(s)
                                         }
                                         .id(s)
-                                    }
-                                    // Au-delà de 2× : expérimental (éprouvette),
-                                    // séparé des crans garantis par un trait.
-                                    Rectangle().fill(Color.tBorder).frame(width: 1, height: 20)
-                                    ForEach(VodSpeed.experimental, id: \.self) { s in
-                                        TChip(title: VodSpeed.label(s, store.lang), icon: "testtube.2",
-                                              isOn: abs(s - speed) < 0.01) {
-                                            onSelectSpeed(s)
-                                        }
-                                        .id(s)
-                                        .accessibilityLabel(VodSpeed.label(s, store.lang) + ", " + store.t("speed_experimental"))
                                     }
                                 }
                                 .padding(.horizontal, TSpace.lg)
@@ -138,14 +133,17 @@ struct PlayerMenuSheet: View {
                             .onAppear { proxy.scrollTo(VodSpeed.nearest(speed), anchor: .center) }
                         }
                         .padding(.top, TSpace.sm)
+                        .padding(.bottom, liveCatchUp ? 0 : TSpace.sm)
 
-                        Text(store.t("speed_experimental_note"))
-                            .font(.tMeta).foregroundColor(.tMuted)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, TSpace.lg)
-                            .padding(.top, TSpace.xs)
-                            .padding(.bottom, TSpace.sm)
+                        if liveCatchUp {
+                            Text(store.t("speed_live_note"))
+                                .font(.tMeta).foregroundColor(.tMuted)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, TSpace.lg)
+                                .padding(.top, TSpace.xs)
+                                .padding(.bottom, TSpace.sm)
+                        }
 
                         divider
                     }

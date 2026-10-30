@@ -421,9 +421,10 @@ struct MainTabView: View {
                     immersiveQuality = q
                     showPlayerMenu = false
                 },
-                // Pas sur le direct lui-même ; son rembobinage (enregistrement)
-                // l'a, de quoi rattraper le bord.
-                speed: isLivePlaying ? nil : playbackSpeed,
+                // Sur le direct : la vitesse qui rattrape le bord après un
+                // retour en arrière (ImmersivePlayerModel.liveCatchUp).
+                speed: playbackSpeed,
+                liveCatchUp: isLivePlaying,
                 onSelectSpeed: { setPlaybackSpeed($0); showPlayerMenu = false },
                 onRewind: { showPlayerMenu = false; rewindAction?() },
                 onBackToLive: { showPlayerMenu = false; backToLiveAction?() },
@@ -1911,10 +1912,6 @@ struct MainTabView: View {
         let speed = VodSpeed.nearest(v)
         if isClipPlaying {
             clipSpeed = speed
-        } else if VodSpeed.isExperimental(speed) {
-            // Au-delà de 2× (expérimental) : pour cette lecture seulement. La
-            // préférence, partagée avec le site, reste dans ses crans.
-            forcedVodSpeed = speed
         } else {
             forcedVodSpeed = nil
             if speed != store.vodSpeed {
@@ -1938,12 +1935,11 @@ struct MainTabView: View {
 
     /// Lecteur immersif revenu loin du bord d'un enregistrement en cours
     /// (retour en arrière) : la vitesse d'avant le retour à 1× revient — la
-    /// préférence, ou une vitesse expérimentale choisie pour cette lecture.
-    /// Seulement si celle de la lecture est encore imposée : un choix fait
-    /// entre-temps dans le menu ⋯ l'emporte.
+    /// préférence. Seulement si celle de la lecture est encore imposée : un
+    /// choix fait entre-temps dans le menu ⋯ l'emporte.
     private func restoreChosenSpeed(_ held: Double) {
         guard !isClipPlaying, forcedVodSpeed != nil else { return }
-        forcedVodSpeed = VodSpeed.isExperimental(held) ? VodSpeed.nearest(held) : nil
+        forcedVodSpeed = nil
     }
 
     // MARK: – Mini-barre (lecteur réduit)

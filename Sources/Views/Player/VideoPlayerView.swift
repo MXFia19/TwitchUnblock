@@ -97,9 +97,7 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
     /// d'où `defaultRate` (1× en direct, même après une VOD en accéléré).
     private func applySpeed(_ vc: AVPlayerViewController, player: AVPlayer, context: Context) {
         vc.speeds = isLive ? [] : speedOptions
-        // Le menu d'Apple n'a que les crans jusqu'à 2× : une vitesse
-        // expérimentale (lecteur immersif) n'y passe pas.
-        let rate = isLive ? 1 : VodSpeed.nearestSafe(speed)
+        let rate = isLive ? 1 : VodSpeed.nearest(speed)
         context.coordinator.speed = rate
         player.defaultRate = Float(rate)
         if let option = vc.speeds.first(where: { abs(Double($0.rate) - rate) < 0.01 }) {
@@ -760,7 +758,7 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
                 rateProbe.reset()
                 return
             }
-            let real = VodSpeed.nearestSafe(measured)
+            let real = VodSpeed.nearest(measured)
             impose(real, on: player, notice: "speed_unavailable")
             logger.info("LECTEUR", "Vitesse ramenée à " + String(format: "×%g", real),
                         String(format: "×%.2f mesuré", measured))

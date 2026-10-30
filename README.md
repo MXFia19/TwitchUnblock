@@ -73,17 +73,18 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
 * 🐢 **Playback speed** — 0.25× to 2× on VODs and clips, from the ⋯ menu (or
   Apple's own speed menu in the native player and on Apple TV). The VOD speed
   is remembered from one VOD to the next, shown next to the timer, and synced
-  with the website through the backup file; clips start at 1×, live streams
-  always play at normal speed. Catching up with a live recording drops back to
-  1× near its edge (Apple's player too, whose menu used to keep showing 2×),
-  and the chosen speed comes back once you rewind away from the edge. A speed
-  the player can't keep (AirPlay, slow motion refused, or measured lower than
-  asked once applied again) is announced and shown as it really plays, for
-  the current video only.
-* 🧪 **Experimental 2.25×, 2.5× and 3×** — in the ⋯ menu of the app's player,
-  marked with a test tube, for the current video only. Twitch publishes no
-  I-frame playlists, so iOS only guarantees up to 2×: as soon as playback
-  can't keep up (speed refused or measured lower, stall), it goes back to 2×.
+  with the website through the backup file; clips start at 1×. A live plays at
+  normal speed, except to **catch up**: once you go back in it (−10 s, the
+  bar), the app's player plays at the chosen speed (1× to 2×, also in the ⋯
+  menu during a live) until the live edge, then back to 1× ("Caught up with
+  the live"); the timer only shows the speed while it applies. Catching up with
+  a live recording drops back to 1× near its edge (Apple's player too, whose
+  menu used to keep showing 2×), and the chosen speed comes back once you
+  rewind away from the edge. A speed the player can't keep (AirPlay, slow
+  motion refused, or measured lower than asked once applied again) is
+  announced and shown as it really plays, for the current video only. No
+  faster than 2×: Twitch publishes no I-frame playlists, and iOS doesn't play
+  its streams above 2× (2.25× to 3× were tried in TU Test and removed).
 * ⏩ **Double-tap to skip ±10 s** — consecutive taps add up, so three taps read
   "+30 s" instead of three separate "+10 s". On a live there's nothing to skip
   ahead to: in landscape, double-tap shows or hides the chat instead, and once
@@ -717,7 +718,7 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
 * ⬆️ **Back to the top** — tap the tab you're already on to scroll Home (any
   live tab), Search or My VODs back to the top, or Discover back to its first
   page.
-* 👈 **Swipe back** — swipe from the left edge to go back, as in iOS apps: in Settings (the page follows your finger), from a category's live channels and from a channel opened from search results.
+* 👈 **Swipe back** — swipe from the left edge to go back, as in iOS apps: in Settings (the page follows your finger), from a category's live channels and from a channel opened from search results. Once the swipe is recognized, the page stops scrolling up and down until you lift your finger.
 
 ### The rest
 

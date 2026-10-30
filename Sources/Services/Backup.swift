@@ -412,7 +412,7 @@ enum Backup {
             ok("hiddenEmotes")
         }
         bool("shareUsage") { store.shareUsage = $0 }
-        num("vodSpeed", 0.25...2) { store.vodSpeed = VodSpeed.nearestSafe($0) }
+        num("vodSpeed", 0.25...2) { store.vodSpeed = VodSpeed.nearest($0) }
         // Ordre des sources du direct (nom du site) : sources connues, sans
         // doublon, celles qui manquent juste après celle qu'elles secourent.
         if let v = s["liveSourceOrder"] as? [String], v.contains(where: { kLiveSources.contains($0) }) {

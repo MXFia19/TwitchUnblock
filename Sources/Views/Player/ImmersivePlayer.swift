@@ -1385,6 +1385,9 @@ struct ImmersivePlayer: View {
     @StateObject private var model: ImmersivePlayerModel
     @State private var showControls = true
     @State private var hideTask: Task<Void, Never>? = nil
+    /// iOS a refusé de tourner l'écran (app en fenêtre : écran intérieur de
+    /// l'iPhone Duo) : le bouton de rotation disparaît pour cette lecture.
+    @State private var rotationRefused = false
     /// Touchers sur l'image (voir `tap`) : le précédent, l'état des commandes
     /// avant lui, et une série de doubles-tapes en cours.
     @State private var lastTapAt = Date.distantPast
@@ -2566,9 +2569,13 @@ struct ImmersivePlayer: View {
         case "rotate":
             // Bascule portrait / paysage. Le même bouton fait l'aller ET le
             // retour : sans ça, un téléphone dont la rotation est verrouillée
-            // reste coincé en paysage.
-            overlayButton(icon: isLandscape ? "rectangle.portrait.rotate" : "rectangle.landscape.rotate") {
-                toggleOrientation(); scheduleAutoHide()
+            // reste coincé en paysage. Retiré quand iOS refuse de tourner
+            // (app en fenêtre, écran intérieur de l'iPhone Duo) : il ne
+            // faisait plus rien.
+            if !rotationRefused {
+                overlayButton(icon: isLandscape ? "rectangle.portrait.rotate" : "rectangle.landscape.rotate") {
+                    toggleOrientation(); scheduleAutoHide()
+                }
             }
         case "sleep":
             // Minuteur en cours : sa pastille, plus à gauche, en tient lieu.
@@ -2889,6 +2896,12 @@ struct ImmersivePlayer: View {
         PlayerOrientation.forcedLandscape = target == .landscapeRight
         scene.requestGeometryUpdate(.iOS(interfaceOrientations: target)) { error in
             logger.warn("LECTEUR", "Rotation refusée", error.localizedDescription)
+            // Refus (mode de fenêtre qui interdit de choisir l'orientation) :
+            // rien de forcé à défaire à la fermeture, et plus de bouton.
+            DispatchQueue.main.async {
+                PlayerOrientation.forcedLandscape = false
+                rotationRefused = true
+            }
         }
         // Sans ça, iOS peut garder l'ancienne orientation tant qu'aucune vue
         // ne redemande la mise à jour.
@@ -2915,6 +2928,7 @@ enum PlayerOrientation {
         forcedLandscape = true
         scene.requestGeometryUpdate(.iOS(interfaceOrientations: .landscapeRight)) { error in
             logger.warn("LECTEUR", "Rotation refusée", error.localizedDescription)
+            DispatchQueue.main.async { forcedLandscape = false }
         }
         UIViewController.attemptRotationToDeviceOrientation()
     }

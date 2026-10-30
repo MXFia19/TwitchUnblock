@@ -993,6 +993,12 @@ struct MainTabView: View {
             // lecteur est affiché ainsi.
             .persistentSystemOverlays(landscape && playerVisible && !chatOnly && !closingPlayer
                                       ? .hidden : .automatic)
+            // La barre d'état aussi : l'iPhone la cache seul en paysage, mais
+            // pas l'écran intérieur de l'iPhone Duo (fenêtre aux tailles
+            // « regular », comme l'iPad), où sa colonne restait sur le côté
+            // de l'image (fb_mvt2q11b). Demande que l'Info.plist la laisse aux
+            // contrôleurs (UIViewControllerBasedStatusBarAppearance).
+            .statusBarHidden(landscape && playerVisible && !chatOnly && !closingPlayer)
         }
     }
 

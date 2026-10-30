@@ -685,7 +685,10 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   it follows Customize the app (order, hidden tabs) and goes back to the
   bottom as soon as the window narrows. The header, grids, tab bar and mini
   player stay clear of iOS's status column on the side of the iPhone Duo's
-  displays.
+  displays; the full-size player in landscape hides that column (as an iPhone
+  hides its status bar in landscape), so the picture uses the whole display,
+  and its rotate button goes away when iOS doesn't let apps turn the screen
+  (apps in a window, as on the inner display).
 * 🔠 **Text size** — the app follows iOS's text size (Display & Brightness →
   Text Size, or Accessibility → Larger Text), as soon as you change it, up to
   Accessibility 2: Home, Discover, search, channel pages, settings and chat

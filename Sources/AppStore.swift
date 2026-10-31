@@ -729,6 +729,15 @@ final class AppStore: ObservableObject {
             UserDefaults.standard.set(data, forKey: "cfg_customization")
         }
     }
+
+    /// « Sans compte Twitch » (Personnaliser l'app) en vigueur : pages
+    /// Compte, Drops et Points des réglages, cartes de connexion de l'accueil,
+    /// rappels de connexion (lecteur, chat, prédictions, clips) masqués.
+    /// Jamais pour quelqu'un de connecté (compte de l'app ou session web) :
+    /// il ne perd rien de ce dont il se sert, même réglage restauré.
+    var accountHidden: Bool {
+        customization.hideAccount && twitchToken == nil && twitchWebToken == nil
+    }
     /// Onglet Découvrir dans la barre : l'ancien réglage, lu et écrit dans la
     /// personnalisation (sauvegardes d'avant elle).
     var showDiscoverTab: Bool {
@@ -738,7 +747,10 @@ final class AppStore: ObservableObject {
     /// Réglages → Personnaliser → Rétablir : disposition et bandeaux du chat
     /// comme au premier lancement.
     func resetCustomization() {
-        customization = UICustomization()
+        // « Sans compte Twitch » n'est pas une disposition : il reste.
+        var fresh = UICustomization()
+        fresh.hideAccount = customization.hideAccount
+        customization = fresh
         showPinnedMessages = true; showDropsNotice = true; showSpecialEvents = true
         showLiveEvents = true; showPolls = true; showPredictions = true; showHypeTrain = true
         enableRaids = true; showWatchStreak = true; showFollowButton = true

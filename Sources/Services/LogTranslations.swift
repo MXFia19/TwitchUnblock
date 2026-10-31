@@ -584,6 +584,7 @@ enum LogTranslator {
         "s depuis le début": ["s from the start", "s desde el inicio", "с от начала"],
         "s du bord": ["s from the edge", "s del borde", "с от края"],
         "s restantes": ["s left", "s restantes", "с осталось"],
+        "Sans compte Twitch": ["No Twitch account", "Sin cuenta de Twitch", "Без аккаунта Twitch"],
         "Sans pub avec mon abonnement": ["Ad-free with my sub", "Sin anuncios con mi suscripción", "Без рекламы по подписке"],
         "sans réveiller les autres apps (minuteur de veille)": ["without waking other apps (sleep timer)", "sin despertar a las demás apps (temporizador)", "не будя другие приложения (таймер сна)"],
         "Sauvegarde exportée": ["Backup exported", "Copia exportada", "Резервная копия экспортирована"],

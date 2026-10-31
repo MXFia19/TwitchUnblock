@@ -337,18 +337,24 @@ struct SettingsView: View {
                 }
 
                 VStack(spacing: 0) {
-                    menuRow(.account)
-                    rowSeparator
+                    // Sans compte Twitch : ni Compte, ni Drops, ni Points (le
+                    // partage d'utilisation passe dans « Autres »).
+                    if !store.accountHidden {
+                        menuRow(.account)
+                        rowSeparator
+                    }
                     menuRow(.general)
                     rowSeparator
                     menuRow(.player)
                     rowSeparator
                     menuRow(.chat)
                     rowSeparator
-                    menuRow(.drops)
-                    rowSeparator
-                    menuRow(.points)
-                    rowSeparator
+                    if !store.accountHidden {
+                        menuRow(.drops)
+                        rowSeparator
+                        menuRow(.points)
+                        rowSeparator
+                    }
                     menuRow(.labs)
                     rowSeparator
                     menuRow(.other)
@@ -569,7 +575,7 @@ struct SettingsView: View {
                 customizeCard
                 hiddenCard
                 apparenceCard
-                autoclaimCard
+                if !store.accountHidden { autoclaimCard }
                 veilleCard
                 historiqueCard
                 backupCard
@@ -592,6 +598,9 @@ struct SettingsView: View {
         case .other:
             return AnyView(VStack(spacing: 12) {
                 aboutCard
+                // Page Compte masquée (sans compte Twitch) : son partage
+                // d'utilisation reste réglable ici.
+                if store.accountHidden { usageCard }
                 expertCard
             })
         case .changelog:
@@ -1496,28 +1505,31 @@ struct SettingsView: View {
     /// passe avant toutes les sources.
     @ViewBuilder private var liveSourceRow: some View {
         VStack(alignment: .leading, spacing: 8) {
-            toggleRow(store.t("sub_adfree"), store.t("sub_adfree_sub"),
-                      $store.subAdFree, log: "Sans pub avec mon abonnement")
-            // Il faut la session web : sans elle, de quoi l'ouvrir ici.
-            if store.subAdFree, (store.twitchWebToken ?? "").isEmpty {
-                Button { startWebLogin() } label: {
-                    Label(store.t("sub_adfree_connect"), systemImage: "person.crop.circle.badge.plus")
-                        .font(.tLabel)
-                        .foregroundColor(.tPrimary)
+            // Les deux demandent le compte : rien à régler sans compte Twitch.
+            if !store.accountHidden {
+                toggleRow(store.t("sub_adfree"), store.t("sub_adfree_sub"),
+                          $store.subAdFree, log: "Sans pub avec mon abonnement")
+                // Il faut la session web : sans elle, de quoi l'ouvrir ici.
+                if store.subAdFree, (store.twitchWebToken ?? "").isEmpty {
+                    Button { startWebLogin() } label: {
+                        Label(store.t("sub_adfree_connect"), systemImage: "person.crop.circle.badge.plus")
+                            .font(.tLabel)
+                            .foregroundColor(.tPrimary)
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
+                // Qualités supérieures : Twitch ne les sert qu'au jeton du compte,
+                // donc par la lecture du compte ci-dessus (grisé tant qu'elle est
+                // coupée) ; sans abonnement, les pauses pub passent par la source
+                // sans pub (MainTabView.adBreakChanged).
+                Divider().background(Color.tBorder)
+                toggleRow(store.t("higher_qualities"),
+                          store.t("higher_qualities_sub").replacingOccurrences(of: "{c}", with: HigherQualities.label),
+                          $store.higherQualities, log: "Qualités supérieures")
+                    .disabled(!store.subAdFree)
+                    .opacity(store.subAdFree ? 1 : 0.5)
+                Divider().background(Color.tBorder)
             }
-            // Qualités supérieures : Twitch ne les sert qu'au jeton du compte,
-            // donc par la lecture du compte ci-dessus (grisé tant qu'elle est
-            // coupée) ; sans abonnement, les pauses pub passent par la source
-            // sans pub (MainTabView.adBreakChanged).
-            Divider().background(Color.tBorder)
-            toggleRow(store.t("higher_qualities"),
-                      store.t("higher_qualities_sub").replacingOccurrences(of: "{c}", with: HigherQualities.label),
-                      $store.higherQualities, log: "Qualités supérieures")
-                .disabled(!store.subAdFree)
-                .opacity(store.subAdFree ? 1 : 0.5)
-            Divider().background(Color.tBorder)
             VStack(alignment: .leading, spacing: 2) {
                 Text(store.t("live_source_order"))
                     .font(.tCardTitle)

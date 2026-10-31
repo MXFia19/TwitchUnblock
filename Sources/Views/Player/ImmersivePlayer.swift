@@ -3109,9 +3109,9 @@ struct AdBreakBanner: View {
     @EnvironmentObject private var store: AppStore
 
     /// Pas de session web, ou réglage coupé : un abonné ne profite pas de son
-    /// abonnement sans pub, on le lui dit.
+    /// abonnement sans pub, on le lui dit — sauf sans compte Twitch.
     private var showsLoginHint: Bool {
-        !store.subAdFree || (store.twitchWebToken ?? "").isEmpty
+        !store.accountHidden && (!store.subAdFree || (store.twitchWebToken ?? "").isEmpty)
     }
 
     var body: some View {

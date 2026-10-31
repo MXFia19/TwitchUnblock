@@ -1751,8 +1751,9 @@ struct MainTabView: View {
     /// affichée — maintenant moins la latence mesurée du direct (inconnue :
     /// 5 s, celle d'un direct ordinaire).
     private var createClipAction: (() -> Void)? {
+        // Un clip se crée avec la session web : rien à proposer sans compte Twitch.
         guard case .live(let channel)? = playerMode, qualityLinks != nil, !loading,
-              errorMsg == nil else { return nil }
+              errorMsg == nil, !store.accountHidden else { return nil }
         return {
             showPlayerMenu = false
             let moment = Date().addingTimeInterval(-(liveLatency > 0 ? liveLatency : 5))

@@ -97,18 +97,22 @@ struct ChatMenuSheet: View {
 
                     divider
 
-                    row(icon: "paintpalette.fill",
-                        title: store.t("menu_color"),
-                        subtitle: isAuthenticated ? store.t("menu_color_sub")
-                                                  : store.t("menu_needs_login"),
-                        trailing: .chevron) {
-                        guard isAuthenticated else { return }
-                        showColors = true
-                    }
-                    .disabled(!isAuthenticated)
-                    .opacity(isAuthenticated ? 1 : 0.5)
+                    // Sans compte Twitch : pas de ligne grisée « connexion
+                    // requise ».
+                    if isAuthenticated || !store.accountHidden {
+                        row(icon: "paintpalette.fill",
+                            title: store.t("menu_color"),
+                            subtitle: isAuthenticated ? store.t("menu_color_sub")
+                                                      : store.t("menu_needs_login"),
+                            trailing: .chevron) {
+                            guard isAuthenticated else { return }
+                            showColors = true
+                        }
+                        .disabled(!isAuthenticated)
+                        .opacity(isAuthenticated ? 1 : 0.5)
 
-                    divider
+                        divider
+                    }
 
                     row(icon: "person.2.fill",
                         title: store.t("menu_chatters"),

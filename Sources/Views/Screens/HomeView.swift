@@ -516,7 +516,10 @@ struct HomeView: View {
     }
 
     // MARK: – Personnalisation (Réglages → Personnaliser)
-    private func showsCard(_ key: String) -> Bool { store.customization.shows(home: key) }
+    /// Cartes de connexion : jamais sans compte Twitch (Personnaliser l'app).
+    private func showsCard(_ key: String) -> Bool {
+        store.customization.shows(home: key) && !(store.accountHidden && ["login", "web"].contains(key))
+    }
 
     /// Onglets des lives : 0 = suivies en live, 1 = top, 2 = hors ligne.
     private static func chipTab(_ key: String) -> Int {

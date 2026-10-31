@@ -24,6 +24,16 @@ struct CustomizeView: View {
                         .listRowBackground(Color.tCard)
                 }
 
+                // ── Sans compte Twitch : ce qui y invite disparaît ──
+                // Rien ne se masque pour quelqu'un de connecté (accountHidden).
+                Section {
+                    toggle(store.t("cust_no_account"), icon: "person.crop.circle.badge.xmark",
+                           $store.customization.hideAccount, log: "Sans compte Twitch")
+                        .disabled(signedIn)
+                } footer: {
+                    Text(store.t(signedIn ? "cust_no_account_signed_in" : "cust_no_account_foot"))
+                }
+
                 // ── Onglets ─────────────────────────────────────────
                 Section {
                     ForEach(c.tabs, id: \.self) { key in
@@ -62,8 +72,10 @@ struct CustomizeView: View {
                 }
 
                 Section {
+                    // Cartes de connexion : déjà masquées sans compte Twitch.
                     ForEach(UICustomization.homeCards, id: \.self) { key in
-                        visibilityRow(key, in: \.hiddenHome)
+                        visibilityRow(key, in: \.hiddenHome,
+                                      locked: store.accountHidden && ["login", "web"].contains(key))
                     }
                 } header: {
                     Text(store.t("cust_home_cards"))
@@ -154,6 +166,10 @@ struct CustomizeView: View {
         }
         .preferredColorScheme(.dark)
     }
+
+    /// Compte de l'app ou session web : « Sans compte Twitch » ne masquerait
+    /// rien, l'interrupteur est grisé et sa note dit pourquoi.
+    private var signedIn: Bool { store.twitchToken != nil || store.twitchWebToken != nil }
 
     // MARK: – Lignes
 

@@ -680,6 +680,15 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   predictions, hype train, raids, watch streak, Follow button). Drag ≡ to
   reorder; **Restore the default layout** puts everything back. Kept in the
   backup file.
+* 🙈 **No Twitch account** (top of Customize the app) — for those who never
+  log in: hides everything that needs an account or asks you to: the Twitch
+  Account, Drops and Channel points pages of Settings (usage sharing moves to
+  About), the points auto-claim and ad-free-with-my-sub settings, Home's
+  sign-in cards, the log-in hints of the ad-break notice, the chat's ⋯ menu
+  and predictions, and Create a clip. Followed channels stay on the device.
+  It never hides anything while you're logged in (app account or web
+  session): the switch is greyed out and says so. Kept when restoring the
+  default layout.
 * 🎨 **Themes** — 7 accent colours and 3 backgrounds (dark, OLED black, slate),
   in Settings → General → Appearance.
 * 📐 **Large screens** — on the iPhone Duo's inner display and on iPad, grids

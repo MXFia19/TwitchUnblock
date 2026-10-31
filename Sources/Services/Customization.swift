@@ -26,6 +26,9 @@ struct UICustomization: Codable, Equatable {
     var compactFollowedCategories: Bool = false
     /// Leur ordre : les plus regardées d'abord (comme Twitch), ou de A à Z.
     var followedCategoriesSort: FollowedCategorySort = .viewers
+    /// « Sans compte Twitch » : ce qui demande un compte ou invite à se
+    /// connecter est masqué (voir AppStore.accountHidden) — demande de joey.
+    var hideAccount: Bool = false
 
     static let defaultTabs = ["home", "discover", "search", "library"]
     /// Onglets des lives de l'accueil (Suivies, Top, Hors ligne).
@@ -63,6 +66,7 @@ struct UICustomization: Codable, Equatable {
         compactFollowedCategories = (try? c.decodeIfPresent(Bool.self, forKey: .compactFollowedCategories)) ?? false
         // Ordre inconnu (version plus récente) : celui par défaut.
         followedCategoriesSort = (try? c.decodeIfPresent(FollowedCategorySort.self, forKey: .followedCategoriesSort)) ?? .viewers
+        hideAccount = (try? c.decodeIfPresent(Bool.self, forKey: .hideAccount)) ?? false
     }
 
     /// L'ordre choisi (éléments connus, sans doublon), puis les nouveaux.

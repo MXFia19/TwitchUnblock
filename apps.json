@@ -194,6 +194,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.7.1",
+          "buildVersion": "379",
+          "date": "2026-10-31",
+          "localizedDescription": "- VODs, a live's recording and clips now show the channel's name with the title next to it, like lives: tap the title to read it in full, with the broadcast date",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-379/TwitchUnblock.ipa",
+          "size": 4487336,
+          "commit": "55efbc4097d6202f609c40596e19f568e2149659"
+        },
+        {
           "version": "1.7.0",
           "buildVersion": "377",
           "date": "2026-10-30",
@@ -273,25 +282,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-369/TwitchUnblock.ipa",
           "size": 4458918,
           "commit": "31ad47a7796a8851b1e1a6fbfc0a34d3dd897a8a"
-        },
-        {
-          "version": "1.6.56",
-          "buildVersion": "368",
-          "date": "2026-10-26",
-          "localizedDescription": "- Fixed: a live could be wrongly reported as \"not available in your region\".\n- Vertical video: going back now returns to the ad-free source, and drops keep progressing while the vertical picture plays.",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-368/TwitchUnblock.ipa",
-          "size": 4457983,
-          "commit": "1abc43823678d23c37847468168ee4e03a13e181"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.7.0",
-      "versionDate": "2026-10-30",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-377/TwitchUnblock.ipa",
-      "size": 4486051
+      "version": "1.7.1",
+      "versionDate": "2026-10-31",
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-379/TwitchUnblock.ipa",
+      "size": 4487336
     }
   ],
   "news": []

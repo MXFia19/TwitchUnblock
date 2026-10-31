@@ -25,6 +25,8 @@ struct PlayerOverlayInfo {
     var viewers: Int     = 0
     var uptime: String   = ""
     var latency: Double? = nil
+    /// Hors direct : date de diffusion de la VOD, pour sa fiche.
+    var date: String     = ""
 }
 
 // MARK: – Écran verrouillé
@@ -1965,13 +1967,14 @@ struct ImmersivePlayer: View {
                         .textSelection(.enabled)
                 }
                 .listRowBackground(Color.tCard)
-                if !info.game.isEmpty || info.viewers > 0 || !info.uptime.isEmpty {
+                if !info.game.isEmpty || info.viewers > 0 || !info.uptime.isEmpty || !info.date.isEmpty {
                     Section {
                         if !info.game.isEmpty { infoRow("gamecontroller.fill", info.game) }
                         if info.viewers > 0 {
                             infoRow("eye.fill", "\(formatViewers(info.viewers)) \(store.tn("viewers", info.viewers, abbreviated: info.viewers >= 1000))")
                         }
                         if !info.uptime.isEmpty { infoRow("clock.fill", info.uptime) }
+                        if !info.date.isEmpty { infoRow("calendar", info.date) }
                     }
                     .listRowBackground(Color.tCard)
                 }

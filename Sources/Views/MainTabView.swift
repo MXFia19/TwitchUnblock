@@ -181,16 +181,25 @@ struct MainTabView: View {
     @State private var vodMuted: [MutedRange] = []
     @State private var vodUnmuted = 0
 
-    /// Infos affichées par-dessus l'image en mode immersif.
+    /// Infos affichées par-dessus l'image en mode immersif. Hors direct (VOD,
+    /// rembobinage, VOD retrouvée, clip), la chaîne en clair et le titre à
+    /// côté, qui ouvre sa fiche comme en direct : avant, le titre y prenait
+    /// la place du nom et rien ne le montrait en entier. Sans chaîne connue,
+    /// il reste à la place du nom.
     private var overlayInfo: PlayerOverlayInfo {
-        PlayerOverlayInfo(
-            channel: currentChannelName ?? statusTitle,
+        let streamer = isLivePlaying ? nil : (playerChannelLogin ?? (isClipPlaying ? clipChannel : nil))
+        return PlayerOverlayInfo(
+            channel: currentChannelName ?? streamer ?? statusTitle,
             avatar:  liveAvatar,
-            title:   isLivePlaying ? statusTitle : "",
+            title:   isLivePlaying || streamer != nil ? statusTitle : "",
             game:    liveGame,
             viewers: liveViewerCount,
             uptime:  liveUptimeText,
-            latency: liveLatency > 0 ? liveLatency : nil
+            latency: liveLatency > 0 ? liveLatency : nil,
+            date:    isLivePlaying ? "" : vodStartedAt.map {
+                $0.formatted(.dateTime.day().month(.abbreviated).year().hour().minute()
+                    .locale(Locale(identifier: store.lang.rawValue)))
+            } ?? ""
         )
     }
 

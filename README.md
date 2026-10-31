@@ -132,7 +132,8 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   don't count: the video picks up after them, Live Activity included.
 * 🏷️ **Full title** — tap the title at the top of the player (often cut off)
   to read it in full, with the category, viewers, uptime and a shortcut to the
-  channel. Closing a channel page opened from the full-size player (name,
+  channel. VODs, a live's recording and clips have it too: the channel's name
+  first, then the title, whose card adds the broadcast date. Closing a channel page opened from the full-size player (name,
   title or chat) brings the player back full size instead of the mini player.
 * 🎵 **Leaves your music alone** — opening the app no longer stops music
   playing in another app: the sound switches over only when a video starts,

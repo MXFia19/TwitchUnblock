@@ -194,6 +194,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.7.2",
+          "buildVersion": "380",
+          "date": "2026-10-31",
+          "localizedDescription": "- New \"No Twitch account\" option at the top of Settings → General → Customize the app: hides everything that needs an account or asks you to log in (Account, Drops and Channel points pages, sign-in cards, log-in reminders, clip creation); it never hides anything while you're logged in",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-380/TwitchUnblock.ipa",
+          "size": 4496188,
+          "commit": "a39e589722092595d3eedf63b30d42c662198127"
+        },
+        {
           "version": "1.7.1",
           "buildVersion": "379",
           "date": "2026-10-31",
@@ -273,25 +282,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-370/TwitchUnblock.ipa",
           "size": 4493827,
           "commit": "af80fe92a77754bf55b3e07574e90062c5ca9f72"
-        },
-        {
-          "version": "1.6.57",
-          "buildVersion": "369",
-          "date": "2026-10-26",
-          "localizedDescription": "- A brief Twitch error at launch no longer signs you out of the web session\n- Signing out of the web session without an app account now lets you sign in with another account\n- Lists are no longer hidden behind the mini player and the multi-live bar\n- Picture in Picture now follows raids and the next VOD of Play all instead of closing\n- Apple TV: Menu now closes an open category instead of quitting the app",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-369/TwitchUnblock.ipa",
-          "size": 4458918,
-          "commit": "31ad47a7796a8851b1e1a6fbfc0a34d3dd897a8a"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.7.1",
+      "version": "1.7.2",
       "versionDate": "2026-10-31",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-379/TwitchUnblock.ipa",
-      "size": 4487336
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-380/TwitchUnblock.ipa",
+      "size": 4496188
     }
   ],
   "news": []

@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.7.2",
+          "buildVersion": "380",
+          "date": "2026-10-31",
+          "localizedDescription": "- New \"No Twitch account\" option at the top of Settings → General → Customize the app: hides everything that needs an account or asks you to log in (Account, Drops and Channel points pages, sign-in cards, log-in reminders, clip creation); it never hides anything while you're logged in",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-380/TwitchUnblock.ipa",
+          "size": 4496188,
+          "commit": "a39e589722092595d3eedf63b30d42c662198127"
+        },
+        {
           "version": "1.7.1",
           "buildVersion": "379",
           "date": "2026-10-31",
@@ -280,25 +289,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-349/TwitchUnblock.ipa",
           "size": 4373004,
           "commit": "1763a9961f6c3362527a6b338cd56055b7fcb665"
-        },
-        {
-          "version": "1.5.31",
-          "buildVersion": "348",
-          "date": "2026-10-20",
-          "localizedDescription": "- Other improvements and fixes",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-348/TwitchUnblock.ipa",
-          "size": 4333665,
-          "commit": "9b33d689c78b0f0dd166f1fb1b9ee5da1b5fce02"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.7.1",
+      "version": "1.7.2",
       "versionDate": "2026-10-31",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-379/TwitchUnblock.ipa",
-      "size": 4487336
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-380/TwitchUnblock.ipa",
+      "size": 4496188
     }
   ],
   "news": []

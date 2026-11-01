@@ -4,10 +4,11 @@ import UIKit
 // ═══════════════════════════════════════════════════════════════════════════
 //  Retour (bug, idée, autre) envoyé au Worker, qui le range (base D1) et le
 //  transmet sur Discord. Ce qui part est affiché avant l'envoi : le message,
-//  les captures jointes, le contact s'il est rempli, le modèle d'iPhone, la
-//  version d'iOS et de l'app, la langue. Ni compte Twitch ni identifiant
-//  d'installation. Le Worker rend un jeton : la discussion se suit ensuite
-//  dans « Mes signalements » (MyFeedbackView).
+//  les captures jointes, le contact s'il est rempli, le nom joint (compte
+//  Twitch si l'interrupteur « Signer » reste allumé, sinon un pseudo
+//  facultatif), le modèle d'iPhone, la version d'iOS et de l'app, la langue.
+//  Jamais d'identifiant d'installation. Le Worker rend un jeton : la
+//  discussion se suit ensuite dans « Mes signalements » (MyFeedbackView).
 // ═══════════════════════════════════════════════════════════════════════════
 
 struct FeedbackSheet: View {
@@ -27,6 +28,10 @@ struct FeedbackSheet: View {
     @State private var kind: Kind
     @State private var message = ""
     @State private var contact = ""
+    /// Nom joint, pour que le développeur reconnaisse qui revient : le compte
+    /// Twitch (allumé d'office), sinon un pseudo ; retenus sur l'appareil.
+    @AppStorage("fb_sign_twitch") private var signWithTwitch = true
+    @AppStorage("fb_pseudo") private var pseudo = ""
     @State private var sending = false
     @State private var failure: String? = nil
     @State private var sent = false
@@ -42,6 +47,20 @@ struct FeedbackSheet: View {
     }
 
     private var trimmed: String { message.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+    /// Compte Twitch connecté, proposé pour signer.
+    private var signLogin: String? {
+        guard store.twitchToken != nil || store.twitchWebToken != nil,
+              let login = store.twitchLogin, !login.isEmpty else { return nil }
+        return login
+    }
+
+    /// Nom joint : le compte Twitch si l'interrupteur est allumé, sinon le pseudo écrit.
+    private var signedName: (value: String, source: String)? {
+        if let login = signLogin { return signWithTwitch ? (login, "twitch") : nil }
+        let p = pseudo.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        return p.isEmpty ? nil : (p, "pseudo")
+    }
 
     /// Infos techniques jointes : de quoi reproduire un bug, rien de plus.
     private var info: [String: String] {
@@ -141,6 +160,34 @@ struct FeedbackSheet: View {
                     // Captures d'écran : 3 au plus, réduites avant l'envoi.
                     FeedbackPhotoPicker(images: $images)
 
+                    if let login = signLogin {
+                        Toggle(isOn: $signWithTwitch) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(store.t("fb_sign")).font(.tBody).foregroundColor(.tText)
+                                Text(store.t("fb_sign_sub").replacingOccurrences(of: "{login}", with: login))
+                                    .font(.tMeta).foregroundColor(.tMuted)
+                            }
+                        }
+                        .tint(.tPrimary)
+                        .padding(.horizontal, TSpace.md)
+                        .padding(.vertical, TSpace.sm)
+                        .frame(minHeight: 44)
+                        .background(Color.tSurface)
+                        .cornerRadius(TRadius.control)
+                    } else {
+                        TextField(store.t("fb_name_ph"), text: $pseudo)
+                            .font(.tBody).foregroundColor(.tText)
+                            .autocorrectionDisabled()
+                            .textInputAutocapitalization(.never)
+                            .padding(.horizontal, TSpace.md)
+                            .frame(minHeight: 44)
+                            .background(Color.tSurface)
+                            .cornerRadius(TRadius.control)
+                            .onChange(of: pseudo) { v in
+                                if v.count > 30 { pseudo = String(v.prefix(30)) }
+                            }
+                    }
+
                     TextField(store.t("fb_contact_ph"), text: $contact)
                         .font(.tBody).foregroundColor(.tText)
                         .autocorrectionDisabled()
@@ -208,7 +255,7 @@ struct FeedbackSheet: View {
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        let body: [String: Any] = [
+        var body: [String: Any] = [
             "kind": kind.rawValue,
             "message": trimmed,
             "contact": contact.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -218,6 +265,10 @@ struct FeedbackSheet: View {
             "errors": recentErrors,
             "photos": images.compactMap { $0.feedbackJPEG()?.base64EncodedString() },
         ]
+        if let name = signedName {
+            body["name"] = name.value
+            body["nameSource"] = name.source
+        }
         req.httpBody = try? JSONSerialization.data(withJSONObject: body)
         do {
             let (data, resp) = try await URLSession.shared.data(for: req)

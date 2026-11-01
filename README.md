@@ -758,7 +758,10 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   language picker, with a button to report a mistake.
   On the iPhone, Settings → General → **App language** opens the list on its own page, like iOS's settings.
 * 🐞 **Bug reports & ideas** — a form in the header, in Settings and in the
-  player menu, screenshots included. **My reports** shows where each one stands
+  player menu, screenshots included. Logged in, a report is signed with your
+  Twitch account (a switch, on by default); otherwise you can add a nickname —
+  so the developer knows it's you from one report to the next (both remembered
+  on the device). **My reports** shows where each one stands
   (received, seen, accepted, in progress, done, declined) and the developer's reply,
   and lets you answer back; a badge flags new replies, and open conversations
   refresh on their own. A reply (or a new status) also shows up as a banner

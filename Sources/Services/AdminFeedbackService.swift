@@ -14,6 +14,9 @@ struct AdminFeedbackItem: Decodable, Identifiable, Hashable {
     let kind: String
     let message: String
     let contact: String?
+    /// Nom joint par la personne, et sa source : "twitch" (compte connecté) ou "pseudo".
+    let name: String?
+    let nameSource: String?
     let platform: String
     let version: String
     let info: String?

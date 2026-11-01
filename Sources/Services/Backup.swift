@@ -171,6 +171,8 @@ enum Backup {
             "ios_fillScreen": store.fillScreen,
             "ios_pipOnLeave": store.pipOnLeave,
             "ios_landscapeChat": store.landscapeChat.rawValue,
+            "ios_chatOverlayLayout": store.chatOverlayLayout.raw,
+            "ios_edgeSwipeClose": store.edgeSwipeClose,
             "ios_spatialAudio": store.spatialAudio,
             "ios_restoreMuted": store.restoreMutedAudio,
             "ios_chatFontSize": store.chatFontSize,
@@ -452,6 +454,11 @@ enum Backup {
             store.landscapeChat = lc
             ok("ios_landscapeChat")
         }
+        if let v = s["ios_chatOverlayLayout"] as? String, let layout = ChatOverlayLayout(raw: v) {
+            store.chatOverlayLayout = layout
+            ok("ios_chatOverlayLayout")
+        }
+        bool("ios_edgeSwipeClose") { store.edgeSwipeClose = $0 }
         if let v = s["ios_spatialAudio"] as? String, ["auto", "off"].contains(v) {
             store.spatialAudio = v
             ok("ios_spatialAudio")

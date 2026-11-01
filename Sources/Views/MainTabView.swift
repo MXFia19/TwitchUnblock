@@ -122,6 +122,9 @@ struct MainTabView: View {
     /// mémorisé qui s'applique ; pendant le geste, cet état local évite de
     /// toucher à l'AppStore à chaque image (voir `playerBody`).
     @State private var chatDragRatio: Double? = nil
+    /// Paysage : l'îlot (ou l'encoche) est à droite. La marge de sécurité
+    /// d'en face peut servir au chat (voir `playerBody`).
+    @State private var notchOnTrailing = false
     /// Fermeture du lecteur en cours : le contenu survit le temps du fondu.
     @State private var closingPlayer = false
     /// Bascule entre le direct et son enregistrement, sur la même chaîne.
@@ -410,6 +413,11 @@ struct MainTabView: View {
                     .modifier(PlayerPullEffect(pull: pull))
                     .opacity(playerVisible ? 1 : 0)
                     .allowsHitTesting(playerVisible)
+                    // Glissé depuis le bord gauche : ferme le lecteur, comme ✕
+                    // (réglage, coupé d'office).
+                    .background(EdgeSwipeCloser(enabled: store.edgeSwipeClose && playerVisible && !closingPlayer) {
+                        stopPlayer()
+                    })
                     .zIndex(100)
                     .transition(.opacity)
             }
@@ -935,8 +943,19 @@ struct MainTabView: View {
             ZStack(alignment: .top) {
                 Color.tDark.ignoresSafeArea()
                     // Hauteur du lecteur : seuil du glissé et glissade finale.
-                    .onAppear { pull.height = geo.size.height }
+                    .onAppear {
+                        pull.height = geo.size.height
+                        UIDevice.current.beginGeneratingDeviceOrientationNotifications()
+                        refreshNotchSide()
+                    }
                     .onChange(of: geo.size.height) { pull.height = $0 }
+                    .onChange(of: landscape) { _ in refreshNotchSide() }
+                    // Demi-tour d'un paysage à l'autre : ni la taille ni les
+                    // marges ne changent. L'interface tourne après l'appareil,
+                    // d'où la relecture une fois l'animation passée.
+                    .onReceive(NotificationCenter.default.publisher(for: UIDevice.orientationDidChangeNotification)) { _ in
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { refreshNotchSide() }
+                    }
 
                 if loading {
                     // Les sources d'un direct sont essayées l'une après
@@ -972,7 +991,7 @@ struct MainTabView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                 } else if let links = qualityLinks {
-                    playerBody(links: links, size: geo.size, landscape: landscape)
+                    playerBody(links: links, size: geo.size, landscape: landscape, insets: geo.safeAreaInsets)
                 }
             }
             // Bascule direct ↔ enregistrement : une pastille discrète en haut,
@@ -1012,6 +1031,14 @@ struct MainTabView: View {
         }
     }
 
+    /// Côté de l'îlot (ou de l'encoche) en paysage : interface
+    /// « landscapeLeft » = haut de l'appareil à droite.
+    private func refreshNotchSide() {
+        let scene = UIApplication.shared.connectedScenes.lazy.compactMap { $0 as? UIWindowScene }.first
+        let trailing = scene?.effectiveGeometry.interfaceOrientation == .landscapeLeft
+        if trailing != notchOnTrailing { notchOnTrailing = trailing }
+    }
+
     /// Une seule disposition pour les deux orientations.
     ///
     /// `AnyLayout` échange HStack et VStack **sans changer l'identité des vues** :
@@ -1024,7 +1051,7 @@ struct MainTabView: View {
     /// paysage : le ratio « idéal » y était calculé à partir des contrôles, d'où
     /// l'image réduite en vignette dès qu'on les affichait.
     @ViewBuilder
-    private func playerBody(links: QualityLinks, size: CGSize, landscape: Bool) -> some View {
+    private func playerBody(links: QualityLinks, size: CGSize, landscape: Bool, insets: EdgeInsets) -> some View {
         // Le mode « chat seul » n'a pas de colonne vidéo : il reste empilé.
         let split  = landscape && !chatOnly
         let mode   = store.landscapeChat
@@ -1047,8 +1074,24 @@ struct MainTabView: View {
         // Chat posé sur le bas de l'image verticale : 40 % de la hauteur, là
         // où l'app de Twitch met le sien (le streamer laisse ce bas libre).
         let verticalChatHeight: CGFloat? = verticalOverlay ? max(size.height * 0.4, 220) : nil
-        // Largeur réglable, mais jamais sous 220 pt : en deçà les messages se
-        // hachent en mots isolés, quel que soit le réglage.
+        // Chat posé sur l'image : côté et hauteur choisis dans les réglages.
+        // La colonne, elle, reste à droite sur toute la hauteur.
+        let overlayLayout = split && mode == .overlay ? store.chatOverlayLayout : ChatOverlayLayout()
+        let chatOnLeft  = overlayLayout.side == .left
+        let overlayHalf = overlayLayout.half
+        // Marge de sécurité du côté du chat, reprise quand l'îlot (ou
+        // l'encoche) est de l'autre côté : 62 pt de chaque côté sur un iPhone
+        // à Dynamic Island, qui restaient vides à côté du chat (fb_mvxafsl8).
+        // 16 pt restent pour l'arrondi de l'écran.
+        let reclaim: CGFloat = {
+            guard split else { return 0 }
+            if chatOnLeft { return notchOnTrailing ? max(insets.leading - 16, 0) : 0 }
+            return notchOnTrailing ? 0 : max(insets.trailing - 16, 0)
+        }()
+        let rightReclaim: CGFloat = chatOnLeft ? 0 : reclaim
+        let leftReclaim: CGFloat  = chatOnLeft ? reclaim : 0
+        // Largeur réglable, mais jamais sous 180 pt visibles (marge reprise
+        // comprise) : en deçà les messages se hachent en mots isolés.
         //
         // Pendant un glissement la valeur vient de `chatDragRatio`, un simple
         // @State. Écrire dans le store à chaque image passait par un `didSet`
@@ -1056,7 +1099,10 @@ struct MainTabView: View {
         // soixante fois par seconde — et invalidait tout ce qui observe
         // l'AppStore, dont chaque ligne de message du chat. D'où les à-coups.
         let ratio = chatDragRatio ?? store.chatWidthRatio
-        let chatWidth: CGFloat? = split ? max(size.width * CGFloat(ratio), 220) : nil
+        let chatWidth: CGFloat? = split ? max(size.width * CGFloat(ratio), 180 - reclaim) : nil
+        // Chat dans un coin : la moitié de la hauteur, calé en haut ou en bas.
+        let chatHeight: CGFloat? = verticalOverlay ? nil : overlayHalf.map { _ in size.height / 2 }
+        let chatAlign: Alignment = overlayHalf == .top ? .top : overlayHalf == .bottom ? .bottom : .center
         // Place prise dans la rangée : seule la disposition « colonne » en
         // réclame. Superposé et replié laissent toute la largeur à l'image.
         let chatColumn: CGFloat? = {
@@ -1086,6 +1132,8 @@ struct MainTabView: View {
                 if !chatOnly {
                     videoSurface(links: links, landscape: split,
                                  controlsInset: controlsInset,
+                                 controlsOnLeft: chatOnLeft,
+                                 controlsHalf: overlayHalf,
                                  verticalLayout: verticalOverlay,
                                  controlsBottomInset: controlsBottomInset)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -1112,16 +1160,28 @@ struct MainTabView: View {
             // hauteur. Le chat a sa hauteur (verticalChatHeight) mais ne prend
             // aucune place dans la pile : à zéro et aligné en bas, il déborde
             // vers le haut, sur le bas de l'image.
+            //
+            // Posé à gauche, il garde sa place dans la rangée (à droite) et se
+            // décale jusqu'au bord gauche : le changer de place dans la
+            // hiérarchie le recréerait, et couperait la connexion du chat.
+            // Marge de sécurité reprise : à droite il l'ignore (avec 16 pt
+            // gardés) ; à gauche, décalé, il s'élargit de ce côté.
             chatPane(style: chatStyle)
-                .frame(width: chatWidth)
-                .frame(height: verticalChatHeight)
-                .frame(maxHeight: verticalOverlay ? nil : CGFloat.infinity)
+                .padding(.trailing, rightReclaim > 0 ? 16 : 0)
+                .ignoresSafeArea(.container, edges: rightReclaim > 0 ? .trailing : [])
+                .frame(width: chatWidth.map { $0 + leftReclaim })
+                .padding(.leading, -leftReclaim)
+                .frame(height: verticalChatHeight ?? chatHeight)
                 // Bord du chat : une petite poignée pour régler sa largeur,
-                // sans trait au repos (le chat se fond dans l'image).
-                .overlay(alignment: .leading) {
-                    if split { chatResizeHandle(totalWidth: size.width) }
+                // sans trait au repos (le chat se fond dans l'image). Posée
+                // avant le cadre pleine hauteur : dans un coin, elle ne longe
+                // que le chat.
+                .overlay(alignment: chatOnLeft ? .trailing : .leading) {
+                    if split { chatResizeHandle(totalWidth: size.width, leftSide: chatOnLeft) }
                 }
+                .frame(maxHeight: verticalOverlay ? nil : CGFloat.infinity, alignment: chatAlign)
                 .frame(width: chatColumn, alignment: .trailing)
+                .offset(x: chatOnLeft ? -(size.width - (chatWidth ?? 0)) : 0)
                 .frame(height: verticalOverlay ? 0 : nil, alignment: .bottom)
                 .opacity(chatVisible ? 1 : 0)
                 .allowsHitTesting(chatVisible)
@@ -1134,8 +1194,9 @@ struct MainTabView: View {
     /// vidéo) : seule une petite poignée discrète. Le trait n'apparaît que
     /// pendant qu'on tire. Une bande transparente de 28 pt reçoit le geste,
     /// sous peine de viser un fil avec un pouce.
+    /// `leftSide` : chat posé à gauche, la poignée est sur son bord droit.
     @ViewBuilder
-    private func chatResizeHandle(totalWidth: CGFloat) -> some View {
+    private func chatResizeHandle(totalWidth: CGFloat, leftSide: Bool = false) -> some View {
         let dragging = chatDragRatio != nil
         Rectangle()
             .fill(dragging ? Color.tPrimary : Color.clear)
@@ -1159,9 +1220,10 @@ struct MainTabView: View {
                             .onChanged { value in
                                 let start = chatDragStart ?? store.chatWidthRatio
                                 if chatDragStart == nil { chatDragStart = start }
-                                // Tirer vers la gauche élargit le chat.
-                                let delta = -value.translation.width / totalWidth
-                                chatDragRatio = min(max(start + Double(delta), 0.20), 0.60)
+                                // Tirer vers l'image élargit le chat.
+                                let delta = (leftSide ? 1 : -1) * value.translation.width / totalWidth
+                                chatDragRatio = min(max(start + Double(delta), AppStore.chatWidthRange.lowerBound),
+                                                    AppStore.chatWidthRange.upperBound)
                             }
                             .onEnded { _ in
                                 // Une seule écriture dans le store, donc un seul
@@ -1229,6 +1291,8 @@ struct MainTabView: View {
     @ViewBuilder
     private func videoSurface(links: QualityLinks, landscape: Bool,
                               controlsInset: CGFloat = 0,
+                              controlsOnLeft: Bool = false,
+                              controlsHalf: VerticalEdge? = nil,
                               verticalLayout: Bool = false,
                               controlsBottomInset: CGFloat = 0) -> some View {
         if store.immersivePlayer {
@@ -1244,6 +1308,8 @@ struct MainTabView: View {
                 chatMode: verticalLayout ? (verticalChatHidden ? .hidden : .overlay) : store.landscapeChat,
                 isLandscape: landscape,
                 controlsInset: controlsInset,
+                controlsOnLeft: controlsOnLeft,
+                controlsHalf: controlsHalf,
                 verticalLayout: verticalLayout,
                 controlsBottomInset: controlsBottomInset,
                 // Image verticale en paysage : jamais recadrée (il n'en

@@ -1414,9 +1414,22 @@ struct ImmersivePlayer: View {
     /// Orientation, fournie par le parent : lue sur UIApplication elle ne serait
     /// pas observable, et la vue ne se redessinerait pas à la rotation.
     var isLandscape: Bool = false
-    /// Marge droite des barres de commande : en chat superposé, le calque
-    /// occupe cette largeur, et les boutons doivent rester à sa gauche.
+    /// Marge des barres de commande du côté du chat superposé : le calque
+    /// occupe cette largeur, et les boutons doivent rester à côté.
     var controlsInset: CGFloat = 0
+    /// Chat superposé à gauche (réglage « Chat posé sur l'image ») : la marge
+    /// passe de ce côté.
+    var controlsOnLeft: Bool = false
+    /// Chat superposé sur la moitié haute ou basse seulement : seule la barre
+    /// de ce côté s'écarte (nil : toute la hauteur, les deux barres).
+    var controlsHalf: VerticalEdge? = nil
+    private var controlsEdge: Edge.Set { controlsOnLeft ? .leading : .trailing }
+    /// Décalage de ce qui se centre sur la partie visible de l'image.
+    private var centerShift: CGFloat { controlsOnLeft ? controlsInset / 2 : -controlsInset / 2 }
+    /// Marge d'une barre : celle que le chat couvre.
+    private func barInset(_ bar: VerticalEdge) -> CGFloat {
+        controlsHalf == nil || controlsHalf == bar ? controlsInset : 0
+    }
     /// Image verticale d'un direct, en portrait, chat posé dessus (comme
     /// « Affichage vertical » dans l'app de Twitch) : l'image remplit la
     /// boîte, et le double-tap ou le bouton Chat montre ou masque le chat.
@@ -1579,6 +1592,8 @@ struct ImmersivePlayer: View {
          chatMode: LandscapeChat = .column,
          isLandscape: Bool = false,
          controlsInset: CGFloat = 0,
+         controlsOnLeft: Bool = false,
+         controlsHalf: VerticalEdge? = nil,
          verticalLayout: Bool = false,
          controlsBottomInset: CGFloat = 0,
          fillScreen: Bool = false,
@@ -1628,6 +1643,7 @@ struct ImmersivePlayer: View {
         self.onPull = onPull; self.onPullEnd = onPullEnd
         self.sleepLabel = sleepLabel; self.chatMode = chatMode
         self.isLandscape = isLandscape; self.controlsInset = controlsInset
+        self.controlsOnLeft = controlsOnLeft; self.controlsHalf = controlsHalf
         self.verticalLayout = verticalLayout; self.controlsBottomInset = controlsBottomInset
         self.fillScreen = fillScreen; self.canReturnToLive = canReturnToLive
         self.streamStartedAt = streamStartedAt; self.archiveAvailable = archiveAvailable
@@ -1767,7 +1783,7 @@ struct ImmersivePlayer: View {
                     // Centré sur la partie visible de l'image, comme ▶ dont il
                     // prend la place (chat superposé) ; un long message se
                     // replie dans cette largeur au lieu de passer sous le chat.
-                    .padding(.trailing, controlsInset)
+                    .padding(controlsEdge, controlsInset)
                     .padding(.bottom, controlsBottomInset)
                     .transition(.opacity)
             }
@@ -1784,7 +1800,7 @@ struct ImmersivePlayer: View {
                 mutedNotice(muted)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                     .padding(.top, showControls ? 58 : TSpace.sm)
-                    .padding(.trailing, controlsInset)
+                    .padding(controlsEdge, controlsInset)
                     .transition(.opacity)
             }
 
@@ -1794,7 +1810,7 @@ struct ImmersivePlayer: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 .padding(.top, showControls ? 58 : TSpace.sm)
                 .padding(.horizontal, TSpace.md)
-                .padding(.trailing, controlsInset)
+                .padding(controlsEdge, controlsInset)
         }
         // La boîte est fixée par le parent (16:9 en portrait, toute la colonne en
         // paysage) : ici on remplit ce qu'on nous donne, sans jamais dériver la
@@ -2092,13 +2108,20 @@ struct ImmersivePlayer: View {
                         .tGlass(in: Circle(), fallback: Color.black.opacity(0.45), clear: true)
                 }
                 .buttonStyle(.plain)
-                .offset(x: -controlsInset / 2, y: -controlsBottomInset / 2)
+                .offset(x: centerShift, y: -controlsBottomInset / 2)
             }
 
+            // Les barres se replient de la largeur du chat superposé, de son
+            // côté : leurs boutons restent entièrement visibles et cliquables,
+            // et suivent la largeur du chat quand on la fait varier. Chat dans
+            // un coin (moitié haute ou basse) : seule la barre de ce côté.
+            // Pas d'animation ici : pendant un glissement la marge doit coller
+            // au doigt. Le changement de disposition, lui, est déjà animé par
+            // le `withAnimation` du bouton qui le déclenche.
             VStack(spacing: 0) {
-                topBar
+                topBar.padding(controlsEdge, barInset(.top))
                 Spacer(minLength: 0)
-                bottomBar
+                bottomBar.padding(controlsEdge, barInset(.bottom))
             }
             .padding(TSpace.sm)
             // Image verticale : la barre du bas passe au-dessus du chat posé
@@ -2108,13 +2131,6 @@ struct ImmersivePlayer: View {
             // descendent jusqu'au bord physique, et le trait de la barre
             // d'accueil passerait sinon au ras des boutons.
             .padding(.bottom, isLandscape ? TSpace.xs : 0)
-            // Les barres se replient de la largeur du chat superposé : leurs
-            // boutons restent entièrement visibles et cliquables, et suivent
-            // la largeur du chat quand on la fait varier.
-            // Pas d'animation ici : pendant un glissement la marge doit coller
-            // au doigt. Le changement de disposition, lui, est déjà animé par
-            // le `withAnimation` du bouton qui le déclenche.
-            .padding(.trailing, controlsInset)
             // En paysage, la barre du bas descend jusqu'au bord physique : sans
             // ça elle flottait à une trentaine de points du bord quand le haut
             // n'en avait que huit — la barre d'accueil réserve cet espace.
@@ -2586,7 +2602,7 @@ struct ImmersivePlayer: View {
         .background(Color.black.opacity(0.72))
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         // Centrée sur la partie visible de l'image, comme ▶ (chat superposé).
-        .offset(x: -controlsInset / 2, y: -controlsBottomInset / 2)
+        .offset(x: centerShift, y: -controlsBottomInset / 2)
         .transition(.opacity)
     }
 

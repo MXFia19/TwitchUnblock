@@ -608,14 +608,9 @@ struct CategoryStreamsView: View {
                         TEmptyState(icon: "antenna.radiowaves.left.and.right",
                                     title: store.t("no_live"))
                     }
-                    LazyVGrid(columns: columns, spacing: TSpace.md) {
-                        ForEach(shown) { stream in
-                            StreamCardView(stream: stream, hideable: true, hideCategory: false) {
-                                onPlayStream(stream.userLogin)
-                            }
-                        }
+                    StreamsBlock(streams: shown, columns: columns, hideable: true, hideCategory: false) {
+                        onPlayStream($0.userLogin)
                     }
-                    .padding(.horizontal, TSpace.lg)
 
                     if streams.count > shown.count {
                         HiddenFooter(count: streams.count - shown.count) { showHidden = true }

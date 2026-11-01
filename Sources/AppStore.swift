@@ -424,6 +424,18 @@ final class AppStore: ObservableObject {
     /// Dernière façon d'afficher le chat en paysage : le double-tap la remet.
     private(set) var lastShownLandscapeChat: LandscapeChat = .column
 
+    /// Chat posé sur l'image : côté et hauteur (demande d'Alarez, comme le
+    /// chat de l'app TV). La colonne reste à droite, sur toute la hauteur.
+    @Published var chatOverlayLayout = ChatOverlayLayout() {
+        didSet { UserDefaults.standard.set(chatOverlayLayout.raw, forKey: "cfg_chat_overlay_layout") }
+    }
+
+    /// Glisser depuis le bord gauche ferme le lecteur, comme ✕
+    /// (fb_mvxcjl88). Coupé d'office : le geste pourrait surprendre.
+    @Published var edgeSwipeClose: Bool = false {
+        didSet { UserDefaults.standard.set(edgeSwipeClose, forKey: "cfg_edge_swipe_close") }
+    }
+
     /// Chat affiché ↔ masqué en paysage (double-tap sur un direct) ; rend le
     /// nouvel état.
     @discardableResult
@@ -469,7 +481,9 @@ final class AppStore: ObservableObject {
     static let chatFontRange: ClosedRange<Double> = 10...20
     static let chatSpacingRange: ClosedRange<Double> = 0...16
     static let chatScaleRange: ClosedRange<Double> = 0.5...2
-    static let chatWidthRange: ClosedRange<Double> = 0.20...0.60
+    /// 15 % au plus étroit : 20 % laissait encore trop de place au chat sur
+    /// un grand écran (fb_mvxafsl8).
+    static let chatWidthRange: ClosedRange<Double> = 0.15...0.60
 
     static func clamped(_ v: Double, to range: ClosedRange<Double>) -> Double {
         min(max(v, range.lowerBound), range.upperBound)
@@ -989,6 +1003,9 @@ final class AppStore: ObservableObject {
         landscapeChat      = LandscapeChat(rawValue: ud.string(forKey: "cfg_landscape_chat") ?? "")
                              ?? .column
         if landscapeChat != .hidden { lastShownLandscapeChat = landscapeChat }
+        chatOverlayLayout  = ChatOverlayLayout(raw: ud.string(forKey: "cfg_chat_overlay_layout") ?? "")
+                             ?? ChatOverlayLayout()
+        edgeSwipeClose     = ud.object(forKey: "cfg_edge_swipe_close") as? Bool ?? false
         // Ramenées dans les bornes des curseurs : un import d'avant pouvait
         // les en sortir.
         chatFontSize       = Self.clamped(ud.object(forKey: "cfg_chat_font")    as? Double ?? 13, to: Self.chatFontRange)
@@ -1173,6 +1190,10 @@ final class AppStore: ObservableObject {
 
     // MARK: – History management
     func saveToHistory(_ item: HistoryItem) {
+        // « Streamers récents » coupé : les chaînes ouvertes ne sont plus
+        // retenues, comme sur le site (demande de 4). Celles déjà là restent,
+        // pour ne rien effacer du compte sur les autres appareils.
+        if item.type == .channel && !showRecentChannels { return }
         var filtered = history.filter { $0.term.lowercased() != item.term.lowercased() }
         filtered.insert(item, at: 0)
         // 50 : l'historique mélange chaînes et VODs, 20 faisait disparaître les

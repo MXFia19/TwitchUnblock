@@ -135,6 +135,13 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   channel. VODs, a live's recording and clips have it too: the channel's name
   first, then the title, whose card adds the broadcast date. Closing a channel page opened from the full-size player (name,
   title or chat) brings the player back full size instead of the mini player.
+* 👈 **Swipe from the edge to close** (Settings → Player, off by default) —
+  swipe in from the left edge of the screen to close the player, like ✕.
+* 📋 **Streams as a list** (Settings → General, or the button on Home) —
+  live streams in a list like on Twitch, thumbnail on the left, on Home, in a
+  category and in search results.
+* 🕘 **Recent streamers** — turned off, the shortcuts disappear from Search and
+  the channels you open are no longer remembered.
 * 🎵 **Leaves your music alone** — opening the app no longer stops music
   playing in another app: the sound switches over only when a video starts,
   and goes back to that app when you close the player (not when the sleep
@@ -507,10 +514,14 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
 ### Chat layout
 
 * 📐 **Resizable** — drag the small handle between video and chat (no line
-  across the picture); the width is remembered.
+  across the picture), down to 15 %; the width is remembered. On the side
+  away from the Dynamic Island (or notch), the chat also uses the screen's
+  safe margin instead of leaving it empty, so the picture gets bigger.
 * 🪟 **Three landscape layouts** — a column on the right, translucent over the
-  picture, or folded away. The player's buttons shift with the chat's width so
-  nothing is ever covered.
+  picture, or folded away. Over the picture, the chat goes left or right, full
+  height or in a corner (top or bottom half), like on Apple TV (Settings →
+  Chat → Chat on the video). The player's buttons shift with the chat's width
+  and side so nothing is ever covered.
 * 🔠 **Sizing** — font size, message spacing, badge and emote scale,
   timestamps, with a live preview. The time shows in 12 h or 24 h: Auto
   follows the device, or pick one (Settings → Chat; the log follows it too).

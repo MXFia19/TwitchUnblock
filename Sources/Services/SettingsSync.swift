@@ -58,7 +58,9 @@ enum SettingsSync {
     ///  - ios_higherQualities : codecs que décode l'appareil ;
     ///  - ios_downloadWifiOnly : téléchargements ;
     ///  - ios_liveActivity : écran verrouillé et Dynamic Island ;
-    ///  - ios_fillScreen, ios_landscapeChat, ios_landNoticesHidden et les
+    ///  - ios_edgeSwipeClose : geste, selon l'appareil (téléphone, iPad) ;
+    ///  - ios_fillScreen, ios_landscapeChat, ios_chatOverlayLayout,
+    ///    ios_landNoticesHidden et les
     ///    tailles du chat (ios_chatFontSize, ios_chatSpacing,
     ///    ios_chatBadgeScale, ios_chatEmoteScale, ios_chatWidthRatio) :
     ///    apparence, selon l'écran ;

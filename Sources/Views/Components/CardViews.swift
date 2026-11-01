@@ -675,6 +675,41 @@ struct ChannelHeroView: View {
     }
 }
 
+// MARK: – Lives en grille ou en liste
+/// Cartes en grille, ou lignes façon Twitch, selon « Lives en liste » : à
+/// l'accueil, dans une catégorie et dans la recherche (le réglage ne valait
+/// que pour l'accueil, fb_mvx7rpxe).
+struct StreamsBlock: View {
+    let streams: [TwitchStream]
+    let columns: [GridItem]
+    var pinnable = false
+    var hideable = false
+    var hideCategory = true
+    let onPlay: (TwitchStream) -> Void
+    @EnvironmentObject private var store: AppStore
+
+    var body: some View {
+        Group {
+            if store.homeListLayout {
+                LazyVStack(spacing: TSpace.md) {
+                    ForEach(streams) { stream in
+                        StreamRowView(stream: stream, pinnable: pinnable, hideable: hideable,
+                                      hideCategory: hideCategory) { onPlay(stream) }
+                    }
+                }
+            } else {
+                LazyVGrid(columns: columns, spacing: TSpace.md) {
+                    ForEach(streams) { stream in
+                        StreamCardView(stream: stream, pinnable: pinnable, hideable: hideable,
+                                       hideCategory: hideCategory) { onPlay(stream) }
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, TSpace.lg)
+    }
+}
+
 // MARK: – Direct en liste (façon Twitch)
 /// Miniature à gauche, infos à droite : plus de chaînes visibles d'un coup.
 struct StreamRowView: View {

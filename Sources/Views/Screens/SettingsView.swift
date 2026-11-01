@@ -1327,6 +1327,28 @@ struct SettingsView: View {
                 Text(store.t("cfg_chat_width_sub"))
                     .font(.tMeta).foregroundColor(.tMuted)
                     .fixedSize(horizontal: false, vertical: true)
+                Divider().background(Color.tBorder)
+
+                // Chat posé sur l'image : côté et hauteur, comme l'app TV.
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(store.t("cfg_chat_overlay_pos")).font(.tBody).foregroundColor(.tText)
+                    Text(store.t("cfg_chat_overlay_pos_sub"))
+                        .font(.tMeta).foregroundColor(.tMuted)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Picker("", selection: $store.chatOverlayLayout.side) {
+                        Text(store.t("chat_side_left")).tag(ChatOverlayLayout.Side.left)
+                        Text(store.t("chat_side_right")).tag(ChatOverlayLayout.Side.right)
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    Picker("", selection: $store.chatOverlayLayout.height) {
+                        Text(store.t("chat_height_full")).tag(ChatOverlayLayout.Height.full)
+                        Text(store.t("chat_height_top")).tag(ChatOverlayLayout.Height.top)
+                        Text(store.t("chat_height_bottom")).tag(ChatOverlayLayout.Height.bottom)
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                }
 
                 Button {
                     store.chatFontSize   = 13
@@ -1334,6 +1356,7 @@ struct SettingsView: View {
                     store.chatBadgeScale = 1
                     store.chatEmoteScale = 1
                     store.chatWidthRatio = 0.32
+                    store.chatOverlayLayout = ChatOverlayLayout()
                     store.chatTimestamps = true
                 } label: {
                     Text(store.t("reset_defaults"))
@@ -1355,6 +1378,9 @@ struct SettingsView: View {
                 // Lecteur immersif seulement : le natif ne sait pas lancer son PiP.
                 toggleRow(store.t("pip_on_leave"), store.t("pip_on_leave_sub"),
                           $store.pipOnLeave, log: "PiP en quittant le lecteur")
+                Divider().background(Color.tBorder)
+                toggleRow(store.t("cfg_edge_swipe"), store.t("cfg_edge_swipe_sub"),
+                          $store.edgeSwipeClose, log: "Fermer en glissant depuis le bord")
                 Divider().background(Color.tBorder)
                 backgroundPlaybackRow
                 Divider().background(Color.tBorder)

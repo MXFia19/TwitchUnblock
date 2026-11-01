@@ -1169,10 +1169,13 @@ struct MainTabView: View {
             // hiérarchie le recréerait, et couperait la connexion du chat.
             // Marge de sécurité reprise : à droite il l'ignore (avec 16 pt
             // gardés) ; à gauche, décalé, il s'élargit de ce côté.
+            // Calé du côté de l'image : élargi par la marge reprise, centré
+            // il débordait à moitié sur l'image, et la poignée tombait sur
+            // le texte des messages.
             chatPane(style: chatStyle)
                 .padding(.trailing, rightReclaim > 0 ? 16 : 0)
                 .ignoresSafeArea(.container, edges: rightReclaim > 0 ? .trailing : [])
-                .frame(width: chatWidth.map { $0 + leftReclaim })
+                .frame(width: chatWidth.map { $0 + leftReclaim }, alignment: chatOnLeft ? .trailing : .leading)
                 .padding(.leading, -leftReclaim)
                 .frame(height: verticalChatHeight ?? chatHeight)
                 // Bord du chat : une petite poignée pour régler sa largeur,

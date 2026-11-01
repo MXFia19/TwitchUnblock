@@ -194,6 +194,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.7.4",
+          "buildVersion": "382",
+          "date": "2026-11-01",
+          "localizedDescription": "- Chat over the video can sit left or right, full height or in a corner (Settings → Chat)\n- Landscape chat can be narrower (15 %) and uses the empty safe margin, so the video is bigger\n- \"Streams as a list\" now also applies to categories and search results\n- New option to close the player by swiping from the left edge (Settings → Player, off by default)\n- With Recent streamers off, opened channels are no longer remembered",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-382/TwitchUnblock.ipa",
+          "size": 4518175,
+          "commit": "ba9a6c67c9aac885273a4a5e169b2495d73e6aea"
+        },
+        {
           "version": "1.7.3",
           "buildVersion": "381",
           "date": "2026-11-01",
@@ -273,25 +282,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-372/TwitchUnblock.ipa",
           "size": 4493961,
           "commit": "334f786b7af8f58d61edf796434e957abae0e41d"
-        },
-        {
-          "version": "1.6.59",
-          "buildVersion": "371",
-          "date": "2026-10-27",
-          "localizedDescription": "- Live: each source now has a backup server (PerfProd Asia, nadeko's second server, Luminous Europe 2), and a Luminous mirror that no longer answered was removed.",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-371/TwitchUnblock.ipa",
-          "size": 4492756,
-          "commit": "ea868e57703d4b113f9c92fef0e7a48fb8581fc1"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.7.3",
+      "version": "1.7.4",
       "versionDate": "2026-11-01",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-381/TwitchUnblock.ipa",
-      "size": 4501988
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-382/TwitchUnblock.ipa",
+      "size": 4518175
     }
   ],
   "news": []

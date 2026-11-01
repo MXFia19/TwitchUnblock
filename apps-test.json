@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.7.9",
+          "buildVersion": "387",
+          "date": "2026-11-01",
+          "localizedDescription": "- iPhone Duo: in the full-size player, buttons and text keep clear of the screen's rounded corners",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-387/TwitchUnblock.ipa",
+          "size": 4542829,
+          "commit": "d94fb6e58b235aeb53942ea7d63461e2f9a07c44"
+        },
+        {
           "version": "1.7.8",
           "buildVersion": "386",
           "date": "2026-11-01",
@@ -280,25 +289,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-357/TwitchUnblock.ipa",
           "size": 4547710,
           "commit": "95e378417e8263868a27a00fac86f44c7a978232"
-        },
-        {
-          "version": "1.6.35",
-          "buildVersion": "356",
-          "date": "2026-10-22",
-          "localizedDescription": "- New setting \"PiP when leaving the player\" (Settings → Player, off by default): swiping a live stream or VOD down, or tapping back, opens it in Picture in Picture instead of the mini player\n- Picture in Picture: starting it now shrinks the player so you can keep using the app, instead of leaving a black full-screen player to close\n- Picture in Picture: the window's expand button now brings the player back full size, on the same video\n- A channel's bot commands (Nightbot, StreamElements, Fossabot, Moobot) are now on its channel page too, so they can be checked while the channel is offline.\n- New settings in Settings → General → Customize the app → Chat · banners (all on by default): hide the chat's notification bell, the chat mode badge (\"Followers for 10h\"…) and the channel points crown; the bell stays on the channel page and channel points open from the chat's ⋯ menu.\n- Channel points can be opened from the chat's ⋯ menu whenever the crown isn't shown, landscape included.\n- New setting Settings → General → Customize the app → Chat · banners → Special Events (on by default): hide Twitch's own reward campaigns such as \"1 Month of Apple TV\" while keeping the channel's drops card.\n- Other improvements and fixes",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-356/TwitchUnblock.ipa",
-          "size": 4546453,
-          "commit": "153d416e8aa8cac62c7d1a396f08ebaf815d5a8e"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.7.8",
+      "version": "1.7.9",
       "versionDate": "2026-11-01",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-386/TwitchUnblock.ipa",
-      "size": 4542039
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-387/TwitchUnblock.ipa",
+      "size": 4542829
     }
   ],
   "news": []

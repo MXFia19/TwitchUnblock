@@ -695,6 +695,7 @@ func getLive(channelName: String, webToken: String? = nil,
         switch src {
         case "al":     found = await ttvlolLiveLinks(login: login, lowLatency: lowLatency)
         case "twitch": if let token { found = await usherLiveLinks(login: login, token: token, lowLatency: lowLatency, geo: geo) }
+        case "custom": if let host = customSourceHost() { found = await luminousLiveLinks(hosts: [host], login: login, lowLatency: lowLatency) }
         case let id where kLiveProxyHosts[id] != nil:
             found = await luminousLiveLinks(hosts: [kLiveProxyHosts[id]!], login: login, lowLatency: lowLatency)
         default:

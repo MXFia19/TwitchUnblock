@@ -166,12 +166,39 @@ let kLiveSources = ["as", "pp", "al", "al2", "eu", "eu2", "twitch"]
 /// la reçoit juste après (comme le site et le Worker).
 let kLiveSourceBackupOf = ["pp": "as", "al2": "al", "eu2": "eu"]
 
+/// « Ma source » (id « custom ») : adresse d'un serveur luminous-ttv à soi,
+/// comme sur le site (demande de hippxrr). https://, un nom de domaine, sans
+/// port ni paramètres. Rend « https://hôte/chemin » sans « / » final, ou nil
+/// (mêmes règles que customSourceBase du site).
+func customSourceBase(_ value: String) -> String? {
+    let v = value.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !v.isEmpty, v.count <= 200, let u = URLComponents(string: v),
+          u.scheme?.lowercased() == "https", u.user == nil, u.password == nil,
+          u.query == nil, u.fragment == nil, u.port == nil || u.port == 443,
+          let host = u.host?.lowercased(), host.contains("."), !host.hasPrefix("["),
+          !host.allSatisfy({ $0.isNumber || $0 == "." }) else { return nil }
+    let local = ["localhost", "local", "internal", "lan", "home", "arpa"]
+    if local.contains(where: { host == $0 || host.hasSuffix("." + $0) }) { return nil }
+    var path = u.path
+    while path.hasSuffix("/") { path.removeLast() }
+    return "https://\(host)\(path)"
+}
+
+/// Ma source enregistrée et valable, sans « https:// » (luminousLiveLinks).
+func customSourceHost() -> String? {
+    customSourceBase(UserDefaults.standard.string(forKey: "cfg_custom_source") ?? "")
+        .map { String($0.dropFirst("https://".count)) }
+}
+
 /// Ordre complet des sources : celles de `saved` connues, sans doublon ;
 /// une source qui manque va juste après celle qu'elle secourt, sinon à la
-/// fin, dans l'ordre automatique.
+/// fin, dans l'ordre automatique. Ma source reste tant qu'elle est réglée.
 func completeLiveSourceOrder(_ saved: [String]) -> [String] {
     var order: [String] = []
-    for id in saved where kLiveSources.contains(id) && !order.contains(id) { order.append(id) }
+    let custom = customSourceHost() != nil
+    for id in saved where (kLiveSources.contains(id) || (custom && id == "custom")) && !order.contains(id) {
+        order.append(id)
+    }
     for id in kLiveSources where !order.contains(id) {
         if let parent = kLiveSourceBackupOf[id], let i = order.firstIndex(of: parent) {
             order.insert(id, at: i + 1)
@@ -769,6 +796,9 @@ private let translations: [Lang: [String: String]] = [
         "src_up": "Monter",
         "src_down": "Descendre",
         "src_reset": "Ordre par défaut",
+        "src_custom": "Ma source",
+        "src_custom_sub": "Adresse de ton propre serveur luminous-ttv (https://…) : il prend place en tête de l'ordre ci-dessus. Vide : pas de source perso.",
+        "src_custom_bad": "Adresse refusée : https://, un nom de domaine, sans port ni paramètres.",
         "src_auto": "Automatique",
         "src_as": "Luminous Asie",
         "src_al": "Proxy Albanie (TTV.LOL)",
@@ -1552,6 +1582,9 @@ private let translations: [Lang: [String: String]] = [
         "src_up": "Move up",
         "src_down": "Move down",
         "src_reset": "Default order",
+        "src_custom": "My source",
+        "src_custom_sub": "Address of your own luminous-ttv server (https://…): it goes to the top of the order above. Empty: no custom source.",
+        "src_custom_bad": "Address refused: https://, a domain name, no port or parameters.",
         "src_auto": "Automatic",
         "src_as": "Luminous Asia",
         "src_al": "Albania proxy (TTV.LOL)",
@@ -2335,6 +2368,9 @@ private let translations: [Lang: [String: String]] = [
         "src_up": "Subir",
         "src_down": "Bajar",
         "src_reset": "Orden predeterminado",
+        "src_custom": "Mi fuente",
+        "src_custom_sub": "Dirección de tu propio servidor luminous-ttv (https://…): se coloca al principio del orden de arriba. Vacío: sin fuente propia.",
+        "src_custom_bad": "Dirección rechazada: https://, un nombre de dominio, sin puerto ni parámetros.",
         "src_auto": "Automática",
         "src_as": "Luminous Asia",
         "src_al": "Proxy de Albania (TTV.LOL)",

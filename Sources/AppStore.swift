@@ -329,6 +329,32 @@ final class AppStore: ObservableObject {
         didSet { UserDefaults.standard.set(liveSourceOrder, forKey: "liveSourceOrder") }
     }
 
+    /// « Ma source » : adresse d'un serveur luminous-ttv (voir customSourceBase).
+    @Published private(set) var customSource: String = "" {
+        didSet { UserDefaults.standard.set(customSource, forKey: "cfg_custom_source") }
+    }
+
+    /// Ordre par défaut : l'automatique, Ma source en tête si elle est réglée.
+    var defaultLiveSourceOrder: [String] {
+        customSourceBase(customSource) != nil ? ["custom"] + kLiveSources : kLiveSources
+    }
+
+    /// Ma source changée : en tête de l'ordre à l'ajout (comme sur le site),
+    /// retirée quand on l'efface. Rend faux si l'adresse est refusée.
+    @discardableResult
+    func setCustomSource(_ raw: String) -> Bool {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        let base = trimmed.isEmpty ? nil : customSourceBase(trimmed)
+        if !trimmed.isEmpty && base == nil { return false }
+        let was = customSourceBase(customSource)
+        customSource = base ?? ""
+        if was != base {
+            let rest = liveSourceOrder.filter { $0 != "custom" }
+            liveSourceOrder = base != nil ? ["custom"] + rest : rest
+        }
+        return true
+    }
+
     /// Monte (−1) ou descend (+1) une source d'un cran.
     func moveLiveSource(_ id: String, by delta: Int) {
         guard let i = liveSourceOrder.firstIndex(of: id), liveSourceOrder.indices.contains(i + delta) else { return }
@@ -989,6 +1015,7 @@ final class AppStore: ObservableObject {
         liveActivity       = PlayerActivity.enabled
         // Ordre des sources ; avant lui, une seule source préférée
         // (« liveSource »), mise en tête. Réécrit pour getLive.
+        customSource       = customSourceBase(ud.string(forKey: "cfg_custom_source") ?? "") ?? ""
         liveSourceOrder    = liveSourceSteps().filter { $0 != "worker" }
         ud.set(liveSourceOrder, forKey: "liveSourceOrder")
         subAdFree          = ud.object(forKey: "cfg_sub_adfree") as? Bool ?? true

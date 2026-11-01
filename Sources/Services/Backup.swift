@@ -142,6 +142,8 @@ enum Backup {
             "vodSpeed": store.vodSpeed,
             "qualityPref": store.preferredQuality,
             "liveSourceOrder": store.liveSourceOrder,
+            // Même nom que dans la sauvegarde du site.
+            "customSource": store.customSource.isEmpty ? (NSNull() as Any) : (store.customSource as Any),
             "multiChat": store.multiLiveChat,
         ]
         let app: [String: Any] = [
@@ -417,6 +419,14 @@ enum Backup {
         num("vodSpeed", 0.25...2) { store.vodSpeed = VodSpeed.nearest($0) }
         // Ordre des sources du direct (nom du site) : sources connues, sans
         // doublon, celles qui manquent juste après celle qu'elles secourent.
+        // Ma source avant l'ordre : celui-ci ne garde « custom » que si elle
+        // est réglée.
+        if s["customSource"] is NSNull {
+            store.setCustomSource("")
+            ok("customSource")
+        } else if let v = s["customSource"] as? String, store.setCustomSource(v) {
+            ok("customSource")
+        }
         if let v = s["liveSourceOrder"] as? [String], v.contains(where: { kLiveSources.contains($0) }) {
             store.liveSourceOrder = completeLiveSourceOrder(v)
             ok("liveSourceOrder")

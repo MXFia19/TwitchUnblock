@@ -17,6 +17,10 @@ struct SettingsView: View {
     @State private var updateCheckFailed = false
     @State private var highlightDraft  = ""
     @State private var mutedDraft      = ""
+    /// Ma source en cours de saisie, appliquée en quittant le champ.
+    @State private var customSourceDraft = ""
+    @State private var customSourceRefused = false
+    @FocusState private var customSourceFocused: Bool
     @State private var liveNotif       = LiveNotifier.isEnabled
     @State private var notifTestResult: String? = nil
     @State private var showNotifChannels = false
@@ -1592,17 +1596,55 @@ struct SettingsView: View {
                 .background(Color.tSurface)
                 .cornerRadius(10)
             }
-            if store.liveSourceOrder != kLiveSources {
+            if store.liveSourceOrder != store.defaultLiveSourceOrder {
                 Button(store.t("src_reset")) {
-                    withAnimation { store.liveSourceOrder = kLiveSources }
+                    withAnimation { store.liveSourceOrder = store.defaultLiveSourceOrder }
                 }
                 .font(.tLabel)
                 .foregroundColor(.tPrimary)
                 .buttonStyle(.plain)
             }
+            Divider().background(Color.tBorder)
+            // Ma source : un serveur luminous-ttv à soi, comme sur le site.
+            VStack(alignment: .leading, spacing: 6) {
+                Text(store.t("src_custom")).font(.tCardTitle).foregroundColor(.tText)
+                Text(store.t("src_custom_sub"))
+                    .font(.tMeta).foregroundColor(.tMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+                TextField("https://…", text: $customSourceDraft)
+                    .font(.tBody).foregroundColor(.tText)
+                    .keyboardType(.URL)
+                    .textContentType(.URL)
+                    .autocorrectionDisabled()
+                    .textInputAutocapitalization(.never)
+                    .submitLabel(.done)
+                    .focused($customSourceFocused)
+                    .onSubmit { applyCustomSource() }
+                    .padding(.horizontal, TSpace.md)
+                    .frame(minHeight: 44)
+                    .background(Color.tSurface)
+                    .cornerRadius(TRadius.control)
+                if customSourceRefused {
+                    Text(store.t("src_custom_bad")).font(.tMeta).foregroundColor(.tDanger)
+                }
+            }
+            .onAppear { customSourceDraft = store.customSource }
+            .onChange(of: customSourceFocused) { focused in
+                if !focused { applyCustomSource() }
+            }
         }
         .onChange(of: store.liveSourceOrder) { order in
             logger.settingChanged("Ordre des sources", value: order.joined(separator: ","))
+        }
+    }
+
+    /// Ma source saisie : enregistrée si l'adresse est valable (sinon on le
+    /// dit, et l'ancienne reste).
+    private func applyCustomSource() {
+        customSourceRefused = !store.setCustomSource(customSourceDraft)
+        if !customSourceRefused {
+            customSourceDraft = store.customSource
+            logger.settingChanged("Ma source", value: store.customSource.isEmpty ? "aucune" : store.customSource)
         }
     }
 

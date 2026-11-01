@@ -184,7 +184,10 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   closed while it loads.
   Reorder them in Settings → Player; picking a source from the player's ⋯
   menu (which also ticks the source in use) moves it to the top, or tries it
-  again.
+  again. **My source** (same place, like on the website): the address of your
+  own luminous-ttv server (https://, a domain name, no port or parameters)
+  goes to the top of the order; empty it to remove it. Kept in the backup
+  under the website's name (`customSource`).
   Channels that stream with multiple encodes (Enhanced Broadcasting) keep each
   quality's own name on every source. No source escapes the channel's own ad
   breaks: Twitch stitches them into the stream itself. When Twitch's own API

@@ -194,6 +194,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.7.5",
+          "buildVersion": "383",
+          "date": "2026-11-01",
+          "localizedDescription": "- New \"My source\" option: add your own luminous-ttv server to the live sources (Settings → Player)",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-383/TwitchUnblock.ipa",
+          "size": 4529817,
+          "commit": "ba7f4539c21814468f254bffda4fdba592cbe691"
+        },
+        {
           "version": "1.7.4",
           "buildVersion": "382",
           "date": "2026-11-01",
@@ -273,25 +282,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-373/TwitchUnblock.ipa",
           "size": 4496574,
           "commit": "858417ed00ca59b09dfe09f892001b0e71d73bfc"
-        },
-        {
-          "version": "1.6.60",
-          "buildVersion": "372",
-          "date": "2026-10-27",
-          "localizedDescription": "- Live: three more sources to pick in Settings → Player (PerfProd Asia, Albania proxy 2, Luminous Europe 2); if you change nothing, each one is tried right after its neighbor.",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-372/TwitchUnblock.ipa",
-          "size": 4493961,
-          "commit": "334f786b7af8f58d61edf796434e957abae0e41d"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.7.4",
+      "version": "1.7.5",
       "versionDate": "2026-11-01",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-382/TwitchUnblock.ipa",
-      "size": 4518175
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-383/TwitchUnblock.ipa",
+      "size": 4529817
     }
   ],
   "news": []

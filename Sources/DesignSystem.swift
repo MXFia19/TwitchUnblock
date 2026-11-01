@@ -813,6 +813,9 @@ private struct EdgeSwipeBack: ViewModifier {
         content
             // Seulement couper, jamais rétablir un défilement coupé plus haut.
             .transformEnvironment(\.isScrollEnabled) { if drag.back { $0 = false } }
+            // Liste coupée, un doigt qui descend pendant le retour partait à
+            // la feuille (Réglages), qui se fermait : plus pendant le geste.
+            .interactiveDismissDisabled(drag.back)
             .offset(x: follows ? drag.dx : 0)
             .simultaneousGesture(
                 DragGesture(minimumDistance: 12)

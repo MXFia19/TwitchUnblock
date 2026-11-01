@@ -507,9 +507,7 @@ final class AppStore: ObservableObject {
     static let chatFontRange: ClosedRange<Double> = 10...20
     static let chatSpacingRange: ClosedRange<Double> = 0...16
     static let chatScaleRange: ClosedRange<Double> = 0.5...2
-    /// 15 % au plus étroit : 20 % laissait encore trop de place au chat sur
-    /// un grand écran (fb_mvxafsl8).
-    static let chatWidthRange: ClosedRange<Double> = 0.15...0.60
+    static let chatWidthRange: ClosedRange<Double> = 0.20...0.60
 
     static func clamped(_ v: Double, to range: ClosedRange<Double>) -> Double {
         min(max(v, range.lowerBound), range.upperBound)

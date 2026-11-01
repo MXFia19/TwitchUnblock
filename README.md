@@ -517,7 +517,7 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
 ### Chat layout
 
 * 📐 **Resizable** — drag the small handle between video and chat (no line
-  across the picture), down to 15 %; the width is remembered. On the side
+  across the picture), from 20 %; the width is remembered. On the side
   away from the Dynamic Island (or notch), the chat also uses the screen's
   safe margin instead of leaving it empty, so the picture gets bigger.
 * 🪟 **Three landscape layouts** — a column on the right, translucent over the

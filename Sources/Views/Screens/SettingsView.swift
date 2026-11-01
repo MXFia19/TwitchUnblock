@@ -2056,6 +2056,12 @@ struct SettingsView: View {
                     Divider().background(Color.tBorder)
                     notifChannelsRow
                 }
+                // Barre d'onglets d'iOS 26 au lieu de celle de l'app.
+                if Theme.glassSupported {
+                    Divider().background(Color.tBorder)
+                    toggleRow(store.t("native_tabs"), store.t("native_tabs_sub"),
+                              $store.nativeTabs, log: "Onglets natifs")
+                }
                 Divider().background(Color.tBorder)
                 // Instantanées, même app fermée : le site installé en web app
                 // (à la place de ntfy, retiré : voir NtfyNotifier).

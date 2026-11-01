@@ -11,6 +11,8 @@ struct MainTabView: View {
     /// mini-barre et la barre du multi-live se posent alors à sa droite, au
     /// bas de l'écran.
     @State private var sideTabs = SideTabRail.windowFits
+    /// Onglets dans la colonne d'état de l'iPhone Duo (voir TabScaffold).
+    @State private var railInStatusColumn = false
 
     // ── Player state ─────────────────────────────────────────────────────
     @State private var playerMode: PlayerMode? = nil
@@ -362,6 +364,7 @@ struct MainTabView: View {
             // colonne à gauche (fenêtre large) : voir TabScaffold.
             TabScaffold(activeTab: $activeTab,
                         sideTabs: $sideTabs,
+                        railInStatusColumn: $railInStatusColumn,
                         safeTop: headerSafeTop,
                         header: AnyView(HeaderView(title: activeTab.label(store),
                                                    onOpenSettings: { showSettings = true },
@@ -2063,7 +2066,7 @@ struct MainTabView: View {
         }
         // Onglets en colonne à gauche : la barre se pose à sa droite, au bas
         // de l'écran (plus de barre d'onglets dessous).
-        .padding(.leading, sideTabs ? SideTabRail.width : 0)
+        .padding(.leading, sideTabs && !railInStatusColumn ? SideTabRail.width : 0)
         .padding(.horizontal, TSpace.md)
         .padding(.bottom, sideTabs ? Self.sideBarsBottom : 92)
     }
@@ -2104,7 +2107,7 @@ struct MainTabView: View {
         .overlay(RoundedRectangle(cornerRadius: TRadius.card, style: .continuous)
             .stroke(Color.tPurple.opacity(0.35), lineWidth: 1))
         .contentShape(Rectangle())
-        .padding(.leading, sideTabs ? SideTabRail.width : 0)
+        .padding(.leading, sideTabs && !railInStatusColumn ? SideTabRail.width : 0)
         .padding(.horizontal, TSpace.md)
         .padding(.bottom, (sideTabs ? Self.sideBarsBottom : 92) + (miniShown ? 60 : 0))
     }

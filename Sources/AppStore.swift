@@ -829,6 +829,12 @@ final class AppStore: ObservableObject {
             Theme.liquidGlass = liquidGlass
         }
     }
+    /// Onglets natifs d'iOS 26 (Liquid Glass) au lieu de la barre de l'app
+    /// (fb_mvx2y53r : mieux rangés sur l'iPhone Duo). En test, coupé
+    /// d'office ; sans effet avant iOS 26.
+    @Published var nativeTabs: Bool = UserDefaults.standard.bool(forKey: "cfg_native_tabs") {
+        didSet { UserDefaults.standard.set(nativeTabs, forKey: "cfg_native_tabs") }
+    }
     /// Change avec le thème : MainTabView reconstruit les onglets dessus.
     var themeID: String { "\(accent.rawValue)-\(background.rawValue)-\(liquidGlass)" }
 

@@ -744,6 +744,8 @@ let kTraditionalChineseStrings: [String: String] = [
     "src_custom": "我的來源",
     "src_custom_sub": "你自己的 luminous-ttv 伺服器位址（https://…）：會排在上方順序的最前面。留空：不使用自訂來源。",
     "src_custom_bad": "位址無效：須為 https://、網域名稱，不含連接埠或參數。",
+    "native_tabs": "原生分頁（Liquid Glass）",
+    "native_tabs_sub": "使用 iOS 26 的分頁列取代 App 自己的分頁列：捲動時會縮小，並由系統依螢幕擺放（iPad、iPhone Duo）。測試中：有問題請回報。",
     "src_auto": "自動",
     "src_as": "Luminous 亞洲",
     "src_al": "阿爾巴尼亞代理（TTV.LOL）",

@@ -60,7 +60,9 @@ struct HeaderView: View {
             .tourAnchor(.settings)
         }
         .padding(.horizontal, TSpace.lg)
-        .padding(.top, safeTop + 4)
+        // Pas de marge haute (iPhone Duo, barre d'état en colonne sur le
+        // côté) : le titre collait au bord de l'écran (fb_mvwsyucv).
+        .padding(.top, max(safeTop, 20) + 4)
         .padding(.bottom, TSpace.md)
         .background(Color.tDark)
     }

@@ -759,6 +759,8 @@ let kItalianStrings: [String: String] = [
     "src_custom": "La mia fonte",
     "src_custom_sub": "Indirizzo del tuo server luminous-ttv (https://…): va in cima all'ordine qui sopra. Vuoto: nessuna fonte personale.",
     "src_custom_bad": "Indirizzo rifiutato: https://, un nome di dominio, senza porta né parametri.",
+    "native_tabs": "Schede native (Liquid Glass)",
+    "native_tabs_sub": "La barra delle schede di iOS 26 al posto di quella dell'app: si riduce mentre scorri e il sistema la posiziona in base allo schermo (iPad, iPhone Duo). In prova: segnala cosa non va.",
     "src_auto": "Automatico",
     "src_as": "Luminous Asia",
     "src_al": "Proxy Albania (TTV.LOL)",

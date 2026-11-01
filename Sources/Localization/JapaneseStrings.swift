@@ -758,6 +758,8 @@ let kJapaneseStrings: [String: String] = [
     "src_custom": "マイソース",
     "src_custom_sub": "自分の luminous-ttv サーバーのアドレス（https://…）：上の順番の先頭に入ります。空欄ならマイソースはありません。",
     "src_custom_bad": "アドレスが無効です：https://、ドメイン名のみ、ポートやパラメーターなし。",
+    "native_tabs": "ネイティブのタブ（Liquid Glass）",
+    "native_tabs_sub": "アプリ独自のタブバーの代わりに iOS 26 のタブバーを使います。スクロールすると小さくなり、画面に合わせてシステムが配置します（iPad、iPhone Duo）。テスト中：不具合があれば報告してください。",
     "src_auto": "自動",
     "src_as": "Luminous Asia",
     "src_al": "Albania プロキシ (TTV.LOL)",

@@ -194,6 +194,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.7.8",
+          "buildVersion": "386",
+          "date": "2026-11-01",
+          "localizedDescription": "- Landscape chat: the resize handle no longer sits on top of messages, and the chat fills the empty margin next to it\n- Traditional Chinese: channel points are now called 忠誠點數, as on Twitch",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-386/TwitchUnblock.ipa",
+          "size": 4542039,
+          "commit": "a22b672048e145cdcb19217e1a8ecdeaaa700c64"
+        },
+        {
           "version": "1.7.7",
           "buildVersion": "385",
           "date": "2026-11-01",
@@ -273,25 +282,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-376/TwitchUnblock.ipa",
           "size": 4486050,
           "commit": "bb0b73cf3071659fe779f19a259da7516fb98195"
-        },
-        {
-          "version": "1.6.63",
-          "buildVersion": "375",
-          "date": "2026-10-30",
-          "localizedDescription": "- Live notifications through the ntfy app are gone: for instant ones, install the TwitchUnblock website as a web app (Settings → Features in testing → Open the website shows how)\n- If you had ntfy on, the app tells you once and stops the server from posting to your topic: you can uninstall ntfy",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-375/TwitchUnblock.ipa",
-          "size": 4484889,
-          "commit": "8ac87e483204734d18c265bdb0fba1e6a50508c9"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.7.7",
+      "version": "1.7.8",
       "versionDate": "2026-11-01",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-385/TwitchUnblock.ipa",
-      "size": 4542328
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-386/TwitchUnblock.ipa",
+      "size": 4542039
     }
   ],
   "news": []

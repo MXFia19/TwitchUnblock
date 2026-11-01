@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.7.4",
+          "buildVersion": "382",
+          "date": "2026-11-01",
+          "localizedDescription": "- Chat over the video can sit left or right, full height or in a corner (Settings → Chat)\n- Landscape chat can be narrower (15 %) and uses the empty safe margin, so the video is bigger\n- \"Streams as a list\" now also applies to categories and search results\n- New option to close the player by swiping from the left edge (Settings → Player, off by default)\n- With Recent streamers off, opened channels are no longer remembered",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-382/TwitchUnblock.ipa",
+          "size": 4518175,
+          "commit": "ba9a6c67c9aac885273a4a5e169b2495d73e6aea"
+        },
+        {
           "version": "1.7.3",
           "buildVersion": "381",
           "date": "2026-11-01",
@@ -280,25 +289,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-351/TwitchUnblock.ipa",
           "size": 4381506,
           "commit": "5375594f5890d36c97355010bc4290dea28d58e6"
-        },
-        {
-          "version": "1.5.35",
-          "buildVersion": "350",
-          "date": "2026-10-20",
-          "localizedDescription": "- Channel points: the app now joins raids with your Twitch session, so you get the raid bonus like on twitch.tv",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-350/TwitchUnblock.ipa",
-          "size": 4381511,
-          "commit": "cc4e1d685e1b217e472804d107857c69ea246589"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.7.3",
+      "version": "1.7.4",
       "versionDate": "2026-11-01",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-381/TwitchUnblock.ipa",
-      "size": 4501988
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-382/TwitchUnblock.ipa",
+      "size": 4518175
     }
   ],
   "news": []

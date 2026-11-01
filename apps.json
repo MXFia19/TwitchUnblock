@@ -194,6 +194,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.7.6",
+          "buildVersion": "384",
+          "date": "2026-11-01",
+          "localizedDescription": "- iPhone Duo: tabs move into the status column, as an icon pill under the clock, and the header gets a top margin\n- New in Features in testing (iOS 26): native Liquid Glass tabs instead of the app's tab bar\n- New \"My source\" option: add your own luminous-ttv server to the live sources (Settings → Player)",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-384/TwitchUnblock.ipa",
+          "size": 4541767,
+          "commit": "3a2e8623ccc6915eb6c9e6492cf6b11668fc6bb6"
+        },
+        {
           "version": "1.7.5",
           "buildVersion": "383",
           "date": "2026-11-01",
@@ -273,25 +282,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-374/TwitchUnblock.ipa",
           "size": 4502860,
           "commit": "ed9b128e38adf558fb6f542addf7b856e0ad9763"
-        },
-        {
-          "version": "1.6.61",
-          "buildVersion": "373",
-          "date": "2026-10-30",
-          "localizedDescription": "- iPhone Duo: the full-size player in landscape now hides the status column on the side, so the video fills the display\n- The player's rotate button goes away when iOS doesn't let the app turn the screen (apps in a window, as on the iPhone Duo's inner display)",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-373/TwitchUnblock.ipa",
-          "size": 4496574,
-          "commit": "858417ed00ca59b09dfe09f892001b0e71d73bfc"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.7.5",
+      "version": "1.7.6",
       "versionDate": "2026-11-01",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-383/TwitchUnblock.ipa",
-      "size": 4529817
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-384/TwitchUnblock.ipa",
+      "size": 4541767
     }
   ],
   "news": []

@@ -1430,6 +1430,23 @@ struct ImmersivePlayer: View {
     private func barInset(_ bar: VerticalEdge) -> CGFloat {
         controlsHalf == nil || controlsHalf == bar ? controlsInset : 0
     }
+    /// Écart des barres aux coins arrondis de l'écran, là où iOS ne réserve
+    /// rien : un côté sans zone sûre alors que le haut (ou le bas, où la barre
+    /// descend au bord en paysage) n'en a pas non plus. C'est l'iPhone Duo en
+    /// plein écran, sa colonne d'état masquée : retour, titre, AirPlay,
+    /// fermer, durée et boutons touchaient l'arrondi des coins. Un iPhone à
+    /// encoche garde ses marges des côtés en paysage : rien n'y change.
+    private var cornerPad: EdgeInsets {
+        guard UIDevice.current.userInterfaceIdiom == .phone else { return EdgeInsets() }
+        let s = UIApplication.safeAreaInsets
+        let topOpen = s.top < 1
+        let bottomOpen = isLandscape || s.bottom < 1
+        let leftOpen = s.left < 20
+        let rightOpen = s.right < 20
+        guard (topOpen || bottomOpen) && (leftOpen || rightOpen) else { return EdgeInsets() }
+        return EdgeInsets(top: topOpen ? 8 : 0, leading: leftOpen ? 20 : 0,
+                          bottom: bottomOpen ? 6 : 0, trailing: rightOpen ? 20 : 0)
+    }
     /// Image verticale d'un direct, en portrait, chat posé dessus (comme
     /// « Affichage vertical » dans l'app de Twitch) : l'image remplit la
     /// boîte, et le double-tap ou le bouton Chat montre ou masque le chat.
@@ -2124,6 +2141,8 @@ struct ImmersivePlayer: View {
                 bottomBar.padding(controlsEdge, barInset(.bottom))
             }
             .padding(TSpace.sm)
+            // Coins arrondis là où iOS ne laisse aucune marge (iPhone Duo).
+            .padding(cornerPad)
             // Image verticale : la barre du bas passe au-dessus du chat posé
             // sur le bas de l'image.
             .padding(.bottom, controlsBottomInset)

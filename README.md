@@ -722,7 +722,9 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   there. The full-size player in landscape hides that column (as an iPhone
   hides its status bar in landscape), so the picture uses the whole display,
   and its rotate button goes away when iOS doesn't let apps turn the screen
-  (apps in a window, as on the inner display).
+  (apps in a window, as on the inner display). Its buttons and text then keep
+  clear of the display's rounded corners, since iOS leaves no margin on those
+  sides (iPhones with a notch keep theirs, unchanged).
 * 🧪 **Native tabs** (Settings → Features in testing, iOS 26 and later, off by
   default) — iOS's own Liquid Glass tab bar instead of the app's: it shrinks
   while you scroll and the system places it for each screen (iPad, iPhone Duo).

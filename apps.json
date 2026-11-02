@@ -194,6 +194,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.7.9",
+          "buildVersion": "387",
+          "date": "2026-11-01",
+          "localizedDescription": "- iPhone Duo: in the full-size player, buttons and text keep clear of the screen's rounded corners",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-387/TwitchUnblock.ipa",
+          "size": 4542829,
+          "commit": "d94fb6e58b235aeb53942ea7d63461e2f9a07c44"
+        },
+        {
           "version": "1.7.8",
           "buildVersion": "386",
           "date": "2026-11-01",
@@ -273,25 +282,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-377/TwitchUnblock.ipa",
           "size": 4486051,
           "commit": "fe6d3aba005d3f836fe315e45b2a47ab8d60068c"
-        },
-        {
-          "version": "1.6.64",
-          "buildVersion": "376",
-          "date": "2026-10-30",
-          "localizedDescription": "- Going back in a live (−10 s or the bar) now plays at your chosen speed, up to 2×, to catch up, then back to 1× at the live edge; the speed is also in the player's ⋯ menu during a live\n- The player no longer shows your VOD speed next to the timer during a live when it doesn't apply\n- Rewinding into a live's recording now brings back your chosen playback speed once you're away from its edge, instead of staying at 1×\n- Apple's player now drops to 1× near the edge of a live recording and shows it, instead of a 2× that didn't actually play\n- The player now checks the speed it really plays at: it applies it again, then shows the real speed if playback still can't keep up",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-376/TwitchUnblock.ipa",
-          "size": 4486050,
-          "commit": "bb0b73cf3071659fe779f19a259da7516fb98195"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.7.8",
+      "version": "1.7.9",
       "versionDate": "2026-11-01",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-386/TwitchUnblock.ipa",
-      "size": 4542039
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-387/TwitchUnblock.ipa",
+      "size": 4542829
     }
   ],
   "news": []

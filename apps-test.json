@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.7.10",
+          "buildVersion": "388",
+          "date": "2026-11-04",
+          "localizedDescription": "- Favorite emotes: long-press an emote (in the chat or the picker) or use its card to add it to your favorites, shown first in the emote picker's new Favorites tab; synced with the website\n- Live streams show how long they've been live, on cards and in lists\n- A category's streams no longer repeat its name under each one\n- Followed categories always show their viewer count\n- Downloading a VOD: pick chapters to keep just one game or part of the stream",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-388/TwitchUnblock.ipa",
+          "size": 4568890,
+          "commit": "1428e52fa0911ec1422da562b4fbf366881e20c8"
+        },
+        {
           "version": "1.7.9",
           "buildVersion": "387",
           "date": "2026-11-01",
@@ -280,25 +289,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-358/TwitchUnblock.ipa",
           "size": 4376996,
           "commit": "6adef16519a0a35822b42ed98fb5bbc39469ec9d"
-        },
-        {
-          "version": "1.6.37",
-          "buildVersion": "357",
-          "date": "2026-10-22",
-          "localizedDescription": "- Other improvements and fixes",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-357/TwitchUnblock.ipa",
-          "size": 4547710,
-          "commit": "95e378417e8263868a27a00fac86f44c7a978232"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.7.9",
-      "versionDate": "2026-11-01",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-387/TwitchUnblock.ipa",
-      "size": 4542829
+      "version": "1.7.10",
+      "versionDate": "2026-11-04",
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-388/TwitchUnblock.ipa",
+      "size": 4568890
     }
   ],
   "news": []

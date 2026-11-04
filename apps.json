@@ -194,6 +194,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.7.11",
+          "buildVersion": "389",
+          "date": "2026-11-04",
+          "localizedDescription": "- Every category shows its viewer count again (Top, search and followed), not only the ones followed on your Twitch account",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-389/TwitchUnblock.ipa",
+          "size": 4568792,
+          "commit": "90d837c32313ef1a42f2714b243f0196c6aea08a"
+        },
+        {
           "version": "1.7.10",
           "buildVersion": "388",
           "date": "2026-11-04",
@@ -273,25 +282,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-380/TwitchUnblock.ipa",
           "size": 4496188,
           "commit": "a39e589722092595d3eedf63b30d42c662198127"
-        },
-        {
-          "version": "1.7.1",
-          "buildVersion": "379",
-          "date": "2026-10-31",
-          "localizedDescription": "- VODs, a live's recording and clips now show the channel's name with the title next to it, like lives: tap the title to read it in full, with the broadcast date",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-379/TwitchUnblock.ipa",
-          "size": 4487336,
-          "commit": "55efbc4097d6202f609c40596e19f568e2149659"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.7.10",
+      "version": "1.7.11",
       "versionDate": "2026-11-04",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-388/TwitchUnblock.ipa",
-      "size": 4568890
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-389/TwitchUnblock.ipa",
+      "size": 4568792
     }
   ],
   "news": []

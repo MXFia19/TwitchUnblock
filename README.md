@@ -590,8 +590,10 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
 * 🎮 **Categories** — browse by game, then the live channels in it, filtered
   by language if you like (all, or a single one — kept for every category).
   Search puts the exact match first ("valorant" → VALORANT), with sharp box
-  art. Every followed category shows its viewers, the ones followed on your
-  Twitch account included when Twitch leaves their count out of the list. A category you follow on Twitch shows as followed on its page, and
+  art. Every category shows its viewers — the Top, search results and the
+  followed ones, those of your Twitch account included —, asked 15 at a time:
+  since November 2026, Twitch refuses a GQL request with more than 15 aliases,
+  and the single request for 100 returned nothing. A category you follow on Twitch shows as followed on its page, and
   unfollowing it there removes it from your Twitch account (web session).
   Errors and empty lists have **Retry** / pull to refresh.
 * 🗂️ **Followed categories your way** — Settings → General → Customize the app → Followed categories: **Compact** covers (3 per row on iPhone, more on a wider screen) and the order (most watched first, as before, or A → Z).

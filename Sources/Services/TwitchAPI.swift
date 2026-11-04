@@ -1603,38 +1603,46 @@ func getStreamsByCategory(token: String, gameId: String, cursor: String? = nil,
     return (arr.map { streamFromDict($0) }, arr.isEmpty ? nil : next)
 }
 
-/// Audience par catégorie, en une requête pour toute une page.
+/// Audience par catégorie, pour toute une page.
 ///
 /// Helix ne la donne pas : `games/top` renvoie un classement, pas de chiffres.
-/// GQL, lui, expose `viewersCount` par identifiant. Les champs sont aliasés
-/// pour tenir dans un seul aller-retour — cent alias passent sans broncher —
-/// et la requête ne demande aucun jeton d'intégrité, contrairement à
-/// `channel { chatters }`.
+/// GQL, lui, expose `viewersCount` par identifiant, un champ aliasé par
+/// catégorie, sans jeton d'intégrité (contrairement à `channel { chatters }`).
+/// Twitch refuse désormais plus de 15 alias par requête (« root field aliases
+/// limit allowed (15) », vu le 04/11) : la requête de 100 ne rendait plus
+/// rien, et seules les catégories suivies sur le compte, qui arrivent avec
+/// leur audience, en avaient une. Paquets de 15, envoyés ensemble.
 ///
 /// Un échec n'est pas une erreur ici : la carte affiche simplement la
 /// catégorie sans son audience.
 func categoryViewers(ids: [String]) async -> [String: Int] {
     guard !ids.isEmpty else { return [:] }
+    let chunks = stride(from: 0, to: ids.count, by: 15).map { Array(ids[$0 ..< min($0 + 15, ids.count)]) }
     var out: [String: Int] = [:]
-
-    for start in stride(from: 0, to: ids.count, by: 100) {
-        let chunk = Array(ids[start ..< min(start + 100, ids.count)])
-        let fields = chunk.enumerated()
-            .map { "g\($0.offset): game(id: \"\(gqlStr($0.element))\") { id viewersCount }" }
-            .joined(separator: " ")
-
-        guard let json = try? await twitchGQL("query { \(fields) }") as? [String: Any],
-              let data = json["data"] as? [String: Any] else { continue }
-
-        for (_, value) in data {
-            guard let game = value as? [String: Any],
-                  let id    = game["id"] as? String,
-                  let count = game["viewersCount"] as? Int else { continue }
-            out[id] = count
+    await withTaskGroup(of: [String: Int].self) { group in
+        for chunk in chunks {
+            group.addTask { await categoryViewersChunk(chunk) }
         }
+        for await part in group { out.merge(part) { first, _ in first } }
     }
-
     logger.success("GQL", "\(out.count) audiences de catégories sur \(ids.count)")
+    return out
+}
+
+/// Un paquet de categoryViewers : une requête, un alias par catégorie.
+private func categoryViewersChunk(_ ids: [String]) async -> [String: Int] {
+    let fields = ids.enumerated()
+        .map { "g\($0.offset): game(id: \"\(gqlStr($0.element))\") { id viewersCount }" }
+        .joined(separator: " ")
+    guard let json = try? await twitchGQL("query { \(fields) }") as? [String: Any],
+          let data = json["data"] as? [String: Any] else { return [:] }
+    var out: [String: Int] = [:]
+    for (_, value) in data {
+        guard let game = value as? [String: Any],
+              let id    = game["id"] as? String,
+              let count = game["viewersCount"] as? Int else { continue }
+        out[id] = count
+    }
     return out
 }
 

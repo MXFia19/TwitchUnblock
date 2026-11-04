@@ -140,6 +140,9 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
 * 📋 **Streams as a list** (Settings → General, or the button on Home) —
   live streams in a list like on Twitch, thumbnail on the left, on Home, in a
   category and in search results.
+* ⏱️ **Stream uptime** on every live card and row (“2h 14min”, refreshed every
+  minute), from Helix's `started_at` or GQL's `createdAt`. A category's own
+  streams no longer repeat its name under each one.
 * 🕘 **Recent streamers** — turned off, the shortcuts disappear from Search and
   the channels you open are no longer remembered.
 * 🎵 **Leaves your music alone** — opening the app no longer stops music
@@ -326,7 +329,9 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   and **Share**. A channel that refuses clips, a stream that has ended or
   Twitch saying no is told plainly (details in the log).
 * 📥 **Offline downloads** — download a whole VOD or just a part of it (from one
-  time to another, from where you are, the next 10 minutes) in the quality you
+  time to another, from where you are, the next 10 minutes, or by **chapter**:
+  tap one to keep just that part, then others to extend it — the part stays in
+  one piece, chapters in between included) in the quality you
   pick (your preferred quality is suggested first), then watch it without a connection from the My VODs tab. With the app
   open, the app downloads the segments itself (four at a time, any error shown
   under the download); when you leave it, what's left goes to iOS's background
@@ -379,7 +384,7 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   adds the personal emotes of BTTV Pro users (once BTTV announces them, i.e.
   when they open the chat) and the emotes added to the channel during the
   stream. The emote picker is translated; long-press an emote there to open
-  its card or copy its name. Its channel tab also lists the channel's own
+  its card, add it to your favorites or copy its name. Its channel tab also lists the channel's own
   Twitch emotes (follower, then sub tiers; one public Twitch request per
   channel and session), so channels with only Twitch sub emotes get a tab too.
   Sub emotes your account doesn't have (from the chat's `emote-sets`) are
@@ -409,6 +414,11 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   it comes from (GIPHY), a link to its GIPHY page and its link to copy. In the
   live chat, the multistream, the pinned message, a message thread and the
   VOD and clip chat; VoiceOver can open it too.
+* ⭐ **Favorite emotes** — long-press an emote (in the chat or the picker), or
+  **Add to favorites** on its card: the picker's **Favorites** tab, first and
+  opened first when it has emotes usable in this chat, keeps them in the order
+  you added them (up to 100). The list follows your account, shared with the
+  website (`favoriteEmotes`), and is in the backup.
 * 🙅 **Hide an emote** — long-press it in the chat, or **Hide this emote** on
   its card: it then shows as the typed word, from any source (Twitch, BTTV,
   FFZ, 7TV), in the live, VOD and multi-live chat. Settings → Chat → Hidden
@@ -580,7 +590,8 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
 * 🎮 **Categories** — browse by game, then the live channels in it, filtered
   by language if you like (all, or a single one — kept for every category).
   Search puts the exact match first ("valorant" → VALORANT), with sharp box
-  art. A category you follow on Twitch shows as followed on its page, and
+  art. Every followed category shows its viewers, the ones followed on your
+  Twitch account included when Twitch leaves their count out of the list. A category you follow on Twitch shows as followed on its page, and
   unfollowing it there removes it from your Twitch account (web session).
   Errors and empty lists have **Retry** / pull to refresh.
 * 🗂️ **Followed categories your way** — Settings → General → Customize the app → Followed categories: **Compact** covers (3 per row on iPhone, more on a wider screen) and the order (most watched first, as before, or A → Z).

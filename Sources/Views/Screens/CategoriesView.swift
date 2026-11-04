@@ -229,7 +229,11 @@ struct CategoriesView: View {
             twitchFollowed = []
             loadingFollowed = false
         }
-        let missing = store.followedCategories.map(\.id)
+        // Toutes les suivies dont Twitch n'a pas donné l'audience avec la
+        // liste : celles de l'appareil, et celles du compte quand
+        // `followedGames` la laisse vide (fb_mvzf8mau).
+        let counted = Set(twitchFollowed.filter { $0.viewers != nil }.map(\.id))
+        let missing = followedList.map(\.id).filter { !counted.contains($0) }
         guard !missing.isEmpty else { return }
         let counts = await categoryViewers(ids: missing)
         if !counts.isEmpty { followedViewers = counts }
@@ -608,7 +612,7 @@ struct CategoryStreamsView: View {
                         TEmptyState(icon: "antenna.radiowaves.left.and.right",
                                     title: store.t("no_live"))
                     }
-                    StreamsBlock(streams: shown, columns: columns, hideable: true, hideCategory: false) {
+                    StreamsBlock(streams: shown, columns: columns, hideable: true, hideCategory: false, showGame: false) {
                         onPlayStream($0.userLogin)
                     }
 

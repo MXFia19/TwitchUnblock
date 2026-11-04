@@ -5,16 +5,26 @@ import SwiftUI
 //  d'un message), une emote masquée s'affiche comme le mot tapé. On la
 //  masque d'un appui long sur elle, ou depuis sa fiche ; Réglages → Chat les
 //  liste, avec de quoi les réafficher. La liste (AppStore.hiddenEmotes) suit
-//  le compte, comme sur le site (« hiddenEmotes »).
+//  le compte, comme sur le site (« hiddenEmotes »). Les favoris (onglet en
+//  tête du sélecteur, AppStore.favoriteEmotes) se choisissent aux mêmes
+//  endroits.
 // ═══════════════════════════════════════════════════════════════════════════
 
-/// Appui long sur une emote du chat : la masquer, ou la réafficher.
+/// Appui long sur une emote du chat : l'ajouter aux favoris (ou l'en
+/// retirer), la masquer (ou la réafficher).
 struct EmoteHideMenu: ViewModifier {
     let code: String
     @EnvironmentObject private var store: AppStore
 
     func body(content: Content) -> some View {
         content.contextMenu {
+            let favorite = store.isFavoriteEmote(code)
+            Button {
+                store.toggleFavoriteEmote(code)
+            } label: {
+                Label(store.t(favorite ? "emote_fav_remove" : "emote_fav_add"),
+                      systemImage: favorite ? "star.slash" : "star")
+            }
             let hidden = store.hidesEmote(code)
             Button {
                 store.toggleHiddenEmote(code)
@@ -23,6 +33,25 @@ struct EmoteHideMenu: ViewModifier {
                       systemImage: hidden ? "eye" : "eye.slash")
             }
         }
+    }
+}
+
+/// Fiche d'une emote : l'ajouter aux favoris, ou l'en retirer.
+struct EmoteFavoriteButton: View {
+    let code: String
+    @EnvironmentObject private var store: AppStore
+
+    var body: some View {
+        let favorite = store.isFavoriteEmote(code)
+        Button {
+            store.toggleFavoriteEmote(code)
+        } label: {
+            Label(store.t(favorite ? "emote_fav_remove" : "emote_fav_add"),
+                  systemImage: favorite ? "star.fill" : "star")
+        }
+        .buttonStyle(.bordered)
+        .tint(.tPrimary)
+        .font(.system(size: 14, weight: .semibold))
     }
 }
 

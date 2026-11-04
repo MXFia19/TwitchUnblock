@@ -95,6 +95,8 @@ struct StreamCardView: View {
     /// si `hideCategory`, sa catégorie.
     var hideable = false
     var hideCategory = true
+    /// Coupé dans les lives d'une catégorie : ils ont tous la même (fb_mvzfampl).
+    var showGame = true
     let onPress: () -> Void
     @EnvironmentObject private var store: AppStore
 
@@ -120,10 +122,19 @@ struct StreamCardView: View {
                     }
                     .padding(TSpace.sm)
 
-                    // Spectateurs : en bas à droite, là où l'œil les cherche.
+                    // Durée du direct en bas à gauche ; spectateurs en bas à
+                    // droite, là où l'œil les cherche.
                     VStack {
                         Spacer()
                         HStack {
+                            if let start = stream.startedAt {
+                                LiveUptimeLabel(since: start)
+                                    .font(.tMeta)
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 6).padding(.vertical, 3)
+                                    .background(Color.black.opacity(0.65))
+                                    .cornerRadius(4)
+                            }
                             Spacer()
                             TMeta(icon: "eye.fill", text: formatViewers(stream.viewerCount),
                                   tint: .white, onImage: true)
@@ -154,7 +165,7 @@ struct StreamCardView: View {
                     }
                     .buttonStyle(.plain)
 
-                    if !stream.gameName.isEmpty {
+                    if showGame && !stream.gameName.isEmpty {
                         Text(stream.gameName)
                             .font(.tMeta)
                             .foregroundColor(.tMuted)
@@ -675,6 +686,24 @@ struct ChannelHeroView: View {
     }
 }
 
+// MARK: – Durée d'un direct
+/// « 2h 14min » depuis le début du direct, redessinée chaque minute : cartes
+/// et lignes des lives (fb_mvzf7hmv).
+struct LiveUptimeLabel: View {
+    let since: Date
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 60)) { ctx in
+            HStack(spacing: 3) {
+                Image(systemName: "clock")
+                // Horloge de l'appareil en retard sur Twitch : pas de durée négative.
+                Text(formatDuration(max(0, Int(ctx.date.timeIntervalSince(since)))))
+                    .monospacedDigit()
+            }
+        }
+    }
+}
+
 // MARK: – Lives en grille ou en liste
 /// Cartes en grille, ou lignes façon Twitch, selon « Lives en liste » : à
 /// l'accueil, dans une catégorie et dans la recherche (le réglage ne valait
@@ -685,6 +714,7 @@ struct StreamsBlock: View {
     var pinnable = false
     var hideable = false
     var hideCategory = true
+    var showGame = true
     let onPlay: (TwitchStream) -> Void
     @EnvironmentObject private var store: AppStore
 
@@ -694,14 +724,14 @@ struct StreamsBlock: View {
                 LazyVStack(spacing: TSpace.md) {
                     ForEach(streams) { stream in
                         StreamRowView(stream: stream, pinnable: pinnable, hideable: hideable,
-                                      hideCategory: hideCategory) { onPlay(stream) }
+                                      hideCategory: hideCategory, showGame: showGame) { onPlay(stream) }
                     }
                 }
             } else {
                 LazyVGrid(columns: columns, spacing: TSpace.md) {
                     ForEach(streams) { stream in
                         StreamCardView(stream: stream, pinnable: pinnable, hideable: hideable,
-                                       hideCategory: hideCategory) { onPlay(stream) }
+                                       hideCategory: hideCategory, showGame: showGame) { onPlay(stream) }
                     }
                 }
             }
@@ -719,6 +749,7 @@ struct StreamRowView: View {
     /// Liste de découverte : l'appui long propose de masquer (voir StreamCardView).
     var hideable = false
     var hideCategory = true
+    var showGame = true
     let onPress: () -> Void
     @EnvironmentObject private var store: AppStore
 
@@ -775,11 +806,23 @@ struct StreamRowView: View {
                         .foregroundColor(.tMuted)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
-                    if !stream.gameName.isEmpty {
-                        Text(stream.gameName)
-                            .font(.tSystem(size: 12, weight: .semibold))
-                            .foregroundColor(.tPurple)
-                            .lineLimit(1)
+                    // Catégorie (sauf dans la sienne) et durée du direct.
+                    let game = showGame && !stream.gameName.isEmpty
+                    if game || stream.startedAt != nil {
+                        HStack(spacing: 6) {
+                            if game {
+                                Text(stream.gameName)
+                                    .font(.tSystem(size: 12, weight: .semibold))
+                                    .foregroundColor(.tPurple)
+                                    .lineLimit(1)
+                            }
+                            if let start = stream.startedAt {
+                                LiveUptimeLabel(since: start)
+                                    .font(.tSystem(size: 12))
+                                    .foregroundColor(.tMuted)
+                                    .fixedSize()
+                            }
+                        }
                     }
                     if !stream.tags.isEmpty {
                         TagChips(tags: stream.tags).padding(.top, 2)

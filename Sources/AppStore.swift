@@ -965,6 +965,30 @@ final class AppStore: ObservableObject {
         }
     }
 
+    /// Emotes favorites (onglet « Favoris » en tête du sélecteur), par leur
+    /// code exact, 100 au plus, la plus récente à la fin. Même clé que le
+    /// site (« favoriteEmotes »), dans la synchro des réglages et la sauvegarde
+    /// (to-do du 04/11).
+    @Published var favoriteEmotes: [String] = [] {
+        didSet { UserDefaults.standard.set(favoriteEmotes, forKey: "chat_favorite_emotes") }
+    }
+    static let maxFavoriteEmotes = 100
+
+    func isFavoriteEmote(_ code: String) -> Bool { favoriteEmotes.contains(code) }
+
+    /// Ajoute l'emote aux favoris, ou l'en retire. Au-delà de 100, les plus
+    /// anciennes repartent.
+    func toggleFavoriteEmote(_ code: String) {
+        guard let c = Self.emoteCodes([code]).first else { return }
+        if let i = favoriteEmotes.firstIndex(of: c) {
+            favoriteEmotes.remove(at: i)
+            logger.settingChanged("Emote retirée des favoris", value: c)
+        } else {
+            favoriteEmotes = Array((favoriteEmotes + [c]).suffix(Self.maxFavoriteEmotes))
+            logger.settingChanged("Emote ajoutée aux favoris", value: c)
+        }
+    }
+
     /// Codes d'emotes valides (sauvegarde, synchro, site) : sans espace ni
     /// retour à la ligne, 100 caractères au plus, sans doublon, 200 au plus
     /// (les derniers, les plus récents).
@@ -984,6 +1008,7 @@ final class AppStore: ObservableObject {
         // Assignations de l'init : didSet n'y est pas appelé, l'ensemble suit à la main.
         hiddenEmotes       = Self.emoteCodes(ud.stringArray(forKey: "chat_hidden_emotes") ?? [])
         hiddenEmoteSet     = Set(hiddenEmotes)
+        favoriteEmotes     = Array(Self.emoteCodes(ud.stringArray(forKey: "chat_favorite_emotes") ?? []).suffix(Self.maxFavoriteEmotes))
         chatHideBots       = ud.bool(forKey: "chat_hide_bots")
         chatHideCommands   = ud.bool(forKey: "chat_hide_commands")
         chatMutedWords     = ud.stringArray(forKey: "chat_muted_words") ?? []

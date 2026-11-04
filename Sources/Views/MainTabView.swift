@@ -1736,7 +1736,7 @@ struct MainTabView: View {
         case .vod(let id, let title, let thumb, let streamer)?:
             return VodDownloadContext(vodId: id, title: title ?? statusTitle, streamer: streamer ?? "",
                                       thumbnail: thumb ?? "", links: links, position: vodPlaybackTime,
-                                      variants: qualityVariants)
+                                      variants: qualityVariants, chapters: vodChapters)
         case .recovered(let rec)? where !rec.streamID.hasPrefix("offline-"):
             // VOD supprimée retrouvée : la garder avant qu'elle ne quitte le CDN.
             return VodDownloadContext(vodId: "r\(rec.streamID)", title: rec.title.isEmpty ? statusTitle : rec.title,

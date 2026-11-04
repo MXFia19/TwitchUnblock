@@ -1683,7 +1683,8 @@ private func streamFromDict(_ d: [String: Any]) -> TwitchStream {
         viewerCount: d["viewer_count"] as? Int ?? 0,
         thumbnailURL: d["thumbnail_url"] as? String ?? "",
         tags: d["tags"] as? [String] ?? [],
-        gameId: d["game_id"] as? String ?? ""
+        gameId: d["game_id"] as? String ?? "",
+        startedAt: parseTwitchDate(d["started_at"] as? String)
     )
 }
 
@@ -2195,7 +2196,8 @@ private func streamFromGQL(user u: [String: Any], stream s: [String: Any]) -> Tw
         viewerCount: s["viewersCount"] as? Int ?? 0,
         thumbnailURL: s["previewImageURL"] as? String ?? "",
         tags: (s["freeformTags"] as? [[String: Any]] ?? []).compactMap { $0["name"] as? String },
-        gameId: (s["game"] as? [String: Any])?["id"] as? String ?? "")
+        gameId: (s["game"] as? [String: Any])?["id"] as? String ?? "",
+        startedAt: parseTwitchDate(s["createdAt"] as? String))
 }
 
 /// Lesquelles de ces chaînes sont en live (suivis sans compte). 100 max par requête.
@@ -2208,7 +2210,7 @@ func getLiveStreamsGQL(logins: [String]) async -> [TwitchStream]? {
     guard !logins.isEmpty else { return [] }
     let q = """
     query($l: [String!]) { users(logins: $l) { id login displayName
-      stream { title viewersCount previewImageURL(width: 440, height: 248) game { id displayName } freeformTags { name } } } }
+      stream { title viewersCount createdAt previewImageURL(width: 440, height: 248) game { id displayName } freeformTags { name } } } }
     """
     var out: [TwitchStream] = []
     for start in stride(from: 0, to: logins.count, by: 100) {
@@ -2242,7 +2244,7 @@ func getChannelsGQL(logins: [String]) async -> [ChannelBrief]? {
     query($l: [String!]) { users(logins: $l) { id login displayName profileImageURL(width: 70)
       lastBroadcast { startedAt }
       videos(first: 1, type: ARCHIVE, sort: TIME) { edges { node { publishedAt lengthSeconds } } }
-      stream { title viewersCount previewImageURL(width: 440, height: 248) game { displayName } freeformTags { name } } } }
+      stream { title viewersCount createdAt previewImageURL(width: 440, height: 248) game { displayName } freeformTags { name } } } }
     """
     var out: [ChannelBrief] = []
     for start in stride(from: 0, to: logins.count, by: 100) {
@@ -2394,7 +2396,7 @@ func searchCategoriesGQL(query: String) async -> [TwitchCategory]? {
 func searchStreamsGQL(query: String) async -> [TwitchStream]? {
     let q = """
     query($q: String!) { searchStreams(userQuery: $q, first: 30) {
-      edges { node { title viewersCount previewImageURL(width: 440, height: 248) game { id displayName } freeformTags { name }
+      edges { node { title viewersCount createdAt previewImageURL(width: 440, height: 248) game { id displayName } freeformTags { name }
         broadcaster { id login displayName } } }
     } }
     """
@@ -2452,7 +2454,7 @@ func getStreamsByCategoryPageGQL(gameId: String, lang: String?,
     query($id: ID!, $langs: [Language!], $after: Cursor) { game(id: $id) {
       streams(first: 100, after: $after, options: { broadcasterLanguages: $langs }) {
         edges { cursor node {
-          title viewersCount previewImageURL(width: 440, height: 248) game { id displayName } freeformTags { name }
+          title viewersCount createdAt previewImageURL(width: 440, height: 248) game { id displayName } freeformTags { name }
           broadcaster { id login displayName } } }
         pageInfo { hasNextPage }
     } } }
@@ -2478,7 +2480,7 @@ func getTopStreamsPageGQL(lang: String?,
                           after: String?) async -> (streams: [TwitchStream], next: String?, refused: Bool)? {
     let q = """
     query($langs: [Language!], $after: Cursor) { streams(first: 30, after: $after, options: { broadcasterLanguages: $langs }) {
-      edges { cursor node { title viewersCount previewImageURL(width: 440, height: 248) game { id displayName } freeformTags { name }
+      edges { cursor node { title viewersCount createdAt previewImageURL(width: 440, height: 248) game { id displayName } freeformTags { name }
         broadcaster { id login displayName } } }
       pageInfo { hasNextPage }
     } }

@@ -33,6 +33,9 @@ struct VodDownloadSheet: View {
     @State private var end: Double = 0
     @State private var restore = true
     @State private var withChat = true
+    /// Passage tel que l'ont laissé les chapitres ; un curseur ou un
+    /// raccourci l'a changé depuis : le prochain chapitre touché repart seul.
+    @State private var chapterRange: [Double]? = nil
     /// Espace libre sur l'appareil (nil : inconnu), relu à chaque qualité.
     @State private var freeBytes: Int64? = nil
     /// En données mobiles (NetworkStatus), suivi tant que la feuille est ouverte.
@@ -98,6 +101,7 @@ struct VodDownloadSheet: View {
                     } else if failed {
                         Text(store.t("dl_error")).font(.tMeta).foregroundColor(.tLive)
                     } else if vodDuration >= 20 {
+                        chapterControls
                         rangeControls
                         summary
                         Toggle(isOn: $restore) {
@@ -187,6 +191,80 @@ struct VodDownloadSheet: View {
                 .replacingOccurrences(of: "{f}", with: dlBytes(free))
         }
         return nil
+    }
+
+    // MARK: Chapitres
+    /// Passage de chaque chapitre (changement de jeu) : jusqu'au suivant, le
+    /// dernier jusqu'à la fin.
+    private var chapterSpans: [(title: String, start: Double, end: Double)] {
+        let list = context.chapters.filter { $0.start < vodDuration - 10 }
+        return list.indices.map { i in
+            (list[i].title, list[i].start.rounded(.down),
+             i + 1 < list.count ? list[i + 1].start.rounded(.down) : vodDuration)
+        }
+    }
+
+    private func inside(_ c: (title: String, start: Double, end: Double)) -> Bool {
+        c.start >= start - 1 && c.end <= end + 1
+    }
+
+    /// Chapitres de la VOD (fb_mvzd7r2q), cochés quand le passage les couvre.
+    @ViewBuilder private var chapterControls: some View {
+        let spans = chapterSpans
+        if spans.count > 1 {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(store.t("chapters")).font(.tMeta).foregroundColor(.tMuted)
+                ForEach(spans.indices, id: \.self) { i in
+                    let on = inside(spans[i])
+                    Button { pickChapter(i) } label: {
+                        HStack(spacing: TSpace.sm) {
+                            Text(dlClock(spans[i].start))
+                                .font(.tMeta.monospacedDigit())
+                                .foregroundColor(on ? .tPurple : .tMuted)
+                                .frame(minWidth: 56, alignment: .leading)
+                            Text(spans[i].title)
+                                .font(.tCardTitle).foregroundColor(.tText)
+                                .lineLimit(1)
+                            Spacer(minLength: 0)
+                            Image(systemName: on ? "checkmark.circle.fill" : "circle")
+                                .foregroundColor(on ? .tPrimary : .tMuted)
+                        }
+                        .padding(.horizontal, TSpace.md).padding(.vertical, 8)
+                        .background(on ? Color.tPrimary.opacity(0.14) : Color.tCard)
+                        .cornerRadius(TRadius.control)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(on ? .isSelected : [])
+                }
+                Text(store.t("dl_chapters_sub"))
+                    .font(.tMeta).foregroundColor(.tMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    /// Un chapitre touché : seul gardé au premier choix (le passage venait
+    /// des curseurs ou des raccourcis) ; ensuite, ajouté avec ceux d'entre
+    /// les deux, retiré s'il est au bord du passage, seul gardé s'il est au
+    /// milieu. Le passage reste d'un seul tenant, comme sur le site.
+    private func pickChapter(_ i: Int) {
+        let spans = chapterSpans
+        guard spans.indices.contains(i), vodDuration > 0 else { return }
+        let c = spans[i]
+        let on = spans.map { inside($0) }
+        let first = on.firstIndex(of: true), last = on.lastIndex(of: true)
+        var s = start, e = end
+        if chapterRange != [start, end] || first == nil { s = c.start; e = c.end }
+        else if !on[i] { s = min(s, c.start); e = max(e, c.end) }
+        else if first == last { return }
+        else if i == first { s = spans[i + 1].start }
+        else if i == last { e = spans[i - 1].end }
+        else { s = c.start; e = c.end }
+        if e - s < 10 { e = min(vodDuration, s + 10) }
+        start = s
+        end = e
+        chapterRange = [s, e]
     }
 
     // MARK: Passage

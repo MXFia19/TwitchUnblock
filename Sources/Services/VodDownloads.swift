@@ -91,6 +91,9 @@ struct VodDownloadContext {
     let position: Double
     /// Hauteur et cadence de chaque qualité (qualité proposée d'abord).
     var variants: [String: VariantInfo] = [:]
+    /// Chapitres de la VOD (changements de jeu) : de quoi n'en garder que
+    /// certains (fb_mvzd7r2q).
+    var chapters: [VodChapter] = []
 }
 
 // MARK: – Plan : les segments d'un passage

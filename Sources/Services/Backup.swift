@@ -138,6 +138,7 @@ enum Backup {
             "blockedUsers": store.chatBlockedUsers,
             "highlightWords": store.chatHighlightWords,
             "hiddenEmotes": store.hiddenEmotes,
+            "favoriteEmotes": store.favoriteEmotes,
             "shareUsage": store.shareUsage,
             "vodSpeed": store.vodSpeed,
             "qualityPref": store.preferredQuality,
@@ -414,6 +415,11 @@ enum Backup {
         if let v = s["hiddenEmotes"] as? [String] {
             store.hiddenEmotes = AppStore.emoteCodes(v)
             ok("hiddenEmotes")
+        }
+        // Emotes favorites (nom du site) : codes exacts aussi.
+        if let v = s["favoriteEmotes"] as? [String] {
+            store.favoriteEmotes = Array(AppStore.emoteCodes(v).suffix(AppStore.maxFavoriteEmotes))
+            ok("favoriteEmotes")
         }
         bool("shareUsage") { store.shareUsage = $0 }
         num("vodSpeed", 0.25...2) { store.vodSpeed = VodSpeed.nearest($0) }

@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.7.11",
+          "buildVersion": "389",
+          "date": "2026-11-04",
+          "localizedDescription": "- Every category shows its viewer count again (Top, search and followed), not only the ones followed on your Twitch account",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-389/TwitchUnblock.ipa",
+          "size": 4568792,
+          "commit": "90d837c32313ef1a42f2714b243f0196c6aea08a"
+        },
+        {
           "version": "1.7.10",
           "buildVersion": "388",
           "date": "2026-11-04",
@@ -280,25 +289,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-359/TwitchUnblock.ipa",
           "size": 4414284,
           "commit": "cabf32289ccd8e02941be57f9f004aa310cff314"
-        },
-        {
-          "version": "1.6.37",
-          "buildVersion": "358",
-          "date": "2026-10-25",
-          "localizedDescription": "- Improvements and fixes",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-358/TwitchUnblock.ipa",
-          "size": 4376996,
-          "commit": "6adef16519a0a35822b42ed98fb5bbc39469ec9d"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.7.10",
+      "version": "1.7.11",
       "versionDate": "2026-11-04",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-388/TwitchUnblock.ipa",
-      "size": 4568890
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-389/TwitchUnblock.ipa",
+      "size": 4568792
     }
   ],
   "news": []

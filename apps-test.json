@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.7.12",
+          "buildVersion": "390",
+          "date": "2026-11-05",
+          "localizedDescription": "- The player's seek bar no longer stays on screen after minimizing the player (iOS 16)",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-390/TwitchUnblock.ipa",
+          "size": 4569268,
+          "commit": "eea4414913442e5bbf00c2426e5024149d3baf9e"
+        },
+        {
           "version": "1.7.11",
           "buildVersion": "389",
           "date": "2026-11-04",
@@ -280,25 +289,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-360/TwitchUnblock.ipa",
           "size": 4415376,
           "commit": "312947eee28e7e9fa636fb479318a134d30d4d23"
-        },
-        {
-          "version": "1.6.41",
-          "buildVersion": "359",
-          "date": "2026-10-25",
-          "localizedDescription": "- Wide windows (iPhone Duo's inner display in landscape, iPad): the tab bar becomes a column of tabs on the left, leaving the whole height to the content; it follows your tab order and hidden tabs.\n- Emote picker: a new \"Mine\" tab, first, lists every Twitch emote your account can use in any chat — your subscriptions' emotes, Prime/Turbo and Twitch's global emotes — grouped by channel, and search covers it.\n- Large screens: grids of lives, VODs, clips and categories show more, smaller tiles (3 columns in portrait and 4 in landscape on the iPhone Duo's inner display, up to 5 on iPad) instead of two giant ones.\n- iPhone Duo: the header, grids, tab bar and tour bubbles no longer slide under iOS's status column on the outer display and on the inner display in landscape.",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-359/TwitchUnblock.ipa",
-          "size": 4414284,
-          "commit": "cabf32289ccd8e02941be57f9f004aa310cff314"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.7.11",
-      "versionDate": "2026-11-04",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-389/TwitchUnblock.ipa",
-      "size": 4568792
+      "version": "1.7.12",
+      "versionDate": "2026-11-05",
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-390/TwitchUnblock.ipa",
+      "size": 4569268
     }
   ],
   "news": []

@@ -1386,7 +1386,9 @@ struct MainTabView: View {
                 onAdBreak: { adBreakChanged($0) },
                 onFailed: { hqStreamFailed() },
                 onPiPStart: { pipStarted() },
-                onPiPRestore: { pipRestore() }
+                onPiPRestore: { pipRestore() },
+                // Réduit en mini-barre : le lecteur retire ses commandes.
+                isPresented: playerVisible
             )
         } else {
             VideoPlayerView(

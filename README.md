@@ -943,6 +943,8 @@ What you get on the web:
 * Ad-free lives from the source you pick (settings, or the player's ⚙ menu),
   a few seconds behind live
 * Live and VOD player with quality picker, speed, ±10 s, picture in picture, mini player
+  (minimizing removes the player's controls at once: on iOS 16 its seek bar
+  could stay on screen over the app)
 * Native chat: Twitch, BTTV, FFZ and 7TV emotes, badges, chat history, pinned message, replies
 * VOD chat replayed in sync with the video
 * Stream tags, clips, categories, Twitch-style links (`/xqc`, `/videos/…`)

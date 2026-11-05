@@ -1530,6 +1530,9 @@ struct ImmersivePlayer: View {
     /// source (qualités supérieures sans abonnement, MainTabView).
     var onAdBreak:  (Int?) -> Void = { _ in }
     var onFailed:   () -> Void = {}
+    /// Faux une fois le lecteur réduit en mini-barre : il reste en place,
+    /// seulement rendu transparent (MainTabView), et retire ses commandes.
+    var isPresented: Bool = true
 
     @EnvironmentObject private var store: AppStore
     @StateObject private var model: ImmersivePlayerModel
@@ -1651,7 +1654,8 @@ struct ImmersivePlayer: View {
          onAdBreak: @escaping (Int?) -> Void = { _ in },
          onFailed: @escaping () -> Void = {},
          onPiPStart: @escaping () -> Void = {},
-         onPiPRestore: @escaping () -> Void = {}) {
+         onPiPRestore: @escaping () -> Void = {},
+         isPresented: Bool = true) {
         self.url = url; self.isLive = isLive; self.dvrEnabled = dvrEnabled
         self.savedTime = savedTime; self.contentID = contentID
         self.info = info; self.onChannel = onChannel
@@ -1679,6 +1683,7 @@ struct ImmersivePlayer: View {
         self.multiLiveFull = multiLiveFull; self.onRewind = onRewind
         self.onVertical = onVertical; self.verticalOn = verticalOn
         self.onAdBreak = onAdBreak; self.onFailed = onFailed
+        self.isPresented = isPresented
         // PiP : démarré, le parent réduit le lecteur ; agrandi depuis la
         // fenêtre, il le rend en grand. Rappels du modèle (délégué d'AVKit).
         _model = StateObject(wrappedValue: ImmersivePlayerModel(
@@ -1886,6 +1891,18 @@ struct ImmersivePlayer: View {
         }
         // La boîte change du tout au tout : on repart de l'image entière.
         .onChange(of: isLandscape) { _ in resetZoom() }
+        // Réduit en mini-barre : les commandes partent sur-le-champ, sans
+        // fondu, et rien ne les masquera plus tard dans le lecteur invisible.
+        // Sous iOS 16, la barre de progression (un UISlider) retirée en fondu
+        // dans le lecteur devenu transparent restait dessinée par-dessus
+        // l'app (photo du retour fb_mw3h29pt).
+        .onChange(of: isPresented) { shown in
+            guard !shown else { return }
+            hideTask?.cancel()
+            var instant = Transaction()
+            instant.disablesAnimations = true
+            withTransaction(instant) { showControls = false }
+        }
         .onAppear {
             shownContent = contentID
             // Sans condition : le modèle sait s'il lit un direct (la tenue du

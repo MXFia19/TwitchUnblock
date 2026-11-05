@@ -194,6 +194,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.7.12",
+          "buildVersion": "390",
+          "date": "2026-11-05",
+          "localizedDescription": "- The player's seek bar no longer stays on screen after minimizing the player (iOS 16)",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-390/TwitchUnblock.ipa",
+          "size": 4569268,
+          "commit": "eea4414913442e5bbf00c2426e5024149d3baf9e"
+        },
+        {
           "version": "1.7.11",
           "buildVersion": "389",
           "date": "2026-11-04",
@@ -273,25 +282,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-381/TwitchUnblock.ipa",
           "size": 4501988,
           "commit": "d0cd32c23dbf37b1f4f5e3f215d94410938a2c79"
-        },
-        {
-          "version": "1.7.2",
-          "buildVersion": "380",
-          "date": "2026-10-31",
-          "localizedDescription": "- New \"No Twitch account\" option at the top of Settings → General → Customize the app: hides everything that needs an account or asks you to log in (Account, Drops and Channel points pages, sign-in cards, log-in reminders, clip creation); it never hides anything while you're logged in",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-380/TwitchUnblock.ipa",
-          "size": 4496188,
-          "commit": "a39e589722092595d3eedf63b30d42c662198127"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.7.11",
-      "versionDate": "2026-11-04",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-389/TwitchUnblock.ipa",
-      "size": 4568792
+      "version": "1.7.12",
+      "versionDate": "2026-11-05",
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-390/TwitchUnblock.ipa",
+      "size": 4569268
     }
   ],
   "news": []

@@ -98,6 +98,7 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   lock screen activity.
   Starting it shrinks the player into the mini player, so you can browse the app right away (no more black full-size player to close).
   The PiP window's expand button brings the player back full size on the same video, without reloading (with the app's player, tapping the mini player does too).
+  On iOS 16, the app's player removes its controls a moment before it shrinks into the mini player: its seek bar used to stay drawn over the app.
   A followed raid or the next VOD of **Play all** keeps playing in the same window: the player only changes what it plays (the window used to close while the sound went on).
 * 🌙 **Background playback** — Settings → Player: when the screen locks or you
   switch to another app without Picture-in-Picture, the video keeps playing
@@ -299,7 +300,9 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   right in the player. It stops multi-live too. The screen only stays awake
   while a video plays on screen: paused, minimized or in audio only, it
   sleeps as usual (the sound goes on).
-* 📡 **AirPlay** — send the stream to an Apple TV or a compatible TV.
+* 📡 **AirPlay** — send the stream to an Apple TV or a compatible TV. Low
+  latency stops jumping to the live edge while AirPlay is on: the TV reloaded
+  the stream at each jump and the picture kept freezing.
 * 🎧 **Spatial audio (AirPods)** — turn it off in the app, head tracking
   included (Settings → Player). iOS doesn't let apps pick "Fixed" or "Head
   Tracked": that choice stays in Control Center.
@@ -474,6 +477,9 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
 * 🤖 **Bot commands** — a channel's Nightbot, StreamElements, Fossabot and
   Moobot commands without typing `!commands`: from the chat's ⋯ menu, or from
   the channel page, live or offline (tap one to copy it).
+* 💬 **Chat of an offline channel** — an offline channel's page has a Chat
+  button: Twitch keeps its chat open between streams, so you read and write
+  there as during a live (no points without a live).
 * 🔥 **Watch streak** and a **follow / unfollow** button. Unfollowing, from the
   player or a channel page, asks for confirmation first; from the player, the
   same dialog can hide the button (Settings → Chat → Customization → Follow
@@ -943,8 +949,6 @@ What you get on the web:
 * Ad-free lives from the source you pick (settings, or the player's ⚙ menu),
   a few seconds behind live
 * Live and VOD player with quality picker, speed, ±10 s, picture in picture, mini player
-  (minimizing removes the player's controls at once: on iOS 16 its seek bar
-  could stay on screen over the app)
 * Native chat: Twitch, BTTV, FFZ and 7TV emotes, badges, chat history, pinned message, replies
 * VOD chat replayed in sync with the video
 * Stream tags, clips, categories, Twitch-style links (`/xqc`, `/videos/…`)

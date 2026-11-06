@@ -1530,8 +1530,9 @@ struct ImmersivePlayer: View {
     /// source (qualités supérieures sans abonnement, MainTabView).
     var onAdBreak:  (Int?) -> Void = { _ in }
     var onFailed:   () -> Void = {}
-    /// Faux une fois le lecteur réduit en mini-barre : il reste en place,
-    /// seulement rendu transparent (MainTabView), et retire ses commandes.
+    /// Faux juste avant la réduction en mini-barre, sous iOS 16 seulement
+    /// (MainTabView.hidePlayer) : le lecteur retire ses commandes pendant
+    /// qu'il est encore visible et immobile.
     var isPresented: Bool = true
 
     @EnvironmentObject private var store: AppStore
@@ -1891,11 +1892,12 @@ struct ImmersivePlayer: View {
         }
         // La boîte change du tout au tout : on repart de l'image entière.
         .onChange(of: isLandscape) { _ in resetZoom() }
-        // Réduit en mini-barre : les commandes partent sur-le-champ, sans
-        // fondu, et rien ne les masquera plus tard dans le lecteur invisible.
-        // Sous iOS 16, la barre de progression (un UISlider) retirée en fondu
-        // dans le lecteur devenu transparent restait dessinée par-dessus
-        // l'app (photo du retour fb_mw3h29pt).
+        // Réduction sous iOS 16 : les commandes partent sur-le-champ, sans
+        // fondu, lecteur encore visible, et rien ne les masquera plus tard
+        // dans le lecteur réduit. La barre de progression (un UISlider)
+        // présente pendant la réduction restait dessinée par-dessus l'app
+        // (photo du retour fb_mw3h29pt) ; retirée en même temps, l'app ne
+        // répondait plus aux touchers.
         .onChange(of: isPresented) { shown in
             guard !shown else { return }
             hideTask?.cancel()

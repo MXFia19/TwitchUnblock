@@ -1106,6 +1106,7 @@ let kTraditionalChineseStrings: [String: String] = [
     "emotes_fav": "我的最愛",
     "emote_fav_add": "加入我的最愛",
     "emote_fav_remove": "從我的最愛移除",
+    "chat_offline_open": "頻道目前離線：聊天室仍然開放。",
     "emote_unhide": "重新顯示這個表情符號",
     "emote_hidden_note": "已隱藏：聊天室會顯示為輸入的文字。",
     "hidden_emotes": "已隱藏的表情符號",

@@ -24,6 +24,9 @@ struct MainTabView: View {
     /// pour la qualité préférée ; vide quand la source ne les donne pas.
     @State private var qualityVariants: [String: VariantInfo] = [:]
     @State private var playerVisible = false
+    /// iOS 16 : commandes du lecteur retirées juste avant sa réduction
+    /// (hidePlayer) ; remis à faux quand il revient en grand.
+    @State private var playerControlsAway = false
     @State private var loading = false
     @State private var errorMsg: String? = nil
     /// Relance prévue au retour du réseau, lecteur resté sur son erreur.
@@ -659,7 +662,7 @@ struct MainTabView: View {
         // Visite relancée pendant une lecture : le lecteur se réduit, sinon
         // il cacherait les boutons montrés.
         .onChange(of: onboardingDone) { done in
-            if !done { withAnimation(.easeInOut(duration: 0.2)) { playerVisible = false } }
+            if !done, playerVisible { hidePlayer(.easeInOut(duration: 0.2)) { playerVisible = false } }
         }
         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: updater.showAlert)
         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: showDiscordPrompt)
@@ -677,7 +680,7 @@ struct MainTabView: View {
             if channelSheet == nil {
                 channelReturnsToPlayer = playerMode != nil && playerVisible && !closingPlayer
             }
-            withAnimation(.easeInOut(duration: 0.2)) { playerVisible = false }
+            if playerVisible { hidePlayer(.easeInOut(duration: 0.2)) { playerVisible = false } }
             channelSheet = ChannelSheetItem(login: login)
         }
         // Une vidéo lancée depuis la page s'ouvre elle-même en grand : pas
@@ -816,7 +819,11 @@ struct MainTabView: View {
         // Rouvert en grand (mini-barre, notification…) pendant un PiP :
         // l'image revient dans le lecteur, qui restait noir sinon.
         .onChange(of: playerVisible) { visible in
-            guard !visible else { PlayerPiP.shared.playerShown(); return }
+            guard !visible else {
+                playerControlsAway = false
+                PlayerPiP.shared.playerShown()
+                return
+            }
             PlayerOrientation.restorePortraitIfForced()
             UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder),
                                             to: nil, from: nil, for: nil)
@@ -1387,8 +1394,9 @@ struct MainTabView: View {
                 onFailed: { hqStreamFailed() },
                 onPiPStart: { pipStarted() },
                 onPiPRestore: { pipRestore() },
-                // Réduit en mini-barre : le lecteur retire ses commandes.
-                isPresented: playerVisible
+                // Réduction sous iOS 16 : le lecteur retire d'abord ses
+                // commandes (hidePlayer).
+                isPresented: !playerControlsAway
             )
         } else {
             VideoPlayerView(
@@ -1631,19 +1639,43 @@ struct MainTabView: View {
     /// « Réduire les animations », un simple fondu.
     private func reducePlayer() {
         guard playerVisible, !closingPlayer else { return }
+        let lead: Double
         if reduceMotion {
-            withAnimation(.easeOut(duration: 0.15)) { playerVisible = false }
+            lead = hidePlayer(.easeOut(duration: 0.15)) { playerVisible = false }
         } else {
-            withAnimation(.spring(response: 0.35, dampingFraction: 1)) {
+            lead = hidePlayer(.spring(response: 0.35, dampingFraction: 1)) {
                 pull.y = pull.height
                 playerVisible = false
             }
         }
         // Le décalage retombe une fois le lecteur masqué, pour qu'il revienne
         // à sa place à la prochaine ouverture.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5 + lead) {
             if !playerVisible { pull.y = 0 }
         }
+    }
+
+    /// Réduit le lecteur (mini-barre, page d'une chaîne, visite guidée).
+    /// Sous iOS 16, ses commandes partent d'abord, lecteur encore visible et
+    /// immobile, et il ne file qu'un instant après (fb_mw3h29pt). Présente
+    /// pendant qu'il filait en s'effaçant, la barre de progression (un
+    /// UISlider) restait dessinée par-dessus l'app ; retirée au même moment
+    /// que la réduction (TU Test 1.7.12), l'app ne répondait plus aux
+    /// touchers. Rien ne change dès iOS 17. Rend le délai avant la réduction.
+    @discardableResult
+    private func hidePlayer(_ animation: Animation, _ change: @escaping () -> Void) -> Double {
+        if #available(iOS 17, *) {
+            withAnimation(animation) { change() }
+            return 0
+        }
+        playerControlsAway = true
+        let lead = 0.08
+        DispatchQueue.main.asyncAfter(deadline: .now() + lead) {
+            // Fermé entre-temps (✕, autre lecture) : plus rien à réduire.
+            guard playerVisible, !closingPlayer else { return }
+            withAnimation(animation) { change() }
+        }
+        return lead
     }
 
     /// Doigt levé : assez loin (seuil selon la hauteur), ou lancé

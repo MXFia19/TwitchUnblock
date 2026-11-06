@@ -133,7 +133,11 @@ struct LiveLatencyController {
     /// À appeler une ou deux fois par seconde.
     mutating func adjust(player: AVPlayer, item: AVPlayerItem, behind: Double, total: Double? = nil,
                          enabled: Bool, settled: Bool = true) {
-        guard enabled, player.timeControlStatus == .playing, behind.isFinite else {
+        // AirPlay : la TV lit elle-même le flux, et chaque saut le lui fait
+        // recharger ; l'image s'y figeait sans cesse (fb_mw3j4a81). Rien
+        // n'est tenu tant que la lecture passe par AirPlay.
+        guard enabled, !player.isExternalPlaybackActive, player.timeControlStatus == .playing,
+              behind.isFinite else {
             driftSince = nil
             return
         }

@@ -369,6 +369,7 @@ let kItalianStrings: [String: String] = [
     "emotes_fav": "Preferite",
     "emote_fav_add": "Aggiungi alle preferite",
     "emote_fav_remove": "Rimuovi dalle preferite",
+    "chat_offline_open": "Il canale è offline: la sua chat resta aperta.",
     "emote_unhide": "Mostra di nuovo questa emote",
     "emote_hidden_note": "Nascosta: la chat la mostra come la parola scritta.",
     "hidden_emotes": "Emote nascoste",

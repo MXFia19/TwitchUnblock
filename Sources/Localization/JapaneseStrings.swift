@@ -370,6 +370,7 @@ let kJapaneseStrings: [String: String] = [
     "emotes_fav": "お気に入り",
     "emote_fav_add": "お気に入りに追加",
     "emote_fav_remove": "お気に入りから削除",
+    "chat_offline_open": "チャンネルはオフラインですが、チャットは開いています。",
     "emote_unhide": "このエモートを再表示",
     "emote_hidden_note": "非表示中: チャットでは入力された文字として表示されます。",
     "hidden_emotes": "非表示のエモート",

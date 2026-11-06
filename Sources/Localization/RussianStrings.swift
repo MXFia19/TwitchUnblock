@@ -328,6 +328,7 @@ let kRussianStrings: [String: String] = [
     "emotes_fav": "Избранное",
     "emote_fav_add": "Добавить в избранное",
     "emote_fav_remove": "Убрать из избранного",
+    "chat_offline_open": "Канал не в сети, но его чат открыт.",
     "emote_unhide": "Снова показывать этот эмоут",
     "emote_hidden_note": "Скрыт: в чате он показывается как набранное слово.",
     "hidden_emotes": "Скрытые эмоуты",

@@ -194,6 +194,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.7.13",
+          "buildVersion": "391",
+          "date": "2026-11-06",
+          "localizedDescription": "- iOS 16: the player's seek bar no longer stays on screen after minimizing the player\n- AirPlay: low latency no longer jumps to the live edge while the stream plays on the TV, which kept freezing the picture\n- An offline channel's page has a Chat button: Twitch keeps its chat open between streams, to read and write there",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-391/TwitchUnblock.ipa",
+          "size": 4582203,
+          "commit": "aceb92805268a7297555d7dd3d1755fa2edc3139"
+        },
+        {
           "version": "1.7.12",
           "buildVersion": "390",
           "date": "2026-11-05",
@@ -273,25 +282,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-382/TwitchUnblock.ipa",
           "size": 4518175,
           "commit": "ba9a6c67c9aac885273a4a5e169b2495d73e6aea"
-        },
-        {
-          "version": "1.7.3",
-          "buildVersion": "381",
-          "date": "2026-11-01",
-          "localizedDescription": "- Bug reports and ideas are signed with your Twitch account when you're logged in (a switch, on by default), or with an optional nickname otherwise, so the developer knows it's you from one report to the next",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-381/TwitchUnblock.ipa",
-          "size": 4501988,
-          "commit": "d0cd32c23dbf37b1f4f5e3f215d94410938a2c79"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.7.12",
-      "versionDate": "2026-11-05",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-390/TwitchUnblock.ipa",
-      "size": 4569268
+      "version": "1.7.13",
+      "versionDate": "2026-11-06",
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-391/TwitchUnblock.ipa",
+      "size": 4582203
     }
   ],
   "news": []

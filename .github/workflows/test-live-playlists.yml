@@ -3,14 +3,20 @@ name: Live playlist regression tests
 on:
   pull_request:
     paths:
-      - 'Sources/Services/**'
-      - 'Tests/**'
+      - 'Sources/Services/TwitchAdPlaylist.swift'
+      - 'Sources/Services/LivePlaylistLoader.swift'
+      - 'Sources/Services/AdBreakMonitor.swift'
+      - 'Tests/LivePlaylistTests.swift'
+      - 'Tests/LivePlaylistAppleSupport.swift'
       - 'tools/test-live-playlists.sh'
       - '.github/workflows/test-live-playlists.yml'
   push:
     paths:
-      - 'Sources/Services/**'
-      - 'Tests/**'
+      - 'Sources/Services/TwitchAdPlaylist.swift'
+      - 'Sources/Services/LivePlaylistLoader.swift'
+      - 'Sources/Services/AdBreakMonitor.swift'
+      - 'Tests/LivePlaylistTests.swift'
+      - 'Tests/LivePlaylistAppleSupport.swift'
       - 'tools/test-live-playlists.sh'
       - '.github/workflows/test-live-playlists.yml'
   workflow_dispatch:

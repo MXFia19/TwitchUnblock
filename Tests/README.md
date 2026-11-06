@@ -6,6 +6,10 @@ network access. CI additionally typechecks the loader and monitor against real
 AVFoundation and Combine on macOS. The existing iOS/tvOS build workflows remain
 the full app compilation checks.
 
+Automatic CI runs only when the parser, loader, monitor, their test sources,
+the test script, or the playlist workflow changes. The longer native macOS and
+iOS simulator playback workflows are manual-only (`workflow_dispatch`).
+
 The ad markers follow [Streamlink's Twitch plugin](https://github.com/streamlink/streamlink/blob/master/src/streamlink/plugins/twitch.py):
 `twitch-stitched-ad` classes, `stitched-ad-` IDs, and `Amazon` EXTINF titles.
 The Swift implementation uses HLS `EXT-X-GAP` instead of Streamlink's progressive

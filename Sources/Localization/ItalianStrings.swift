@@ -760,7 +760,7 @@ let kItalianStrings: [String: String] = [
     "sub_adfree_sub": "Se sei abbonato al canale (o hai Turbo), la diretta passa dal tuo account Twitch: nessuna pausa pubblicitaria, come su Twitch. Twitch vede quindi che il tuo account sta guardando. Richiede la sessione web.",
     "sub_adfree_connect": "Connetti la sessione web",
     "ad_break_title": "Pausa pubblicitaria del canale",
-    "ad_break_sub": "Durante la pausa Twitch mostra questa schermata al posto della diretta. Riprende tra {n}s.",
+    "ad_break_sub": "Pausa pubblicitaria di Twitch. La diretta dovrebbe riprendere tra {n}s.",
     "ad_break_login_hint": "Sei abbonato a questo canale? Connetti la sessione web (Impostazioni → Account Twitch) per guardare senza pubblicità.",
     "ad_break_short": "Pausa pubblicitaria · {n}s",
     "spatial_audio": "Audio spaziale (AirPods)",

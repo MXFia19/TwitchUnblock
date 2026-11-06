@@ -759,7 +759,7 @@ let kJapaneseStrings: [String: String] = [
     "sub_adfree_sub": "チャンネルをサブスクライブしている場合 (または Turbo を利用している場合) は、配信を Twitch アカウント経由で視聴します。Twitch で見るのと同じく広告枠はありません。ただし Twitch からは、あなたのアカウントが視聴していると認識されます。Web セッションが必要です。",
     "sub_adfree_connect": "Web セッションを接続",
     "ad_break_title": "チャンネルの広告枠",
-    "ad_break_sub": "広告枠の間、Twitch は配信の代わりにこの画面を表示します。{n} 秒後に再開します。",
+    "ad_break_sub": "Twitch の広告休憩中です。配信は約 {n} 秒後に再開する予定です。",
     "ad_break_login_hint": "このチャンネルをサブスクライブしていますか？ 広告なしで視聴するには、Web セッションを接続してください (設定 → Twitch アカウント)。",
     "ad_break_short": "広告 · {n} 秒",
     "spatial_audio": "空間オーディオ (AirPods)",

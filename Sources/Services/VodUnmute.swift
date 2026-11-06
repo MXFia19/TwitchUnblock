@@ -113,7 +113,7 @@ final class VodUnmuteLoader: NSObject, AVAssetResourceLoaderDelegate {
             let asset = AVURLAsset(url: url)
             asset.resourceLoader.setDelegate(shared, queue: shared.queue)
             item = AVPlayerItem(asset: asset)
-        case LivePlaylistLoader.scheme:
+        case LivePlaylistLoader.scheme, LivePlaylistLoader.bufferedScheme:
             let asset = AVURLAsset(url: url)
             asset.resourceLoader.setDelegate(LivePlaylistLoader.shared, queue: LivePlaylistLoader.shared.queue)
             item = AVPlayerItem(asset: asset)
@@ -160,12 +160,15 @@ final class VodUnmuteLoader: NSObject, AVAssetResourceLoaderDelegate {
         let plain: URL?
         switch asset.url.scheme {
         case scheme, mutedScheme:     plain = unwrap(asset.url)
-        case LivePlaylistLoader.scheme: plain = LivePlaylistLoader.unwrap(asset.url)
+        case LivePlaylistLoader.scheme, LivePlaylistLoader.bufferedScheme: plain = LivePlaylistLoader.unwrap(asset.url)
         default:                      plain = nil
         }
         guard let plain else { return nil }
         logger.info("UNMUTE", "AirPlay : retour à la playlist d'origine", nil)
-        let live = asset.url.scheme == LivePlaylistLoader.scheme
+        let live = LivePlaylistRewriter.isWrapped(asset.url)
+        if live {
+            logger.warn("PUB", "AirPlay : filtrage local des pubs indisponible", "playlist originale sur le récepteur")
+        }
         let t = player.currentTime()
         let playing = player.rate != 0
         let item = AVPlayerItem(url: plain)

@@ -290,7 +290,7 @@ final class MultiTileModel: ObservableObject {
             guard let self, !Task.isCancelled else { return }
             if let id = data.userId { self.channelId = id }
             guard let links = data.links, !links.isEmpty,
-                  let url = MultiLive.pick(links, count: count, variants: data.variants) else {
+                  let url = MultiLive.pick(LivePlaylistLoader.wrap(links, lowLatency: false), count: count, variants: data.variants) else {
                 // Hors ligne ou chaîne inexistante ; une panne (réseau,
                 // aucune source) n'est pas « hors ligne ».
                 let gone = data.error == "offline" || data.error == "not_found"
@@ -399,11 +399,17 @@ final class MultiTileModel: ObservableObject {
         // 20 s sans image, la tuile relance, puis propose « Réessayer ».
         loadWatch?.cancel()
         loadWatch = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 20_000_000_000)
-            guard let self, !Task.isCancelled, self.phase == .loading, !self.userPaused,
-                  self.player.currentItem === item else { return }
-            logger.warn("MULTI", "Tuile sans image depuis 20 s : relance", self.login)
-            self.interrupted(item)
+            // Don't restart a known preroll after 20 seconds. Keep the same
+            // session while its ad edge advances, with a bounded grace period.
+            for attempt in 0...10 {
+                try? await Task.sleep(nanoseconds: 20_000_000_000)
+                guard let self, !Task.isCancelled, self.phase == .loading, !self.userPaused,
+                      self.player.currentItem === item else { return }
+                if attempt < 10, AdBreakMonitor.monitor(of: item)?.waitingForAds == true { continue }
+                logger.warn("MULTI", "Tuile sans image : relance après attente", self.login)
+                self.interrupted(item)
+                return
+            }
         }
     }
 

@@ -2768,6 +2768,7 @@ struct Contributor: Identifiable, Sendable {
         Contributor(login: "kinboy56", contributionKey: "credits_contrib_ja"),
         Contributor(login: "trend0522", contributionKey: "credits_contrib_zhHant"),
         Contributor(login: "dwojc6", contributionKey: "credits_contrib_swipe"),
+        Contributor(login: "ihavenoface", contributionKey: "credits_contrib_ads"),
     ]
 }
 

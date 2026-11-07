@@ -295,6 +295,7 @@ let kTraditionalChineseStrings: [String: String] = [
     "credits_contrib_ja": "日文翻譯",
     "credits_contrib_zhHant": "繁體中文翻譯",
     "credits_contrib_swipe": "播放器下滑手勢更靈敏",
+    "credits_contrib_ads": "直播廣告過濾",
     "update_title": "有可用更新",
     "update_msg": "版本 {v} 已推出（你目前是 {c}）。請從 Feather、SideStore 或 AltStore 更新。",
     "update_whats_new": "自你目前的版本以來的更新內容：",

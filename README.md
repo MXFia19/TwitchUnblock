@@ -274,6 +274,11 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   fallback remain in use. Filtering applies with low latency on or off, in the
   app's player, Apple's player, multi-live and on Apple TV. AirPlay receivers
   use the original CDN playlist, so local filtering does not apply there.
+  Ads only reach lives that come straight from Twitch (Twitch source, vertical
+  picture, Higher qualities through your account): the usual mirrors already
+  have none. Waiting through a break is not counted as a stall, so it no
+  longer lowers the quality or pushes the live further from the edge.
+  Contributed by [ihavenoface](https://github.com/ihavenoface) (PR #11).
 * ⏪ **Rewind a live stream (DVR)** — when the channel archives its broadcasts,
   the progress bar covers the *whole* stream, not just the rewindable window.
   Scrub past that window and the recording takes over at that exact moment.
@@ -1014,6 +1019,7 @@ Settings → About):
 * [kinboy56](https://github.com/kinboy56) — Japanese translation
 * [trend0522](https://github.com/trend0522) — Traditional Chinese translation
 * [dwojc6](https://github.com/dwojc6) — more responsive swipe-down on the player
+* [ihavenoface](https://github.com/ihavenoface) — ad filtering on lives
 
 All contributors on GitHub:
 https://github.com/MXFia19/TwitchUnblock/graphs/contributors

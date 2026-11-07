@@ -328,6 +328,9 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
             forName: .AVPlayerItemPlaybackStalled, object: nil, queue: .main
         ) { [weak self] note in
             guard let self, let item = note.object as? AVPlayerItem, item === self.player.currentItem else { return }
+            // Attente d'une pause pub filtrée (trous EXT-X-GAP) : rien à voir
+            // avec le débit, ni avance sur le bord ni qualité baissée.
+            if AdBreakMonitor.monitor(of: item)?.waitingForAds == true { return }
             self.stalled()
         }
         timeObs = player.addPeriodicTimeObserver(

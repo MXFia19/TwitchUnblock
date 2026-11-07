@@ -580,6 +580,8 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
             ) { [weak self] note in
                 guard let self, let item = note.object as? AVPlayerItem,
                       item === self.playerRef?.currentItem else { return }
+                // Attente d'une pause pub filtrée : pas un calage du réseau.
+                if AdBreakMonitor.monitor(of: item)?.waitingForAds == true { return }
                 if self.isLive { self.latency.noteStall() }
                 let now = Date()
                 self.stallTimes = self.stallTimes.filter { now.timeIntervalSince($0) < 60 } + [now]

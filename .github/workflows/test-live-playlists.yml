@@ -1,0 +1,40 @@
+name: Live playlist regression tests
+
+on:
+  pull_request:
+    paths:
+      - 'Sources/Services/TwitchAdPlaylist.swift'
+      - 'Sources/Services/LivePlaylistLoader.swift'
+      - 'Sources/Services/AdBreakMonitor.swift'
+      - 'Tests/LivePlaylistTests.swift'
+      - 'Tests/LivePlaylistAppleSupport.swift'
+      - 'tools/test-live-playlists.sh'
+      - '.github/workflows/test-live-playlists.yml'
+  push:
+    paths:
+      - 'Sources/Services/TwitchAdPlaylist.swift'
+      - 'Sources/Services/LivePlaylistLoader.swift'
+      - 'Sources/Services/AdBreakMonitor.swift'
+      - 'Tests/LivePlaylistTests.swift'
+      - 'Tests/LivePlaylistAppleSupport.swift'
+      - 'tools/test-live-playlists.sh'
+      - '.github/workflows/test-live-playlists.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  playlists:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run playlist fixtures
+        run: sh tools/test-live-playlists.sh
+      - name: Typecheck shared Apple playback services
+        run: >-
+          swiftc -swift-version 5 -typecheck
+          Sources/Services/TwitchAdPlaylist.swift
+          Sources/Services/LivePlaylistLoader.swift
+          Sources/Services/AdBreakMonitor.swift
+          Tests/LivePlaylistAppleSupport.swift

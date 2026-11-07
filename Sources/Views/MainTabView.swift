@@ -2338,10 +2338,9 @@ struct MainTabView: View {
                         errorMsg = store.t(apiErrorKey(err)); loading = false; switchingSource = false
                     }
                 } else if let links = data.links, !links.isEmpty {
-                    // Mode faible latence : playlist réécrite avec la vraie
-                    // durée des segments (LivePlaylistLoader), relue toutes les
-                    // 2 s au lieu de 6 — le lecteur peut tenir près du bord.
-                    let playable = store.lowLatency ? LivePlaylistLoader.wrap(links) : links
+                    // Pubs filtrées dans tous les modes. En faible latence,
+                    // la durée cible est aussi réécrite pour tenir le bord.
+                    let playable = LivePlaylistLoader.wrap(links, lowLatency: store.lowLatency)
                     // Qualités supérieures par le compte d'un non-abonné.
                     let hq = await hqLaunch(data)
                     await MainActor.run {
@@ -2493,7 +2492,7 @@ struct MainTabView: View {
     /// pubs (Twitch officiel). nil : la source habituelle, comme avant.
     private func hqLaunch(_ data: LiveData) async -> (live: HQLive, wait: TimeInterval)? {
         let wrap = { (links: QualityLinks) -> QualityLinks in
-            store.lowLatency ? LivePlaylistLoader.wrap(links) : links
+            LivePlaylistLoader.wrap(links, lowLatency: store.lowLatency)
         }
         // Aucune source habituelle n'a répondu : le compte, sans bascule possible.
         if data.accountAds, let links = data.links {
@@ -2730,7 +2729,7 @@ struct MainTabView: View {
                 logger.warn("PUB", "Source sans pub injoignable", "reste sur le flux du compte")
                 return
             }
-            now.adFree = store.lowLatency ? LivePlaylistLoader.wrap(links) : links
+            now.adFree = LivePlaylistLoader.wrap(links, lowLatency: store.lowLatency)
             now.adFreeVariants = data.variants
             now.adFreeSource = data.source
             now.adFreeAt = Date()
@@ -2846,7 +2845,7 @@ struct MainTabView: View {
                 }
             }
             verticalBackup = backup
-            qualityLinks = store.lowLatency ? LivePlaylistLoader.wrap(portrait.links) : portrait.links
+            qualityLinks = LivePlaylistLoader.wrap(portrait.links, lowLatency: store.lowLatency)
             qualityVariants = portrait.variants
             liveSourceUsed = "twitch"
             verticalOn = true

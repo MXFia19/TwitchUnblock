@@ -45,8 +45,30 @@ struct NowPlayingMeta: Equatable {
 
 // MARK: – Surface vidéo (AVPlayerLayer)
 final class PlayerLayerUIView: UIView {
-    override class var layerClass: AnyClass { AVPlayerLayer.self }
-    var playerLayer: AVPlayerLayer { layer as! AVPlayerLayer }
+    let playerLayer = AVPlayerLayer()
+    private lazy var geometry = PlayerLayerGeometry(layer: playerLayer)
+    private var fill = false
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        layer.addSublayer(playerLayer)
+        clipsToBounds = true
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    func configure(player: AVPlayer, fill: Bool) {
+        self.fill = fill
+        geometry.setPlayer(player)
+        geometry.layout(in: bounds, fill: fill)
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        geometry.layout(in: bounds, fill: fill)
+    }
+
+    func stopObserving() { geometry.stopObserving() }
 }
 
 struct PlayerLayerView: UIViewRepresentable {
@@ -59,19 +81,18 @@ struct PlayerLayerView: UIViewRepresentable {
 
     func makeUIView(context: Context) -> PlayerLayerUIView {
         let v = PlayerLayerUIView()
-        v.playerLayer.player = player
-        v.playerLayer.videoGravity = fill ? .resizeAspectFill : .resizeAspect
+        v.configure(player: player, fill: fill)
         v.backgroundColor = .black
         onLayer?(v.playerLayer)
         return v
     }
 
     func updateUIView(_ uiView: PlayerLayerUIView, context: Context) {
-        if uiView.playerLayer.player !== player { uiView.playerLayer.player = player }
-        let wanted: AVLayerVideoGravity = fill ? .resizeAspectFill : .resizeAspect
-        if uiView.playerLayer.videoGravity != wanted {
-            uiView.playerLayer.videoGravity = wanted
-        }
+        uiView.configure(player: player, fill: fill)
+    }
+
+    static func dismantleUIView(_ uiView: PlayerLayerUIView, coordinator: ()) {
+        uiView.stopObserving()
     }
 }
 
@@ -1796,8 +1817,8 @@ struct ImmersivePlayer: View {
         }
         // La boîte est fixée par le parent (16:9 en portrait, toute la colonne en
         // paysage) : ici on remplit ce qu'on nous donne, sans jamais dériver la
-        // taille des contrôles. AVPlayerLayer étant en `resizeAspect`, l'image
-        // garde ses proportions quelle que soit la boîte.
+        // taille des contrôles. PlayerLayerGeometry garde les proportions de
+        // l'image réellement affichée, y compris pendant un GAP publicitaire.
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.black)
         // Pas de `clipped()` : il rognerait précisément le débordement que

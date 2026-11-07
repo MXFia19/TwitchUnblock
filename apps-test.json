@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.7.17",
+          "buildVersion": "394",
+          "date": "2026-11-07",
+          "localizedDescription": "- Improvements and fixes",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-394/TwitchUnblock.ipa",
+          "size": 4607954,
+          "commit": "f5bddf30560694a8444d75b044dbf3cb9c70fe0c"
+        },
+        {
           "version": "1.7.16",
           "buildVersion": "393",
           "date": "2026-11-07",
@@ -280,25 +289,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-364/TwitchUnblock.ipa",
           "size": 4455995,
           "commit": "e7d15a1fb38530fec3eb88baab2bb9960c0ac4bf"
-        },
-        {
-          "version": "1.6.51",
-          "buildVersion": "363",
-          "date": "2026-10-26",
-          "localizedDescription": "- Other improvements and fixes",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-363/TwitchUnblock.ipa",
-          "size": 4441807,
-          "commit": "621506228d1aa21b10ccf54faed6e66235d42bd5"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.7.16",
+      "version": "1.7.17",
       "versionDate": "2026-11-07",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-393/TwitchUnblock.ipa",
-      "size": 4607985
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-394/TwitchUnblock.ipa",
+      "size": 4607954
     }
   ],
   "news": []

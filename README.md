@@ -298,7 +298,11 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
 * 🖥 **Fill the screen** — crops the video to remove the black bars in
   landscape. Cuts off the top and bottom: 16:9 in a phone screen can't do both.
   Otherwise the picture never goes under the Dynamic Island or the notch in
-  landscape, even when the chat takes a column next to it.
+  landscape, even when the chat takes a column next to it. The side margins
+  it can use without that are part of the picture (the side away from the
+  island, the iPhone Duo's status column): it stays centered on the whole
+  screen and gets as big as it can. On the Duo's outer screen, narrower than
+  16:9, it used to stop at the status column, off-center.
 * 🔍 **Pinch to zoom** — in the app's player, like the Twitch app: the zoom
   (up to 4×) starts right where you pinch, and moving both fingers while
   pinching moves the picture around; once zoomed, one finger is enough to

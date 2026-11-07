@@ -1481,6 +1481,10 @@ struct ImmersivePlayer: View {
     /// Recadrer pour remplir l'écran au lieu de laisser des bandes noires.
     /// Coupe le haut et le bas de l'image : c'est le compromis, d'où le réglage.
     var fillScreen: Bool = false
+    /// Paysage : l'image va aussi sous les marges des côtés, rien ne l'y
+    /// cachant (MainTabView décide : colonne d'état de l'iPhone Duo, marge
+    /// du côté sans île).
+    var sideBleed: Bool = false
     /// On regarde le DVR d'un direct : proposer d'y retourner.
     var canReturnToLive: Bool = false
     var onBackToLive: () -> Void = {}
@@ -1642,6 +1646,7 @@ struct ImmersivePlayer: View {
          verticalLayout: Bool = false,
          controlsBottomInset: CGFloat = 0,
          fillScreen: Bool = false,
+         sideBleed: Bool = false,
          canReturnToLive: Bool = false,
          streamStartedAt: Date? = nil,
          archiveAvailable: Bool = false,
@@ -1692,6 +1697,7 @@ struct ImmersivePlayer: View {
         self.controlsOnLeft = controlsOnLeft; self.controlsHalf = controlsHalf
         self.verticalLayout = verticalLayout; self.controlsBottomInset = controlsBottomInset
         self.fillScreen = fillScreen; self.canReturnToLive = canReturnToLive
+        self.sideBleed = sideBleed
         self.streamStartedAt = streamStartedAt; self.archiveAvailable = archiveAvailable
         self.chapters = chapters; self.nowPlaying = nowPlaying
         self.speed = speed; self.onSpeedChange = onSpeedChange; self.notice = notice
@@ -1796,16 +1802,17 @@ struct ImmersivePlayer: View {
                                })
             // En paysage la surface va jusqu'en haut et en bas de l'écran
             // (indicateur d'accueil compris) : l'image reste centrée sur l'écran
-            // réel. Sur les côtés, elle s'arrête à la zone sûre : jusqu'au bord
-            // physique, une image plus étroite que l'écran (chat en colonne)
-            // passait sous la Dynamic Island ou l'encoche. Centrée en 16:9, elle
-            // n'y va pas (bandes égales sur les côtés, l'île dans l'une). Seul
-            // « Remplir l'écran » va jusqu'aux bords, île comprise.
+            // réel. Sur les côtés, elle s'arrête à la zone sûre quand l'île (ou
+            // l'encoche) tomberait sur elle : une image plus étroite que l'écran
+            // (chat en colonne) passait dessous. Sinon (`sideBleed`) elle va
+            // aussi jusqu'aux bords, centrée sur l'écran entier : colonne d'état
+            // de l'iPhone Duo, marge du côté sans île. « Remplir l'écran » va
+            // toujours jusqu'aux bords, île comprise.
             //
             // En portrait, jamais : la boîte est déjà en 16:9, déborder ne
             // faisait que la rendre plus haute que large et rogner les côtés.
             .ignoresSafeArea(isLandscape ? SafeAreaRegions.all : [],
-                             edges: isLandscape && !croppingFill ? .vertical : .all)
+                             edges: isLandscape && !croppingFill && !sideBleed ? .vertical : .all)
 
             // Double-tap ±10 s, en VOD seulement. En direct, avancer n'a pas
             // de sens (on est au bord, ou presque) : en paysage, le double-tap

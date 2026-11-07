@@ -1119,6 +1119,25 @@ struct MainTabView: View {
             guard split, mode != .column else { return chatWidth }
             return CGFloat(0)
         }()
+        // Paysage : l'image prend aussi les marges des côtés, centrée sur
+        // l'écran entier, tant que l'île (ou l'encoche) ne tombe pas sur elle
+        // (2aac64e). Une marge d'un seul côté, c'est la colonne d'état de
+        // l'iPhone Duo : sur son écran extérieur, moins large que du 16:9,
+        // l'image s'arrêtait à elle, décalée, avec 12 % de noir à côté
+        // (ElLuca). Deux marges : iPhone à île, celle-ci d'un seul côté. Chat
+        // en colonne de son côté, l'image ne la touche pas ; sinon elle ne
+        // prend les marges que si l'île reste dans une bande noire.
+        let videoSideBleed: Bool = {
+            guard split else { return false }
+            guard insets.leading >= 30 && insets.trailing >= 30 else { return true }
+            let column = chatColumn ?? 0
+            let touchesTrailing = column < 1
+            if notchOnTrailing && !touchesTrailing { return true }
+            let width = size.width - column + insets.leading + (touchesTrailing ? insets.trailing : 0)
+            let height = size.height + insets.top + insets.bottom
+            let gap = (width - min(width, height * 16 / 9)) / 2
+            return gap >= (notchOnTrailing ? insets.trailing : insets.leading)
+        }()
         let chatVisible = verticalOverlay ? !verticalChatHidden : (!split || mode != .hidden)
         let overlaying  = (split && mode == .overlay) || verticalOverlay
         // Le décor ne tient que dans le chat plein cadre ; la transparence ne
@@ -1145,7 +1164,8 @@ struct MainTabView: View {
                                  controlsOnLeft: chatOnLeft,
                                  controlsHalf: overlayHalf,
                                  verticalLayout: verticalOverlay,
-                                 controlsBottomInset: controlsBottomInset)
+                                 controlsBottomInset: controlsBottomInset,
+                                 sideBleed: videoSideBleed)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .frame(height: videoHeight)
                 }
@@ -1307,7 +1327,8 @@ struct MainTabView: View {
                               controlsOnLeft: Bool = false,
                               controlsHalf: VerticalEdge? = nil,
                               verticalLayout: Bool = false,
-                              controlsBottomInset: CGFloat = 0) -> some View {
+                              controlsBottomInset: CGFloat = 0,
+                              sideBleed: Bool = false) -> some View {
         if store.immersivePlayer {
             ImmersivePlayer(
                 url: URL(string: links[currentQuality(links)] ?? "") ?? URL(string: "about:blank")!,
@@ -1328,6 +1349,7 @@ struct MainTabView: View {
                 // Image verticale en paysage : jamais recadrée (il n'en
                 // resterait qu'une bande).
                 fillScreen: store.fillScreen && !verticalOn,
+                sideBleed: sideBleed,
                 canReturnToLive: dvrSourceChannel != nil,
                 streamStartedAt: liveStartedAt,
                 archiveAvailable: liveDvrVideoId != nil,

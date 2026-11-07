@@ -1,0 +1,49 @@
+name: Native playback regression tests
+on: workflow_dispatch
+permissions:
+  contents: read
+jobs:
+  playback:
+    runs-on: macos-26-intel
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run playlist fixtures
+        run: sh tools/test-live-playlists.sh
+      - name: Compile playback check
+        run: >-
+          swiftc -swift-version 5
+          Sources/Services/PlayerLayerGeometry.swift
+          Sources/Services/TwitchAdPlaylist.swift
+          Sources/Services/LivePlaylistLoader.swift
+          Sources/Services/AdBreakMonitor.swift
+          Tests/LivePlaylistAppleSupport.swift
+          Tests/NativePlayback/Playback.swift -o /tmp/playback-check
+      - name: Trust local HTTPS fixture on this ephemeral runner
+        run: |
+          openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj /CN=localhost \
+            -addext 'subjectAltName=DNS:localhost,IP:127.0.0.1' \
+            -addext 'extendedKeyUsage=serverAuth' \
+            -keyout /tmp/fixture.key -out /tmp/fixture.crt
+          sudo security add-trusted-cert -d -r trustRoot \
+            -k /Library/Keychains/System.keychain /tmp/fixture.crt
+      - name: Exercise AVPlayer
+        env:
+          FIXTURE_CERT: /tmp/fixture.crt
+          FIXTURE_KEY: /tmp/fixture.key
+        run: |
+          python3 -u Tests/NativePlayback/server.py &
+          server_pid=$!
+          trap 'kill "$server_pid"' EXIT
+          ready=0
+          for attempt in {1..30}; do
+            kill -0 "$server_pid"
+            if curl --silent --show-error --fail --max-time 2 --cacert /tmp/fixture.crt \
+              https://127.0.0.1:8765/health --output /dev/null; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          test "$ready" = 1
+          /tmp/playback-check

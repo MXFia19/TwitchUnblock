@@ -258,7 +258,7 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   landscape. A source that would one day list the vertical variants with the
   usual ones (`IVS-GROUPS="portrait"`) keeps them out of the quality picker.
   The vertical picture comes straight from
-  Twitch (anonymous token), with its ad breaks muted and announced as on the
+  Twitch (anonymous token), with its ad segments filtered as on the
   other sources; Higher qualities stop until the next launch. The choice is
   remembered: the next streams that have a vertical picture start on it.
 * 🌍 **Lives blocked in your country** — when Twitch keeps a live to some
@@ -267,13 +267,13 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   answered”. It reads it from the playback token (`geoblock_reason`) or from
   Twitch's refusal; the mirrors are still tried, in case one is in an allowed
   country.
-* 📢 **Channel ad breaks explained** — during an ad break (or the pre-roll
-  when a stream opens), Twitch replaces the stream with its purple
-  “Commercial break in progress” screen or a real ad. The player now says so,
-  with a countdown to the stream's return, and mutes the sound meanwhile
-  (restored at the end). Works in the app's player, Apple's player, each
-  multi-live tile and on Apple TV (banner and countdown only: tvOS's player
-  has no button to turn the sound back on).
+* 📢 **Live ad filtering** — recognized Twitch ad segments are marked as gaps
+  before playback, including pre-rolls and channel ad breaks. The player may
+  hold its last frame or buffer until the broadcast returns; filtering cannot
+  recover video Twitch replaced with ads. The existing countdown and account
+  fallback remain in use. Filtering applies with low latency on or off, in the
+  app's player, Apple's player, multi-live and on Apple TV. AirPlay receivers
+  use the original CDN playlist, so local filtering does not apply there.
 * ⏪ **Rewind a live stream (DVR)** — when the channel archives its broadcasts,
   the progress bar covers the *whole* stream, not just the rewindable window.
   Scrub past that window and the recording takes over at that exact moment.
@@ -885,8 +885,8 @@ unsigned `tv-test-N` pre-release:
   take the focus, so Menu goes back to the list even on an offline channel
   without videos (the focus used to stay on the tab bar, and Menu quit the
   app).
-* During a channel's ad break on a live, the same banner as on the iPhone
-  says what the purple screen is, with a countdown to the stream's return.
+* Recognized live ad segments are filtered, with the same break countdown as
+  on the iPhone. Playback waits when clean broadcast content is unavailable.
 * Usage count, like the iPhone (Account → Share my usage): a random install ID,
   or your Twitch account when signed in, the version, the language and how many
   lives and VODs started (which source, failures), at most once an hour; never

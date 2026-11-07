@@ -194,6 +194,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.7.15",
+          "buildVersion": "392",
+          "date": "2026-11-07",
+          "localizedDescription": "- Lives that come straight from Twitch (Twitch source, vertical picture, Higher qualities through your account) now filter Twitch's ad segments: the picture holds on the last frame instead of the purple ad screen, and the ads aren't downloaded. Contributed by ihavenoface\n- Other improvements and fixes",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-392/TwitchUnblock.ipa",
+          "size": 4605890,
+          "commit": "581034a55a31be31d80a2384c2eaceeba9460cd0"
+        },
+        {
           "version": "1.7.13",
           "buildVersion": "391",
           "date": "2026-11-06",
@@ -273,25 +282,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-383/TwitchUnblock.ipa",
           "size": 4529817,
           "commit": "ba7f4539c21814468f254bffda4fdba592cbe691"
-        },
-        {
-          "version": "1.7.4",
-          "buildVersion": "382",
-          "date": "2026-11-01",
-          "localizedDescription": "- Chat over the video can sit left or right, full height or in a corner (Settings → Chat)\n- Landscape chat can be narrower (15 %) and uses the empty safe margin, so the video is bigger\n- \"Streams as a list\" now also applies to categories and search results\n- New option to close the player by swiping from the left edge (Settings → Player, off by default)\n- With Recent streamers off, opened channels are no longer remembered",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-382/TwitchUnblock.ipa",
-          "size": 4518175,
-          "commit": "ba9a6c67c9aac885273a4a5e169b2495d73e6aea"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.7.13",
-      "versionDate": "2026-11-06",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-391/TwitchUnblock.ipa",
-      "size": 4582203
+      "version": "1.7.15",
+      "versionDate": "2026-11-07",
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-392/TwitchUnblock.ipa",
+      "size": 4605890
     }
   ],
   "news": []

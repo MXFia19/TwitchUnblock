@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.7.18",
+          "buildVersion": "395",
+          "date": "2026-11-07",
+          "localizedDescription": "- In landscape, the video takes the whole width of the iPhone Duo's outer screen, centered (it stopped at the status column), and the empty margin on the side away from the Dynamic Island when the chat is in a column",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-395/TwitchUnblock.ipa",
+          "size": 4607991,
+          "commit": "2c0bf7a1c27db615e608a51171d300b1ad2588b2"
+        },
+        {
           "version": "1.7.17",
           "buildVersion": "394",
           "date": "2026-11-07",
@@ -280,25 +289,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-365/TwitchUnblock.ipa",
           "size": 4458163,
           "commit": "03c1f679365a2de317131564fad796bb03efc4de"
-        },
-        {
-          "version": "1.6.52",
-          "buildVersion": "364",
-          "date": "2026-10-26",
-          "localizedDescription": "- Vertical streams: when a streamer also sends Twitch a vertical picture (Dual Format: mobile games, IRL), a ▯ button in the player switches to it, like in the Twitch app. The choice is remembered.\n- A live that Twitch keeps to some countries now says so (“not available in your region”) instead of “No source answered”.",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-364/TwitchUnblock.ipa",
-          "size": 4455995,
-          "commit": "e7d15a1fb38530fec3eb88baab2bb9960c0ac4bf"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.7.17",
+      "version": "1.7.18",
       "versionDate": "2026-11-07",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-394/TwitchUnblock.ipa",
-      "size": 4607954
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-395/TwitchUnblock.ipa",
+      "size": 4607991
     }
   ],
   "news": []

@@ -123,6 +123,11 @@ enum LivePlaylistTests {
         expect(masterOutput.contains("URI=\"tulivebuffered://cdn.example/live/audio/index.m3u8\""), "Alternate audio cannot bypass filtering")
         expect(masterOutput.contains("tulivebuffered://cdn.example/live/video/index.m3u8"), "Child video inherits buffering mode")
         expect(!masterOutput.contains("#EXT-X-GAP"), "Master playlists contain no media gaps")
+        // Variants of a master (Auto quality): found back in https, as the loader will read them.
+        let children = LivePlaylistRewriter.wrappedChildren(in: masterOutput).map { $0.absoluteString }
+        expect(children.contains("https://cdn.example/live/audio/index.m3u8"), "Alternate audio is a child of its master")
+        expect(children.contains("https://cdn.example/live/video/index.m3u8"), "Variants are children of their master")
+        expect(LivePlaylistRewriter.wrappedChildren(in: output).isEmpty, "Media playlists have no children")
         for lowLatency in [false, true] {
             let wrapped = LivePlaylistRewriter.wrap(base.absoluteString, lowLatency: lowLatency)
             expect(LivePlaylistRewriter.unwrap(URL(string: wrapped)!) == base, "AirPlay unwrap preserves signed URL")

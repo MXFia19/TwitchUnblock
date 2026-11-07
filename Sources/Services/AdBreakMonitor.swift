@@ -66,8 +66,11 @@ final class AdBreakMonitor: NSObject, AVPlayerItemMetadataCollectorPushDelegate 
         playlistObserver = NotificationCenter.default.addObserver(
             forName: LivePlaylistLoader.playlistNotification, object: nil, queue: .main
         ) { [weak self] note in
-            guard let self, note.object as? URL == url,
-                  let snapshot = note.userInfo?["playlist"] as? TwitchAdPlaylist else { return }
+            // Sa propre liste, ou une variante de sa liste maîtresse (Auto) ;
+            // la maîtresse elle-même n'a pas de segments.
+            guard let self, note.object as? URL == url || note.userInfo?["owner"] as? URL == url,
+                  let snapshot = note.userInfo?["playlist"] as? TwitchAdPlaylist,
+                  !snapshot.segments.isEmpty else { return }
             self.playlist = snapshot
             self.playlistReceived = Date()
             for brk in snapshot.breaks { self.breaks[brk.id] = brk }

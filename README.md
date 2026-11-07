@@ -276,7 +276,10 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   use the original CDN playlist, so local filtering does not apply there.
   Ads only reach lives that come straight from Twitch (Twitch source, vertical
   picture, Higher qualities through your account): the usual mirrors already
-  have none. Waiting through a break is not counted as a stall, so it no
+  have none. Higher qualities still switch to the ad-free source (1080p at
+  most) for the length of a break and come back after, as before; filtering
+  only covers the moment of the switch, or the whole break when there is no
+  ad-free source. Waiting through a break is not counted as a stall, so it no
   longer lowers the quality or pushes the live further from the edge.
   Contributed by [ihavenoface](https://github.com/ihavenoface) (PR #11).
 * ⏪ **Rewind a live stream (DVR)** — when the channel archives its broadcasts,

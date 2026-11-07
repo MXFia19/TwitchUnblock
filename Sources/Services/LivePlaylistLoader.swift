@@ -23,6 +23,8 @@ final class LivePlaylistLoader: NSObject, AVAssetResourceLoaderDelegate {
     static let bufferedScheme = LivePlaylistRewriter.bufferedScheme
     static let playlistNotification = Notification.Name("TULivePlaylist")
     private var tasks: [ObjectIdentifier: Task<Void, Never>] = [:]
+    /// Variantes d'une liste maîtresse passée par le chargeur → la maîtresse.
+    private let owners = PlaylistOwners()
 
     let queue = DispatchQueue(label: "twitchunblock.live")
     /// Sans cache : une playlist de direct change toutes les 2 s.
@@ -74,17 +76,48 @@ final class LivePlaylistLoader: NSObject, AVAssetResourceLoaderDelegate {
         let text = String(decoding: data, as: UTF8.self)
         guard text.hasPrefix("#EXTM3U") else { return nil }
         let playlist = TwitchAdPlaylist(text)
+        let rewritten = Self.rewrite(text, base: resp.url ?? url, lowLatency: lowLatency)
+        // Liste maîtresse (qualité « Auto ») : AVPlayer lit ensuite ses
+        // variantes, par ce chargeur aussi, mais l'élément (et son guetteur
+        // de pubs) ne connaît que l'adresse de la maîtresse. On retient d'où
+        // viennent les variantes : leurs instantanés portent cette adresse
+        // en « owner », sinon le compte à rebours manquait en Auto.
+        if playlist.segments.isEmpty {
+            owners.remember(LivePlaylistRewriter.wrappedChildren(in: rewritten), of: owners.owner(of: url) ?? url)
+        }
+        let owner = owners.owner(of: url)
         // Feed the countdown even when AVPlayer is waiting on an all-GAP
         // playlist and hasn't produced timed metadata or a currentDate yet.
         await MainActor.run {
             guard !Task.isCancelled else { return }
-            NotificationCenter.default.post(name: Self.playlistNotification, object: url,
-                                            userInfo: ["playlist": playlist])
+            var info: [String: Any] = ["playlist": playlist]
+            if let owner { info["owner"] = owner }
+            NotificationCenter.default.post(name: Self.playlistNotification, object: url, userInfo: info)
         }
-        return Data(Self.rewrite(text, base: resp.url ?? url, lowLatency: lowLatency).utf8)
+        return Data(rewritten.utf8)
     }
 
     static func rewrite(_ text: String, base: URL, lowLatency: Bool = true) -> String {
         LivePlaylistRewriter.rewrite(text, base: base, lowLatency: lowLatency)
+    }
+}
+
+/// Variante → liste maîtresse dont elle vient (adresses https, en texte).
+/// Appelé depuis plusieurs tâches à la fois : protégé par un verrou ; vidé
+/// au-delà de 300 entrées (adresses de séance renouvelées au fil des heures).
+final class PlaylistOwners {
+    private let lock = NSLock()
+    private var map: [String: URL] = [:]
+
+    func remember(_ children: [URL], of owner: URL) {
+        guard !children.isEmpty else { return }
+        lock.lock(); defer { lock.unlock() }
+        if map.count > 300 { map.removeAll() }
+        for child in children where child != owner { map[child.absoluteString] = owner }
+    }
+
+    func owner(of url: URL) -> URL? {
+        lock.lock(); defer { lock.unlock() }
+        return map[url.absoluteString]
     }
 }

@@ -220,6 +220,25 @@ enum LivePlaylistRewriter {
         return parts.url ?? url
     }
 
+    /// Adresses d'une liste réécrite qui repassent par le chargeur (variantes
+    /// et rendus d'une maîtresse), remises en https comme le fait le
+    /// chargeur à leur lecture : mêmes textes, mêmes clés.
+    static func wrappedChildren(in rewritten: String) -> [URL] {
+        var out: [URL] = []
+        for raw in rewritten.components(separatedBy: "\n") {
+            let line = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            var candidate: String?
+            if !line.isEmpty, !line.hasPrefix("#") {
+                candidate = line
+            } else if let r = line.range(of: #"(?<=URI=")[^"]+"#, options: .regularExpression) {
+                candidate = String(line[r])
+            }
+            guard let candidate, let url = URL(string: candidate), isWrapped(url) else { continue }
+            out.append(unwrap(url))
+        }
+        return out
+    }
+
     static func rewrite(_ text: String, base: URL, lowLatency: Bool) -> String {
         let playlist = TwitchAdPlaylist(text)
         let isMaster = text.contains("#EXT-X-STREAM-INF:") || text.contains("#EXT-X-MEDIA:")

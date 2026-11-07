@@ -17,6 +17,11 @@ struct TwitchUnblockTVApp: App {
 
     init() {
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
+        // Audio spatial coupé par défaut (SpatialAudio lit « off ») : le son
+        // reste en stéréo, comme dans l'app Twitch. Avec des écouteurs, tvOS
+        // le spatialisait (effet de grande salle, retour du 06/11). Réglage
+        // dans Compte → Réglages.
+        UserDefaults.standard.register(defaults: [SpatialAudio.key: "off"])
         // Journal gardé entre les lancements, erreurs du lecteur comprises.
         logger.sessionStart()
         PlaybackDiagnostics.start()

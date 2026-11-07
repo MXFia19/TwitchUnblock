@@ -892,6 +892,11 @@ unsigned `tv-test-N` pre-release:
   app).
 * Recognized live ad segments are filtered, with the same break countdown as
   on the iPhone. Playback waits when clean broadcast content is unavailable.
+* Spatial audio is off by default: the sound stays stereo, as in the Twitch
+  app (with AirPods or headphones, tvOS used to spatialize it, which sounded
+  like a large room). Account → Settings → Spatial audio turns it back on.
+* The app's version shows next to the Settings title in the Account tab, not
+  only at the bottom under About.
 * Usage count, like the iPhone (Account → Share my usage): a random install ID,
   or your Twitch account when signed in, the version, the language and how many
   lives and VODs started (which source, failures), at most once an hour; never

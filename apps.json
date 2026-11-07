@@ -194,6 +194,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.7.17",
+          "buildVersion": "394",
+          "date": "2026-11-07",
+          "localizedDescription": "- Improvements and fixes",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-394/TwitchUnblock.ipa",
+          "size": 4607954,
+          "commit": "f5bddf30560694a8444d75b044dbf3cb9c70fe0c"
+        },
+        {
           "version": "1.7.16",
           "buildVersion": "393",
           "date": "2026-11-07",
@@ -273,25 +282,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-385/TwitchUnblock.ipa",
           "size": 4542328,
           "commit": "f7eb07ccc86ca413776099bd759b69d171202575"
-        },
-        {
-          "version": "1.7.6",
-          "buildVersion": "384",
-          "date": "2026-11-01",
-          "localizedDescription": "- iPhone Duo: tabs move into the status column, as an icon pill under the clock, and the header gets a top margin\n- New in Features in testing (iOS 26): native Liquid Glass tabs instead of the app's tab bar\n- New \"My source\" option: add your own luminous-ttv server to the live sources (Settings → Player)",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-384/TwitchUnblock.ipa",
-          "size": 4541767,
-          "commit": "3a2e8623ccc6915eb6c9e6492cf6b11668fc6bb6"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.7.16",
+      "version": "1.7.17",
       "versionDate": "2026-11-07",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-393/TwitchUnblock.ipa",
-      "size": 4607985
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-394/TwitchUnblock.ipa",
+      "size": 4607954
     }
   ],
   "news": []

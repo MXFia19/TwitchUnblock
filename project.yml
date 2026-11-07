@@ -87,6 +87,8 @@ targets:
       - path: Sources/Services/PlaybackDiagnostics.swift
       # Journal traduit (section « Erreurs récentes » du Compte).
       - path: Sources/Services/LogTranslations.swift
+      - path: Sources/Services/MultiLive.swift
+      - path: Sources/Services/NetworkStatus.swift
 
     # Signature automatique : en local, il suffit de choisir son équipe dans
     # Xcode. La CI construit sans signer (réglages passés à xcodebuild).

@@ -900,6 +900,16 @@ unsigned `tv-test-N` pre-release:
   like a large room). Account → Settings → Spatial audio turns it back on.
 * The app's version shows next to the Settings title in the Account tab, not
   only at the bottom under About.
+* **Multi-live**: up to 4 lives side by side, as on the iPhone (same core:
+  the list is kept, each tile's quality follows how many there are, ad
+  breaks, retries). Press and hold a live's card → *Add to multi-live*; the
+  *Multi-live (n/4)* bar at the top of Following, Top and a category's lives
+  opens it (or *Watch · Multi-live* in the same menu). One live fills the
+  screen, two sit side by side, three put the first one large with two
+  stacked on the right, four make a 2 × 2 grid. The sound follows the tile
+  that has the focus; Select makes it full screen (again, or Menu, goes back
+  to the mosaic), or retries a tile that failed; press and hold a tile to
+  remove it; Menu closes the multi-live.
 * Usage count, like the iPhone (Account → Share my usage): a random install ID,
   or your Twitch account when signed in, the version, the language and how many
   lives and VODs started (which source, failures), at most once an hour; never

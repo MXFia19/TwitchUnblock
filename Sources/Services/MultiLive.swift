@@ -285,8 +285,13 @@ final class MultiTileModel: ObservableObject {
         let login = self.login
         let web = accountToken(login)
         task = Task { [weak self] in
-            let data = await getLive(channelName: login, webToken: web,
-                                     integrity: web.map { dropsIntegrity(for: $0) })
+            #if os(tvOS)
+            // Apple TV : pas de session web, donc ni drops ni intégrité.
+            let integrity: (() async -> (token: String, deviceId: String)?)? = nil
+            #else
+            let integrity = web.map { dropsIntegrity(for: $0) }
+            #endif
+            let data = await getLive(channelName: login, webToken: web, integrity: integrity)
             guard let self, !Task.isCancelled else { return }
             if let id = data.userId { self.channelId = id }
             guard let links = data.links, !links.isEmpty,
@@ -317,7 +322,11 @@ final class MultiTileModel: ObservableObject {
             // Santé des lectures (/stats) : une fois par tuile, sans la VOD.
             if !self.counted {
                 self.counted = true
+                #if os(tvOS)
+                TVUsage.count(data.links.isEmpty ? "vod_fail" : "vod")
+                #else
                 UsageService.shared.count(data.links.isEmpty ? "vod_fail" : "vod")
+                #endif
             }
             if let meta, !meta.login.isEmpty { self.login = meta.login }
             guard !data.links.isEmpty,

@@ -49,6 +49,8 @@ struct TVRootView: View {
     /// « Chaîne » touché dans le lecteur : sa page s'ouvre une fois celui-ci fermé.
     @State private var pendingChannel: String?
     @State private var channelPage: TVChannelRoute?
+    /// Multi-live (TVMultiLive) : ouvert depuis son bandeau ou le menu d'une carte.
+    @ObservedObject private var multiRoute = TVMultiRoute.shared
 
     enum Tab: Hashable { case following, top, categories, search, account }
     @State private var tab = Tab.following
@@ -90,6 +92,10 @@ struct TVRootView: View {
         }
         .fullScreenCover(item: $channelPage) { route in
             TVChannelCover(login: route.login)
+                .environmentObject(session)
+        }
+        .fullScreenCover(isPresented: $multiRoute.open) {
+            TVMultiLiveScreen()
                 .environmentObject(session)
         }
         .task {
@@ -251,6 +257,7 @@ struct TVFollowingTab: View {
         AnyView(
             ScrollView {
                 VStack {
+                    TVMultiLiveBar()
                     if resumeShown, session.resumePlace == .top { resumeSection }
                     if session.token == nil {
                         TVMessage(text: session.t("tv_need_login"))
@@ -390,6 +397,8 @@ struct TVFollowingTab: View {
                 .tvCard()
                 // Bouton Play de la télécommande : comme Sélection.
                 .onPlayPauseCommand { openPlayer(.live(login: s.userLogin, name: s.userName), from: .live(s.id)) }
+                // Bouton central maintenu : multi-live (TVMultiLive).
+                .contextMenu { TVMultiLiveMenuItems(login: s.userLogin, name: s.userName) }
             }
         }
         .padding(.horizontal, 64)
@@ -635,6 +644,8 @@ struct TVTopTab: View {
                 .frame(maxWidth: 800)
                 .padding(.top, 24)
 
+                TVMultiLiveBar()
+
                 if top.streams.isEmpty {
                     TVMessage(text: loading ? session.t("loading") : session.t("tv_no_live"))
                 } else {
@@ -752,6 +763,7 @@ struct TVCategoryStreams: View {
             // Chaînes masquées écartées ; la catégorie, ouverte exprès, reste
             // consultable même masquée.
             let shown = streams.filter { !session.hidden.hides(channel: $0.userLogin) }
+            TVMultiLiveBar()
             if shown.isEmpty {
                 TVMessage(text: loaded ? session.t("tv_no_live") : session.t("loading"))
             } else {
@@ -1481,6 +1493,7 @@ struct TVStreamGrid: View {
                 // Bouton Play de la télécommande : comme Sélection.
                 .onPlayPauseCommand { play(.live(login: s.userLogin, name: s.userName)) }
                 .contextMenu {
+                    TVMultiLiveMenuItems(login: s.userLogin, name: s.userName)
                     if hideable {
                         Button(role: .destructive) {
                             session.hidden.hide(channel: s.userLogin, name: s.userName)
@@ -1530,6 +1543,7 @@ struct TVStreamCard: View {
                         .padding(.horizontal, 8).padding(.vertical, 3)
                         .background(Color.black.opacity(0.7))
                         .cornerRadius(4)
+                    TVMultiLiveMark(login: stream.userLogin)
                 }
                 .foregroundColor(.white)
                 .padding(12)

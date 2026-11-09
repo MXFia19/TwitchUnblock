@@ -227,10 +227,11 @@ final class AdBreakWatcher: ObservableObject {
     private var timer: Timer?
     /// Faux pour un lecteur dont le son est géré ailleurs.
     private let managesAudio: Bool
-    /// Lecteur principal (pas une case du multi-live) : chaque pause vue est
-    /// comptée pour /stats, une fois même si le bandeau se rouvre (autre
-    /// qualité, autre source), comme sur le site.
-    private let counts: Bool
+    /// Lecteur principal (pas une case du multi-live) : appelé à chaque pause
+    /// vue, pour /stats (UsageService ou TVUsage), une fois même si le bandeau
+    /// se rouvre (autre qualité, autre source), comme sur le site. Passé par
+    /// le lecteur : ce fichier est vérifié seul par la CI (test-live-playlists).
+    private let onBreak: (() -> Void)?
     private var counted: [String] = []
     /// Son coupé par nous, sur cet élément.
     private var mutedByUs = false
@@ -243,9 +244,9 @@ final class AdBreakWatcher: ObservableObject {
     /// Minuteur de secours : fin prévue + 5 s, en temps réel.
     private var deadline: Date?
 
-    init(managesAudio: Bool = true, counts: Bool = false) {
+    init(managesAudio: Bool = true, onBreak: (() -> Void)? = nil) {
         self.managesAudio = managesAudio
-        self.counts = counts
+        self.onBreak = onBreak
     }
 
     deinit {
@@ -311,14 +312,10 @@ final class AdBreakWatcher: ObservableObject {
     }
 
     private func countOnce(_ id: String) {
-        guard counts, !counted.contains(id) else { return }
+        guard let onBreak, !counted.contains(id) else { return }
         counted.append(id)
         if counted.count > 8 { counted.removeFirst() }
-        #if os(tvOS)
-        TVUsage.countAdBreak()
-        #else
-        Task { @MainActor in UsageService.shared.countAdBreak() }
-        #endif
+        onBreak()
     }
 
     /// Hors pause : le son rendu, le bandeau retiré.

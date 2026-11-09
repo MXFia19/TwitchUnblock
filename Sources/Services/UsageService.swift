@@ -143,6 +143,11 @@ final class UsageService: ObservableObject {
         AdHours.add()
     }
 
+    /// Pour AdBreakWatcher(onBreak:), dont le minuteur n'est pas sur l'acteur principal.
+    nonisolated static func adBreakSeen() {
+        Task { @MainActor in shared.countAdBreak() }
+    }
+
     // MARK: – Ping
     /// Signale l'installation au Worker. Sans effet si le comptage est coupé.
     /// Comptage coupé : un effacement resté en attente est retenté. Un ping en

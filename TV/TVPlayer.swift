@@ -126,7 +126,7 @@ final class TVPlayerModel: ObservableObject {
     /// Pause pub cousue par Twitch dans le direct : bandeau avec compte à
     /// rebours, comme sur l'iPhone. Le son n'y est pas coupé : le lecteur de
     /// tvOS n'a pas de bouton pour le remettre.
-    let adBreaks = AdBreakWatcher(managesAudio: false, counts: true)
+    let adBreaks = AdBreakWatcher(managesAudio: false, onBreak: TVUsage.countAdBreak)
 
     private func flash(_ text: String) {
         notice = text

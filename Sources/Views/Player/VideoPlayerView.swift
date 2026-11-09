@@ -957,7 +957,7 @@ struct VideoPlayerView: View {
     @State private var lastPersisted: Double = -99
     @State private var latency: Double? = nil
     /// Pause pub cousue par Twitch dans le direct : bandeau, son coupé.
-    @StateObject private var adBreaks = AdBreakWatcher(counts: true)
+    @StateObject private var adBreaks = AdBreakWatcher(onBreak: UsageService.adBreakSeen)
     @State private var noticeShown: String? = nil
 
     private var qualities: [String] { sortQualities(Array(qualityLinks.keys), variants: variants) }

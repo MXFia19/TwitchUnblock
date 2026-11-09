@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.7.20",
+          "buildVersion": "397",
+          "date": "2026-11-09",
+          "localizedDescription": "- Other improvements and fixes",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-397/TwitchUnblock.ipa",
+          "size": 4610277,
+          "commit": "6f3667c73e13511a15031bc05876e09d13557a53"
+        },
+        {
           "version": "1.7.19",
           "buildVersion": "396",
           "date": "2026-11-09",
@@ -280,25 +289,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-367/TwitchUnblock.ipa",
           "size": 4457344,
           "commit": "c78dbdd12e305b24f22cc6f00fbf3cba4795f707"
-        },
-        {
-          "version": "1.6.54",
-          "buildVersion": "366",
-          "date": "2026-10-26",
-          "localizedDescription": "- The player's bottom bar no longer squeezes the live's duration when there are many buttons (vertical video): the buttons move to a second row.",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-366/TwitchUnblock.ipa",
-          "size": 4457513,
-          "commit": "413df41f091fa97701846b85db753fa50e32ad16"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.7.19",
+      "version": "1.7.20",
       "versionDate": "2026-11-09",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-396/TwitchUnblock.ipa",
-      "size": 4610371
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-397/TwitchUnblock.ipa",
+      "size": 4610277
     }
   ],
   "news": []

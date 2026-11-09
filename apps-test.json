@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.7.19",
+          "buildVersion": "396",
+          "date": "2026-11-09",
+          "localizedDescription": "- Other improvements and fixes",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-396/TwitchUnblock.ipa",
+          "size": 4610371,
+          "commit": "7613bf3d829d0ce23ea17418aaeaccff3df33c85"
+        },
+        {
           "version": "1.7.18",
           "buildVersion": "395",
           "date": "2026-11-07",
@@ -280,25 +289,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-366/TwitchUnblock.ipa",
           "size": 4457513,
           "commit": "413df41f091fa97701846b85db753fa50e32ad16"
-        },
-        {
-          "version": "1.6.53",
-          "buildVersion": "365",
-          "date": "2026-10-26",
-          "localizedDescription": "- Vertical streams now look like the Twitch app's vertical view: the picture fills the player and the chat sits on its bottom, see-through (double-tap or the Chat button hides it).",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-365/TwitchUnblock.ipa",
-          "size": 4458163,
-          "commit": "03c1f679365a2de317131564fad796bb03efc4de"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.7.18",
-      "versionDate": "2026-11-07",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-395/TwitchUnblock.ipa",
-      "size": 4607991
+      "version": "1.7.19",
+      "versionDate": "2026-11-09",
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-396/TwitchUnblock.ipa",
+      "size": 4610371
     }
   ],
   "news": []

@@ -839,7 +839,8 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
 * 📊 **Usage count** — logged in, your Twitch account (counted once across the
   app and the website); logged out, a random install ID. Plus the app version,
   the app language, iPhone or iPad, the iOS version and how many lives and
-  VODs were started (which source served a live, failures — counters only),
+  VODs were started (which source served a live, failures, channel ad breaks
+  seen and the hour each one came — counters only),
   at most once an hour. No channels watched, no IP address. Switching it off
   erases it server-side. Public numbers: [/stats](https://twitchunblock.vercel.app/stats). See
   [`Sources/Services/UsageService.swift`](Sources/Services/UsageService.swift).

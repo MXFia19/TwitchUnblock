@@ -180,6 +180,42 @@ extension AdBreakMonitor {
 
 }
 
+/// Heures (UTC) des pauses pub comptées, pas encore envoyées (« 2026-11-09T13 »
+/// → nombre) : jointes au signal d'utilisation suivant (champ « adh ») pour le
+/// graphique horaire de /stats. 48 heures au plus : le Worker ne garde
+/// qu'aujourd'hui et hier.
+enum AdHours {
+    private static let key = "usage_ad_hours"
+
+    private static func stamp(_ date: Date) -> String {
+        String(ISO8601DateFormatter().string(from: date).prefix(13))
+    }
+
+    static var pending: [String: Int] {
+        let all = UserDefaults.standard.dictionary(forKey: key) as? [String: Int] ?? [:]
+        let oldest = stamp(Date().addingTimeInterval(-48 * 3600))
+        return all.filter { $0.key >= oldest && $0.value > 0 }
+    }
+
+    static func add() {
+        var all = pending
+        all[stamp(Date()), default: 0] += 1
+        UserDefaults.standard.set(all, forKey: key)
+    }
+
+    /// Parties : retirées (celles arrivées pendant l'envoi restent).
+    static func sent(_ sent: [String: Int]) {
+        var left = pending
+        for (k, n) in sent {
+            let rest = (left[k] ?? 0) - n
+            left[k] = rest > 0 ? rest : nil
+        }
+        UserDefaults.standard.set(left, forKey: key)
+    }
+
+    static func clear() { UserDefaults.standard.removeObject(forKey: key) }
+}
+
 /// Pause pub à l'écran sur un lecteur : secondes restantes (nil hors pause),
 /// et le son coupé le temps qu'elle dure — seulement s'il ne l'était pas
 /// déjà, rendu à la fin, au changement d'élément, au plus tard 5 s après la
@@ -191,6 +227,11 @@ final class AdBreakWatcher: ObservableObject {
     private var timer: Timer?
     /// Faux pour un lecteur dont le son est géré ailleurs.
     private let managesAudio: Bool
+    /// Lecteur principal (pas une case du multi-live) : chaque pause vue est
+    /// comptée pour /stats, une fois même si le bandeau se rouvre (autre
+    /// qualité, autre source), comme sur le site.
+    private let counts: Bool
+    private var counted: [String] = []
     /// Son coupé par nous, sur cet élément.
     private var mutedByUs = false
     private weak var mutedItem: AVPlayerItem?
@@ -202,8 +243,9 @@ final class AdBreakWatcher: ObservableObject {
     /// Minuteur de secours : fin prévue + 5 s, en temps réel.
     private var deadline: Date?
 
-    init(managesAudio: Bool = true) {
+    init(managesAudio: Bool = true, counts: Bool = false) {
         self.managesAudio = managesAudio
+        self.counts = counts
     }
 
     deinit {
@@ -244,7 +286,10 @@ final class AdBreakWatcher: ObservableObject {
         let left = max(0, Int(brk.end.timeIntervalSince(now).rounded(.up)))
         if remaining != left { remaining = left }
         if currentId != brk.id || currentEnd != brk.end {
-            if currentId != brk.id { logger.info("PUB", "Pause pub à l'écran", "\(left) s restantes") }
+            if currentId != brk.id {
+                logger.info("PUB", "Pause pub à l'écran", "\(left) s restantes")
+                countOnce(brk.id)
+            }
             currentId = brk.id
             // Bloc prolongé par une pub annoncée après coup : secours repoussé.
             currentEnd = brk.end
@@ -263,6 +308,17 @@ final class AdBreakWatcher: ObservableObject {
             mutedByUs = true
             mutedItem = item
         }
+    }
+
+    private func countOnce(_ id: String) {
+        guard counts, !counted.contains(id) else { return }
+        counted.append(id)
+        if counted.count > 8 { counted.removeFirst() }
+        #if os(tvOS)
+        TVUsage.countAdBreak()
+        #else
+        Task { @MainActor in UsageService.shared.countAdBreak() }
+        #endif
     }
 
     /// Hors pause : le son rendu, le bandeau retiré.

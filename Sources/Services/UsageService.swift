@@ -135,6 +135,14 @@ final class UsageService: ObservableObject {
         UserDefaults.standard.set(all, forKey: eventsKey)
     }
 
+    /// Pause pub de la chaîne vue (lecteur principal, une par pause) : comptée
+    /// avec son heure UTC, pour le graphique des pubs de /stats.
+    func countAdBreak() {
+        guard UserDefaults.standard.object(forKey: "cfg_share_usage") as? Bool ?? true else { return }
+        count("live_ad_break")
+        AdHours.add()
+    }
+
     // MARK: – Ping
     /// Signale l'installation au Worker. Sans effet si le comptage est coupé.
     /// Comptage coupé : un effacement resté en attente est retenté. Un ping en
@@ -189,6 +197,8 @@ final class UsageService: ObservableObject {
             "device": UIDevice.current.userInterfaceIdiom == .pad ? "ipad" : "iphone",
         ]
         if !events.isEmpty { body["ev"] = events }
+        let adHours = AdHours.pending
+        if !adHours.isEmpty { body["adh"] = adHours }
         req.httpBody = try? JSONSerialization.data(withJSONObject: body)
 
         do {
@@ -210,6 +220,7 @@ final class UsageService: ObservableObject {
                 }
                 UserDefaults.standard.set(left, forKey: eventsKey)
             }
+            if !adHours.isEmpty { AdHours.sent(adHours) }
             logger.debug("USAGE", "Ping envoyé", "version \(appVersion)")
         } catch {
             logger.debug("USAGE", "Ping impossible", error.localizedDescription)
@@ -282,6 +293,7 @@ final class UsageService: ObservableObject {
         let ud = UserDefaults.standard
         ud.removeObject(forKey: "usage_last_ping")
         ud.removeObject(forKey: eventsKey)
+        AdHours.clear()
         var bases = [APIConfig.base]
         if let b = ud.string(forKey: pingBaseKey), !bases.contains(b) { bases.append(b) }
         ud.set(bases, forKey: forgetPendingKey)

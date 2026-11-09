@@ -152,7 +152,7 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
     /// « Réessayer ».
     @Published private(set) var failed = false
     /// Pause pub cousue par Twitch dans le direct : bandeau, son coupé.
-    let adBreaks = AdBreakWatcher()
+    let adBreaks = AdBreakWatcher(counts: true)
 
     /// Pas une constante : une bascule douce direct → enregistrement remplace
     /// la source sans reconstruire le modèle. Figée, elle laissait le lecteur

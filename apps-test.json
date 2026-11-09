@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.7.21",
+          "buildVersion": "398",
+          "date": "2026-11-09",
+          "localizedDescription": "- Importing a backup now works in LiveContainer without turning on its Fix File Picker option",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-398/TwitchUnblock.ipa",
+          "size": 4611092,
+          "commit": "788da169718aba0ff956697e6d38acf382e774c4"
+        },
+        {
           "version": "1.7.20",
           "buildVersion": "397",
           "date": "2026-11-09",
@@ -280,25 +289,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-368/TwitchUnblock.ipa",
           "size": 4457983,
           "commit": "1abc43823678d23c37847468168ee4e03a13e181"
-        },
-        {
-          "version": "1.6.55",
-          "buildVersion": "367",
-          "date": "2026-10-26",
-          "localizedDescription": "- With the chat on top of the video (vertical video, overlay chat in landscape), the pinned-message bar is now see-through instead of a black band.\n- The player's bottom bar no longer squeezes the live's duration when there are many buttons (vertical video): the buttons move to a second row.",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-367/TwitchUnblock.ipa",
-          "size": 4457344,
-          "commit": "c78dbdd12e305b24f22cc6f00fbf3cba4795f707"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.7.20",
+      "version": "1.7.21",
       "versionDate": "2026-11-09",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-397/TwitchUnblock.ipa",
-      "size": 4610277
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-398/TwitchUnblock.ipa",
+      "size": 4611092
     }
   ],
   "news": []

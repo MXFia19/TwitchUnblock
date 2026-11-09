@@ -194,6 +194,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.7.20",
+          "buildVersion": "397",
+          "date": "2026-11-09",
+          "localizedDescription": "- Other improvements and fixes",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-397/TwitchUnblock.ipa",
+          "size": 4610277,
+          "commit": "6f3667c73e13511a15031bc05876e09d13557a53"
+        },
+        {
           "version": "1.7.19",
           "buildVersion": "396",
           "date": "2026-11-09",
@@ -273,25 +282,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-388/TwitchUnblock.ipa",
           "size": 4568890,
           "commit": "1428e52fa0911ec1422da562b4fbf366881e20c8"
-        },
-        {
-          "version": "1.7.9",
-          "buildVersion": "387",
-          "date": "2026-11-01",
-          "localizedDescription": "- iPhone Duo: in the full-size player, buttons and text keep clear of the screen's rounded corners",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-387/TwitchUnblock.ipa",
-          "size": 4542829,
-          "commit": "d94fb6e58b235aeb53942ea7d63461e2f9a07c44"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.7.19",
+      "version": "1.7.20",
       "versionDate": "2026-11-09",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-396/TwitchUnblock.ipa",
-      "size": 4610371
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-397/TwitchUnblock.ipa",
+      "size": 4610277
     }
   ],
   "news": []

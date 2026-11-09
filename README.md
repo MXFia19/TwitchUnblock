@@ -687,7 +687,9 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   sign-ins, tokens or install ID. **Import** asks **Everything** or **Channels
   only**, adds without removing anything, then lists what it restored
   (unknown or invalid settings are skipped). Handy to move between the app
-  and TU Test; older backups and the website's still import.
+  and TU Test; older backups and the website's still import. The file picker
+  copies the file into the app before reading it, so importing also works in
+  LiveContainer without its « Fix File Picker » option.
 * ⬆️ **Update check** — the app tells you when a new version is out on the
   source, with a shortcut to Feather / SideStore / AltStore.
 * 🔢 **Build number** — Settings → About shows the version and its build

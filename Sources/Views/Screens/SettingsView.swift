@@ -57,7 +57,6 @@ struct SettingsView: View {
     // Sauvegarde (export / import)
     @State private var exportDoc: BackupDocument? = nil
     @State private var showExporter    = false
-    @State private var showImporter    = false
     @State private var backupMessage: String? = nil
     /// Sauvegarde lue, en attente du choix « Tout » / « Chaînes seulement ».
     @State private var pendingImport: Backup.File? = nil
@@ -1862,7 +1861,16 @@ struct SettingsView: View {
                     }
                     TSecondaryButton(title: store.t("import_data"), icon: "square.and.arrow.down",
                                      tint: .tPrimary, fullWidth: true) {
-                        showImporter = true
+                        BackupFilePicker.present { data in
+                            guard let data, let file = try? Backup.read(data) else {
+                                backupMessage = store.t("import_bad"); return
+                            }
+                            backupMessage = nil
+                            pendingImport = file
+                            // Le sélecteur de fichiers se ferme encore : le choix attend un
+                            // instant, sinon iOS refuse de l'ouvrir par-dessus.
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { showImportChoice = true }
+                        }
                     }
                 }
                 if let backupMessage {
@@ -1878,20 +1886,6 @@ struct SettingsView: View {
                 backupMessage = store.t("export_done")
                 logger.info("SAUVEGARDE", "Sauvegarde exportée", nil)
             }
-        }
-        .fileImporter(isPresented: $showImporter, allowedContentTypes: [.json]) { result in
-            guard case .success(let url) = result else { return }
-            let scoped = url.startAccessingSecurityScopedResource()
-            defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-            guard let data = try? Data(contentsOf: url),
-                  let file = try? Backup.read(data) else {
-                backupMessage = store.t("import_bad"); return
-            }
-            backupMessage = nil
-            pendingImport = file
-            // Le sélecteur de fichiers se ferme encore : le choix attend un
-            // instant, sinon iOS refuse de l'ouvrir par-dessus.
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { showImportChoice = true }
         }
         // Tout, ou les chaînes seulement (suivies, épinglées, masquées).
         .confirmationDialog(store.t("import_choice_title"), isPresented: $showImportChoice,

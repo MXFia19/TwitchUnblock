@@ -39,6 +39,34 @@ struct BackupDocument: FileDocument {
     }
 }
 
+/// Choix du fichier à importer, en mode copie : iOS copie le fichier dans le
+/// dossier temporaire de l'app avant de le donner. `.fileImporter` (SwiftUI)
+/// l'ouvre sur place, et dans LiveContainer « Ouvrir » ne répondait pas
+/// (retour du 20/10/2026, réglé jusque-là par l'option « Fix File Picker »
+/// de LiveContainer, que le tweak FilePickerFix reprend en forçant la copie).
+final class BackupFilePicker: UIDocumentPickerViewController, UIDocumentPickerDelegate {
+    private var onPick: ((Data?) -> Void)?
+
+    static func present(onPick: @escaping (Data?) -> Void) {
+        guard let root = UIApplication.shared.connectedScenes
+            .compactMap({ ($0 as? UIWindowScene)?.keyWindow }).first?.rootViewController else { return }
+        var top = root
+        while let presented = top.presentedViewController { top = presented }
+        let picker = BackupFilePicker(forOpeningContentTypes: [.json], asCopy: true)
+        picker.onPick = onPick
+        picker.delegate = picker
+        top.present(picker, animated: true)
+    }
+
+    func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+        guard let url = urls.first else { return }
+        let data = try? Data(contentsOf: url)
+        // La copie ne sert plus une fois lue.
+        try? FileManager.default.removeItem(at: url)
+        onPick?(data)
+    }
+}
+
 enum Backup {
     static let format = "twitchunblock-backup"
     /// Version écrite par cette app (voir l'en-tête).

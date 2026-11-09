@@ -194,6 +194,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.7.19",
+          "buildVersion": "396",
+          "date": "2026-11-09",
+          "localizedDescription": "- Other improvements and fixes",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-396/TwitchUnblock.ipa",
+          "size": 4610371,
+          "commit": "7613bf3d829d0ce23ea17418aaeaccff3df33c85"
+        },
+        {
           "version": "1.7.18",
           "buildVersion": "395",
           "date": "2026-11-07",
@@ -273,25 +282,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-387/TwitchUnblock.ipa",
           "size": 4542829,
           "commit": "d94fb6e58b235aeb53942ea7d63461e2f9a07c44"
-        },
-        {
-          "version": "1.7.8",
-          "buildVersion": "386",
-          "date": "2026-11-01",
-          "localizedDescription": "- Landscape chat: the resize handle no longer sits on top of messages, and the chat fills the empty margin next to it\n- Traditional Chinese: channel points are now called 忠誠點數, as on Twitch",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-386/TwitchUnblock.ipa",
-          "size": 4542039,
-          "commit": "a22b672048e145cdcb19217e1a8ecdeaaa700c64"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.7.18",
-      "versionDate": "2026-11-07",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-395/TwitchUnblock.ipa",
-      "size": 4607991
+      "version": "1.7.19",
+      "versionDate": "2026-11-09",
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-396/TwitchUnblock.ipa",
+      "size": 4610371
     }
   ],
   "news": []

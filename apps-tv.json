@@ -25,6 +25,15 @@
       },
       "versions": [
         {
+          "version": "0.1.47",
+          "buildVersion": "47",
+          "date": "2026-11-10",
+          "localizedDescription": "- Ad breaks counted for the website's /stats now include the live source and whether it was a Twitch pre-roll or the channel's own break",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-test-47/TwitchUnblockTV.ipa",
+          "size": 2894632,
+          "commit": "788f75b5812b372489de7dcf06c8d2b9e7ab6b96"
+        },
+        {
           "version": "0.1.46",
           "buildVersion": "46",
           "date": "2026-11-09",
@@ -194,21 +203,12 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-test-25/TwitchUnblockTV.ipa",
           "size": 2515331,
           "commit": "d83ce6240c749741663778400094090973873b50"
-        },
-        {
-          "version": "0.1.24",
-          "buildVersion": "24",
-          "date": "2026-10-19",
-          "localizedDescription": "- Improvements and fixes",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-test-24/TwitchUnblockTV.ipa",
-          "size": 2514433,
-          "commit": "9e0a7847913c19a9432d20730dba2c5c9c963f27"
         }
       ],
-      "version": "0.1.46",
-      "versionDate": "2026-11-09",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-test-46/TwitchUnblockTV.ipa",
-      "size": 2892467
+      "version": "0.1.47",
+      "versionDate": "2026-11-10",
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-test-47/TwitchUnblockTV.ipa",
+      "size": 2894632
     }
   ]
 }

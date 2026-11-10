@@ -135,17 +135,23 @@ final class UsageService: ObservableObject {
         UserDefaults.standard.set(all, forKey: eventsKey)
     }
 
-    /// Pause pub de la chaîne vue (lecteur principal, une par pause) : comptée
-    /// avec son heure UTC, pour le graphique des pubs de /stats.
-    func countAdBreak() {
+    /// Source du direct en cours (MainTabView, menuLiveSource) : jointe aux
+    /// pauses pub vues, pour mettre à part dans /stats celles du compte
+    /// (qualités supérieures) et de Twitch officiel.
+    var adSource: String? = nil
+
+    /// Pause pub vue (lecteur principal, une par pause) : comptée avec son
+    /// heure UTC, la source du direct et son type (« pre », « mid » ou vide),
+    /// pour les graphiques des pubs de /stats.
+    func countAdBreak(roll: String) {
         guard UserDefaults.standard.object(forKey: "cfg_share_usage") as? Bool ?? true else { return }
         count("live_ad_break")
-        AdHours.add()
+        AdHours.add(source: adSource, roll: roll)
     }
 
     /// Pour AdBreakWatcher(onBreak:), dont le minuteur n'est pas sur l'acteur principal.
-    nonisolated static func adBreakSeen() {
-        Task { @MainActor in shared.countAdBreak() }
+    nonisolated static func adBreakSeen(_ roll: String) {
+        Task { @MainActor in shared.countAdBreak(roll: roll) }
     }
 
     // MARK: – Ping

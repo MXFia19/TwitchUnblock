@@ -394,6 +394,8 @@ struct MainTabView: View {
             .onChange(of: onboardingDone) { _ in keepVisibleTab() }
             // Multi-live ouvert ou fermé : aperçus de Découvrir bloqués ou permis.
             .onChange(of: showMultiLive) { on in DiscoverGate.shared.blocked = on || playerMode != nil }
+            // Source du direct, jointe aux pauses pub comptées pour /stats.
+            .onChange(of: menuLiveSource) { UsageService.shared.adSource = $0 }
             // iPhone : portrait, sauf lecteur ouvert en grand ou multi-live.
             .onChange(of: landscapeAllowed) { OrientationLock.allowLandscape($0) }
             .onAppear { OrientationLock.allowLandscape(landscapeAllowed) }

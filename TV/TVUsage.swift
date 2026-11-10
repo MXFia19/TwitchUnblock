@@ -46,12 +46,15 @@ enum TVUsage {
         UserDefaults.standard.set(all, forKey: eventsKey)
     }
 
-    /// Pause pub vue (une par pause) : comptée avec son heure UTC, pour le
-    /// graphique des pubs de /stats.
-    static func countAdBreak() {
+    /// Source du direct en cours (TVPlayer) : jointe aux pauses pub vues.
+    static var adSource: String? = nil
+
+    /// Pause pub vue (une par pause) : comptée avec son heure UTC, la source
+    /// du direct et son type (« pre », « mid » ou vide), pour /stats.
+    static func countAdBreak(roll: String) {
         guard enabled else { return }
         count("live_ad_break")
-        AdHours.add()
+        AdHours.add(source: adSource, roll: roll)
     }
 
     /// Au lancement et au retour dans l'app : un signal par heure au plus.

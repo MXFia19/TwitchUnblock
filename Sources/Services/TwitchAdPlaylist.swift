@@ -5,6 +5,10 @@ struct AdBreak: Equatable {
     let id: String
     let start: Date
     let end: Date
+    /// X-TV-TWITCH-AD-ROLL-TYPE : « pre » (pré-roll de Twitch à l'ouverture),
+    /// « mid » (pause de la chaîne, lancée par le streamer ou son planning),
+    /// vide si la playlist ne le dit pas (flux du compte réécrit, titres).
+    var roll: String = ""
 }
 
 /// Twitch-specific classification, independent of AVPlayer. Recognizes the same
@@ -29,6 +33,15 @@ struct TwitchAdPlaylist {
 
     static func isAd(className: String?, id: String?) -> Bool {
         className == adClass || (id?.hasPrefix("stitched-ad-") ?? false)
+    }
+
+    /// Type de pause d'après X-TV-TWITCH-AD-ROLL-TYPE (PREROLL, MIDROLL).
+    static func roll(_ value: String?) -> String {
+        switch value?.uppercased() {
+        case "PREROLL": return "pre"
+        case "MIDROLL": return "mid"
+        default: return ""
+        }
     }
 
     static func attribute(_ line: String, _ name: String) -> String? {
@@ -64,7 +77,8 @@ struct TwitchAdPlaylist {
         var attributes: [String: [String: String]] = [:]
         for line in lines where line.hasPrefix("#EXT-X-DATERANGE:") {
             guard let id = Self.attribute(line, "ID") else { continue }
-            for key in ["CLASS", "START-DATE", "END-DATE", "DURATION", "PLANNED-DURATION", "END-ON-NEXT"] {
+            for key in ["CLASS", "START-DATE", "END-DATE", "DURATION", "PLANNED-DURATION", "END-ON-NEXT",
+                        "X-TV-TWITCH-AD-ROLL-TYPE"] {
                 if let value = Self.attribute(line, key) { attributes[id, default: [:]][key] = value }
             }
         }
@@ -85,7 +99,10 @@ struct TwitchAdPlaylist {
             let end = followingStart ?? values["END-DATE"].flatMap(date)
                 ?? start.addingTimeInterval(duration ?? Self.maxAdLength)
             let capped = min(end, start.addingTimeInterval(Self.maxAdLength))
-            if capped > start { ranges.append(AdBreak(id: id, start: start, end: capped)) }
+            if capped > start {
+                ranges.append(AdBreak(id: id, start: start, end: capped,
+                                      roll: Self.roll(values["X-TV-TWITCH-AD-ROLL-TYPE"])))
+            }
         }
 
         var parsed: [Segment] = []
@@ -182,7 +199,8 @@ struct TwitchAdPlaylist {
         // can still be associated with the same continuous break.
         for next in (breaks + knownBreaks).sorted(by: { ($0.start, $0.id) < ($1.start, $1.id) }) {
             if let last = blocks.last, next.start <= last.end {
-                blocks[blocks.count - 1] = AdBreak(id: last.id, start: last.start, end: max(last.end, next.end))
+                blocks[blocks.count - 1] = AdBreak(id: last.id, start: last.start, end: max(last.end, next.end),
+                                                   roll: last.roll.isEmpty ? next.roll : last.roll)
             } else {
                 blocks.append(next)
             }

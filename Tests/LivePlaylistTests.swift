@@ -153,6 +153,12 @@ enum LivePlaylistTests {
         expect(!TwitchAdPlaylist(quotedMedia).filteringAds().contains("#EXT-X-GAP\nlive.ts"), "Do not gap clean media after a quoted attribute")
         expect(TwitchAdPlaylist.attribute("#EXT-X-DATERANGE:X-NOTE=\"x,CLASS=twitch-stitched-ad\",ID=\"overlay\"", "CLASS") == nil, "A class inside a quoted value is not an ad marker")
         expect(TwitchAdPlaylist.attribute("#EXT-X-DATERANGE:X-NOTE=\"unterminated,DURATION=180", "DURATION") == nil, "Reject unterminated quoted attributes")
+        // Type de pause (/stats) : pré-roll de Twitch, pause de la chaîne, ou inconnu.
+        let midroll = quotedMedia.replacingOccurrences(of: ",DURATION=2", with: ",DURATION=2,X-TV-TWITCH-AD-ROLL-TYPE=\"MIDROLL\"")
+        expect(TwitchAdPlaylist(midroll).breaks.map(\.roll) == ["mid"], "Read the channel break roll type")
+        let preroll = quotedMedia.replacingOccurrences(of: ",DURATION=2", with: ",X-TV-TWITCH-AD-ROLL-TYPE=\"PREROLL\",DURATION=2")
+        expect(TwitchAdPlaylist(preroll).breaks.map(\.roll) == ["pre"], "Read the preroll roll type")
+        expect(TwitchAdPlaylist(quotedMedia).breaks.map(\.roll) == [""], "No roll type when the playlist doesn't say")
 
         let nextRange = "#EXT-X-DATERANGE:ID=\"stitched-ad-a\",CLASS=\"twitch-stitched-ad\",START-DATE=\"2026-11-06T12:00:00Z\",END-ON-NEXT=YES"
         let followingRange = "#EXT-X-DATERANGE:ID=\"stitched-ad-b\",CLASS=\"twitch-stitched-ad\",START-DATE=\"2026-11-06T12:00:02Z\",DURATION=2"

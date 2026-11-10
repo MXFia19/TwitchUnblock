@@ -73,7 +73,11 @@ final class AdBreakMonitor: NSObject, AVPlayerItemMetadataCollectorPushDelegate 
                   !snapshot.segments.isEmpty else { return }
             self.playlist = snapshot
             self.playlistReceived = Date()
-            for brk in snapshot.breaks { self.breaks[brk.id] = brk }
+            for brk in snapshot.breaks {
+                // Type déjà connu (lecture précédente) : gardé si celle-ci ne le dit plus.
+                let roll = brk.roll.isEmpty ? self.breaks[brk.id]?.roll ?? "" : brk.roll
+                self.breaks[brk.id] = AdBreak(id: brk.id, start: brk.start, end: brk.end, roll: roll)
+            }
             self.breaks = self.breaks.filter { $0.value.end > Date().addingTimeInterval(-3600) }
         }
     }
@@ -120,7 +124,8 @@ final class AdBreakMonitor: NSObject, AVPlayerItemMetadataCollectorPushDelegate 
                           group.startDate.addingTimeInterval(Self.maxLength))
             guard end > group.startDate else { continue }
             let id = group.uniqueID ?? "\(group.startDate.timeIntervalSince1970)"
-            let brk = AdBreak(id: id, start: group.startDate, end: end)
+            // Le type vient de la playlist lue par le chargeur (followPlaylist).
+            let brk = AdBreak(id: id, start: group.startDate, end: end, roll: breaks[id]?.roll ?? "")
             if breaks[id] == nil {
                 logger.info("PUB", "Pause pub annoncée par la playlist",
                             String(format: "%.0f s", end.timeIntervalSince(group.startDate)))
@@ -140,7 +145,9 @@ final class AdBreakMonitor: NSObject, AVPlayerItemMetadataCollectorPushDelegate 
         var block: AdBreak? = nil
         for next in breaks.values.sorted(by: { ($0.start, $0.id) < ($1.start, $1.id) }) {
             if let b = block, next.start <= b.end.addingTimeInterval(1) {
-                if next.end > b.end { block = AdBreak(id: b.id, start: b.start, end: next.end) }
+                if next.end > b.end {
+                    block = AdBreak(id: b.id, start: b.start, end: next.end, roll: b.roll.isEmpty ? next.roll : b.roll)
+                }
                 continue
             }
             if let b = block, b.start <= date, date < b.end { return b }
@@ -180,12 +187,24 @@ extension AdBreakMonitor {
 
 }
 
-/// Heures (UTC) des pauses pub comptées, pas encore envoyées (« 2026-11-09T13 »
-/// → nombre) : jointes au signal d'utilisation suivant (champ « adh ») pour le
-/// graphique horaire de /stats. 48 heures au plus : le Worker ne garde
-/// qu'aujourd'hui et hier.
+/// Heures (UTC) des pauses pub comptées, pas encore envoyées, avec la source
+/// du direct et le type de pause (« 2026-11-09T13|as|mid » → nombre) : jointes
+/// au signal d'utilisation suivant (champ « adh ») pour les graphiques de
+/// /stats, où les pubs des proxys sans pub restent à part de celles du compte
+/// (qualités supérieures) ou de Twitch officiel. 48 heures au plus : le Worker
+/// ne garde qu'aujourd'hui et hier.
 enum AdHours {
     private static let key = "usage_ad_hours"
+    /// Sources connues du Worker ; une autre part en « other ».
+    private static let sources: Set<String> = ["as", "pp", "al", "al2", "eu", "eu2", "custom", "account", "twitch"]
+
+    /// Source pour /stats : les deux formes du compte (sans pub, qualités
+    /// supérieures) sous « account ».
+    static func source(_ id: String?) -> String {
+        guard let id = id?.lowercased(), !id.isEmpty else { return "other" }
+        if id.hasPrefix("account") { return "account" }
+        return sources.contains(id) ? id : "other"
+    }
 
     private static func stamp(_ date: Date) -> String {
         String(ISO8601DateFormatter().string(from: date).prefix(13))
@@ -197,9 +216,11 @@ enum AdHours {
         return all.filter { $0.key >= oldest && $0.value > 0 }
     }
 
-    static func add() {
+    /// `roll` : « pre », « mid » ou vide (inconnu, « x »).
+    static func add(source: String?, roll: String) {
         var all = pending
-        all[stamp(Date()), default: 0] += 1
+        let type = roll == "pre" || roll == "mid" ? roll : "x"
+        all["\(stamp(Date()))|\(Self.source(source))|\(type)", default: 0] += 1
         UserDefaults.standard.set(all, forKey: key)
     }
 
@@ -228,10 +249,11 @@ final class AdBreakWatcher: ObservableObject {
     /// Faux pour un lecteur dont le son est géré ailleurs.
     private let managesAudio: Bool
     /// Lecteur principal (pas une case du multi-live) : appelé à chaque pause
-    /// vue, pour /stats (UsageService ou TVUsage), une fois même si le bandeau
-    /// se rouvre (autre qualité, autre source), comme sur le site. Passé par
-    /// le lecteur : ce fichier est vérifié seul par la CI (test-live-playlists).
-    private let onBreak: (() -> Void)?
+    /// vue, avec son type (« pre », « mid » ou vide), pour /stats (UsageService
+    /// ou TVUsage), une fois même si le bandeau se rouvre (autre qualité, autre
+    /// source), comme sur le site. Passé par le lecteur : ce fichier est
+    /// vérifié seul par la CI (test-live-playlists).
+    private let onBreak: ((String) -> Void)?
     private var counted: [String] = []
     /// Son coupé par nous, sur cet élément.
     private var mutedByUs = false
@@ -244,7 +266,7 @@ final class AdBreakWatcher: ObservableObject {
     /// Minuteur de secours : fin prévue + 5 s, en temps réel.
     private var deadline: Date?
 
-    init(managesAudio: Bool = true, onBreak: (() -> Void)? = nil) {
+    init(managesAudio: Bool = true, onBreak: ((String) -> Void)? = nil) {
         self.managesAudio = managesAudio
         self.onBreak = onBreak
     }
@@ -288,8 +310,9 @@ final class AdBreakWatcher: ObservableObject {
         if remaining != left { remaining = left }
         if currentId != brk.id || currentEnd != brk.end {
             if currentId != brk.id {
-                logger.info("PUB", "Pause pub à l'écran", "\(left) s restantes")
-                countOnce(brk.id)
+                logger.info("PUB", "Pause pub à l'écran",
+                            "\(left) s restantes\(brk.roll.isEmpty ? "" : " · \(brk.roll)")")
+                countOnce(brk)
             }
             currentId = brk.id
             // Bloc prolongé par une pub annoncée après coup : secours repoussé.
@@ -311,11 +334,11 @@ final class AdBreakWatcher: ObservableObject {
         }
     }
 
-    private func countOnce(_ id: String) {
-        guard let onBreak, !counted.contains(id) else { return }
-        counted.append(id)
+    private func countOnce(_ brk: AdBreak) {
+        guard let onBreak, !counted.contains(brk.id) else { return }
+        counted.append(brk.id)
         if counted.count > 8 { counted.removeFirst() }
-        onBreak()
+        onBreak(brk.roll)
     }
 
     /// Hors pause : le son rendu, le bandeau retiré.

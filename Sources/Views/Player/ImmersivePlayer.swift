@@ -2101,30 +2101,38 @@ struct ImmersivePlayer: View {
     @ViewBuilder private var chaptersSheet: some View {
         let current = currentChapter
         NavigationStack {
-            List(chapters) { c in
-                Button {
-                    model.seek(to: c.start)
-                    showChapters = false
-                } label: {
-                    HStack(spacing: 10) {
-                        Text(timeLabel(c.start))
-                            .font(.system(size: 13, weight: .semibold).monospacedDigit())
-                            .foregroundColor(.tMuted)
-                            .frame(minWidth: 56, alignment: .leading)
-                        Text(c.title)
-                            .font(.system(size: 15, weight: c == current ? .bold : .regular))
-                            .foregroundColor(c == current ? .tPrimary : .tText)
-                            .lineLimit(2)
-                        Spacer(minLength: 0)
-                        if c == current {
-                            Image(systemName: "checkmark").foregroundColor(.tPrimary)
+            ScrollViewReader { proxy in
+                List(chapters) { c in
+                    Button {
+                        model.seek(to: c.start)
+                        showChapters = false
+                    } label: {
+                        HStack(spacing: 10) {
+                            Text(timeLabel(c.start))
+                                .font(.system(size: 13, weight: .semibold).monospacedDigit())
+                                .foregroundColor(.tMuted)
+                                .frame(minWidth: 56, alignment: .leading)
+                            Text(c.title)
+                                .font(.system(size: 15, weight: c == current ? .bold : .regular))
+                                .foregroundColor(c == current ? .tPrimary : .tText)
+                                .lineLimit(2)
+                            Spacer(minLength: 0)
+                            if c == current {
+                                Image(systemName: "checkmark").foregroundColor(.tPrimary)
+                            }
                         }
                     }
+                    .listRowBackground(Color.tCard)
                 }
-                .listRowBackground(Color.tCard)
+                .scrollContentBackground(.hidden)
+                .background(Color.tDark)
+                // Ouverte sur le chapitre en cours, au milieu (demande de joey,
+                // 09/11) : dans une longue VOD, il fallait le chercher.
+                .onAppear {
+                    guard let current else { return }
+                    DispatchQueue.main.async { proxy.scrollTo(current.id, anchor: .center) }
+                }
             }
-            .scrollContentBackground(.hidden)
-            .background(Color.tDark)
             .navigationTitle(store.t("chapters"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

@@ -188,9 +188,12 @@ final class PlayerPullTouchGuard: UIGestureRecognizer {
 //
 //  Réglage « Fermer en glissant depuis le bord », coupé d'office. Un geste
 //  UIKit de bord d'écran, posé sur la fenêtre : il ne part que d'un doigt
-//  posé au bord, et prend alors la main sur ce qui est dessous (barre de
-//  lecture, chat). Une feuille ouverte par-dessus le lecteur garde son
-//  propre geste de retour : le nôtre ne démarre pas.
+//  posé au bord. Il suit le doigt EN MÊME TEMPS que les gestes du dessous :
+//  le glissé vers le bas du lecteur (PlayerPullGesture, dès un point), le
+//  déplacement de l'image ou le défilement du chat démarraient avant lui et
+//  le faisaient échouer, et le bord ne fermait rien (rykozin, 08/11). Une
+//  feuille ouverte par-dessus le lecteur garde son propre geste de retour :
+//  le nôtre ne démarre pas.
 // ═══════════════════════════════════════════════════════════════════════════
 
 struct EdgeSwipeCloser: UIViewRepresentable {
@@ -239,6 +242,13 @@ struct EdgeSwipeCloser: UIViewRepresentable {
 
         func gestureRecognizerShouldBegin(_ r: UIGestureRecognizer) -> Bool {
             enabled && (r.view as? UIWindow)?.rootViewController?.presentedViewController == nil
+        }
+
+        /// Avec les gestes du lecteur et du chat, sans attendre qu'ils renoncent
+        /// (voir l'en-tête).
+        func gestureRecognizer(_ r: UIGestureRecognizer,
+                               shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
+            true
         }
 
         @objc private func handle(_ r: UIScreenEdgePanGestureRecognizer) {

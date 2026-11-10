@@ -403,7 +403,7 @@ struct MainTabView: View {
             // fondu de fermeture, le lecteur étant encore en place mais masqué.
             // Aussi pendant un chargement réduit (ou son erreur) : de quoi y
             // revenir.
-            if playerMode != nil && !playerVisible && !closingPlayer {
+            if miniBarShown {
                 miniBar.zIndex(99)
             }
 
@@ -890,7 +890,7 @@ struct MainTabView: View {
     /// barre d'onglets dessous (voir miniBar).
     private var floatingBarsInset: CGFloat {
         guard !playerVisible, !closingPlayer else { return 0 }
-        let bars = (playerMode != nil ? 1 : 0) + (multi.entries.isEmpty ? 0 : 1)
+        let bars = (miniBarShown ? 1 : 0) + (multi.entries.isEmpty ? 0 : 1)
         guard bars > 0 else { return 0 }
         return CGFloat((sideTabs ? 0 : 20) + 65 * bars)
     }
@@ -900,8 +900,16 @@ struct MainTabView: View {
     /// colonne) : environ 50 pt par barre, plus l'écart entre elles.
     private var listBarsInset: CGFloat {
         guard !playerVisible, !closingPlayer else { return 0 }
-        let bars = (playerMode != nil ? 1 : 0) + (multi.entries.isEmpty ? 0 : 1)
+        let bars = (miniBarShown ? 1 : 0) + (multi.entries.isEmpty ? 0 : 1)
         return CGFloat(64 * bars)
+    }
+
+    /// Mini-barre du lecteur réduit. Pas pendant un PiP : la fenêtre ramène
+    /// déjà au lecteur et le ferme, la barre ne faisait que cacher le bas de
+    /// l'écran (demande de Slowie et hippxrr, 09/11). Elle revient à la fin
+    /// du PiP si le lecteur reste réduit.
+    private var miniBarShown: Bool {
+        playerMode != nil && !playerVisible && !closingPlayer && !pipState.active
     }
 
     /// Feuilles et mosaïque attachées à cet écran : une notification touchée
@@ -2137,7 +2145,7 @@ struct MainTabView: View {
     /// Multi-live en préparation : les vidéos choisies, et « Regarder ».
     /// Au-dessus du mini-lecteur quand il est là.
     private var multiBar: some View {
-        let miniShown = playerMode != nil
+        let miniShown = miniBarShown
         return HStack(spacing: TSpace.sm) {
             Image(systemName: "square.grid.2x2.fill")
                 .font(.system(size: 14, weight: .bold))

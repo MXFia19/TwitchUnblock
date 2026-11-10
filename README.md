@@ -96,8 +96,8 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   rest of the app with the player reduced. Closing the player, opening another
   video or switching to chat only ends it, along with its chat connection and
   lock screen activity.
-  Starting it shrinks the player into the mini player, so you can browse the app right away (no more black full-size player to close).
-  The PiP window's expand button brings the player back full size on the same video, without reloading (with the app's player, tapping the mini player does too).
+  Starting it shrinks the player out of the way, so you can browse the app right away (no more black full-size player to close). The mini player bar stays hidden while the window is open (the window brings you back and closes the video), and comes back when it closes if the player is still reduced.
+  The PiP window's expand button brings the player back full size on the same video, without reloading.
   On iOS 16, the app's player removes its controls a moment before it shrinks into the mini player: its seek bar used to stay drawn over the app.
   A followed raid or the next VOD of **Play all** keeps playing in the same window: the player only changes what it plays (the window used to close while the sound went on).
 * 🌙 **Background playback** — Settings → Player: when the screen locks or you
@@ -137,7 +137,8 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   first, then the title, whose card adds the broadcast date. Closing a channel page opened from the full-size player (name,
   title or chat) brings the player back full size instead of the mini player.
 * 👈 **Swipe from the edge to close** (Settings → Player, off by default) —
-  swipe in from the left edge of the screen to close the player, like ✕.
+  swipe in from the left edge of the screen to close the player, like ✕, even
+  when the swipe starts over the video or the chat.
 * 📋 **Streams as a list** (Settings → General, or the button on Home) —
   live streams in a list like on Twitch, thumbnail on the left, on Home, in a
   category and in search results.
@@ -319,7 +320,7 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   included (Settings → Player). iOS doesn't let apps pick "Fixed" or "Head
   Tracked": that choice stays in Control Center.
 * 🧭 **VOD chapters** — game changes marked on the progress bar; tap the current
-  chapter to jump to another.
+  chapter to jump to another (the list opens on the current one).
 * 🔇 **Muted parts** — passages Twitch muted for copyrighted music show in orange
   on the progress bar, with a notice and a **Skip** button. For a day or two
   after a stream, Twitch's CDN still serves the original sound: the app puts it

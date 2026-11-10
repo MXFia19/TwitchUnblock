@@ -194,6 +194,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.7.22",
+          "buildVersion": "399",
+          "date": "2026-11-10",
+          "localizedDescription": "- Swipe from the edge to close the player now works even when the swipe starts over the video or the chat\n- The mini player bar hides while the Picture-in-Picture window is open, and comes back when it closes\n- The chapters list opens on the current chapter",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-399/TwitchUnblock.ipa",
+          "size": 4611568,
+          "commit": "b9e5d2a7913ce1ee35d89d61e314d1f9d257b5e6"
+        },
+        {
           "version": "1.7.21",
           "buildVersion": "398",
           "date": "2026-11-09",
@@ -273,25 +282,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-390/TwitchUnblock.ipa",
           "size": 4569268,
           "commit": "eea4414913442e5bbf00c2426e5024149d3baf9e"
-        },
-        {
-          "version": "1.7.11",
-          "buildVersion": "389",
-          "date": "2026-11-04",
-          "localizedDescription": "- Every category shows its viewer count again (Top, search and followed), not only the ones followed on your Twitch account",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-389/TwitchUnblock.ipa",
-          "size": 4568792,
-          "commit": "90d837c32313ef1a42f2714b243f0196c6aea08a"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.7.21",
-      "versionDate": "2026-11-09",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-398/TwitchUnblock.ipa",
-      "size": 4611092
+      "version": "1.7.22",
+      "versionDate": "2026-11-10",
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-399/TwitchUnblock.ipa",
+      "size": 4611568
     }
   ],
   "news": []

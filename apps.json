@@ -194,6 +194,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.7.23",
+          "buildVersion": "400",
+          "date": "2026-11-10",
+          "localizedDescription": "- Ad breaks counted for the website's /stats now include the live source and whether it was a Twitch pre-roll or the channel's own break\n- Apple TV: Ad breaks counted for the website's /stats now include the live source and whether it was a Twitch pre-roll or the channel's own break",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-400/TwitchUnblock.ipa",
+          "size": 4615039,
+          "commit": "788f75b5812b372489de7dcf06c8d2b9e7ab6b96"
+        },
+        {
           "version": "1.7.22",
           "buildVersion": "399",
           "date": "2026-11-10",
@@ -273,25 +282,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-391/TwitchUnblock.ipa",
           "size": 4582203,
           "commit": "aceb92805268a7297555d7dd3d1755fa2edc3139"
-        },
-        {
-          "version": "1.7.12",
-          "buildVersion": "390",
-          "date": "2026-11-05",
-          "localizedDescription": "- The player's seek bar no longer stays on screen after minimizing the player (iOS 16)",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-390/TwitchUnblock.ipa",
-          "size": 4569268,
-          "commit": "eea4414913442e5bbf00c2426e5024149d3baf9e"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.7.22",
+      "version": "1.7.23",
       "versionDate": "2026-11-10",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-399/TwitchUnblock.ipa",
-      "size": 4611568
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-400/TwitchUnblock.ipa",
+      "size": 4615039
     }
   ],
   "news": []

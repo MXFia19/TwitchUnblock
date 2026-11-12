@@ -17,6 +17,10 @@ struct TabScaffold: View {
     /// mini-barre en conséquence ; mise à jour ici d'après la taille de la
     /// fenêtre (rotation, pliage, Split View).
     @Binding var sideTabs: Bool
+    /// Colonne posée dans la colonne d'état de l'iPhone Duo (barre d'état sur
+    /// le côté) plutôt qu'à gauche du contenu : MainTabView ne décale plus la
+    /// mini-barre (voir SideTabRail.statusColumn).
+    @Binding var railInStatusColumn: Bool
     /// Marge haute de la fenêtre (MainTabView), comme l'en-tête.
     let safeTop: CGFloat
     let header: AnyView
@@ -29,11 +33,35 @@ struct TabScaffold: View {
     /// 2 à 4 colonnes sous le lecteur, la liste, deux fois moins haute, y
     /// était remontée, et au retour en portrait on avait perdu sa place.
     @State private var lowWindow = false
+    /// Côté de la colonne d'état (Duo), et sa largeur.
+    @State private var railEdge: HorizontalEdge? = nil
+    @State private var columnWidth: CGFloat = 0
 
     var body: some View {
+        if #available(iOS 26.0, *) {
+            if store.nativeTabs {
+                // Onglets natifs (Fonctionnalités en test) : la barre d'iOS 26,
+                // rangée par le système selon l'écran. Ni colonne ni barre de
+                // l'app : la mini-barre ne se décale plus.
+                NativeTabScaffold(activeTab: $activeTab, header: header, content: content)
+                    .onAppear {
+                        sideTabs = false
+                        railInStatusColumn = false
+                    }
+            } else {
+                customBody
+            }
+        } else {
+            customBody
+        }
+    }
+
+    /// Barre d'onglets de l'app : en bas, en colonne à gauche, ou dans la
+    /// colonne d'état de l'iPhone Duo.
+    private var customBody: some View {
         let glass = store.liquidGlass && Theme.glassSupported
-        HStack(spacing: 0) {
-            if sideTabs {
+        return HStack(spacing: 0) {
+            if sideTabs && !railInStatusColumn {
                 SideTabRail(activeTab: $activeTab, safeTop: safeTop)
             }
 
@@ -55,8 +83,20 @@ struct TabScaffold: View {
                 }
             }
         }
+        // iPhone Duo, barre d'état en colonne sur le côté : les onglets se
+        // rangent dans cette colonne, sous l'heure, en bas — comme les apps
+        // faites pour le Duo (fb_mvwsyucv). Le contenu garde toute sa largeur.
+        // Posée au bord du contenu puis décalée de la largeur de la colonne :
+        // elle y entre tout entière.
+        .overlay(alignment: railEdge == .leading ? .bottomLeading : .bottomTrailing) {
+            if sideTabs && railInStatusColumn {
+                SideTabRail(activeTab: $activeTab, safeTop: safeTop, columnWidth: columnWidth)
+                    .offset(x: railEdge == .leading ? -columnWidth : columnWidth)
+            }
+        }
         // Taille de la fenêtre, marges des côtés déduites : barre en bas ou
-        // colonne à gauche.
+        // colonne à gauche. La colonne d'état du Duo change cette largeur en
+        // apparaissant ou en disparaissant (lecteur en grand).
         .background(GeometryReader { geo in
             Color.clear
                 .onAppear { update(geo.size, appearing: true) }
@@ -89,10 +129,19 @@ struct TabScaffold: View {
     private func update(_ size: CGSize, appearing: Bool = false) {
         let low = size.height < SideTabRail.minHeight
         if low != lowWindow { lowWindow = low }
-        let side = SideTabRail.fits(size)
+        // Colonne d'état sur un côté (Duo) : les onglets y vont, même en
+        // portrait ; sa largeur est celle de la marge de ce côté.
+        let insets = SideTabRail.windowInsets
+        let column = SideTabRail.statusColumn(insets)
+        if column != railEdge { railEdge = column }
+        let width = column == .leading ? insets.left : insets.right
+        if abs(width - columnWidth) > 0.5 { columnWidth = width }
+        if (column != nil) != railInStatusColumn { railInStatusColumn = column != nil }
+        let side = SideTabRail.fits(size) || column != nil
         guard side != sideTabs || (appearing && size.width > 500) else { return }
         if side != sideTabs { sideTabs = side }
-        logger.info("APP", side ? "Onglets en colonne à gauche" : "Onglets en bas",
+        logger.info("APP", side ? (column == nil ? "Onglets en colonne à gauche" : "Onglets dans la colonne d'état")
+                                : "Onglets en bas",
                     "\(Int(size.width))×\(Int(size.height)) pt · marges \(Self.windowInsets)")
     }
 
@@ -106,6 +155,49 @@ struct TabScaffold: View {
     }
 }
 
+// MARK: – Onglets natifs (iOS 26)
+/// La barre d'onglets d'iOS 26 (Liquid Glass) : elle se replie quand on
+/// défile, et le système la range selon l'écran (iPad, iPhone Duo). Mêmes
+/// onglets et mêmes réglages que la barre de l'app ; l'onglet affiché reçoit
+/// l'en-tête et l'écran, comme avec elle.
+@available(iOS 26.0, *)
+private struct NativeTabScaffold: View {
+    @Binding var activeTab: MainTabView.TabName
+    let header: AnyView
+    let content: AnyView
+    @EnvironmentObject private var store: AppStore
+    /// Visite guidée en cours : tous les onglets, même masqués.
+    @AppStorage("onboarding_done") private var onboardingDone = false
+
+    var body: some View {
+        // Toucher l'onglet affiché remonte sa liste, comme avec la barre de
+        // l'app (CustomTabBar.select), si le système le signale.
+        TabView(selection: Binding(get: { activeTab },
+                                   set: { CustomTabBar.select($0, in: $activeTab) })) {
+            ForEach(MainTabView.TabName.visible(store, all: !onboardingDone), id: \.self) { tab in
+                Tab(tab.label(store), systemImage: tab.icon, value: tab) {
+                    if tab == activeTab {
+                        VStack(spacing: 0) {
+                            header
+                                .zIndex(10)
+                            content
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                .tMeasuresContentWidth(true)
+                        }
+                        // L'en-tête pose lui-même sa marge haute.
+                        .ignoresSafeArea(edges: .top)
+                    } else {
+                        Color.tDark
+                    }
+                }
+            }
+        }
+        .tabViewStyle(.sidebarAdaptable)
+        .tabBarMinimizeBehavior(.onScrollDown)
+        .tint(.tPrimary)
+    }
+}
+
 // MARK: – Colonne d'onglets
 /// Barre d'onglets posée à gauche quand la fenêtre est large : la hauteur
 /// reste au contenu. Mêmes onglets, même ordre et mêmes réglages que la
@@ -116,6 +208,10 @@ struct SideTabRail: View {
     @Binding var activeTab: MainTabView.TabName
     /// Marge haute de la fenêtre (barre d'état), comme l'en-tête.
     let safeTop: CGFloat
+    /// Dans la colonne d'état de l'iPhone Duo (sa largeur) : une pastille
+    /// d'icônes au bas de la colonne, sous l'heure, comme les apps faites
+    /// pour le Duo. nil : la colonne à gauche du contenu.
+    var columnWidth: CGFloat? = nil
     @EnvironmentObject private var store: AppStore
     /// Visite guidée en cours : tous les onglets, même masqués.
     @AppStorage("onboarding_done") private var onboardingDone = false
@@ -123,6 +219,23 @@ struct SideTabRail: View {
     /// Largeur de la colonne (marge de sécurité non comprise) : la
     /// mini-barre se décale d'autant (MainTabView).
     static let width: CGFloat = 84
+
+    /// Marges de sécurité de la fenêtre (UIKit) ; zéro sans fenêtre.
+    static var windowInsets: UIEdgeInsets {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first?.windows.first(where: { $0.isKeyWindow })?.safeAreaInsets ?? .zero
+    }
+
+    /// Côté où la barre d'état de l'iPhone Duo forme une colonne : une marge
+    /// d'un seul côté, aucune en haut. Un iPhone couché en a des deux côtés,
+    /// un iPad aucune : ni l'un ni l'autre ne sont concernés.
+    static func statusColumn(_ i: UIEdgeInsets) -> HorizontalEdge? {
+        guard i.top < 1 else { return nil }
+        if i.right >= 30 && i.left < 1 { return .trailing }
+        if i.left >= 30 && i.right < 1 { return .leading }
+        return nil
+    }
 
     /// Hauteur de fenêtre en dessous de laquelle c'est un iPhone couché
     /// (lecteur ouvert en grand) : barre du bas et grilles d'iPhone
@@ -151,7 +264,19 @@ struct SideTabRail: View {
     }
 
     var body: some View {
-        if store.liquidGlass && Theme.glassSupported {
+        if let columnWidth {
+            VStack(spacing: 4) {
+                ForEach(MainTabView.TabName.visible(store, all: !onboardingDone), id: \.self) { tab in
+                    columnItem(tab)
+                }
+            }
+            .padding(.vertical, 6)
+            .frame(width: max(columnWidth - 10, 44))
+            .tGlass(in: Capsule(), fallback: .tCard)
+            .frame(width: columnWidth)
+            .padding(.bottom, UIApplication.safeAreaBottom + TSpace.md)
+            .frame(maxHeight: .infinity, alignment: .bottom)
+        } else if store.liquidGlass && Theme.glassSupported {
             // Verre liquide : une pastille flottante, comme la barre du bas.
             tabs
                 .padding(.vertical, 8)
@@ -180,6 +305,26 @@ struct SideTabRail: View {
                 item(tab)
             }
         }
+    }
+
+    /// Onglet de la pastille du Duo : l'icône seule (la colonne est étroite),
+    /// son nom pour VoiceOver.
+    private func columnItem(_ tab: MainTabView.TabName) -> some View {
+        let isActive = activeTab == tab
+        return Button {
+            CustomTabBar.select(tab, in: $activeTab)
+        } label: {
+            Image(systemName: isActive ? tab.iconFilled : tab.icon)
+                .font(.system(size: 19, weight: isActive ? .semibold : .regular))
+                .foregroundColor(isActive ? .tPrimary : .tMuted)
+                .frame(width: 44, height: 44)
+                .background(Circle().fill(isActive ? Color.tPrimary.opacity(0.16) : Color.clear))
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(tab.label(store))
+        .accessibilityAddTraits(isActive ? [.isSelected] : [])
+        .tourAnchor(tab.tourTarget)
     }
 
     private func item(_ tab: MainTabView.TabName) -> some View {

@@ -49,6 +49,8 @@ struct TVRootView: View {
     /// « Chaîne » touché dans le lecteur : sa page s'ouvre une fois celui-ci fermé.
     @State private var pendingChannel: String?
     @State private var channelPage: TVChannelRoute?
+    /// Multi-live (TVMultiLive) : ouvert depuis son bandeau ou le menu d'une carte.
+    @ObservedObject private var multiRoute = TVMultiRoute.shared
 
     enum Tab: Hashable { case following, top, categories, search, account }
     @State private var tab = Tab.following
@@ -90,6 +92,10 @@ struct TVRootView: View {
         }
         .fullScreenCover(item: $channelPage) { route in
             TVChannelCover(login: route.login)
+                .environmentObject(session)
+        }
+        .fullScreenCover(isPresented: $multiRoute.open) {
+            TVMultiLiveScreen()
                 .environmentObject(session)
         }
         .task {
@@ -251,6 +257,7 @@ struct TVFollowingTab: View {
         AnyView(
             ScrollView {
                 VStack {
+                    TVMultiLiveBar()
                     if resumeShown, session.resumePlace == .top { resumeSection }
                     if session.token == nil {
                         TVMessage(text: session.t("tv_need_login"))
@@ -390,6 +397,8 @@ struct TVFollowingTab: View {
                 .tvCard()
                 // Bouton Play de la télécommande : comme Sélection.
                 .onPlayPauseCommand { openPlayer(.live(login: s.userLogin, name: s.userName), from: .live(s.id)) }
+                // Bouton central maintenu : multi-live (TVMultiLive).
+                .contextMenu { TVMultiLiveMenuItems(login: s.userLogin, name: s.userName) }
             }
         }
         .padding(.horizontal, 64)
@@ -635,6 +644,8 @@ struct TVTopTab: View {
                 .frame(maxWidth: 800)
                 .padding(.top, 24)
 
+                TVMultiLiveBar()
+
                 if top.streams.isEmpty {
                     TVMessage(text: loading ? session.t("loading") : session.t("tv_no_live"))
                 } else {
@@ -752,6 +763,7 @@ struct TVCategoryStreams: View {
             // Chaînes masquées écartées ; la catégorie, ouverte exprès, reste
             // consultable même masquée.
             let shown = streams.filter { !session.hidden.hides(channel: $0.userLogin) }
+            TVMultiLiveBar()
             if shown.isEmpty {
                 TVMessage(text: loaded ? session.t("tv_no_live") : session.t("loading"))
             } else {
@@ -1178,6 +1190,9 @@ struct TVAccountTab: View {
     @ObservedObject private var appLogger = AppLogger.shared
     /// Signal d'utilisation pour /stats (TVUsage) : coupé, le serveur oublie tout.
     @AppStorage(TVUsage.enabledKey) private var shareUsage = true
+    /// Audio spatial : « off » par défaut sur Apple TV (TVApp), lu par
+    /// SpatialAudio à la création de chaque élément.
+    @AppStorage(SpatialAudio.key) private var spatialAudio = "off"
 
     var body: some View {
         ScrollView {
@@ -1210,7 +1225,13 @@ struct TVAccountTab: View {
                 }
 
                 VStack(alignment: .leading, spacing: 32) {
-                    Text(session.t("tv_settings")).font(.title3.bold())
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(session.t("tv_settings")).font(.title3.bold())
+                        Spacer(minLength: 24)
+                        // Version visible sans descendre jusqu'à « À propos »
+                        // (retour du 06/11 : introuvable dans l'app).
+                        Text(versionText).foregroundColor(.secondary)
+                    }
                     TVChoiceRow(title: session.t("tv_language"),
                                 options: Lang.allCases.map { ($0.rawValue, $0.label) },
                                 selection: Binding(get: { session.lang.rawValue },
@@ -1224,6 +1245,12 @@ struct TVAccountTab: View {
                                          : pref == "audio" ? session.t("tv_audio") : "\(pref)p")
                                 },
                                 selection: $session.qualityPref)
+                    // Audio spatial : coupé par défaut (TVApp), comme l'app
+                    // Twitch ; vaut pour la prochaine lecture.
+                    TVChoiceRow(title: session.t("tv_spatial"),
+                                options: [("off", session.t("tv_off")), ("auto", session.t("tv_on"))],
+                                selection: $spatialAudio)
+                    Text(session.t("tv_spatial_sub")).foregroundColor(.secondary)
                     // Rangée « Continuer à regarder » de Suivies : au-dessus
                     // des directs, en dessous, ou masquée.
                     TVChoiceRow(title: session.t("tv_resume_place"),
@@ -1276,19 +1303,23 @@ struct TVAccountTab: View {
         // L'attente du code n'est plus annulée en quittant l'onglet (TVSession).
     }
 
+    /// « Version 0.1.43 (build 43) » : en tête des réglages et dans « À propos ».
+    private var versionText: String {
+        let info = Bundle.main.infoDictionary
+        let version = info?["CFBundleShortVersionString"] as? String ?? "?"
+        let build = info?["CFBundleVersion"] as? String ?? "?"
+        return session.t("tv_version")
+            .replacingOccurrences(of: "{v}", with: version)
+            .replacingOccurrences(of: "{b}", with: build)
+    }
+
     /// À propos : version et numéro de build de l'app (« Version 0.1.34
     /// (build 34) » pour un build de la CI), pour décrire un problème ou
     /// vérifier qu'une mise à jour est bien installée.
     private var aboutSection: some View {
-        let info = Bundle.main.infoDictionary
-        let version = info?["CFBundleShortVersionString"] as? String ?? "?"
-        let build = info?["CFBundleVersion"] as? String ?? "?"
-        return VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 16) {
             Text(session.t("tv_about")).font(.title3.bold())
-            Text(session.t("tv_version")
-                    .replacingOccurrences(of: "{v}", with: version)
-                    .replacingOccurrences(of: "{b}", with: build))
-                .foregroundColor(.secondary)
+            Text(versionText).foregroundColor(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         // Atteignable à la télécommande : sans rien d'autre à focaliser
@@ -1462,6 +1493,7 @@ struct TVStreamGrid: View {
                 // Bouton Play de la télécommande : comme Sélection.
                 .onPlayPauseCommand { play(.live(login: s.userLogin, name: s.userName)) }
                 .contextMenu {
+                    TVMultiLiveMenuItems(login: s.userLogin, name: s.userName)
                     if hideable {
                         Button(role: .destructive) {
                             session.hidden.hide(channel: s.userLogin, name: s.userName)
@@ -1511,6 +1543,7 @@ struct TVStreamCard: View {
                         .padding(.horizontal, 8).padding(.vertical, 3)
                         .background(Color.black.opacity(0.7))
                         .cornerRadius(4)
+                    TVMultiLiveMark(login: stream.userLogin)
                 }
                 .foregroundColor(.white)
                 .padding(12)

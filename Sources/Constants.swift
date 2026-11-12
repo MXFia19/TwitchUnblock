@@ -166,12 +166,39 @@ let kLiveSources = ["as", "pp", "al", "al2", "eu", "eu2", "twitch"]
 /// la reçoit juste après (comme le site et le Worker).
 let kLiveSourceBackupOf = ["pp": "as", "al2": "al", "eu2": "eu"]
 
+/// « Ma source » (id « custom ») : adresse d'un serveur luminous-ttv à soi,
+/// comme sur le site (demande de hippxrr). https://, un nom de domaine, sans
+/// port ni paramètres. Rend « https://hôte/chemin » sans « / » final, ou nil
+/// (mêmes règles que customSourceBase du site).
+func customSourceBase(_ value: String) -> String? {
+    let v = value.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !v.isEmpty, v.count <= 200, let u = URLComponents(string: v),
+          u.scheme?.lowercased() == "https", u.user == nil, u.password == nil,
+          u.query == nil, u.fragment == nil, u.port == nil || u.port == 443,
+          let host = u.host?.lowercased(), host.contains("."), !host.hasPrefix("["),
+          !host.allSatisfy({ $0.isNumber || $0 == "." }) else { return nil }
+    let local = ["localhost", "local", "internal", "lan", "home", "arpa"]
+    if local.contains(where: { host == $0 || host.hasSuffix("." + $0) }) { return nil }
+    var path = u.path
+    while path.hasSuffix("/") { path.removeLast() }
+    return "https://\(host)\(path)"
+}
+
+/// Ma source enregistrée et valable, sans « https:// » (luminousLiveLinks).
+func customSourceHost() -> String? {
+    customSourceBase(UserDefaults.standard.string(forKey: "cfg_custom_source") ?? "")
+        .map { String($0.dropFirst("https://".count)) }
+}
+
 /// Ordre complet des sources : celles de `saved` connues, sans doublon ;
 /// une source qui manque va juste après celle qu'elle secourt, sinon à la
-/// fin, dans l'ordre automatique.
+/// fin, dans l'ordre automatique. Ma source reste tant qu'elle est réglée.
 func completeLiveSourceOrder(_ saved: [String]) -> [String] {
     var order: [String] = []
-    for id in saved where kLiveSources.contains(id) && !order.contains(id) { order.append(id) }
+    let custom = customSourceHost() != nil
+    for id in saved where (kLiveSources.contains(id) || (custom && id == "custom")) && !order.contains(id) {
+        order.append(id)
+    }
     for id in kLiveSources where !order.contains(id) {
         if let parent = kLiveSourceBackupOf[id], let i = order.firstIndex(of: parent) {
             order.insert(id, at: i + 1)
@@ -334,6 +361,9 @@ private let translations: [Lang: [String: String]] = [
         "discover_unmute": "Activer le son", "discover_mute": "Couper le son",
         "cust_title": "Personnaliser l'app", "cust_open": "Onglets, accueil, lecteur, chat",
         "cust_sub": "Affiche, masque et range ce que tu veux : onglets, accueil, boutons du lecteur et bandeaux du chat.",
+        "cust_no_account": "Sans compte Twitch",
+        "cust_no_account_foot": "Masque tout ce qui demande un compte ou invite à se connecter : pages Compte Twitch, Drops et Points de chaîne des réglages, cartes de connexion de l'accueil, rappels du lecteur, du chat et des prédictions, création de clips. Les chaînes suivies restent sur cet appareil.",
+        "cust_no_account_signed_in": "Tu es connecté (compte de l'app ou session web) : rien ne serait masqué. Déconnecte-toi d'abord dans Réglages → Compte Twitch.",
         "cust_tabs": "Onglets", "cust_launch_tab": "Onglet au lancement",
         "cust_tabs_foot": "Fais glisser ≡ pour changer l'ordre. Il reste toujours au moins un onglet.",
         "cust_home_tabs": "Accueil · onglets des lives", "cust_home_cards": "Accueil · cartes",
@@ -452,7 +482,7 @@ private let translations: [Lang: [String: String]] = [
         "notif_channels_error": "Impossible de charger tes chaînes suivies. Réessaie dans un instant.",
         "chapters": "Chapitres", "close": "Fermer",
         "made_by": "Fait par", "source_ios": "Code source de l'app", "web_version": "Version web", "credits_thanks": "Merci à BetterTTV, FrankerFaceZ, 7TV, recent-messages et Luminous.", "not_affiliated": "Projet indépendant, non affilié à Twitch.",
-        "credits_contributors": "Contributeurs", "credits_contrib_it": "Traduction italienne", "credits_contrib_ja": "Traduction japonaise", "credits_contrib_zhHant": "Traduction en chinois traditionnel", "credits_contrib_swipe": "Glissé vers le bas du lecteur plus réactif",
+        "credits_contributors": "Contributeurs", "credits_contrib_it": "Traduction italienne", "credits_contrib_ja": "Traduction japonaise", "credits_contrib_zhHant": "Traduction en chinois traditionnel", "credits_contrib_swipe": "Glissé vers le bas du lecteur plus réactif", "credits_contrib_ads": "Filtrage des pubs dans les directs",
         "update_title": "Mise à jour disponible", "update_msg": "La version {v} est sortie (tu as la {c}). Mets-la à jour depuis Feather, SideStore ou AltStore.", "update_whats_new": "Voici ce qui a changé depuis ta version :", "update_open": "Mettre à jour", "later": "Plus tard", "update_available": "Mise à jour disponible : {v}", "update_check": "Vérifier les mises à jour", "update_none": "L'app est à jour", "version_label": "Version", "discord_join": "Rejoindre le Discord",
         "discord_title": "Rejoins le Discord", "discord_msg": "Nouveautés, bugs, idées : la communauté TwitchUnblock est sur Discord. Tu peux aussi le retrouver plus tard dans Réglages → À propos.",
         "update_msg_short": "Une nouvelle version de TwitchUnblock est disponible. Installe-la depuis Feather, SideStore ou AltStore.",
@@ -482,6 +512,8 @@ private let translations: [Lang: [String: String]] = [
         "drops_notice_title": "Regarde {m} min pour obtenir {r}", "drops_notice_ends": "Jusqu'au {d}", "drops_notice_details": "Détails", "drops_notice_more": "+{n} récompenses",
         "chat_info_copy": "Copier le nom", "chat_info_copied": "Copié", "chat_info_insert": "Ajouter au message", "chat_info_badge": "Badge",
         "emote_hide": "Masquer cette emote",
+        "emotes_fav": "Favoris", "emote_fav_add": "Ajouter aux favoris", "emote_fav_remove": "Retirer des favoris",
+        "chat_offline_open": "La chaîne est hors ligne : son chat reste ouvert.",
         "emote_unhide": "Réafficher cette emote",
         "emote_hidden_note": "Masquée : le chat l'affiche comme le mot tapé.",
         "hidden_emotes": "Emotes masquées",
@@ -587,7 +619,7 @@ private let translations: [Lang: [String: String]] = [
         "sec_general_sub": "Langue, coffres, minuteur, historique, cache",
         "sec_player_sub": "Lecteur immersif, faible latence, débogage",
         "sec_chat_sub": "Messages récents, apparence, taille",
-        "sec_other_sub": "Version et journaux", "sec_labs_sub": "Nouveautés encore en rodage", "offline_channels": "Hors ligne", "cat_followed": "Suivies", "cat_all": "Toutes", "cat_followed_empty": "Aucune catégorie suivie", "cat_followed_empty_msg": "Suis des catégories sur Twitch, ou ouvre une catégorie et touche « Suivre ».", "cat_followed_empty_msg_local": "Ouvre une catégorie et touche « Suivre » : elle apparaîtra ici.", "ob_skip": "Passer", "ob_next": "Suivant", "ob_start": "C’est parti", "ob_replay": "Revoir le tutoriel", "ob_welcome_title": "Bienvenue sur TwitchUnblock", "ob_welcome_text": "Lives et VODs Twitch en qualité maximale, sans abonnement, avec le vrai chat. Choisis ta langue, puis fais le tour de l’app en une minute.", "bot_commands": "Commandes des bots", "bot_commands_sub": "Nightbot, StreamElements, Fossabot, Moobot : sans écrire dans le chat", "bot_commands_filter": "Filtrer les commandes", "bot_commands_none": "Aucune commande trouvée", "bot_commands_none_msg": "Cette chaîne n’utilise pas Nightbot, StreamElements, Fossabot ni Moobot, ou n’y a pas de commande publique.", "copied_cmd": "{c} copiée", "home_list": "Accueil en liste", "home_list_sub": "Chaînes en liste comme sur Twitch (miniature à gauche) au lieu de la grille", "layout_grid": "Afficher en grille", "layout_list": "Afficher en liste", "local_follow_empty": "Suis des chaînes sans compte", "local_follow_empty_msg": "Ouvre la page d’une chaîne et touche « Suivre » : elle apparaîtra ici dès qu’elle est en live.", "login_optional_msg": "Facultatif : pour tes chaînes suivies Twitch, le chat et les points. Tout le reste marche sans compte.", "on_this_device": "sur cet appareil",
+        "sec_other_sub": "Version et journaux", "sec_labs_sub": "Nouveautés encore en rodage", "offline_channels": "Hors ligne", "cat_followed": "Suivies", "cat_all": "Toutes", "cat_followed_empty": "Aucune catégorie suivie", "cat_followed_empty_msg": "Suis des catégories sur Twitch, ou ouvre une catégorie et touche « Suivre ».", "cat_followed_empty_msg_local": "Ouvre une catégorie et touche « Suivre » : elle apparaîtra ici.", "ob_skip": "Passer", "ob_next": "Suivant", "ob_start": "C’est parti", "ob_replay": "Revoir le tutoriel", "ob_welcome_title": "Bienvenue sur TwitchUnblock", "ob_welcome_text": "Lives et VODs Twitch en qualité maximale, sans abonnement, avec le vrai chat. Choisis ta langue, puis fais le tour de l’app en une minute.", "bot_commands": "Commandes des bots", "bot_commands_sub": "Nightbot, StreamElements, Fossabot, Moobot : sans écrire dans le chat", "bot_commands_filter": "Filtrer les commandes", "bot_commands_none": "Aucune commande trouvée", "bot_commands_none_msg": "Cette chaîne n’utilise pas Nightbot, StreamElements, Fossabot ni Moobot, ou n’y a pas de commande publique.", "copied_cmd": "{c} copiée", "home_list": "Lives en liste", "home_list_sub": "Lives en liste comme sur Twitch (miniature à gauche) au lieu de la grille : accueil, catégories et recherche", "layout_grid": "Afficher en grille", "layout_list": "Afficher en liste", "local_follow_empty": "Suis des chaînes sans compte", "local_follow_empty_msg": "Ouvre la page d’une chaîne et touche « Suivre » : elle apparaîtra ici dès qu’elle est en live.", "login_optional_msg": "Facultatif : pour tes chaînes suivies Twitch, le chat et les points. Tout le reste marche sans compte.", "on_this_device": "sur cet appareil",
         "chat_behavior": "Comportement du chat",
         "cfg_recent": "Charger les messages récents",
         "cfg_recent_sub": "Twitch n'envoie rien d'antérieur à l'arrivée. Les dernières lignes sont récupérées auprès de recent-messages.robotty.de, un service tiers.",
@@ -612,6 +644,15 @@ private let translations: [Lang: [String: String]] = [
         "cfg_badge_scale": "Taille des badges", "cfg_emote_scale": "Taille des emotes",
         "cfg_chat_width": "Largeur du chat",
         "cfg_chat_width_sub": "En paysage seulement, que le chat soit en colonne ou posé sur l'image.",
+        "cfg_chat_overlay_pos": "Chat posé sur l'image",
+        "cfg_chat_overlay_pos_sub": "En paysage, quand le chat est posé sur l'image : à gauche ou à droite, sur toute la hauteur ou dans un coin.",
+        "chat_side_left": "Gauche",
+        "chat_side_right": "Droite",
+        "chat_height_full": "Toute la hauteur",
+        "chat_height_top": "En haut",
+        "chat_height_bottom": "En bas",
+        "cfg_edge_swipe": "Fermer en glissant depuis le bord",
+        "cfg_edge_swipe_sub": "Glisse depuis le bord gauche de l'écran pour fermer le lecteur, comme avec ✕.",
         "reset_defaults": "Rétablir les valeurs par défaut",
         "vlc_player": "Lecteur VLC",
         "vlc_player_sub": "Contrôles maison : double-tap ±10s, rembobinage live. (pas de PiP)",
@@ -620,7 +661,7 @@ private let translations: [Lang: [String: String]] = [
         // Catégories
         "streams": "Streams", "categories": "Catégories",
         "cat_search_ph": "Rechercher une catégorie…",
-        "load_more": "Charger plus", "more_needs_login": "Twitch refuse la suite sans compte pour le moment. Connecte-toi à Twitch pour la voir.", "more_unavailable": "Twitch ne donne pas la suite pour le moment.", "feedback": "Signaler un bug ou proposer une idée", "feedback_sub": "Un problème, une idée : ton message arrive directement au développeur.", "report_problem": "Signaler un problème", "fb_bug": "🐞 Bug", "fb_idea": "💡 Idée", "fb_other": "💬 Autre", "fb_ph_bug": "Que s’est-il passé ? Qu’attendais-tu ? Sur quelle chaîne ou quelle VOD ?", "fb_ph_idea": "Ton idée, et à quoi elle servirait.", "fb_ph_other": "Ton message.", "fb_contact_ph": "Pseudo Discord ou e-mail (facultatif)", "fb_info": "Joint automatiquement :", "fb_send": "Envoyer", "fb_thanks": "Merci ! Ton message a bien été envoyé.", "fb_failed": "Envoi impossible, réessaie plus tard.", "fb_too_many": "Trop de messages d’un coup : réessaie dans une heure.", "about_channel": "À propos de {u}", "followers": "followers", "about_empty": "Pas de description", "show_recent": "Streamers récents", "show_recent_sub": "Raccourcis vers les dernières chaînes ouvertes, dans Recherche.",
+        "load_more": "Charger plus", "more_needs_login": "Twitch refuse la suite sans compte pour le moment. Connecte-toi à Twitch pour la voir.", "more_unavailable": "Twitch ne donne pas la suite pour le moment.", "feedback": "Signaler un bug ou proposer une idée", "feedback_sub": "Un problème, une idée : ton message arrive directement au développeur.", "report_problem": "Signaler un problème", "fb_bug": "🐞 Bug", "fb_idea": "💡 Idée", "fb_other": "💬 Autre", "fb_ph_bug": "Que s’est-il passé ? Qu’attendais-tu ? Sur quelle chaîne ou quelle VOD ?", "fb_ph_idea": "Ton idée, et à quoi elle servirait.", "fb_ph_other": "Ton message.", "fb_contact_ph": "Pseudo Discord ou e-mail (facultatif)", "fb_name_ph": "Ton pseudo (facultatif, pour te reconnaître)", "fb_sign": "Signer avec mon compte Twitch", "fb_sign_sub": "{login} : le développeur saura que c’est toi", "adm_pseudo": "pseudo", "fb_info": "Joint automatiquement :", "fb_send": "Envoyer", "fb_thanks": "Merci ! Ton message a bien été envoyé.", "fb_failed": "Envoi impossible, réessaie plus tard.", "fb_too_many": "Trop de messages d’un coup : réessaie dans une heure.", "about_channel": "À propos de {u}", "followers": "followers", "about_empty": "Pas de description", "show_recent": "Streamers récents", "show_recent_sub": "Raccourcis vers les dernières chaînes ouvertes, dans Recherche. Coupé, les chaînes ouvertes ne sont plus retenues.",
         "sort_viewers_desc": "Plus de spectateurs",
         "sort_viewers_asc": "Moins de spectateurs",
         "sort_name": "Nom (A → Z)",
@@ -757,6 +798,11 @@ private let translations: [Lang: [String: String]] = [
         "src_up": "Monter",
         "src_down": "Descendre",
         "src_reset": "Ordre par défaut",
+        "src_custom": "Ma source",
+        "src_custom_sub": "Adresse de ton propre serveur luminous-ttv (https://…) : il prend place en tête de l'ordre ci-dessus. Vide : pas de source perso.",
+        "src_custom_bad": "Adresse refusée : https://, un nom de domaine, sans port ni paramètres.",
+        "native_tabs": "Onglets natifs (Liquid Glass)",
+        "native_tabs_sub": "La barre d'onglets d'iOS 26 au lieu de celle de l'app : elle se replie quand tu défiles et le système la range selon l'écran (iPad, iPhone Duo). En test : signale ce qui cloche.",
         "src_auto": "Automatique",
         "src_as": "Luminous Asie",
         "src_al": "Proxy Albanie (TTV.LOL)",
@@ -777,7 +823,7 @@ private let translations: [Lang: [String: String]] = [
         "sub_adfree_sub": "Si tu es abonné à la chaîne (ou Turbo), le direct passe par ton compte Twitch : plus de pauses pub, comme sur Twitch. Twitch voit alors ton compte regarder la chaîne. Nécessite la session web.",
         "sub_adfree_connect": "Connecter la session web",
         "ad_break_title": "Pause pub de la chaîne",
-        "ad_break_sub": "Twitch remplace le direct par cet écran pendant la pause. Reprise dans {n} s.",
+        "ad_break_sub": "Pause publicitaire Twitch. Reprise du direct estimée dans {n} s.",
         "ad_break_login_hint": "Abonné à cette chaîne ? Connecte la session web (Paramètres → Compte Twitch) pour regarder sans pub.",
         "ad_break_short": "Pause pub · {n} s",
         "spatial_audio": "Audio spatial (AirPods)",
@@ -858,6 +904,7 @@ private let translations: [Lang: [String: String]] = [
         "dl_ten_min": "10 min à partir d'ici",
         "dl_summary": "{d} · environ {s}",
         "dl_restore": "Garder le son des passages coupés",
+        "dl_chapters_sub": "Touche un chapitre pour ne garder que lui, puis d'autres pour allonger le passage.",
         "dl_restore_sub": "Pour la musique protégée, Twitch garde le son d'origine un jour ou deux après le live : tant qu'il existe, c'est lui qui est téléchargé à la place du passage muet.",
         "dl_note": "Le téléchargement va plus vite app ouverte. Si tu la quittes ou verrouilles ton iPhone, iOS le continue de son côté, parfois plus lentement ; si tu la fermes en la balayant, il reprend quand tu la rouvres. Tes téléchargements sont dans l'onglet {tab}, et s'exportent en un seul fichier (Fichiers, AirDrop, VLC).",
         "dl_chat": "Garder aussi le chat",
@@ -1105,6 +1152,9 @@ private let translations: [Lang: [String: String]] = [
         "discover_unmute": "Turn sound on", "discover_mute": "Mute",
         "cust_title": "Customize the app", "cust_open": "Tabs, home, player, chat",
         "cust_sub": "Show, hide and reorder what you want: tabs, home, player buttons and chat banners.",
+        "cust_no_account": "No Twitch account",
+        "cust_no_account_foot": "Hides everything that needs an account or asks you to log in: the Twitch Account, Drops and Channel points pages of Settings, Home's sign-in cards, log-in reminders in the player, chat and predictions, and clip creation. Followed channels stay on this device.",
+        "cust_no_account_signed_in": "You're logged in (app account or web session): nothing would be hidden. Log out first in Settings → Twitch Account.",
         "cust_tabs": "Tabs", "cust_launch_tab": "Tab at launch",
         "cust_tabs_foot": "Drag ≡ to reorder. At least one tab always stays.",
         "cust_home_tabs": "Home · live tabs", "cust_home_cards": "Home · cards",
@@ -1223,7 +1273,7 @@ private let translations: [Lang: [String: String]] = [
         "notif_channels_error": "Couldn't load the channels you follow. Try again in a moment.",
         "chapters": "Chapters", "close": "Close",
         "made_by": "Made by", "source_ios": "App source code", "web_version": "Web version", "credits_thanks": "Thanks to BetterTTV, FrankerFaceZ, 7TV, recent-messages and Luminous.", "not_affiliated": "Independent project, not affiliated with Twitch.",
-        "credits_contributors": "Contributors", "credits_contrib_it": "Italian translation", "credits_contrib_ja": "Japanese translation", "credits_contrib_zhHant": "Traditional Chinese translation", "credits_contrib_swipe": "More responsive swipe-down on the player",
+        "credits_contributors": "Contributors", "credits_contrib_it": "Italian translation", "credits_contrib_ja": "Japanese translation", "credits_contrib_zhHant": "Traditional Chinese translation", "credits_contrib_swipe": "More responsive swipe-down on the player", "credits_contrib_ads": "Ad filtering on lives",
         "update_title": "Update available", "update_msg": "Version {v} is out (you have {c}). Update it from Feather, SideStore or AltStore.", "update_whats_new": "Here’s what’s new since your version:", "update_open": "Update", "later": "Later", "update_available": "Update available: {v}", "update_check": "Check for updates", "update_none": "The app is up to date", "version_label": "Version", "discord_join": "Join the Discord",
         "discord_title": "Join the Discord", "discord_msg": "News, bugs, ideas: the TwitchUnblock community is on Discord. You can also find it later in Settings → About.",
         "update_msg_short": "A new version of TwitchUnblock is available. Install it from Feather, SideStore or AltStore.",
@@ -1253,6 +1303,8 @@ private let translations: [Lang: [String: String]] = [
         "drops_notice_title": "Watch {m} min to get {r}", "drops_notice_ends": "Until {d}", "drops_notice_details": "Details", "drops_notice_more": "+{n} rewards",
         "chat_info_copy": "Copy name", "chat_info_copied": "Copied", "chat_info_insert": "Add to message", "chat_info_badge": "Badge",
         "emote_hide": "Hide this emote",
+        "emotes_fav": "Favorites", "emote_fav_add": "Add to favorites", "emote_fav_remove": "Remove from favorites",
+        "chat_offline_open": "The channel is offline: its chat stays open.",
         "emote_unhide": "Show this emote again",
         "emote_hidden_note": "Hidden: the chat shows it as the typed word.",
         "hidden_emotes": "Hidden emotes",
@@ -1358,7 +1410,7 @@ private let translations: [Lang: [String: String]] = [
         "sec_general_sub": "Language, chests, sleep timer, history, cache",
         "sec_player_sub": "Immersive player, low latency, debug",
         "sec_chat_sub": "Recent messages, appearance, sizing",
-        "sec_other_sub": "Version and logs", "sec_labs_sub": "New features still being polished", "offline_channels": "Offline", "cat_followed": "Followed", "cat_all": "All", "cat_followed_empty": "No followed categories", "cat_followed_empty_msg": "Follow categories on Twitch, or open a category and tap “Follow”.", "cat_followed_empty_msg_local": "Open a category and tap “Follow”: it will show up here.", "ob_skip": "Skip", "ob_next": "Next", "ob_start": "Let’s go", "ob_replay": "Replay the tutorial", "ob_welcome_title": "Welcome to TwitchUnblock", "ob_welcome_text": "Twitch lives and VODs at full quality, with no subscription, and the real chat. Pick your language, then take a one-minute tour of the app.", "bot_commands": "Bot commands", "bot_commands_sub": "Nightbot, StreamElements, Fossabot, Moobot: without typing in chat", "bot_commands_filter": "Filter commands", "bot_commands_none": "No commands found", "bot_commands_none_msg": "This channel doesn’t use Nightbot, StreamElements, Fossabot or Moobot, or has no public commands there.", "copied_cmd": "{c} copied", "home_list": "Home as a list", "home_list_sub": "Channels in a list like on Twitch (thumbnail on the left) instead of a grid", "layout_grid": "Show as grid", "layout_list": "Show as list", "local_follow_empty": "Follow channels without an account", "local_follow_empty_msg": "Open a channel page and tap “Follow”: it will show up here as soon as it goes live.", "login_optional_msg": "Optional: for your Twitch follows, chat and channel points. Everything else works without an account.", "on_this_device": "on this device",
+        "sec_other_sub": "Version and logs", "sec_labs_sub": "New features still being polished", "offline_channels": "Offline", "cat_followed": "Followed", "cat_all": "All", "cat_followed_empty": "No followed categories", "cat_followed_empty_msg": "Follow categories on Twitch, or open a category and tap “Follow”.", "cat_followed_empty_msg_local": "Open a category and tap “Follow”: it will show up here.", "ob_skip": "Skip", "ob_next": "Next", "ob_start": "Let’s go", "ob_replay": "Replay the tutorial", "ob_welcome_title": "Welcome to TwitchUnblock", "ob_welcome_text": "Twitch lives and VODs at full quality, with no subscription, and the real chat. Pick your language, then take a one-minute tour of the app.", "bot_commands": "Bot commands", "bot_commands_sub": "Nightbot, StreamElements, Fossabot, Moobot: without typing in chat", "bot_commands_filter": "Filter commands", "bot_commands_none": "No commands found", "bot_commands_none_msg": "This channel doesn’t use Nightbot, StreamElements, Fossabot or Moobot, or has no public commands there.", "copied_cmd": "{c} copied", "home_list": "Streams as a list", "home_list_sub": "Live streams in a list like on Twitch (thumbnail on the left) instead of a grid: Home, categories and search", "layout_grid": "Show as grid", "layout_list": "Show as list", "local_follow_empty": "Follow channels without an account", "local_follow_empty_msg": "Open a channel page and tap “Follow”: it will show up here as soon as it goes live.", "login_optional_msg": "Optional: for your Twitch follows, chat and channel points. Everything else works without an account.", "on_this_device": "on this device",
         "chat_behavior": "Chat behaviour",
         "cfg_recent": "Load recent messages",
         "cfg_recent_sub": "Twitch sends nothing from before you join. Recent lines are fetched from recent-messages.robotty.de, a third-party service.",
@@ -1383,6 +1435,15 @@ private let translations: [Lang: [String: String]] = [
         "cfg_badge_scale": "Badge scale", "cfg_emote_scale": "Emote scale",
         "cfg_chat_width": "Chat width",
         "cfg_chat_width_sub": "Landscape only, whether the chat is a column or sits on the video.",
+        "cfg_chat_overlay_pos": "Chat on the video",
+        "cfg_chat_overlay_pos_sub": "In landscape, when the chat sits on the video: left or right, full height or in a corner.",
+        "chat_side_left": "Left",
+        "chat_side_right": "Right",
+        "chat_height_full": "Full height",
+        "chat_height_top": "Top",
+        "chat_height_bottom": "Bottom",
+        "cfg_edge_swipe": "Swipe from the edge to close",
+        "cfg_edge_swipe_sub": "Swipe in from the left edge of the screen to close the player, like ✕.",
         "reset_defaults": "Reset to defaults",
         "vlc_player": "VLC player",
         "vlc_player_sub": "Custom controls: double-tap ±10s, live rewind. (no PiP)",
@@ -1391,7 +1452,7 @@ private let translations: [Lang: [String: String]] = [
         // Categories
         "streams": "Streams", "categories": "Categories",
         "cat_search_ph": "Search a category…",
-        "load_more": "Load more", "more_needs_login": "Twitch won't load more without an account right now. Log in with Twitch to see more.", "more_unavailable": "Twitch isn't giving the rest right now.", "feedback": "Report a bug or suggest an idea", "feedback_sub": "A problem or an idea: your message goes straight to the developer.", "report_problem": "Report a problem", "fb_bug": "🐞 Bug", "fb_idea": "💡 Idea", "fb_other": "💬 Other", "fb_ph_bug": "What happened? What did you expect? On which channel or VOD?", "fb_ph_idea": "Your idea, and what it would be useful for.", "fb_ph_other": "Your message.", "fb_contact_ph": "Discord name or email (optional)", "fb_info": "Attached automatically:", "fb_send": "Send", "fb_thanks": "Thanks! Your message was sent.", "fb_failed": "Could not send, try again later.", "fb_too_many": "Too many messages at once: try again in an hour.", "about_channel": "About {u}", "followers": "followers", "about_empty": "No description yet", "show_recent": "Recent Streamers", "show_recent_sub": "Shortcuts to the channels you opened last, in Search.",
+        "load_more": "Load more", "more_needs_login": "Twitch won't load more without an account right now. Log in with Twitch to see more.", "more_unavailable": "Twitch isn't giving the rest right now.", "feedback": "Report a bug or suggest an idea", "feedback_sub": "A problem or an idea: your message goes straight to the developer.", "report_problem": "Report a problem", "fb_bug": "🐞 Bug", "fb_idea": "💡 Idea", "fb_other": "💬 Other", "fb_ph_bug": "What happened? What did you expect? On which channel or VOD?", "fb_ph_idea": "Your idea, and what it would be useful for.", "fb_ph_other": "Your message.", "fb_contact_ph": "Discord name or email (optional)", "fb_name_ph": "Your nickname (optional, so we recognize you)", "fb_sign": "Sign with my Twitch account", "fb_sign_sub": "{login}: the developer will know it’s you", "adm_pseudo": "nickname", "fb_info": "Attached automatically:", "fb_send": "Send", "fb_thanks": "Thanks! Your message was sent.", "fb_failed": "Could not send, try again later.", "fb_too_many": "Too many messages at once: try again in an hour.", "about_channel": "About {u}", "followers": "followers", "about_empty": "No description yet", "show_recent": "Recent Streamers", "show_recent_sub": "Shortcuts to the channels you opened last, in Search. Off, opened channels are no longer remembered.",
         "sort_viewers_desc": "Most viewers",
         "sort_viewers_asc": "Fewest viewers",
         "sort_name": "Name (A → Z)",
@@ -1528,6 +1589,11 @@ private let translations: [Lang: [String: String]] = [
         "src_up": "Move up",
         "src_down": "Move down",
         "src_reset": "Default order",
+        "src_custom": "My source",
+        "src_custom_sub": "Address of your own luminous-ttv server (https://…): it goes to the top of the order above. Empty: no custom source.",
+        "src_custom_bad": "Address refused: https://, a domain name, no port or parameters.",
+        "native_tabs": "Native tabs (Liquid Glass)",
+        "native_tabs_sub": "iOS 26's own tab bar instead of the app's: it shrinks while you scroll and the system places it for the screen (iPad, iPhone Duo). In testing: report what's off.",
         "src_auto": "Automatic",
         "src_as": "Luminous Asia",
         "src_al": "Albania proxy (TTV.LOL)",
@@ -1548,7 +1614,7 @@ private let translations: [Lang: [String: String]] = [
         "sub_adfree_sub": "If you're subscribed to the channel (or have Turbo), the stream goes through your Twitch account: no ad breaks, just like on Twitch. Twitch then sees your account watching. Needs the web session.",
         "sub_adfree_connect": "Connect the web session",
         "ad_break_title": "Channel ad break",
-        "ad_break_sub": "Twitch shows this screen instead of the stream during the break. Back in {n}s.",
+        "ad_break_sub": "Twitch ad break. The stream is expected back in {n}s.",
         "ad_break_login_hint": "Subscribed to this channel? Connect the web session (Settings → Twitch Account) to watch ad-free.",
         "ad_break_short": "Ad break · {n}s",
         "spatial_audio": "Spatial audio (AirPods)",
@@ -1629,6 +1695,7 @@ private let translations: [Lang: [String: String]] = [
         "dl_ten_min": "Next 10 min",
         "dl_summary": "{d} · about {s}",
         "dl_restore": "Keep the sound of muted parts",
+        "dl_chapters_sub": "Tap a chapter to keep just that part, then others to extend it.",
         "dl_restore_sub": "For copyrighted music, Twitch keeps the original sound for a day or two after the stream: while it still exists, it's downloaded instead of the muted part.",
         "dl_note": "Downloading is fastest with the app open. If you leave it or lock your iPhone, iOS keeps going on its own, sometimes more slowly; if you swipe the app away, it resumes when you open it again. Your downloads are in the {tab} tab, and can be exported as a single file (Files, AirDrop, VLC).",
         "dl_chat": "Keep the chat too",
@@ -1876,6 +1943,9 @@ private let translations: [Lang: [String: String]] = [
         "discover_unmute": "Activar el sonido", "discover_mute": "Silenciar",
         "cust_title": "Personalizar la app", "cust_open": "Pestañas, inicio, reproductor, chat",
         "cust_sub": "Muestra, oculta y ordena lo que quieras: pestañas, inicio, botones del reproductor y avisos del chat.",
+        "cust_no_account": "Sin cuenta de Twitch",
+        "cust_no_account_foot": "Oculta todo lo que necesita una cuenta o invita a iniciar sesión: las páginas Cuenta de Twitch, Drops y Puntos de canal de los ajustes, las tarjetas de inicio de sesión del inicio, los recordatorios del reproductor, del chat y de las predicciones, y la creación de clips. Los canales seguidos quedan en este dispositivo.",
+        "cust_no_account_signed_in": "Has iniciado sesión (cuenta de la app o sesión web): no se ocultaría nada. Cierra sesión primero en Ajustes → Cuenta de Twitch.",
         "cust_tabs": "Pestañas", "cust_launch_tab": "Pestaña al abrir",
         "cust_tabs_foot": "Arrastra ≡ para cambiar el orden. Siempre queda al menos una pestaña.",
         "cust_home_tabs": "Inicio · pestañas de directos", "cust_home_cards": "Inicio · tarjetas",
@@ -1994,7 +2064,7 @@ private let translations: [Lang: [String: String]] = [
         "notif_channels_error": "No se pudieron cargar los canales que sigues. Vuelve a intentarlo en un momento.",
         "chapters": "Capítulos", "close": "Cerrar",
         "made_by": "Hecho por", "source_ios": "Código fuente de la app", "web_version": "Versión web", "credits_thanks": "Gracias a BetterTTV, FrankerFaceZ, 7TV, recent-messages y Luminous.", "not_affiliated": "Proyecto independiente, no afiliado a Twitch.",
-        "credits_contributors": "Colaboradores", "credits_contrib_it": "Traducción al italiano", "credits_contrib_ja": "Traducción al japonés", "credits_contrib_zhHant": "Traducción al chino tradicional", "credits_contrib_swipe": "Gesto de deslizar hacia abajo del reproductor más ágil",
+        "credits_contributors": "Colaboradores", "credits_contrib_it": "Traducción al italiano", "credits_contrib_ja": "Traducción al japonés", "credits_contrib_zhHant": "Traducción al chino tradicional", "credits_contrib_swipe": "Gesto de deslizar hacia abajo del reproductor más ágil", "credits_contrib_ads": "Filtrado de anuncios en los directos",
         "update_title": "Actualización disponible", "update_msg": "Ya salió la versión {v} (tienes la {c}). Actualízala desde Feather, SideStore o AltStore.", "update_whats_new": "Esto es lo nuevo desde tu versión:", "update_open": "Actualizar", "later": "Más tarde", "update_available": "Actualización disponible: {v}", "update_check": "Buscar actualizaciones", "update_none": "La app está al día", "version_label": "Versión", "discord_join": "Unirse al Discord",
         "discord_title": "Únete al Discord", "discord_msg": "Novedades, bugs, ideas: la comunidad de TwitchUnblock está en Discord. También lo encontrarás en Ajustes → Acerca de.",
         "update_msg_short": "Hay una nueva versión de TwitchUnblock. Instálala desde Feather, SideStore o AltStore.",
@@ -2024,6 +2094,8 @@ private let translations: [Lang: [String: String]] = [
         "drops_notice_title": "Mira {m} min para conseguir {r}", "drops_notice_ends": "Hasta el {d}", "drops_notice_details": "Detalles", "drops_notice_more": "+{n} recompensas",
         "chat_info_copy": "Copiar el nombre", "chat_info_copied": "Copiado", "chat_info_insert": "Añadir al mensaje", "chat_info_badge": "Insignia",
         "emote_hide": "Ocultar este emote",
+        "emotes_fav": "Favoritos", "emote_fav_add": "Añadir a favoritos", "emote_fav_remove": "Quitar de favoritos",
+        "chat_offline_open": "El canal está desconectado: su chat sigue abierto.",
         "emote_unhide": "Volver a mostrar este emote",
         "emote_hidden_note": "Oculto: el chat lo muestra como la palabra escrita.",
         "hidden_emotes": "Emotes ocultos",
@@ -2129,7 +2201,7 @@ private let translations: [Lang: [String: String]] = [
         "sec_general_sub": "Idioma, cofres, temporizador, historial, caché",
         "sec_player_sub": "Reproductor inmersivo, baja latencia, depuración",
         "sec_chat_sub": "Mensajes recientes, apariencia, tamaño",
-        "sec_other_sub": "Versión y registros", "sec_labs_sub": "Novedades aún en pruebas", "offline_channels": "Desconectados", "cat_followed": "Seguidas", "cat_all": "Todas", "cat_followed_empty": "Ninguna categoría seguida", "cat_followed_empty_msg": "Sigue categorías en Twitch, o abre una categoría y toca «Seguir».", "cat_followed_empty_msg_local": "Abre una categoría y toca «Seguir»: aparecerá aquí.", "ob_skip": "Saltar", "ob_next": "Siguiente", "ob_start": "Empezar", "ob_replay": "Ver el tutorial otra vez", "ob_welcome_title": "Bienvenido a TwitchUnblock", "ob_welcome_text": "Directos y VODs de Twitch en máxima calidad, sin suscripción y con el chat real. Elige tu idioma y haz un recorrido de un minuto por la app.", "bot_commands": "Comandos de bots", "bot_commands_sub": "Nightbot, StreamElements, Fossabot, Moobot: sin escribir en el chat", "bot_commands_filter": "Filtrar comandos", "bot_commands_none": "No se encontraron comandos", "bot_commands_none_msg": "Este canal no usa Nightbot, StreamElements, Fossabot ni Moobot, o no tiene comandos públicos.", "copied_cmd": "{c} copiado", "home_list": "Inicio en lista", "home_list_sub": "Canales en lista como en Twitch (miniatura a la izquierda) en lugar de cuadrícula", "layout_grid": "Ver en cuadrícula", "layout_list": "Ver en lista", "local_follow_empty": "Sigue canales sin cuenta", "local_follow_empty_msg": "Abre la página de un canal y toca «Seguir»: aparecerá aquí en cuanto esté en directo.", "login_optional_msg": "Opcional: para tus canales seguidos de Twitch, el chat y los puntos. Todo lo demás funciona sin cuenta.", "on_this_device": "en este dispositivo",
+        "sec_other_sub": "Versión y registros", "sec_labs_sub": "Novedades aún en pruebas", "offline_channels": "Desconectados", "cat_followed": "Seguidas", "cat_all": "Todas", "cat_followed_empty": "Ninguna categoría seguida", "cat_followed_empty_msg": "Sigue categorías en Twitch, o abre una categoría y toca «Seguir».", "cat_followed_empty_msg_local": "Abre una categoría y toca «Seguir»: aparecerá aquí.", "ob_skip": "Saltar", "ob_next": "Siguiente", "ob_start": "Empezar", "ob_replay": "Ver el tutorial otra vez", "ob_welcome_title": "Bienvenido a TwitchUnblock", "ob_welcome_text": "Directos y VODs de Twitch en máxima calidad, sin suscripción y con el chat real. Elige tu idioma y haz un recorrido de un minuto por la app.", "bot_commands": "Comandos de bots", "bot_commands_sub": "Nightbot, StreamElements, Fossabot, Moobot: sin escribir en el chat", "bot_commands_filter": "Filtrar comandos", "bot_commands_none": "No se encontraron comandos", "bot_commands_none_msg": "Este canal no usa Nightbot, StreamElements, Fossabot ni Moobot, o no tiene comandos públicos.", "copied_cmd": "{c} copiado", "home_list": "Directos en lista", "home_list_sub": "Directos en lista como en Twitch (miniatura a la izquierda) en lugar de cuadrícula: inicio, categorías y búsqueda", "layout_grid": "Ver en cuadrícula", "layout_list": "Ver en lista", "local_follow_empty": "Sigue canales sin cuenta", "local_follow_empty_msg": "Abre la página de un canal y toca «Seguir»: aparecerá aquí en cuanto esté en directo.", "login_optional_msg": "Opcional: para tus canales seguidos de Twitch, el chat y los puntos. Todo lo demás funciona sin cuenta.", "on_this_device": "en este dispositivo",
         "chat_behavior": "Comportamiento del chat",
         "cfg_recent": "Cargar mensajes recientes",
         "cfg_recent_sub": "Twitch no envía nada anterior a tu llegada. Las últimas líneas se piden a recent-messages.robotty.de, un servicio de terceros.",
@@ -2154,6 +2226,15 @@ private let translations: [Lang: [String: String]] = [
         "cfg_badge_scale": "Tamaño de las insignias", "cfg_emote_scale": "Tamaño de los emotes",
         "cfg_chat_width": "Ancho del chat",
         "cfg_chat_width_sub": "Solo en horizontal, ya sea en columna o sobre el vídeo.",
+        "cfg_chat_overlay_pos": "Chat sobre el vídeo",
+        "cfg_chat_overlay_pos_sub": "En horizontal, cuando el chat está sobre el vídeo: a la izquierda o a la derecha, a toda altura o en una esquina.",
+        "chat_side_left": "Izquierda",
+        "chat_side_right": "Derecha",
+        "chat_height_full": "Toda la altura",
+        "chat_height_top": "Arriba",
+        "chat_height_bottom": "Abajo",
+        "cfg_edge_swipe": "Cerrar deslizando desde el borde",
+        "cfg_edge_swipe_sub": "Desliza desde el borde izquierdo de la pantalla para cerrar el reproductor, como con ✕.",
         "reset_defaults": "Restablecer valores por defecto",
         "vlc_player": "Reproductor VLC",
         "vlc_player_sub": "Controles propios: doble toque ±10s, rebobinar directo. (sin PiP)",
@@ -2162,7 +2243,7 @@ private let translations: [Lang: [String: String]] = [
         // Categorías
         "streams": "Streams", "categories": "Categorías",
         "cat_search_ph": "Buscar una categoría…",
-        "load_more": "Cargar más", "more_needs_login": "Por ahora Twitch no carga más sin cuenta. Inicia sesión con Twitch para ver más.", "more_unavailable": "Twitch no da el resto por ahora.", "feedback": "Informar de un error o proponer una idea", "feedback_sub": "Un problema o una idea: tu mensaje llega directamente al desarrollador.", "report_problem": "Informar de un problema", "fb_bug": "🐞 Error", "fb_idea": "💡 Idea", "fb_other": "💬 Otro", "fb_ph_bug": "¿Qué pasó? ¿Qué esperabas? ¿En qué canal o VOD?", "fb_ph_idea": "Tu idea, y para qué serviría.", "fb_ph_other": "Tu mensaje.", "fb_contact_ph": "Usuario de Discord o e-mail (opcional)", "fb_info": "Se adjunta automáticamente:", "fb_send": "Enviar", "fb_thanks": "¡Gracias! Tu mensaje se ha enviado.", "fb_failed": "No se pudo enviar, inténtalo más tarde.", "fb_too_many": "Demasiados mensajes seguidos: inténtalo en una hora.", "about_channel": "Acerca de {u}", "followers": "seguidores", "about_empty": "Sin descripción", "show_recent": "Streamers recientes", "show_recent_sub": "Accesos a los últimos canales abiertos, en Buscar.",
+        "load_more": "Cargar más", "more_needs_login": "Por ahora Twitch no carga más sin cuenta. Inicia sesión con Twitch para ver más.", "more_unavailable": "Twitch no da el resto por ahora.", "feedback": "Informar de un error o proponer una idea", "feedback_sub": "Un problema o una idea: tu mensaje llega directamente al desarrollador.", "report_problem": "Informar de un problema", "fb_bug": "🐞 Error", "fb_idea": "💡 Idea", "fb_other": "💬 Otro", "fb_ph_bug": "¿Qué pasó? ¿Qué esperabas? ¿En qué canal o VOD?", "fb_ph_idea": "Tu idea, y para qué serviría.", "fb_ph_other": "Tu mensaje.", "fb_contact_ph": "Usuario de Discord o e-mail (opcional)", "fb_name_ph": "Tu apodo (opcional, para reconocerte)", "fb_sign": "Firmar con mi cuenta de Twitch", "fb_sign_sub": "{login}: el desarrollador sabrá que eres tú", "adm_pseudo": "apodo", "fb_info": "Se adjunta automáticamente:", "fb_send": "Enviar", "fb_thanks": "¡Gracias! Tu mensaje se ha enviado.", "fb_failed": "No se pudo enviar, inténtalo más tarde.", "fb_too_many": "Demasiados mensajes seguidos: inténtalo en una hora.", "about_channel": "Acerca de {u}", "followers": "seguidores", "about_empty": "Sin descripción", "show_recent": "Streamers recientes", "show_recent_sub": "Accesos a los últimos canales abiertos, en Buscar. Desactivado, los canales abiertos ya no se recuerdan.",
         "sort_viewers_desc": "Más espectadores",
         "sort_viewers_asc": "Menos espectadores",
         "sort_name": "Nombre (A → Z)",
@@ -2299,6 +2380,11 @@ private let translations: [Lang: [String: String]] = [
         "src_up": "Subir",
         "src_down": "Bajar",
         "src_reset": "Orden predeterminado",
+        "src_custom": "Mi fuente",
+        "src_custom_sub": "Dirección de tu propio servidor luminous-ttv (https://…): se coloca al principio del orden de arriba. Vacío: sin fuente propia.",
+        "src_custom_bad": "Dirección rechazada: https://, un nombre de dominio, sin puerto ni parámetros.",
+        "native_tabs": "Pestañas nativas (Liquid Glass)",
+        "native_tabs_sub": "La barra de pestañas de iOS 26 en lugar de la de la app: se reduce al desplazarte y el sistema la coloca según la pantalla (iPad, iPhone Duo). En pruebas: avisa de lo que falle.",
         "src_auto": "Automática",
         "src_as": "Luminous Asia",
         "src_al": "Proxy de Albania (TTV.LOL)",
@@ -2319,7 +2405,7 @@ private let translations: [Lang: [String: String]] = [
         "sub_adfree_sub": "Si estás suscrito al canal (o tienes Turbo), el directo pasa por tu cuenta de Twitch: sin pausas publicitarias, como en Twitch. Twitch verá que tu cuenta lo está viendo. Requiere la sesión web.",
         "sub_adfree_connect": "Conectar la sesión web",
         "ad_break_title": "Pausa publicitaria del canal",
-        "ad_break_sub": "Twitch muestra esta pantalla en lugar del directo durante la pausa. Vuelve en {n} s.",
+        "ad_break_sub": "Pausa publicitaria de Twitch. El directo volverá aproximadamente en {n} s.",
         "ad_break_login_hint": "¿Suscrito a este canal? Conecta la sesión web (Ajustes → Cuenta de Twitch) para verlo sin anuncios.",
         "ad_break_short": "Pausa publicitaria · {n} s",
         "spatial_audio": "Audio espacial (AirPods)",
@@ -2400,6 +2486,7 @@ private let translations: [Lang: [String: String]] = [
         "dl_ten_min": "10 min desde aquí",
         "dl_summary": "{d} · unos {s}",
         "dl_restore": "Mantener el sonido de las partes silenciadas",
+        "dl_chapters_sub": "Toca un capítulo para quedarte solo con esa parte y luego otros para ampliarla.",
         "dl_restore_sub": "Con la música protegida, Twitch conserva el sonido original uno o dos días después del directo: mientras exista, se descarga en lugar de la parte silenciada.",
         "dl_note": "La descarga va más rápido con la app abierta. Si sales de ella o bloqueas el iPhone, iOS la continúa por su cuenta, a veces más despacio; si cierras la app deslizándola, se reanuda al volver a abrirla. Tus descargas están en la pestaña {tab} y se pueden exportar en un solo archivo (Archivos, AirDrop, VLC).",
         "dl_chat": "Guardar también el chat",

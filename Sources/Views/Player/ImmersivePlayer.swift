@@ -25,6 +25,8 @@ struct PlayerOverlayInfo {
     var viewers: Int     = 0
     var uptime: String   = ""
     var latency: Double? = nil
+    /// Hors direct : date de diffusion de la VOD, pour sa fiche.
+    var date: String     = ""
 }
 
 // MARK: – Écran verrouillé
@@ -45,8 +47,30 @@ struct NowPlayingMeta: Equatable {
 
 // MARK: – Surface vidéo (AVPlayerLayer)
 final class PlayerLayerUIView: UIView {
-    override class var layerClass: AnyClass { AVPlayerLayer.self }
-    var playerLayer: AVPlayerLayer { layer as! AVPlayerLayer }
+    let playerLayer = AVPlayerLayer()
+    private lazy var geometry = PlayerLayerGeometry(layer: playerLayer)
+    private var fill = false
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        layer.addSublayer(playerLayer)
+        clipsToBounds = true
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    func configure(player: AVPlayer, fill: Bool) {
+        self.fill = fill
+        geometry.setPlayer(player)
+        geometry.layout(in: bounds, fill: fill)
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        geometry.layout(in: bounds, fill: fill)
+    }
+
+    func stopObserving() { geometry.stopObserving() }
 }
 
 struct PlayerLayerView: UIViewRepresentable {
@@ -59,19 +83,18 @@ struct PlayerLayerView: UIViewRepresentable {
 
     func makeUIView(context: Context) -> PlayerLayerUIView {
         let v = PlayerLayerUIView()
-        v.playerLayer.player = player
-        v.playerLayer.videoGravity = fill ? .resizeAspectFill : .resizeAspect
+        v.configure(player: player, fill: fill)
         v.backgroundColor = .black
         onLayer?(v.playerLayer)
         return v
     }
 
     func updateUIView(_ uiView: PlayerLayerUIView, context: Context) {
-        if uiView.playerLayer.player !== player { uiView.playerLayer.player = player }
-        let wanted: AVLayerVideoGravity = fill ? .resizeAspectFill : .resizeAspect
-        if uiView.playerLayer.videoGravity != wanted {
-            uiView.playerLayer.videoGravity = wanted
-        }
+        uiView.configure(player: player, fill: fill)
+    }
+
+    static func dismantleUIView(_ uiView: PlayerLayerUIView, coordinator: ()) {
+        uiView.stopObserving()
     }
 }
 
@@ -129,7 +152,7 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
     /// « Réessayer ».
     @Published private(set) var failed = false
     /// Pause pub cousue par Twitch dans le direct : bandeau, son coupé.
-    let adBreaks = AdBreakWatcher()
+    let adBreaks = AdBreakWatcher(onBreak: UsageService.adBreakSeen)
 
     /// Pas une constante : une bascule douce direct → enregistrement remplace
     /// la source sans reconstruire le modèle. Figée, elle laissait le lecteur
@@ -305,6 +328,9 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
             forName: .AVPlayerItemPlaybackStalled, object: nil, queue: .main
         ) { [weak self] note in
             guard let self, let item = note.object as? AVPlayerItem, item === self.player.currentItem else { return }
+            // Attente d'une pause pub filtrée (trous EXT-X-GAP) : rien à voir
+            // avec le débit, ni avance sur le bord ni qualité baissée.
+            if AdBreakMonitor.monitor(of: item)?.waitingForAds == true { return }
             self.stalled()
         }
         timeObs = player.addPeriodicTimeObserver(
@@ -1412,9 +1438,39 @@ struct ImmersivePlayer: View {
     /// Orientation, fournie par le parent : lue sur UIApplication elle ne serait
     /// pas observable, et la vue ne se redessinerait pas à la rotation.
     var isLandscape: Bool = false
-    /// Marge droite des barres de commande : en chat superposé, le calque
-    /// occupe cette largeur, et les boutons doivent rester à sa gauche.
+    /// Marge des barres de commande du côté du chat superposé : le calque
+    /// occupe cette largeur, et les boutons doivent rester à côté.
     var controlsInset: CGFloat = 0
+    /// Chat superposé à gauche (réglage « Chat posé sur l'image ») : la marge
+    /// passe de ce côté.
+    var controlsOnLeft: Bool = false
+    /// Chat superposé sur la moitié haute ou basse seulement : seule la barre
+    /// de ce côté s'écarte (nil : toute la hauteur, les deux barres).
+    var controlsHalf: VerticalEdge? = nil
+    private var controlsEdge: Edge.Set { controlsOnLeft ? .leading : .trailing }
+    /// Décalage de ce qui se centre sur la partie visible de l'image.
+    private var centerShift: CGFloat { controlsOnLeft ? controlsInset / 2 : -controlsInset / 2 }
+    /// Marge d'une barre : celle que le chat couvre.
+    private func barInset(_ bar: VerticalEdge) -> CGFloat {
+        controlsHalf == nil || controlsHalf == bar ? controlsInset : 0
+    }
+    /// Écart des barres aux coins arrondis de l'écran, là où iOS ne réserve
+    /// rien : un côté sans zone sûre alors que le haut (ou le bas, où la barre
+    /// descend au bord en paysage) n'en a pas non plus. C'est l'iPhone Duo en
+    /// plein écran, sa colonne d'état masquée : retour, titre, AirPlay,
+    /// fermer, durée et boutons touchaient l'arrondi des coins. Un iPhone à
+    /// encoche garde ses marges des côtés en paysage : rien n'y change.
+    private var cornerPad: EdgeInsets {
+        guard UIDevice.current.userInterfaceIdiom == .phone else { return EdgeInsets() }
+        let s = UIApplication.safeAreaInsets
+        let topOpen = s.top < 1
+        let bottomOpen = isLandscape || s.bottom < 1
+        let leftOpen = s.left < 20
+        let rightOpen = s.right < 20
+        guard (topOpen || bottomOpen) && (leftOpen || rightOpen) else { return EdgeInsets() }
+        return EdgeInsets(top: topOpen ? 8 : 0, leading: leftOpen ? 20 : 0,
+                          bottom: bottomOpen ? 6 : 0, trailing: rightOpen ? 20 : 0)
+    }
     /// Image verticale d'un direct, en portrait, chat posé dessus (comme
     /// « Affichage vertical » dans l'app de Twitch) : l'image remplit la
     /// boîte, et le double-tap ou le bouton Chat montre ou masque le chat.
@@ -1425,6 +1481,10 @@ struct ImmersivePlayer: View {
     /// Recadrer pour remplir l'écran au lieu de laisser des bandes noires.
     /// Coupe le haut et le bas de l'image : c'est le compromis, d'où le réglage.
     var fillScreen: Bool = false
+    /// Paysage : l'image va aussi sous les marges des côtés, rien ne l'y
+    /// cachant (MainTabView décide : colonne d'état de l'iPhone Duo, marge
+    /// du côté sans île).
+    var sideBleed: Bool = false
     /// On regarde le DVR d'un direct : proposer d'y retourner.
     var canReturnToLive: Bool = false
     var onBackToLive: () -> Void = {}
@@ -1498,6 +1558,10 @@ struct ImmersivePlayer: View {
     /// source (qualités supérieures sans abonnement, MainTabView).
     var onAdBreak:  (Int?) -> Void = { _ in }
     var onFailed:   () -> Void = {}
+    /// Faux juste avant la réduction en mini-barre, sous iOS 16 seulement
+    /// (MainTabView.hidePlayer) : le lecteur retire ses commandes pendant
+    /// qu'il est encore visible et immobile.
+    var isPresented: Bool = true
 
     @EnvironmentObject private var store: AppStore
     @StateObject private var model: ImmersivePlayerModel
@@ -1577,9 +1641,12 @@ struct ImmersivePlayer: View {
          chatMode: LandscapeChat = .column,
          isLandscape: Bool = false,
          controlsInset: CGFloat = 0,
+         controlsOnLeft: Bool = false,
+         controlsHalf: VerticalEdge? = nil,
          verticalLayout: Bool = false,
          controlsBottomInset: CGFloat = 0,
          fillScreen: Bool = false,
+         sideBleed: Bool = false,
          canReturnToLive: Bool = false,
          streamStartedAt: Date? = nil,
          archiveAvailable: Bool = false,
@@ -1617,7 +1684,8 @@ struct ImmersivePlayer: View {
          onAdBreak: @escaping (Int?) -> Void = { _ in },
          onFailed: @escaping () -> Void = {},
          onPiPStart: @escaping () -> Void = {},
-         onPiPRestore: @escaping () -> Void = {}) {
+         onPiPRestore: @escaping () -> Void = {},
+         isPresented: Bool = true) {
         self.url = url; self.isLive = isLive; self.dvrEnabled = dvrEnabled
         self.savedTime = savedTime; self.contentID = contentID
         self.info = info; self.onChannel = onChannel
@@ -1626,8 +1694,10 @@ struct ImmersivePlayer: View {
         self.onPull = onPull; self.onPullEnd = onPullEnd
         self.sleepLabel = sleepLabel; self.chatMode = chatMode
         self.isLandscape = isLandscape; self.controlsInset = controlsInset
+        self.controlsOnLeft = controlsOnLeft; self.controlsHalf = controlsHalf
         self.verticalLayout = verticalLayout; self.controlsBottomInset = controlsBottomInset
         self.fillScreen = fillScreen; self.canReturnToLive = canReturnToLive
+        self.sideBleed = sideBleed
         self.streamStartedAt = streamStartedAt; self.archiveAvailable = archiveAvailable
         self.chapters = chapters; self.nowPlaying = nowPlaying
         self.speed = speed; self.onSpeedChange = onSpeedChange; self.notice = notice
@@ -1644,6 +1714,7 @@ struct ImmersivePlayer: View {
         self.multiLiveFull = multiLiveFull; self.onRewind = onRewind
         self.onVertical = onVertical; self.verticalOn = verticalOn
         self.onAdBreak = onAdBreak; self.onFailed = onFailed
+        self.isPresented = isPresented
         // PiP : démarré, le parent réduit le lecteur ; agrandi depuis la
         // fenêtre, il le rend en grand. Rappels du modèle (délégué d'AVKit).
         _model = StateObject(wrappedValue: ImmersivePlayerModel(
@@ -1731,16 +1802,17 @@ struct ImmersivePlayer: View {
                                })
             // En paysage la surface va jusqu'en haut et en bas de l'écran
             // (indicateur d'accueil compris) : l'image reste centrée sur l'écran
-            // réel. Sur les côtés, elle s'arrête à la zone sûre : jusqu'au bord
-            // physique, une image plus étroite que l'écran (chat en colonne)
-            // passait sous la Dynamic Island ou l'encoche. Centrée en 16:9, elle
-            // n'y va pas (bandes égales sur les côtés, l'île dans l'une). Seul
-            // « Remplir l'écran » va jusqu'aux bords, île comprise.
+            // réel. Sur les côtés, elle s'arrête à la zone sûre quand l'île (ou
+            // l'encoche) tomberait sur elle : une image plus étroite que l'écran
+            // (chat en colonne) passait dessous. Sinon (`sideBleed`) elle va
+            // aussi jusqu'aux bords, centrée sur l'écran entier : colonne d'état
+            // de l'iPhone Duo, marge du côté sans île. « Remplir l'écran » va
+            // toujours jusqu'aux bords, île comprise.
             //
             // En portrait, jamais : la boîte est déjà en 16:9, déborder ne
             // faisait que la rendre plus haute que large et rogner les côtés.
             .ignoresSafeArea(isLandscape ? SafeAreaRegions.all : [],
-                             edges: isLandscape && !croppingFill ? .vertical : .all)
+                             edges: isLandscape && !croppingFill && !sideBleed ? .vertical : .all)
 
             // Double-tap ±10 s, en VOD seulement. En direct, avancer n'a pas
             // de sens (on est au bord, ou presque) : en paysage, le double-tap
@@ -1765,7 +1837,7 @@ struct ImmersivePlayer: View {
                     // Centré sur la partie visible de l'image, comme ▶ dont il
                     // prend la place (chat superposé) ; un long message se
                     // replie dans cette largeur au lieu de passer sous le chat.
-                    .padding(.trailing, controlsInset)
+                    .padding(controlsEdge, controlsInset)
                     .padding(.bottom, controlsBottomInset)
                     .transition(.opacity)
             }
@@ -1782,7 +1854,7 @@ struct ImmersivePlayer: View {
                 mutedNotice(muted)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                     .padding(.top, showControls ? 58 : TSpace.sm)
-                    .padding(.trailing, controlsInset)
+                    .padding(controlsEdge, controlsInset)
                     .transition(.opacity)
             }
 
@@ -1792,12 +1864,12 @@ struct ImmersivePlayer: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 .padding(.top, showControls ? 58 : TSpace.sm)
                 .padding(.horizontal, TSpace.md)
-                .padding(.trailing, controlsInset)
+                .padding(controlsEdge, controlsInset)
         }
         // La boîte est fixée par le parent (16:9 en portrait, toute la colonne en
         // paysage) : ici on remplit ce qu'on nous donne, sans jamais dériver la
-        // taille des contrôles. AVPlayerLayer étant en `resizeAspect`, l'image
-        // garde ses proportions quelle que soit la boîte.
+        // taille des contrôles. PlayerLayerGeometry garde les proportions de
+        // l'image réellement affichée, y compris pendant un GAP publicitaire.
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.black)
         // Pas de `clipped()` : il rognerait précisément le débordement que
@@ -1851,6 +1923,19 @@ struct ImmersivePlayer: View {
         }
         // La boîte change du tout au tout : on repart de l'image entière.
         .onChange(of: isLandscape) { _ in resetZoom() }
+        // Réduction sous iOS 16 : les commandes partent sur-le-champ, sans
+        // fondu, lecteur encore visible, et rien ne les masquera plus tard
+        // dans le lecteur réduit. La barre de progression (un UISlider)
+        // présente pendant la réduction restait dessinée par-dessus l'app
+        // (photo du retour fb_mw3h29pt) ; retirée en même temps, l'app ne
+        // répondait plus aux touchers.
+        .onChange(of: isPresented) { shown in
+            guard !shown else { return }
+            hideTask?.cancel()
+            var instant = Transaction()
+            instant.disablesAnimations = true
+            withTransaction(instant) { showControls = false }
+        }
         .onAppear {
             shownContent = contentID
             // Sans condition : le modèle sait s'il lit un direct (la tenue du
@@ -1965,13 +2050,14 @@ struct ImmersivePlayer: View {
                         .textSelection(.enabled)
                 }
                 .listRowBackground(Color.tCard)
-                if !info.game.isEmpty || info.viewers > 0 || !info.uptime.isEmpty {
+                if !info.game.isEmpty || info.viewers > 0 || !info.uptime.isEmpty || !info.date.isEmpty {
                     Section {
                         if !info.game.isEmpty { infoRow("gamecontroller.fill", info.game) }
                         if info.viewers > 0 {
                             infoRow("eye.fill", "\(formatViewers(info.viewers)) \(store.tn("viewers", info.viewers, abbreviated: info.viewers >= 1000))")
                         }
                         if !info.uptime.isEmpty { infoRow("clock.fill", info.uptime) }
+                        if !info.date.isEmpty { infoRow("calendar", info.date) }
                     }
                     .listRowBackground(Color.tCard)
                 }
@@ -2015,30 +2101,38 @@ struct ImmersivePlayer: View {
     @ViewBuilder private var chaptersSheet: some View {
         let current = currentChapter
         NavigationStack {
-            List(chapters) { c in
-                Button {
-                    model.seek(to: c.start)
-                    showChapters = false
-                } label: {
-                    HStack(spacing: 10) {
-                        Text(timeLabel(c.start))
-                            .font(.system(size: 13, weight: .semibold).monospacedDigit())
-                            .foregroundColor(.tMuted)
-                            .frame(minWidth: 56, alignment: .leading)
-                        Text(c.title)
-                            .font(.system(size: 15, weight: c == current ? .bold : .regular))
-                            .foregroundColor(c == current ? .tPrimary : .tText)
-                            .lineLimit(2)
-                        Spacer(minLength: 0)
-                        if c == current {
-                            Image(systemName: "checkmark").foregroundColor(.tPrimary)
+            ScrollViewReader { proxy in
+                List(chapters) { c in
+                    Button {
+                        model.seek(to: c.start)
+                        showChapters = false
+                    } label: {
+                        HStack(spacing: 10) {
+                            Text(timeLabel(c.start))
+                                .font(.system(size: 13, weight: .semibold).monospacedDigit())
+                                .foregroundColor(.tMuted)
+                                .frame(minWidth: 56, alignment: .leading)
+                            Text(c.title)
+                                .font(.system(size: 15, weight: c == current ? .bold : .regular))
+                                .foregroundColor(c == current ? .tPrimary : .tText)
+                                .lineLimit(2)
+                            Spacer(minLength: 0)
+                            if c == current {
+                                Image(systemName: "checkmark").foregroundColor(.tPrimary)
+                            }
                         }
                     }
+                    .listRowBackground(Color.tCard)
                 }
-                .listRowBackground(Color.tCard)
+                .scrollContentBackground(.hidden)
+                .background(Color.tDark)
+                // Ouverte sur le chapitre en cours, au milieu (demande de joey,
+                // 09/11) : dans une longue VOD, il fallait le chercher.
+                .onAppear {
+                    guard let current else { return }
+                    DispatchQueue.main.async { proxy.scrollTo(current.id, anchor: .center) }
+                }
             }
-            .scrollContentBackground(.hidden)
-            .background(Color.tDark)
             .navigationTitle(store.t("chapters"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -2089,15 +2183,24 @@ struct ImmersivePlayer: View {
                         .tGlass(in: Circle(), fallback: Color.black.opacity(0.45), clear: true)
                 }
                 .buttonStyle(.plain)
-                .offset(x: -controlsInset / 2, y: -controlsBottomInset / 2)
+                .offset(x: centerShift, y: -controlsBottomInset / 2)
             }
 
+            // Les barres se replient de la largeur du chat superposé, de son
+            // côté : leurs boutons restent entièrement visibles et cliquables,
+            // et suivent la largeur du chat quand on la fait varier. Chat dans
+            // un coin (moitié haute ou basse) : seule la barre de ce côté.
+            // Pas d'animation ici : pendant un glissement la marge doit coller
+            // au doigt. Le changement de disposition, lui, est déjà animé par
+            // le `withAnimation` du bouton qui le déclenche.
             VStack(spacing: 0) {
-                topBar
+                topBar.padding(controlsEdge, barInset(.top))
                 Spacer(minLength: 0)
-                bottomBar
+                bottomBar.padding(controlsEdge, barInset(.bottom))
             }
             .padding(TSpace.sm)
+            // Coins arrondis là où iOS ne laisse aucune marge (iPhone Duo).
+            .padding(cornerPad)
             // Image verticale : la barre du bas passe au-dessus du chat posé
             // sur le bas de l'image.
             .padding(.bottom, controlsBottomInset)
@@ -2105,13 +2208,6 @@ struct ImmersivePlayer: View {
             // descendent jusqu'au bord physique, et le trait de la barre
             // d'accueil passerait sinon au ras des boutons.
             .padding(.bottom, isLandscape ? TSpace.xs : 0)
-            // Les barres se replient de la largeur du chat superposé : leurs
-            // boutons restent entièrement visibles et cliquables, et suivent
-            // la largeur du chat quand on la fait varier.
-            // Pas d'animation ici : pendant un glissement la marge doit coller
-            // au doigt. Le changement de disposition, lui, est déjà animé par
-            // le `withAnimation` du bouton qui le déclenche.
-            .padding(.trailing, controlsInset)
             // En paysage, la barre du bas descend jusqu'au bord physique : sans
             // ça elle flottait à une trentaine de points du bord quand le haut
             // n'en avait que huit — la barre d'accueil réserve cet espace.
@@ -2583,7 +2679,7 @@ struct ImmersivePlayer: View {
         .background(Color.black.opacity(0.72))
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         // Centrée sur la partie visible de l'image, comme ▶ (chat superposé).
-        .offset(x: -controlsInset / 2, y: -controlsBottomInset / 2)
+        .offset(x: centerShift, y: -controlsBottomInset / 2)
         .transition(.opacity)
     }
 
@@ -3106,9 +3202,9 @@ struct AdBreakBanner: View {
     @EnvironmentObject private var store: AppStore
 
     /// Pas de session web, ou réglage coupé : un abonné ne profite pas de son
-    /// abonnement sans pub, on le lui dit.
+    /// abonnement sans pub, on le lui dit — sauf sans compte Twitch.
     private var showsLoginHint: Bool {
-        !store.subAdFree || (store.twitchWebToken ?? "").isEmpty
+        !store.accountHidden && (!store.subAdFree || (store.twitchWebToken ?? "").isEmpty)
     }
 
     var body: some View {

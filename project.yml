@@ -76,6 +76,7 @@ targets:
       - path: Sources/Services/TopLanguage.swift
       - path: Sources/Services/TwitchAPI.swift
       - path: Sources/Services/LivePlaylistLoader.swift
+      - path: Sources/Services/TwitchAdPlaylist.swift
       - path: Sources/Services/VodUnmute.swift
       # Pauses pub du direct : VodUnmuteLoader.playerItem y fait appel.
       - path: Sources/Services/AdBreakMonitor.swift
@@ -86,6 +87,8 @@ targets:
       - path: Sources/Services/PlaybackDiagnostics.swift
       # Journal traduit (section « Erreurs récentes » du Compte).
       - path: Sources/Services/LogTranslations.swift
+      - path: Sources/Services/MultiLive.swift
+      - path: Sources/Services/NetworkStatus.swift
 
     # Signature automatique : en local, il suffit de choisir son équipe dans
     # Xcode. La CI construit sans signer (réglages passés à xcodebuild).

@@ -688,10 +688,16 @@ struct SearchView: View {
             }
 
             // Commandes des bots (Nightbot, StreamElements…) : aussi hors
-            // ligne, quand il n'y a pas de chat pour ouvrir son menu ⋯.
+            // ligne. Hors ligne, le chat de la chaîne s'ouvre à côté : Twitch
+            // le garde ouvert hors direct.
             if !channelName.isEmpty {
-                BotCommandsButton(channelName: channelName)
-                    .padding(.horizontal, TSpace.lg)
+                HStack(spacing: TSpace.sm) {
+                    if live.error != nil {
+                        OfflineChatButton(channelName: channelName, channelId: live.userId)
+                    }
+                    BotCommandsButton(channelName: channelName)
+                }
+                .padding(.horizontal, TSpace.lg)
             }
 
             // Chaîne masquée des listes de découverte : la réafficher d'ici.

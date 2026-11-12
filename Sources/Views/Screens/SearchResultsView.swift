@@ -284,12 +284,9 @@ struct SearchResultsSection: View {
                 emptyOrFailed(.lives, icon: "antenna.radiowaves.left.and.right")
             } else {
                 if !shown.isEmpty {
-                    LazyVGrid(columns: columns, spacing: TSpace.md) {
-                        ForEach(shown) { stream in
-                            StreamCardView(stream: stream, hideable: true) { onPlayLive(stream.userLogin) }
-                        }
+                    StreamsBlock(streams: shown, columns: columns, hideable: true) {
+                        onPlayLive($0.userLogin)
                     }
-                    .padding(.horizontal, TSpace.lg)
                 }
                 if all.count > shown.count {
                     HiddenFooter(count: all.count - shown.count, action: onShowHidden)

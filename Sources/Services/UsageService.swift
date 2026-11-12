@@ -135,6 +135,25 @@ final class UsageService: ObservableObject {
         UserDefaults.standard.set(all, forKey: eventsKey)
     }
 
+    /// Source du direct en cours (MainTabView, menuLiveSource) : jointe aux
+    /// pauses pub vues, pour mettre à part dans /stats celles du compte
+    /// (qualités supérieures) et de Twitch officiel.
+    var adSource: String? = nil
+
+    /// Pause pub vue (lecteur principal, une par pause) : comptée avec son
+    /// heure UTC, la source du direct et son type (« pre », « mid » ou vide),
+    /// pour les graphiques des pubs de /stats.
+    func countAdBreak(roll: String) {
+        guard UserDefaults.standard.object(forKey: "cfg_share_usage") as? Bool ?? true else { return }
+        count("live_ad_break")
+        AdHours.add(source: adSource, roll: roll)
+    }
+
+    /// Pour AdBreakWatcher(onBreak:), dont le minuteur n'est pas sur l'acteur principal.
+    nonisolated static func adBreakSeen(_ roll: String) {
+        Task { @MainActor in shared.countAdBreak(roll: roll) }
+    }
+
     // MARK: – Ping
     /// Signale l'installation au Worker. Sans effet si le comptage est coupé.
     /// Comptage coupé : un effacement resté en attente est retenté. Un ping en
@@ -189,6 +208,8 @@ final class UsageService: ObservableObject {
             "device": UIDevice.current.userInterfaceIdiom == .pad ? "ipad" : "iphone",
         ]
         if !events.isEmpty { body["ev"] = events }
+        let adHours = AdHours.pending
+        if !adHours.isEmpty { body["adh"] = adHours }
         req.httpBody = try? JSONSerialization.data(withJSONObject: body)
 
         do {
@@ -210,6 +231,7 @@ final class UsageService: ObservableObject {
                 }
                 UserDefaults.standard.set(left, forKey: eventsKey)
             }
+            if !adHours.isEmpty { AdHours.sent(adHours) }
             logger.debug("USAGE", "Ping envoyé", "version \(appVersion)")
         } catch {
             logger.debug("USAGE", "Ping impossible", error.localizedDescription)
@@ -282,6 +304,7 @@ final class UsageService: ObservableObject {
         let ud = UserDefaults.standard
         ud.removeObject(forKey: "usage_last_ping")
         ud.removeObject(forKey: eventsKey)
+        AdHours.clear()
         var bases = [APIConfig.base]
         if let b = ud.string(forKey: pingBaseKey), !bases.contains(b) { bases.append(b) }
         ud.set(bases, forKey: forgetPendingKey)

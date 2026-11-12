@@ -184,6 +184,82 @@ final class PlayerPullTouchGuard: UIGestureRecognizer {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+//  Glissé depuis le bord gauche : fermer le lecteur (fb_mvxcjl88).
+//
+//  Réglage « Fermer en glissant depuis le bord », coupé d'office. Un geste
+//  UIKit de bord d'écran, posé sur la fenêtre : il ne part que d'un doigt
+//  posé au bord. Il suit le doigt EN MÊME TEMPS que les gestes du dessous :
+//  le glissé vers le bas du lecteur (PlayerPullGesture, dès un point), le
+//  déplacement de l'image ou le défilement du chat démarraient avant lui et
+//  le faisaient échouer, et le bord ne fermait rien (rykozin, 08/11). Une
+//  feuille ouverte par-dessus le lecteur garde son propre geste de retour :
+//  le nôtre ne démarre pas.
+// ═══════════════════════════════════════════════════════════════════════════
+
+struct EdgeSwipeCloser: UIViewRepresentable {
+    var enabled: Bool
+    var onClose: () -> Void
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView(frame: .zero)
+        view.isUserInteractionEnabled = false
+        return view
+    }
+
+    func updateUIView(_ view: UIView, context: Context) {
+        context.coordinator.onClose = onClose
+        context.coordinator.enabled = enabled
+        // La vue n'est dans la fenêtre qu'après ce premier passage.
+        DispatchQueue.main.async { context.coordinator.attach(to: view.window) }
+    }
+
+    static func dismantleUIView(_ view: UIView, coordinator: Coordinator) {
+        coordinator.detach()
+    }
+
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        var onClose: () -> Void = {}
+        var enabled = false { didSet { recognizer?.isEnabled = enabled } }
+        private var recognizer: UIScreenEdgePanGestureRecognizer?
+
+        func attach(to window: UIWindow?) {
+            guard let window, recognizer?.view !== window else { return }
+            detach()
+            let r = UIScreenEdgePanGestureRecognizer(target: self, action: #selector(handle(_:)))
+            r.edges = .left
+            r.delegate = self
+            r.isEnabled = enabled
+            window.addGestureRecognizer(r)
+            recognizer = r
+        }
+
+        func detach() {
+            if let r = recognizer { r.view?.removeGestureRecognizer(r) }
+            recognizer = nil
+        }
+
+        func gestureRecognizerShouldBegin(_ r: UIGestureRecognizer) -> Bool {
+            enabled && (r.view as? UIWindow)?.rootViewController?.presentedViewController == nil
+        }
+
+        /// Avec les gestes du lecteur et du chat, sans attendre qu'ils renoncent
+        /// (voir l'en-tête).
+        func gestureRecognizer(_ r: UIGestureRecognizer,
+                               shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
+            true
+        }
+
+        @objc private func handle(_ r: UIScreenEdgePanGestureRecognizer) {
+            guard r.state == .ended, let view = r.view else { return }
+            // Un vrai glissé vers la droite, ou un geste vif : pas un bord effleuré.
+            if r.translation(in: view).x > 80 || r.velocity(in: view).x > 700 { onClose() }
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 //  Pincement sur l'image : le point entre les doigts.
 //
 //  Le zoom partait toujours du milieu de l'image : MagnificationGesture ne

@@ -933,8 +933,11 @@ private struct PredictionCard: View {
             }
             if open {
                 if needsSession {
-                    Text(store.t("pred_need_login"))
-                        .font(.system(size: 10)).foregroundColor(.tMuted)
+                    // Sans compte Twitch : la prédiction se suit, sans rappel.
+                    if !store.accountHidden {
+                        Text(store.t("pred_need_login"))
+                            .font(.system(size: 10)).foregroundColor(.tMuted)
+                    }
                 } else if let o = pred.outcomes.first(where: { $0.id == selected }) {
                     betPanel(o)
                 } else {

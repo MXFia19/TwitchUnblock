@@ -39,6 +39,34 @@ struct BackupDocument: FileDocument {
     }
 }
 
+/// Choix du fichier à importer, en mode copie : iOS copie le fichier dans le
+/// dossier temporaire de l'app avant de le donner. `.fileImporter` (SwiftUI)
+/// l'ouvre sur place, et dans LiveContainer « Ouvrir » ne répondait pas
+/// (retour du 20/10/2026, réglé jusque-là par l'option « Fix File Picker »
+/// de LiveContainer, que le tweak FilePickerFix reprend en forçant la copie).
+final class BackupFilePicker: UIDocumentPickerViewController, UIDocumentPickerDelegate {
+    private var onPick: ((Data?) -> Void)?
+
+    static func present(onPick: @escaping (Data?) -> Void) {
+        guard let root = UIApplication.shared.connectedScenes
+            .compactMap({ ($0 as? UIWindowScene)?.keyWindow }).first?.rootViewController else { return }
+        var top = root
+        while let presented = top.presentedViewController { top = presented }
+        let picker = BackupFilePicker(forOpeningContentTypes: [.json], asCopy: true)
+        picker.onPick = onPick
+        picker.delegate = picker
+        top.present(picker, animated: true)
+    }
+
+    func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+        guard let url = urls.first else { return }
+        let data = try? Data(contentsOf: url)
+        // La copie ne sert plus une fois lue.
+        try? FileManager.default.removeItem(at: url)
+        onPick?(data)
+    }
+}
+
 enum Backup {
     static let format = "twitchunblock-backup"
     /// Version écrite par cette app (voir l'en-tête).
@@ -138,10 +166,13 @@ enum Backup {
             "blockedUsers": store.chatBlockedUsers,
             "highlightWords": store.chatHighlightWords,
             "hiddenEmotes": store.hiddenEmotes,
+            "favoriteEmotes": store.favoriteEmotes,
             "shareUsage": store.shareUsage,
             "vodSpeed": store.vodSpeed,
             "qualityPref": store.preferredQuality,
             "liveSourceOrder": store.liveSourceOrder,
+            // Même nom que dans la sauvegarde du site.
+            "customSource": store.customSource.isEmpty ? (NSNull() as Any) : (store.customSource as Any),
             "multiChat": store.multiLiveChat,
         ]
         let app: [String: Any] = [
@@ -171,6 +202,8 @@ enum Backup {
             "ios_fillScreen": store.fillScreen,
             "ios_pipOnLeave": store.pipOnLeave,
             "ios_landscapeChat": store.landscapeChat.rawValue,
+            "ios_chatOverlayLayout": store.chatOverlayLayout.raw,
+            "ios_edgeSwipeClose": store.edgeSwipeClose,
             "ios_spatialAudio": store.spatialAudio,
             "ios_restoreMuted": store.restoreMutedAudio,
             "ios_chatFontSize": store.chatFontSize,
@@ -411,10 +444,23 @@ enum Backup {
             store.hiddenEmotes = AppStore.emoteCodes(v)
             ok("hiddenEmotes")
         }
+        // Emotes favorites (nom du site) : codes exacts aussi.
+        if let v = s["favoriteEmotes"] as? [String] {
+            store.favoriteEmotes = Array(AppStore.emoteCodes(v).suffix(AppStore.maxFavoriteEmotes))
+            ok("favoriteEmotes")
+        }
         bool("shareUsage") { store.shareUsage = $0 }
         num("vodSpeed", 0.25...2) { store.vodSpeed = VodSpeed.nearest($0) }
         // Ordre des sources du direct (nom du site) : sources connues, sans
         // doublon, celles qui manquent juste après celle qu'elles secourent.
+        // Ma source avant l'ordre : celui-ci ne garde « custom » que si elle
+        // est réglée.
+        if s["customSource"] is NSNull {
+            store.setCustomSource("")
+            ok("customSource")
+        } else if let v = s["customSource"] as? String, store.setCustomSource(v) {
+            ok("customSource")
+        }
         if let v = s["liveSourceOrder"] as? [String], v.contains(where: { kLiveSources.contains($0) }) {
             store.liveSourceOrder = completeLiveSourceOrder(v)
             ok("liveSourceOrder")
@@ -452,6 +498,11 @@ enum Backup {
             store.landscapeChat = lc
             ok("ios_landscapeChat")
         }
+        if let v = s["ios_chatOverlayLayout"] as? String, let layout = ChatOverlayLayout(raw: v) {
+            store.chatOverlayLayout = layout
+            ok("ios_chatOverlayLayout")
+        }
+        bool("ios_edgeSwipeClose") { store.edgeSwipeClose = $0 }
         if let v = s["ios_spatialAudio"] as? String, ["auto", "off"].contains(v) {
             store.spatialAudio = v
             ok("ios_spatialAudio")

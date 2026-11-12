@@ -117,7 +117,10 @@ private func workerVariants(_ value: Any?) -> [String: VariantInfo] {
 }
 
 // MARK: – GQL
-private func twitchGQL(_ query: String) async throws -> Any {
+/// `deviceID` : faux pour le jeton du direct — avec cet en-tête, Twitch coud
+/// ses pubs (pré-roll, blocs de 3 min) même pour playerType « embed »
+/// (mesuré le 2026-11-12 : 6 séances sur 28 avec pub, 0 sur 28 sans).
+private func twitchGQL(_ query: String, deviceID: Bool = true) async throws -> Any {
     guard let url = URL(string: "https://gql.twitch.tv/gql") else { throw URLError(.badURL) }
     // 10 s au plus sans réponse (au lieu de 60) : GQL répond en une seconde
     // quand il marche, et getLive l'attend avant d'essayer les sources.
@@ -126,7 +129,7 @@ private func twitchGQL(_ query: String) async throws -> Any {
     req.setValue(kGQLClientID, forHTTPHeaderField: "Client-ID")
     req.setValue("application/json", forHTTPHeaderField: "Content-Type")
     req.setValue(requestHeaders["User-Agent"], forHTTPHeaderField: "User-Agent")
-    req.setValue("MkMq8a9\(Int.random(in: 100000...999999))", forHTTPHeaderField: "Device-ID")
+    if deviceID { req.setValue("MkMq8a9\(Int.random(in: 100000...999999))", forHTTPHeaderField: "Device-ID") }
     req.httpBody = try JSONSerialization.data(withJSONObject: ["query": query])
     let (data, resp) = try await URLSession.shared.data(for: req)
     guard (resp as? HTTPURLResponse)?.statusCode == 200 else { throw URLError(.badServerResponse) }
@@ -134,12 +137,15 @@ private func twitchGQL(_ query: String) async throws -> Any {
 }
 
 // MARK: – Access Token
+/// Jeton du direct demandé comme Streamlink (lecteur « embed », sans
+/// Device-ID ; PR #12 d'ihavenoface) : Twitch y coud bien moins de pubs.
+/// Le Worker (source Twitch officielle du site) et l'app Android font de même.
 private func getAccessToken(id: String, isLive: Bool) async -> (value: String, signature: String)? {
     logger.debug("TOKEN", "Récupération token \(isLive ? "live" : "VOD") pour \"\(id)\"")
     let q = isLive
-        ? "query { streamPlaybackAccessToken(channelName: \"\(gqlStr(id))\", params: {platform: \"web\", playerBackend: \"mediaplayer\", playerType: \"site\"}) { value signature } }"
+        ? "query { streamPlaybackAccessToken(channelName: \"\(gqlStr(id))\", params: {platform: \"site\", playerBackend: \"mediaplayer\", playerType: \"embed\"}) { value signature } }"
         : "query { videoPlaybackAccessToken(id: \"\(gqlStr(id))\", params: {platform: \"web\", playerBackend: \"mediaplayer\", playerType: \"site\"}) { value signature } }"
-    guard let json = try? await twitchGQL(q) as? [String: Any],
+    guard let json = try? await twitchGQL(q, deviceID: !isLive) as? [String: Any],
           let data = json["data"] as? [String: Any],
           let token = (isLive ? data["streamPlaybackAccessToken"] : data["videoPlaybackAccessToken"]) as? [String: Any],
           let value = token["value"] as? String,
@@ -695,6 +701,7 @@ func getLive(channelName: String, webToken: String? = nil,
         switch src {
         case "al":     found = await ttvlolLiveLinks(login: login, lowLatency: lowLatency)
         case "twitch": if let token { found = await usherLiveLinks(login: login, token: token, lowLatency: lowLatency, geo: geo) }
+        case "custom": if let host = customSourceHost() { found = await luminousLiveLinks(hosts: [host], login: login, lowLatency: lowLatency) }
         case let id where kLiveProxyHosts[id] != nil:
             found = await luminousLiveLinks(hosts: [kLiveProxyHosts[id]!], login: login, lowLatency: lowLatency)
         default:
@@ -1602,38 +1609,46 @@ func getStreamsByCategory(token: String, gameId: String, cursor: String? = nil,
     return (arr.map { streamFromDict($0) }, arr.isEmpty ? nil : next)
 }
 
-/// Audience par catégorie, en une requête pour toute une page.
+/// Audience par catégorie, pour toute une page.
 ///
 /// Helix ne la donne pas : `games/top` renvoie un classement, pas de chiffres.
-/// GQL, lui, expose `viewersCount` par identifiant. Les champs sont aliasés
-/// pour tenir dans un seul aller-retour — cent alias passent sans broncher —
-/// et la requête ne demande aucun jeton d'intégrité, contrairement à
-/// `channel { chatters }`.
+/// GQL, lui, expose `viewersCount` par identifiant, un champ aliasé par
+/// catégorie, sans jeton d'intégrité (contrairement à `channel { chatters }`).
+/// Twitch refuse désormais plus de 15 alias par requête (« root field aliases
+/// limit allowed (15) », vu le 04/11) : la requête de 100 ne rendait plus
+/// rien, et seules les catégories suivies sur le compte, qui arrivent avec
+/// leur audience, en avaient une. Paquets de 15, envoyés ensemble.
 ///
 /// Un échec n'est pas une erreur ici : la carte affiche simplement la
 /// catégorie sans son audience.
 func categoryViewers(ids: [String]) async -> [String: Int] {
     guard !ids.isEmpty else { return [:] }
+    let chunks = stride(from: 0, to: ids.count, by: 15).map { Array(ids[$0 ..< min($0 + 15, ids.count)]) }
     var out: [String: Int] = [:]
-
-    for start in stride(from: 0, to: ids.count, by: 100) {
-        let chunk = Array(ids[start ..< min(start + 100, ids.count)])
-        let fields = chunk.enumerated()
-            .map { "g\($0.offset): game(id: \"\(gqlStr($0.element))\") { id viewersCount }" }
-            .joined(separator: " ")
-
-        guard let json = try? await twitchGQL("query { \(fields) }") as? [String: Any],
-              let data = json["data"] as? [String: Any] else { continue }
-
-        for (_, value) in data {
-            guard let game = value as? [String: Any],
-                  let id    = game["id"] as? String,
-                  let count = game["viewersCount"] as? Int else { continue }
-            out[id] = count
+    await withTaskGroup(of: [String: Int].self) { group in
+        for chunk in chunks {
+            group.addTask { await categoryViewersChunk(chunk) }
         }
+        for await part in group { out.merge(part) { first, _ in first } }
     }
-
     logger.success("GQL", "\(out.count) audiences de catégories sur \(ids.count)")
+    return out
+}
+
+/// Un paquet de categoryViewers : une requête, un alias par catégorie.
+private func categoryViewersChunk(_ ids: [String]) async -> [String: Int] {
+    let fields = ids.enumerated()
+        .map { "g\($0.offset): game(id: \"\(gqlStr($0.element))\") { id viewersCount }" }
+        .joined(separator: " ")
+    guard let json = try? await twitchGQL("query { \(fields) }") as? [String: Any],
+          let data = json["data"] as? [String: Any] else { return [:] }
+    var out: [String: Int] = [:]
+    for (_, value) in data {
+        guard let game = value as? [String: Any],
+              let id    = game["id"] as? String,
+              let count = game["viewersCount"] as? Int else { continue }
+        out[id] = count
+    }
     return out
 }
 
@@ -1682,7 +1697,8 @@ private func streamFromDict(_ d: [String: Any]) -> TwitchStream {
         viewerCount: d["viewer_count"] as? Int ?? 0,
         thumbnailURL: d["thumbnail_url"] as? String ?? "",
         tags: d["tags"] as? [String] ?? [],
-        gameId: d["game_id"] as? String ?? ""
+        gameId: d["game_id"] as? String ?? "",
+        startedAt: parseTwitchDate(d["started_at"] as? String)
     )
 }
 
@@ -2194,7 +2210,8 @@ private func streamFromGQL(user u: [String: Any], stream s: [String: Any]) -> Tw
         viewerCount: s["viewersCount"] as? Int ?? 0,
         thumbnailURL: s["previewImageURL"] as? String ?? "",
         tags: (s["freeformTags"] as? [[String: Any]] ?? []).compactMap { $0["name"] as? String },
-        gameId: (s["game"] as? [String: Any])?["id"] as? String ?? "")
+        gameId: (s["game"] as? [String: Any])?["id"] as? String ?? "",
+        startedAt: parseTwitchDate(s["createdAt"] as? String))
 }
 
 /// Lesquelles de ces chaînes sont en live (suivis sans compte). 100 max par requête.
@@ -2207,7 +2224,7 @@ func getLiveStreamsGQL(logins: [String]) async -> [TwitchStream]? {
     guard !logins.isEmpty else { return [] }
     let q = """
     query($l: [String!]) { users(logins: $l) { id login displayName
-      stream { title viewersCount previewImageURL(width: 440, height: 248) game { id displayName } freeformTags { name } } } }
+      stream { title viewersCount createdAt previewImageURL(width: 440, height: 248) game { id displayName } freeformTags { name } } } }
     """
     var out: [TwitchStream] = []
     for start in stride(from: 0, to: logins.count, by: 100) {
@@ -2241,7 +2258,7 @@ func getChannelsGQL(logins: [String]) async -> [ChannelBrief]? {
     query($l: [String!]) { users(logins: $l) { id login displayName profileImageURL(width: 70)
       lastBroadcast { startedAt }
       videos(first: 1, type: ARCHIVE, sort: TIME) { edges { node { publishedAt lengthSeconds } } }
-      stream { title viewersCount previewImageURL(width: 440, height: 248) game { displayName } freeformTags { name } } } }
+      stream { title viewersCount createdAt previewImageURL(width: 440, height: 248) game { displayName } freeformTags { name } } } }
     """
     var out: [ChannelBrief] = []
     for start in stride(from: 0, to: logins.count, by: 100) {
@@ -2393,7 +2410,7 @@ func searchCategoriesGQL(query: String) async -> [TwitchCategory]? {
 func searchStreamsGQL(query: String) async -> [TwitchStream]? {
     let q = """
     query($q: String!) { searchStreams(userQuery: $q, first: 30) {
-      edges { node { title viewersCount previewImageURL(width: 440, height: 248) game { id displayName } freeformTags { name }
+      edges { node { title viewersCount createdAt previewImageURL(width: 440, height: 248) game { id displayName } freeformTags { name }
         broadcaster { id login displayName } } }
     } }
     """
@@ -2451,7 +2468,7 @@ func getStreamsByCategoryPageGQL(gameId: String, lang: String?,
     query($id: ID!, $langs: [Language!], $after: Cursor) { game(id: $id) {
       streams(first: 100, after: $after, options: { broadcasterLanguages: $langs }) {
         edges { cursor node {
-          title viewersCount previewImageURL(width: 440, height: 248) game { id displayName } freeformTags { name }
+          title viewersCount createdAt previewImageURL(width: 440, height: 248) game { id displayName } freeformTags { name }
           broadcaster { id login displayName } } }
         pageInfo { hasNextPage }
     } } }
@@ -2477,7 +2494,7 @@ func getTopStreamsPageGQL(lang: String?,
                           after: String?) async -> (streams: [TwitchStream], next: String?, refused: Bool)? {
     let q = """
     query($langs: [Language!], $after: Cursor) { streams(first: 30, after: $after, options: { broadcasterLanguages: $langs }) {
-      edges { cursor node { title viewersCount previewImageURL(width: 440, height: 248) game { id displayName } freeformTags { name }
+      edges { cursor node { title viewersCount createdAt previewImageURL(width: 440, height: 248) game { id displayName } freeformTags { name }
         broadcaster { id login displayName } } }
       pageInfo { hasNextPage }
     } }

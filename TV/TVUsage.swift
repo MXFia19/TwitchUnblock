@@ -46,6 +46,17 @@ enum TVUsage {
         UserDefaults.standard.set(all, forKey: eventsKey)
     }
 
+    /// Source du direct en cours (TVPlayer) : jointe aux pauses pub vues.
+    static var adSource: String? = nil
+
+    /// Pause pub vue (une par pause) : comptée avec son heure UTC, la source
+    /// du direct et son type (« pre », « mid » ou vide), pour /stats.
+    static func countAdBreak(roll: String) {
+        guard enabled else { return }
+        count("live_ad_break")
+        AdHours.add(source: adSource, roll: roll)
+    }
+
     /// Au lancement et au retour dans l'app : un signal par heure au plus.
     static func ping(token: String?, lang: Lang) async {
         guard enabled else { return }
@@ -64,6 +75,8 @@ enum TVUsage {
             "device": "tv",
         ]
         if !events.isEmpty { body["ev"] = events }
+        let adHours = AdHours.pending
+        if !adHours.isEmpty { body["adh"] = adHours }
         req.httpBody = try? JSONSerialization.data(withJSONObject: body)
         guard let (_, resp) = try? await URLSession.shared.data(for: req),
               (resp as? HTTPURLResponse)?.statusCode == 200 else { return }
@@ -75,6 +88,7 @@ enum TVUsage {
             left[key] = rest > 0 ? rest : nil
         }
         ud.set(left, forKey: eventsKey)
+        if !adHours.isEmpty { AdHours.sent(adHours) }
     }
 
     /// Partage coupé : cette installation (et le compte connecté) effacés du serveur.
@@ -82,6 +96,7 @@ enum TVUsage {
         let ud = UserDefaults.standard
         ud.removeObject(forKey: lastKey)
         ud.removeObject(forKey: eventsKey)
+        AdHours.clear()
         guard var req = request() else { return }
         if let token, !token.isEmpty { req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
         req.httpBody = try? JSONSerialization.data(withJSONObject: ["id": installId, "forget": true])

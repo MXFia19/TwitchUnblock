@@ -210,20 +210,8 @@ struct HomeView: View {
     /// où l'appui long propose de masquer la chaîne ou sa catégorie.
     @ViewBuilder private func streamsBlock(_ streams: [TwitchStream], pinnable: Bool = false,
                                            hideable: Bool = false) -> some View {
-        if store.homeListLayout {
-            LazyVStack(spacing: TSpace.md) {
-                ForEach(streams) { stream in
-                    StreamRowView(stream: stream, pinnable: pinnable, hideable: hideable) { onPlayStream(stream.userLogin) }
-                }
-            }
-            .padding(.horizontal, TSpace.lg)
-        } else {
-            LazyVGrid(columns: columns, spacing: TSpace.md) {
-                ForEach(streams) { stream in
-                    StreamCardView(stream: stream, pinnable: pinnable, hideable: hideable) { onPlayStream(stream.userLogin) }
-                }
-            }
-            .padding(.horizontal, TSpace.lg)
+        StreamsBlock(streams: streams, columns: columns, pinnable: pinnable, hideable: hideable) {
+            onPlayStream($0.userLogin)
         }
     }
 
@@ -516,7 +504,10 @@ struct HomeView: View {
     }
 
     // MARK: – Personnalisation (Réglages → Personnaliser)
-    private func showsCard(_ key: String) -> Bool { store.customization.shows(home: key) }
+    /// Cartes de connexion : jamais sans compte Twitch (Personnaliser l'app).
+    private func showsCard(_ key: String) -> Bool {
+        store.customization.shows(home: key) && !(store.accountHidden && ["login", "web"].contains(key))
+    }
 
     /// Onglets des lives : 0 = suivies en live, 1 = top, 2 = hors ligne.
     private static func chipTab(_ key: String) -> Int {

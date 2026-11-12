@@ -39,6 +39,42 @@ enum LandscapeChat: String, CaseIterable {
     }
 }
 
+// MARK: – Place du chat posé sur l'image
+/// Chat superposé, en paysage : à gauche ou à droite, sur toute la hauteur ou
+/// sur sa moitié haute ou basse (un des quatre coins), comme sur l'app TV.
+struct ChatOverlayLayout: Equatable {
+    enum Side: String, CaseIterable { case left, right }
+    enum Height: String, CaseIterable { case full, top, bottom }
+
+    var side: Side
+    var height: Height
+
+    init(side: Side = .right, height: Height = .full) {
+        self.side = side
+        self.height = height
+    }
+
+    /// « right-full », « left-bottom »… : forme enregistrée, la même que
+    /// celle du site.
+    init?(raw: String) {
+        let parts = raw.split(separator: "-").map(String.init)
+        guard parts.count == 2, let side = Side(rawValue: parts[0]),
+              let height = Height(rawValue: parts[1]) else { return nil }
+        self.init(side: side, height: height)
+    }
+
+    var raw: String { "\(side.rawValue)-\(height.rawValue)" }
+
+    /// Moitié de l'écran couverte (nil : toute la hauteur).
+    var half: VerticalEdge? {
+        switch height {
+        case .full:   return nil
+        case .top:    return .top
+        case .bottom: return .bottom
+        }
+    }
+}
+
 // MARK: – Présentation du chat
 /// Regroupe ce qui change entre le chat plein cadre, la colonne étroite du
 /// paysage et le calque posé sur l'image. Passer un seul objet évite de

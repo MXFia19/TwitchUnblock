@@ -96,8 +96,9 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   rest of the app with the player reduced. Closing the player, opening another
   video or switching to chat only ends it, along with its chat connection and
   lock screen activity.
-  Starting it shrinks the player into the mini player, so you can browse the app right away (no more black full-size player to close).
-  The PiP window's expand button brings the player back full size on the same video, without reloading (with the app's player, tapping the mini player does too).
+  Starting it shrinks the player out of the way, so you can browse the app right away (no more black full-size player to close). The mini player bar stays hidden while the window is open (the window brings you back and closes the video), and comes back when it closes if the player is still reduced.
+  The PiP window's expand button brings the player back full size on the same video, without reloading.
+  On iOS 16, the app's player removes its controls a moment before it shrinks into the mini player: its seek bar used to stay drawn over the app.
   A followed raid or the next VOD of **Play all** keeps playing in the same window: the player only changes what it plays (the window used to close while the sound went on).
 * 🌙 **Background playback** — Settings → Player: when the screen locks or you
   switch to another app without Picture-in-Picture, the video keeps playing
@@ -132,8 +133,20 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   don't count: the video picks up after them, Live Activity included.
 * 🏷️ **Full title** — tap the title at the top of the player (often cut off)
   to read it in full, with the category, viewers, uptime and a shortcut to the
-  channel. Closing a channel page opened from the full-size player (name,
+  channel. VODs, a live's recording and clips have it too: the channel's name
+  first, then the title, whose card adds the broadcast date. Closing a channel page opened from the full-size player (name,
   title or chat) brings the player back full size instead of the mini player.
+* 👈 **Swipe from the edge to close** (Settings → Player, off by default) —
+  swipe in from the left edge of the screen to close the player, like ✕, even
+  when the swipe starts over the video or the chat.
+* 📋 **Streams as a list** (Settings → General, or the button on Home) —
+  live streams in a list like on Twitch, thumbnail on the left, on Home, in a
+  category and in search results.
+* ⏱️ **Stream uptime** on every live card and row (“2h 14min”, refreshed every
+  minute), from Helix's `started_at` or GQL's `createdAt`. A category's own
+  streams no longer repeat its name under each one.
+* 🕘 **Recent streamers** — turned off, the shortcuts disappear from Search and
+  the channels you open are no longer remembered.
 * 🎵 **Leaves your music alone** — opening the app no longer stops music
   playing in another app: the sound switches over only when a video starts,
   and goes back to that app when you close the player (not when the sleep
@@ -176,7 +189,10 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   closed while it loads.
   Reorder them in Settings → Player; picking a source from the player's ⋯
   menu (which also ticks the source in use) moves it to the top, or tries it
-  again.
+  again. **My source** (same place, like on the website): the address of your
+  own luminous-ttv server (https://, a domain name, no port or parameters)
+  goes to the top of the order; empty it to remove it. Kept in the backup
+  under the website's name (`customSource`).
   Channels that stream with multiple encodes (Enhanced Broadcasting) keep each
   quality's own name on every source. No source escapes the channel's own ad
   breaks: Twitch stitches them into the stream itself. When Twitch's own API
@@ -243,7 +259,7 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   landscape. A source that would one day list the vertical variants with the
   usual ones (`IVS-GROUPS="portrait"`) keeps them out of the quality picker.
   The vertical picture comes straight from
-  Twitch (anonymous token), with its ad breaks muted and announced as on the
+  Twitch (anonymous token), with its ad segments filtered as on the
   other sources; Higher qualities stop until the next launch. The choice is
   remembered: the next streams that have a vertical picture start on it.
 * 🌍 **Lives blocked in your country** — when Twitch keeps a live to some
@@ -252,13 +268,27 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   answered”. It reads it from the playback token (`geoblock_reason`) or from
   Twitch's refusal; the mirrors are still tried, in case one is in an allowed
   country.
-* 📢 **Channel ad breaks explained** — during an ad break (or the pre-roll
-  when a stream opens), Twitch replaces the stream with its purple
-  “Commercial break in progress” screen or a real ad. The player now says so,
-  with a countdown to the stream's return, and mutes the sound meanwhile
-  (restored at the end). Works in the app's player, Apple's player, each
-  multi-live tile and on Apple TV (banner and countdown only: tvOS's player
-  has no button to turn the sound back on).
+* 📢 **Live ad filtering** — recognized Twitch ad segments are marked as gaps
+  before playback, including pre-rolls and channel ad breaks. The player may
+  hold its last frame or buffer until the broadcast returns; filtering cannot
+  recover video Twitch replaced with ads. The existing countdown and account
+  fallback remain in use. Filtering applies with low latency on or off, in the
+  app's player, Apple's player, multi-live and on Apple TV. AirPlay receivers
+  use the original CDN playlist, so local filtering does not apply there.
+  Most ads reach lives that come straight from Twitch (Twitch source, vertical
+  picture, Higher qualities through your account); since November 2026 some
+  connections get them through the mirrors too, and the same filtering covers
+  them. The Twitch source asks for its playback token like Streamlink (embed
+  player, no Device-ID), which Twitch serves with far fewer ads (pre-rolls and
+  pods of 3–6 ads every few minutes went away in the contributor's
+  measurements; the channel's own breaks still come). The countdown runs to
+  the end of the whole pod: Twitch announces each ad only as it starts, so it
+  used to restart with every ad. Higher qualities still switch to the ad-free source (1080p at
+  most) for the length of a break and come back after, as before; filtering
+  only covers the moment of the switch, or the whole break when there is no
+  ad-free source. Waiting through a break is not counted as a stall, so it no
+  longer lowers the quality or pushes the live further from the edge.
+  Contributed by [ihavenoface](https://github.com/ihavenoface) (PR #11, #12).
 * ⏪ **Rewind a live stream (DVR)** — when the channel archives its broadcasts,
   the progress bar covers the *whole* stream, not just the rewindable window.
   Scrub past that window and the recording takes over at that exact moment.
@@ -275,7 +305,11 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
 * 🖥 **Fill the screen** — crops the video to remove the black bars in
   landscape. Cuts off the top and bottom: 16:9 in a phone screen can't do both.
   Otherwise the picture never goes under the Dynamic Island or the notch in
-  landscape, even when the chat takes a column next to it.
+  landscape, even when the chat takes a column next to it. The side margins
+  it can use without that are part of the picture (the side away from the
+  island, the iPhone Duo's status column): it stays centered on the whole
+  screen and gets as big as it can. On the Duo's outer screen, narrower than
+  16:9, it used to stop at the status column, off-center.
 * 🔍 **Pinch to zoom** — in the app's player, like the Twitch app: the zoom
   (up to 4×) starts right where you pinch, and moving both fingers while
   pinching moves the picture around; once zoomed, one finger is enough to
@@ -285,12 +319,14 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   right in the player. It stops multi-live too. The screen only stays awake
   while a video plays on screen: paused, minimized or in audio only, it
   sleeps as usual (the sound goes on).
-* 📡 **AirPlay** — send the stream to an Apple TV or a compatible TV.
+* 📡 **AirPlay** — send the stream to an Apple TV or a compatible TV. Low
+  latency stops jumping to the live edge while AirPlay is on: the TV reloaded
+  the stream at each jump and the picture kept freezing.
 * 🎧 **Spatial audio (AirPods)** — turn it off in the app, head tracking
   included (Settings → Player). iOS doesn't let apps pick "Fixed" or "Head
   Tracked": that choice stays in Control Center.
 * 🧭 **VOD chapters** — game changes marked on the progress bar; tap the current
-  chapter to jump to another.
+  chapter to jump to another (the list opens on the current one).
 * 🔇 **Muted parts** — passages Twitch muted for copyrighted music show in orange
   on the progress bar, with a notice and a **Skip** button. For a day or two
   after a stream, Twitch's CDN still serves the original sound: the app puts it
@@ -315,7 +351,9 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   and **Share**. A channel that refuses clips, a stream that has ended or
   Twitch saying no is told plainly (details in the log).
 * 📥 **Offline downloads** — download a whole VOD or just a part of it (from one
-  time to another, from where you are, the next 10 minutes) in the quality you
+  time to another, from where you are, the next 10 minutes, or by **chapter**:
+  tap one to keep just that part, then others to extend it — the part stays in
+  one piece, chapters in between included) in the quality you
   pick (your preferred quality is suggested first), then watch it without a connection from the My VODs tab. With the app
   open, the app downloads the segments itself (four at a time, any error shown
   under the download); when you leave it, what's left goes to iOS's background
@@ -363,12 +401,15 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   account** button for when you're unbanned (remembered until the app
   closes). A timeout only adds a line saying for how long.
 * 😀 **Emotes** — Twitch, BetterTTV, FrankerFaceZ and 7TV, global and
-  per-channel, animated (FrankerFaceZ included); GIFs sent with Twitch's GIF
+  per-channel, animated (FrankerFaceZ included) at their real frame timing —
+  held frames keep their hold, frames of 10 ms or less play at 100 ms like in
+  browsers, very long emotes play from their file instead of dropping frames
+  (PR #13 by [ihavenoface](https://github.com/ihavenoface)); GIFs sent with Twitch's GIF
   keyboard show in the chat on their own line. BetterTTV's live connection
   adds the personal emotes of BTTV Pro users (once BTTV announces them, i.e.
   when they open the chat) and the emotes added to the channel during the
   stream. The emote picker is translated; long-press an emote there to open
-  its card or copy its name. Its channel tab also lists the channel's own
+  its card, add it to your favorites or copy its name. Its channel tab also lists the channel's own
   Twitch emotes (follower, then sub tiers; one public Twitch request per
   channel and session), so channels with only Twitch sub emotes get a tab too.
   Sub emotes your account doesn't have (from the chat's `emote-sets`) are
@@ -398,6 +439,11 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   it comes from (GIPHY), a link to its GIPHY page and its link to copy. In the
   live chat, the multistream, the pinned message, a message thread and the
   VOD and clip chat; VoiceOver can open it too.
+* ⭐ **Favorite emotes** — long-press an emote (in the chat or the picker), or
+  **Add to favorites** on its card: the picker's **Favorites** tab, first and
+  opened first when it has emotes usable in this chat, keeps them in the order
+  you added them (up to 100). The list follows your account, shared with the
+  website (`favoriteEmotes`), and is in the backup.
 * 🙅 **Hide an emote** — long-press it in the chat, or **Hide this emote** on
   its card: it then shows as the typed word, from any source (Twitch, BTTV,
   FFZ, 7TV), in the live, VOD and multi-live chat. Settings → Chat → Hidden
@@ -453,6 +499,9 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
 * 🤖 **Bot commands** — a channel's Nightbot, StreamElements, Fossabot and
   Moobot commands without typing `!commands`: from the chat's ⋯ menu, or from
   the channel page, live or offline (tap one to copy it).
+* 💬 **Chat of an offline channel** — an offline channel's page has a Chat
+  button: Twitch keeps its chat open between streams, so you read and write
+  there as during a live (no points without a live).
 * 🔥 **Watch streak** and a **follow / unfollow** button. Unfollowing, from the
   player or a channel page, asks for confirmation first; from the player, the
   same dialog can hide the button (Settings → Chat → Customization → Follow
@@ -506,10 +555,14 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
 ### Chat layout
 
 * 📐 **Resizable** — drag the small handle between video and chat (no line
-  across the picture); the width is remembered.
+  across the picture), from 20 %; the width is remembered. On the side
+  away from the Dynamic Island (or notch), the chat also uses the screen's
+  safe margin instead of leaving it empty, so the picture gets bigger.
 * 🪟 **Three landscape layouts** — a column on the right, translucent over the
-  picture, or folded away. The player's buttons shift with the chat's width so
-  nothing is ever covered.
+  picture, or folded away. Over the picture, the chat goes left or right, full
+  height or in a corner (top or bottom half), like on Apple TV (Settings →
+  Chat → Chat on the video). The player's buttons shift with the chat's width
+  and side so nothing is ever covered.
 * 🔠 **Sizing** — font size, message spacing, badge and emote scale,
   timestamps, with a live preview. The time shows in 12 h or 24 h: Auto
   follows the device, or pick one (Settings → Chat; the log follows it too).
@@ -565,7 +618,10 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
 * 🎮 **Categories** — browse by game, then the live channels in it, filtered
   by language if you like (all, or a single one — kept for every category).
   Search puts the exact match first ("valorant" → VALORANT), with sharp box
-  art. A category you follow on Twitch shows as followed on its page, and
+  art. Every category shows its viewers — the Top, search results and the
+  followed ones, those of your Twitch account included —, asked 15 at a time:
+  since November 2026, Twitch refuses a GQL request with more than 15 aliases,
+  and the single request for 100 returned nothing. A category you follow on Twitch shows as followed on its page, and
   unfollowing it there removes it from your Twitch account (web session).
   Errors and empty lists have **Retry** / pull to refresh.
 * 🗂️ **Followed categories your way** — Settings → General → Customize the app → Followed categories: **Compact** covers (3 per row on iPhone, more on a wider screen) and the order (most watched first, as before, or A → Z).
@@ -641,7 +697,9 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   sign-ins, tokens or install ID. **Import** asks **Everything** or **Channels
   only**, adds without removing anything, then lists what it restored
   (unknown or invalid settings are skipped). Handy to move between the app
-  and TU Test; older backups and the website's still import.
+  and TU Test; older backups and the website's still import. The file picker
+  copies the file into the app before reading it, so importing also works in
+  LiveContainer without its « Fix File Picker » option.
 * ⬆️ **Update check** — the app tells you when a new version is out on the
   source, with a shortcut to Feather / SideStore / AltStore.
 * 🔢 **Build number** — Settings → About shows the version and its build
@@ -679,6 +737,15 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   predictions, hype train, raids, watch streak, Follow button). Drag ≡ to
   reorder; **Restore the default layout** puts everything back. Kept in the
   backup file.
+* 🙈 **No Twitch account** (top of Customize the app) — for those who never
+  log in: hides everything that needs an account or asks you to: the Twitch
+  Account, Drops and Channel points pages of Settings (usage sharing moves to
+  About), the points auto-claim and ad-free-with-my-sub settings, Home's
+  sign-in cards, the log-in hints of the ad-break notice, the chat's ⋯ menu
+  and predictions, and Create a clip. Followed channels stay on the device.
+  It never hides anything while you're logged in (app account or web
+  session): the switch is greyed out and says so. Kept when restoring the
+  default layout.
 * 🎨 **Themes** — 7 accent colours and 3 backgrounds (dark, OLED black, slate),
   in Settings → General → Appearance.
 * 📐 **Large screens** — on the iPhone Duo's inner display and on iPad, grids
@@ -692,10 +759,18 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   it follows Customize the app (order, hidden tabs) and goes back to the
   bottom as soon as the window narrows. The header, grids, tab bar and mini
   player stay clear of iOS's status column on the side of the iPhone Duo's
-  displays; the full-size player in landscape hides that column (as an iPhone
+  displays; the tabs then go **into that column**, as a pill of icons at its
+  bottom under the clock (like apps made for the Duo), in portrait too, and
+  the header keeps a margin at the top even though the screen has none
+  there. The full-size player in landscape hides that column (as an iPhone
   hides its status bar in landscape), so the picture uses the whole display,
   and its rotate button goes away when iOS doesn't let apps turn the screen
-  (apps in a window, as on the inner display).
+  (apps in a window, as on the inner display). Its buttons and text then keep
+  clear of the display's rounded corners, since iOS leaves no margin on those
+  sides (iPhones with a notch keep theirs, unchanged).
+* 🧪 **Native tabs** (Settings → Features in testing, iOS 26 and later, off by
+  default) — iOS's own Liquid Glass tab bar instead of the app's: it shrinks
+  while you scroll and the system places it for each screen (iPad, iPhone Duo).
 * 🔠 **Text size** — the app follows iOS's text size (Display & Brightness →
   Text Size, or Accessibility → Larger Text), as soon as you change it, up to
   Accessibility 2: Home, Discover, search, channel pages, settings and chat
@@ -748,7 +823,10 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   language picker, with a button to report a mistake.
   On the iPhone, Settings → General → **App language** opens the list on its own page, like iOS's settings.
 * 🐞 **Bug reports & ideas** — a form in the header, in Settings and in the
-  player menu, screenshots included. **My reports** shows where each one stands
+  player menu, screenshots included. Logged in, a report is signed with your
+  Twitch account (a switch, on by default); otherwise you can add a nickname —
+  so the developer knows it's you from one report to the next (both remembered
+  on the device). **My reports** shows where each one stands
   (received, seen, accepted, in progress, done, declined) and the developer's reply,
   and lets you answer back; a badge flags new replies, and open conversations
   refresh on their own. A reply (or a new status) also shows up as a banner
@@ -773,7 +851,10 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
 * 📊 **Usage count** — logged in, your Twitch account (counted once across the
   app and the website); logged out, a random install ID. Plus the app version,
   the app language, iPhone or iPad, the iOS version and how many lives and
-  VODs were started (which source served a live, failures — counters only),
+  VODs were started (which source served a live, failures, ad breaks seen,
+  each with the hour it came, the source of the live and its type — Twitch's
+  pre-roll or the channel's own break — counters only, so the website's
+  /stats keeps the ad-free proxies apart from the account and official Twitch),
   at most once an hour. No channels watched, no IP address. Switching it off
   erases it server-side. Public numbers: [/stats](https://twitchunblock.vercel.app/stats). See
   [`Sources/Services/UsageService.swift`](Sources/Services/UsageService.swift).
@@ -831,8 +912,23 @@ unsigned `tv-test-N` pre-release:
   take the focus, so Menu goes back to the list even on an offline channel
   without videos (the focus used to stay on the tab bar, and Menu quit the
   app).
-* During a channel's ad break on a live, the same banner as on the iPhone
-  says what the purple screen is, with a countdown to the stream's return.
+* Recognized live ad segments are filtered, with the same break countdown as
+  on the iPhone. Playback waits when clean broadcast content is unavailable.
+* Spatial audio is off by default: the sound stays stereo, as in the Twitch
+  app (with AirPods or headphones, tvOS used to spatialize it, which sounded
+  like a large room). Account → Settings → Spatial audio turns it back on.
+* The app's version shows next to the Settings title in the Account tab, not
+  only at the bottom under About.
+* **Multi-live**: up to 4 lives side by side, as on the iPhone (same core:
+  the list is kept, each tile's quality follows how many there are, ad
+  breaks, retries). Press and hold a live's card → *Add to multi-live*; the
+  *Multi-live (n/4)* bar at the top of Following, Top and a category's lives
+  opens it (or *Watch · Multi-live* in the same menu). One live fills the
+  screen, two sit side by side, three put the first one large with two
+  stacked on the right, four make a 2 × 2 grid. The sound follows the tile
+  that has the focus; Select makes it full screen (again, or Menu, goes back
+  to the mosaic), or retries a tile that failed; press and hold a tile to
+  remove it; Menu closes the multi-live.
 * Usage count, like the iPhone (Account → Share my usage): a random install ID,
   or your Twitch account when signed in, the version, the language and how many
   lives and VODs started (which source, failures), at most once an hour; never
@@ -960,6 +1056,7 @@ Settings → About):
 * [kinboy56](https://github.com/kinboy56) — Japanese translation
 * [trend0522](https://github.com/trend0522) — Traditional Chinese translation
 * [dwojc6](https://github.com/dwojc6) — more responsive swipe-down on the player
+* [ihavenoface](https://github.com/ihavenoface) — ad filtering on lives
 
 All contributors on GitHub:
 https://github.com/MXFia19/TwitchUnblock/graphs/contributors

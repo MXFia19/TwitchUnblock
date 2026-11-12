@@ -165,6 +165,7 @@ struct AdminFeedbackList: View {
                 Text("\(f.platformLabel(long: false)) · \(f.version)")
                 if f.count > 1 { Label("\(f.count)", systemImage: "bubble.left.and.bubble.right") }
                 if f.photos > 0 { Label("\(f.photos)", systemImage: "photo") }
+                if let n = f.name, !n.isEmpty { Label(n, systemImage: "person.fill").lineLimit(1) }
                 if let c = f.contact, !c.isEmpty { Text(c).lineLimit(1) }
             }
             .font(.tMeta).foregroundColor(.tMuted)
@@ -264,6 +265,11 @@ struct AdminFeedbackThread: View {
         VStack(alignment: .leading, spacing: 6) {
             Text("\(f.platformLabel(long: true)) · \(f.version) · \(f.date.formatted(date: .abbreviated, time: .shortened))")
                 .font(.tMeta).foregroundColor(.tMuted)
+            if let n = f.name, !n.isEmpty {
+                Label("\(n) (\(f.nameSource == "twitch" ? "Twitch" : store.t("adm_pseudo")))", systemImage: "person.fill")
+                    .font(.tLabel).foregroundColor(.tText)
+                    .textSelection(.enabled)
+            }
             if let c = f.contact, !c.isEmpty {
                 Text("\(store.t("adm_contact")) : \(c)")
                     .font(.tLabel).foregroundColor(.tText)

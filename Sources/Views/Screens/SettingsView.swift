@@ -17,6 +17,10 @@ struct SettingsView: View {
     @State private var updateCheckFailed = false
     @State private var highlightDraft  = ""
     @State private var mutedDraft      = ""
+    /// Ma source en cours de saisie, appliquée en quittant le champ.
+    @State private var customSourceDraft = ""
+    @State private var customSourceRefused = false
+    @FocusState private var customSourceFocused: Bool
     @State private var liveNotif       = LiveNotifier.isEnabled
     @State private var notifTestResult: String? = nil
     @State private var showNotifChannels = false
@@ -53,7 +57,6 @@ struct SettingsView: View {
     // Sauvegarde (export / import)
     @State private var exportDoc: BackupDocument? = nil
     @State private var showExporter    = false
-    @State private var showImporter    = false
     @State private var backupMessage: String? = nil
     /// Sauvegarde lue, en attente du choix « Tout » / « Chaînes seulement ».
     @State private var pendingImport: Backup.File? = nil
@@ -337,18 +340,24 @@ struct SettingsView: View {
                 }
 
                 VStack(spacing: 0) {
-                    menuRow(.account)
-                    rowSeparator
+                    // Sans compte Twitch : ni Compte, ni Drops, ni Points (le
+                    // partage d'utilisation passe dans « Autres »).
+                    if !store.accountHidden {
+                        menuRow(.account)
+                        rowSeparator
+                    }
                     menuRow(.general)
                     rowSeparator
                     menuRow(.player)
                     rowSeparator
                     menuRow(.chat)
                     rowSeparator
-                    menuRow(.drops)
-                    rowSeparator
-                    menuRow(.points)
-                    rowSeparator
+                    if !store.accountHidden {
+                        menuRow(.drops)
+                        rowSeparator
+                        menuRow(.points)
+                        rowSeparator
+                    }
                     menuRow(.labs)
                     rowSeparator
                     menuRow(.other)
@@ -569,7 +578,7 @@ struct SettingsView: View {
                 customizeCard
                 hiddenCard
                 apparenceCard
-                autoclaimCard
+                if !store.accountHidden { autoclaimCard }
                 veilleCard
                 historiqueCard
                 backupCard
@@ -592,6 +601,9 @@ struct SettingsView: View {
         case .other:
             return AnyView(VStack(spacing: 12) {
                 aboutCard
+                // Page Compte masquée (sans compte Twitch) : son partage
+                // d'utilisation reste réglable ici.
+                if store.accountHidden { usageCard }
                 expertCard
             })
         case .changelog:
@@ -1318,6 +1330,28 @@ struct SettingsView: View {
                 Text(store.t("cfg_chat_width_sub"))
                     .font(.tMeta).foregroundColor(.tMuted)
                     .fixedSize(horizontal: false, vertical: true)
+                Divider().background(Color.tBorder)
+
+                // Chat posé sur l'image : côté et hauteur, comme l'app TV.
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(store.t("cfg_chat_overlay_pos")).font(.tBody).foregroundColor(.tText)
+                    Text(store.t("cfg_chat_overlay_pos_sub"))
+                        .font(.tMeta).foregroundColor(.tMuted)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Picker("", selection: $store.chatOverlayLayout.side) {
+                        Text(store.t("chat_side_left")).tag(ChatOverlayLayout.Side.left)
+                        Text(store.t("chat_side_right")).tag(ChatOverlayLayout.Side.right)
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    Picker("", selection: $store.chatOverlayLayout.height) {
+                        Text(store.t("chat_height_full")).tag(ChatOverlayLayout.Height.full)
+                        Text(store.t("chat_height_top")).tag(ChatOverlayLayout.Height.top)
+                        Text(store.t("chat_height_bottom")).tag(ChatOverlayLayout.Height.bottom)
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                }
 
                 Button {
                     store.chatFontSize   = 13
@@ -1325,6 +1359,7 @@ struct SettingsView: View {
                     store.chatBadgeScale = 1
                     store.chatEmoteScale = 1
                     store.chatWidthRatio = 0.32
+                    store.chatOverlayLayout = ChatOverlayLayout()
                     store.chatTimestamps = true
                 } label: {
                     Text(store.t("reset_defaults"))
@@ -1346,6 +1381,9 @@ struct SettingsView: View {
                 // Lecteur immersif seulement : le natif ne sait pas lancer son PiP.
                 toggleRow(store.t("pip_on_leave"), store.t("pip_on_leave_sub"),
                           $store.pipOnLeave, log: "PiP en quittant le lecteur")
+                Divider().background(Color.tBorder)
+                toggleRow(store.t("cfg_edge_swipe"), store.t("cfg_edge_swipe_sub"),
+                          $store.edgeSwipeClose, log: "Fermer en glissant depuis le bord")
                 Divider().background(Color.tBorder)
                 backgroundPlaybackRow
                 Divider().background(Color.tBorder)
@@ -1496,28 +1534,31 @@ struct SettingsView: View {
     /// passe avant toutes les sources.
     @ViewBuilder private var liveSourceRow: some View {
         VStack(alignment: .leading, spacing: 8) {
-            toggleRow(store.t("sub_adfree"), store.t("sub_adfree_sub"),
-                      $store.subAdFree, log: "Sans pub avec mon abonnement")
-            // Il faut la session web : sans elle, de quoi l'ouvrir ici.
-            if store.subAdFree, (store.twitchWebToken ?? "").isEmpty {
-                Button { startWebLogin() } label: {
-                    Label(store.t("sub_adfree_connect"), systemImage: "person.crop.circle.badge.plus")
-                        .font(.tLabel)
-                        .foregroundColor(.tPrimary)
+            // Les deux demandent le compte : rien à régler sans compte Twitch.
+            if !store.accountHidden {
+                toggleRow(store.t("sub_adfree"), store.t("sub_adfree_sub"),
+                          $store.subAdFree, log: "Sans pub avec mon abonnement")
+                // Il faut la session web : sans elle, de quoi l'ouvrir ici.
+                if store.subAdFree, (store.twitchWebToken ?? "").isEmpty {
+                    Button { startWebLogin() } label: {
+                        Label(store.t("sub_adfree_connect"), systemImage: "person.crop.circle.badge.plus")
+                            .font(.tLabel)
+                            .foregroundColor(.tPrimary)
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
+                // Qualités supérieures : Twitch ne les sert qu'au jeton du compte,
+                // donc par la lecture du compte ci-dessus (grisé tant qu'elle est
+                // coupée) ; sans abonnement, les pauses pub passent par la source
+                // sans pub (MainTabView.adBreakChanged).
+                Divider().background(Color.tBorder)
+                toggleRow(store.t("higher_qualities"),
+                          store.t("higher_qualities_sub").replacingOccurrences(of: "{c}", with: HigherQualities.label),
+                          $store.higherQualities, log: "Qualités supérieures")
+                    .disabled(!store.subAdFree)
+                    .opacity(store.subAdFree ? 1 : 0.5)
+                Divider().background(Color.tBorder)
             }
-            // Qualités supérieures : Twitch ne les sert qu'au jeton du compte,
-            // donc par la lecture du compte ci-dessus (grisé tant qu'elle est
-            // coupée) ; sans abonnement, les pauses pub passent par la source
-            // sans pub (MainTabView.adBreakChanged).
-            Divider().background(Color.tBorder)
-            toggleRow(store.t("higher_qualities"),
-                      store.t("higher_qualities_sub").replacingOccurrences(of: "{c}", with: HigherQualities.label),
-                      $store.higherQualities, log: "Qualités supérieures")
-                .disabled(!store.subAdFree)
-                .opacity(store.subAdFree ? 1 : 0.5)
-            Divider().background(Color.tBorder)
             VStack(alignment: .leading, spacing: 2) {
                 Text(store.t("live_source_order"))
                     .font(.tCardTitle)
@@ -1554,17 +1595,55 @@ struct SettingsView: View {
                 .background(Color.tSurface)
                 .cornerRadius(10)
             }
-            if store.liveSourceOrder != kLiveSources {
+            if store.liveSourceOrder != store.defaultLiveSourceOrder {
                 Button(store.t("src_reset")) {
-                    withAnimation { store.liveSourceOrder = kLiveSources }
+                    withAnimation { store.liveSourceOrder = store.defaultLiveSourceOrder }
                 }
                 .font(.tLabel)
                 .foregroundColor(.tPrimary)
                 .buttonStyle(.plain)
             }
+            Divider().background(Color.tBorder)
+            // Ma source : un serveur luminous-ttv à soi, comme sur le site.
+            VStack(alignment: .leading, spacing: 6) {
+                Text(store.t("src_custom")).font(.tCardTitle).foregroundColor(.tText)
+                Text(store.t("src_custom_sub"))
+                    .font(.tMeta).foregroundColor(.tMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+                TextField("https://…", text: $customSourceDraft)
+                    .font(.tBody).foregroundColor(.tText)
+                    .keyboardType(.URL)
+                    .textContentType(.URL)
+                    .autocorrectionDisabled()
+                    .textInputAutocapitalization(.never)
+                    .submitLabel(.done)
+                    .focused($customSourceFocused)
+                    .onSubmit { applyCustomSource() }
+                    .padding(.horizontal, TSpace.md)
+                    .frame(minHeight: 44)
+                    .background(Color.tSurface)
+                    .cornerRadius(TRadius.control)
+                if customSourceRefused {
+                    Text(store.t("src_custom_bad")).font(.tMeta).foregroundColor(.tDanger)
+                }
+            }
+            .onAppear { customSourceDraft = store.customSource }
+            .onChange(of: customSourceFocused) { focused in
+                if !focused { applyCustomSource() }
+            }
         }
         .onChange(of: store.liveSourceOrder) { order in
             logger.settingChanged("Ordre des sources", value: order.joined(separator: ","))
+        }
+    }
+
+    /// Ma source saisie : enregistrée si l'adresse est valable (sinon on le
+    /// dit, et l'ancienne reste).
+    private func applyCustomSource() {
+        customSourceRefused = !store.setCustomSource(customSourceDraft)
+        if !customSourceRefused {
+            customSourceDraft = store.customSource
+            logger.settingChanged("Ma source", value: store.customSource.isEmpty ? "aucune" : store.customSource)
         }
     }
 
@@ -1782,7 +1861,16 @@ struct SettingsView: View {
                     }
                     TSecondaryButton(title: store.t("import_data"), icon: "square.and.arrow.down",
                                      tint: .tPrimary, fullWidth: true) {
-                        showImporter = true
+                        BackupFilePicker.present { data in
+                            guard let data, let file = try? Backup.read(data) else {
+                                backupMessage = store.t("import_bad"); return
+                            }
+                            backupMessage = nil
+                            pendingImport = file
+                            // Le sélecteur de fichiers se ferme encore : le choix attend un
+                            // instant, sinon iOS refuse de l'ouvrir par-dessus.
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { showImportChoice = true }
+                        }
                     }
                 }
                 if let backupMessage {
@@ -1798,20 +1886,6 @@ struct SettingsView: View {
                 backupMessage = store.t("export_done")
                 logger.info("SAUVEGARDE", "Sauvegarde exportée", nil)
             }
-        }
-        .fileImporter(isPresented: $showImporter, allowedContentTypes: [.json]) { result in
-            guard case .success(let url) = result else { return }
-            let scoped = url.startAccessingSecurityScopedResource()
-            defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-            guard let data = try? Data(contentsOf: url),
-                  let file = try? Backup.read(data) else {
-                backupMessage = store.t("import_bad"); return
-            }
-            backupMessage = nil
-            pendingImport = file
-            // Le sélecteur de fichiers se ferme encore : le choix attend un
-            // instant, sinon iOS refuse de l'ouvrir par-dessus.
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { showImportChoice = true }
         }
         // Tout, ou les chaînes seulement (suivies, épinglées, masquées).
         .confirmationDialog(store.t("import_choice_title"), isPresented: $showImportChoice,
@@ -1975,6 +2049,12 @@ struct SettingsView: View {
                 if liveNotif {
                     Divider().background(Color.tBorder)
                     notifChannelsRow
+                }
+                // Barre d'onglets d'iOS 26 au lieu de celle de l'app.
+                if Theme.glassSupported {
+                    Divider().background(Color.tBorder)
+                    toggleRow(store.t("native_tabs"), store.t("native_tabs_sub"),
+                              $store.nativeTabs, log: "Onglets natifs")
                 }
                 Divider().background(Color.tBorder)
                 // Instantanées, même app fermée : le site installé en web app
@@ -2682,6 +2762,7 @@ struct Contributor: Identifiable, Sendable {
         Contributor(login: "kinboy56", contributionKey: "credits_contrib_ja"),
         Contributor(login: "trend0522", contributionKey: "credits_contrib_zhHant"),
         Contributor(login: "dwojc6", contributionKey: "credits_contrib_swipe"),
+        Contributor(login: "ihavenoface", contributionKey: "credits_contrib_ads"),
     ]
 }
 

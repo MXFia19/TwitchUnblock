@@ -18,6 +18,9 @@ import Combine
 //  temps, et coupe le son le temps qu'elle dure. La playlist a jusqu'à une
 //  vingtaine de secondes d'avance sur l'image : se caler sur sa lecture
 //  annoncerait la pause trop tôt.
+//  Le chargeur filtre aussi les identifiants stitched-ad-* et les titres
+//  EXTINF Amazon. Ses instantanés alimentent le compteur pendant les GAP,
+//  avant qu'AVPlayer ait une image ou des métadonnées à présenter.
 //
 //  Les autres classes sont ignorées, `twitch-maf-ad` en tête : présente dans
 //  toutes les sessions quelques minutes après l'ouverture, c'est une pub que
@@ -27,24 +30,75 @@ import Combine
 //  d'UIKit ni d'AppStore ici.
 // ═══════════════════════════════════════════════════════════════════════════
 
-/// Une pause pub annoncée par la playlist.
-struct AdBreak: Equatable {
-    let id: String
-    let start: Date
-    let end: Date
-}
-
 final class AdBreakMonitor: NSObject, AVPlayerItemMetadataCollectorPushDelegate {
-    static let adClass = "twitch-stitched-ad"
+    static let adClass = TwitchAdPlaylist.adClass
     /// Plus longue pause plausible : une durée absurde ne doit pas couper le
     /// son pour de bon (Twitch plafonne une pause à 3 min).
-    private static let maxLength: TimeInterval = 200
+    private static let maxLength = TwitchAdPlaylist.maxAdLength
     private static var key: UInt8 = 0
 
     private let collector = AVPlayerItemMetadataCollector(identifiers: nil,
-                                                          classifyingLabels: [AdBreakMonitor.adClass])
+                                                          classifyingLabels: nil)
     /// Pauses connues, par identifiant (file principale seulement).
     private var breaks: [String: AdBreak] = [:]
+
+    private var playlistObserver: NSObjectProtocol?
+    private var playlist: TwitchAdPlaylist?
+    private var playlistReceived = Date.distantPast
+    private var filtered = false
+
+    /// A fresh all-ad edge is intentional waiting, not a dead source. Used by
+    /// the startup watchdog, including title-only ads without a wall clock.
+    var waitingForAds: Bool {
+        filtered && Date().timeIntervalSince(playlistReceived) < 12 && playlist?.segments.last?.ad == true
+    }
+
+    deinit {
+        if let playlistObserver { NotificationCenter.default.removeObserver(playlistObserver) }
+    }
+
+    /// Metadata isn't emitted while an all-ad playlist is waiting on GAPs.
+    /// The loader supplies its latest view; buffered clean content still wins.
+    private func followPlaylist(of item: AVPlayerItem) {
+        guard let asset = item.asset as? AVURLAsset, LivePlaylistRewriter.isWrapped(asset.url),
+              let url = LivePlaylistLoader.unwrap(asset.url) else { return }
+        filtered = true
+        playlistObserver = NotificationCenter.default.addObserver(
+            forName: LivePlaylistLoader.playlistNotification, object: nil, queue: .main
+        ) { [weak self] note in
+            // Sa propre liste, ou une variante de sa liste maîtresse (Auto) ;
+            // la maîtresse elle-même n'a pas de segments.
+            guard let self, note.object as? URL == url || note.userInfo?["owner"] as? URL == url,
+                  let snapshot = note.userInfo?["playlist"] as? TwitchAdPlaylist,
+                  !snapshot.segments.isEmpty else { return }
+            self.playlist = snapshot
+            self.playlistReceived = Date()
+            for brk in snapshot.breaks {
+                // Type déjà connu (lecture précédente) : gardé si celle-ci ne le dit plus.
+                var known = brk
+                if brk.roll.isEmpty { known.roll = self.breaks[brk.id]?.roll ?? "" }
+                self.breaks[brk.id] = known
+            }
+            self.breaks = self.breaks.filter { $0.value.end > Date().addingTimeInterval(-3600) }
+        }
+    }
+
+    func playbackBreak(on player: AVPlayer) -> (brk: AdBreak, clock: Date)? {
+        guard let item = player.currentItem else { return nil }
+        let date = item.currentDate()
+        if filtered, player.timeControlStatus == .waitingToPlayAtSpecifiedRate {
+            guard Date().timeIntervalSince(playlistReceived) < 12, let playlist,
+                  let brk = playlist.waitingBreak(after: date, knownBreaks: Array(breaks.values)),
+                  let edge = playlist.segments.last?.end else { return nil }
+            // Advance the countdown while the last clean video frame is held.
+            // Keep a one-second indication until a clean playlist arrives.
+            let clock = min(brk.countdownEnd.addingTimeInterval(-0.1),
+                            edge.addingTimeInterval(Date().timeIntervalSince(playlistReceived)))
+            return (brk, clock)
+        }
+        guard let date, let brk = active(at: date) else { return nil }
+        return (brk, date)
+    }
 
     /// Recueille les pauses pub de cet élément (une seule fois par élément).
     static func attach(to item: AVPlayerItem) {
@@ -52,6 +106,7 @@ final class AdBreakMonitor: NSObject, AVPlayerItemMetadataCollectorPushDelegate 
         let monitor = AdBreakMonitor()
         monitor.collector.setDelegate(monitor, queue: .main)
         item.add(monitor.collector)
+        monitor.followPlaylist(of: item)
         // Le collecteur ne retient pas son délégué : l'élément le garde.
         objc_setAssociatedObject(item, &key, monitor, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
     }
@@ -64,14 +119,15 @@ final class AdBreakMonitor: NSObject, AVPlayerItemMetadataCollectorPushDelegate 
                            didCollect metadataGroups: [AVDateRangeMetadataGroup],
                            indexesOfNewGroups: IndexSet,
                            indexesOfModifiedGroups: IndexSet) {
-        for group in metadataGroups where group.classifyingLabel == Self.adClass {
-            // Sans DURATION ni END-DATE (rare) : 30 s, prolongées si la
-            // playlist précise ensuite la fin (groupe modifié).
-            let end = min(group.endDate ?? group.startDate.addingTimeInterval(30),
+        for group in metadataGroups where TwitchAdPlaylist.isAd(className: group.classifyingLabel, id: group.uniqueID) {
+            // Sans fin annoncée : attente bornée, corrigée par les mises à jour.
+            let end = min(group.endDate ?? group.startDate.addingTimeInterval(Self.maxLength),
                           group.startDate.addingTimeInterval(Self.maxLength))
             guard end > group.startDate else { continue }
             let id = group.uniqueID ?? "\(group.startDate.timeIntervalSince1970)"
-            let brk = AdBreak(id: id, start: group.startDate, end: end)
+            // Le type vient de la playlist lue par le chargeur (followPlaylist).
+            let brk = AdBreak(id: id, start: group.startDate, end: end, roll: breaks[id]?.roll ?? "",
+                              podEnd: breaks[id]?.podEnd)
             if breaks[id] == nil {
                 logger.info("PUB", "Pause pub annoncée par la playlist",
                             String(format: "%.0f s", end.timeIntervalSince(group.startDate)))
@@ -90,8 +146,8 @@ final class AdBreakMonitor: NSObject, AVPlayerItemMetadataCollectorPushDelegate 
     func active(at date: Date) -> AdBreak? {
         var block: AdBreak? = nil
         for next in breaks.values.sorted(by: { ($0.start, $0.id) < ($1.start, $1.id) }) {
-            if let b = block, next.start <= b.end.addingTimeInterval(1) {
-                if next.end > b.end { block = AdBreak(id: b.id, start: b.start, end: next.end) }
+            if let merged = block?.merged(with: next) {
+                block = merged
                 continue
             }
             if let b = block, b.start <= date, date < b.end { return b }
@@ -126,46 +182,59 @@ extension AdBreakMonitor {
     /// Voir adWait(at:window:), d'après le texte de la playlist : fin de la
     /// dernière pub annoncée, plus `window`, moins la fin du dernier segment.
     static func adWait(in text: String, window: TimeInterval) -> TimeInterval {
-        let precise = ISO8601DateFormatter()
-        precise.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let plain = ISO8601DateFormatter()
-        func date(_ s: String) -> Date? { precise.date(from: s) ?? plain.date(from: s) }
-        var adEnd: Date? = nil
-        var edge: Date? = nil
-        var segmentStart: Date? = nil
-        for raw in text.split(whereSeparator: \.isNewline) {
-            let line = raw.trimmingCharacters(in: .whitespaces)
-            if line.hasPrefix("#EXT-X-PROGRAM-DATE-TIME:") {
-                segmentStart = date(String(line.dropFirst("#EXT-X-PROGRAM-DATE-TIME:".count)))
-            } else if line.hasPrefix("#EXTINF:") {
-                let length = Double(line.dropFirst("#EXTINF:".count).prefix { $0 != "," }) ?? 0
-                // Segment sans horodatage : à la suite du précédent.
-                if let start = segmentStart ?? edge { edge = start.addingTimeInterval(length) }
-                segmentStart = nil
-            } else if line.hasPrefix("#EXT-X-DATERANGE"), line.contains("CLASS=\"\(adClass)\""),
-                      let start = attribute(line, "START-DATE").flatMap(date) {
-                // Mêmes règles que le collecteur : 30 s sans durée, 200 s au plus.
-                let duration: TimeInterval? = attribute(line, "DURATION").flatMap { Double($0) }
-                let end: Date = attribute(line, "END-DATE").flatMap(date)
-                    ?? duration.map { start.addingTimeInterval($0) }
-                    ?? start.addingTimeInterval(30)
-                let capped = min(end, start.addingTimeInterval(maxLength))
-                adEnd = max(adEnd ?? capped, capped)
-            }
-        }
-        guard let adEnd, let edge else { return 0 }
-        return max(0, adEnd.addingTimeInterval(window).timeIntervalSince(edge))
+        TwitchAdPlaylist(text).adWait(window: window)
     }
 
-    /// Valeur d'un attribut de balise (`,NOM="valeur"` ou `,NOM=valeur`) :
-    /// précédé d'une virgule ou des deux-points, « DURATION » ne prend pas
-    /// « X-TV-TWITCH-AD-POD-FILLED-DURATION ».
-    private static func attribute(_ line: String, _ name: String) -> String? {
-        guard let r = line.range(of: #"[:,]\#(name)=("[^"]*"|[^,\s]*)"#, options: .regularExpression) else { return nil }
-        var value = line[r].drop { $0 != "=" }.dropFirst()
-        if value.hasPrefix("\"") { value = value.dropFirst().dropLast() }
-        return String(value)
+}
+
+/// Heures (UTC) des pauses pub comptées, pas encore envoyées, avec la source
+/// du direct et le type de pause (« 2026-11-09T13|as|mid » → nombre) : jointes
+/// au signal d'utilisation suivant (champ « adh ») pour les graphiques de
+/// /stats, où les pubs des proxys sans pub restent à part de celles du compte
+/// (qualités supérieures) ou de Twitch officiel. 48 heures au plus : le Worker
+/// ne garde qu'aujourd'hui et hier.
+enum AdHours {
+    private static let key = "usage_ad_hours"
+    /// Sources connues du Worker (comme le site) ; une autre part en « other ».
+    private static let sources: Set<String> = ["as", "pp", "al", "al2", "eu", "eu2", "custom", "worker", "account", "twitch"]
+
+    /// Source pour /stats : les deux formes du compte (sans pub, qualités
+    /// supérieures) sous « account ».
+    static func source(_ id: String?) -> String {
+        guard let id = id?.lowercased(), !id.isEmpty else { return "other" }
+        if id.hasPrefix("account") { return "account" }
+        return sources.contains(id) ? id : "other"
     }
+
+    private static func stamp(_ date: Date) -> String {
+        String(ISO8601DateFormatter().string(from: date).prefix(13))
+    }
+
+    static var pending: [String: Int] {
+        let all = UserDefaults.standard.dictionary(forKey: key) as? [String: Int] ?? [:]
+        let oldest = stamp(Date().addingTimeInterval(-48 * 3600))
+        return all.filter { $0.key >= oldest && $0.value > 0 }
+    }
+
+    /// `roll` : « pre », « mid » ou vide (inconnu, « x »).
+    static func add(source: String?, roll: String) {
+        var all = pending
+        let type = roll == "pre" || roll == "mid" ? roll : "x"
+        all["\(stamp(Date()))|\(Self.source(source))|\(type)", default: 0] += 1
+        UserDefaults.standard.set(all, forKey: key)
+    }
+
+    /// Parties : retirées (celles arrivées pendant l'envoi restent).
+    static func sent(_ sent: [String: Int]) {
+        var left = pending
+        for (k, n) in sent {
+            let rest = (left[k] ?? 0) - n
+            left[k] = rest > 0 ? rest : nil
+        }
+        UserDefaults.standard.set(left, forKey: key)
+    }
+
+    static func clear() { UserDefaults.standard.removeObject(forKey: key) }
 }
 
 /// Pause pub à l'écran sur un lecteur : secondes restantes (nil hors pause),
@@ -179,6 +248,13 @@ final class AdBreakWatcher: ObservableObject {
     private var timer: Timer?
     /// Faux pour un lecteur dont le son est géré ailleurs.
     private let managesAudio: Bool
+    /// Lecteur principal (pas une case du multi-live) : appelé à chaque pause
+    /// vue, avec son type (« pre », « mid » ou vide), pour /stats (UsageService
+    /// ou TVUsage), une fois même si le bandeau se rouvre (autre qualité, autre
+    /// source), comme sur le site. Passé par le lecteur : ce fichier est
+    /// vérifié seul par la CI (test-live-playlists).
+    private let onBreak: ((String) -> Void)?
+    private var counted: [String] = []
     /// Son coupé par nous, sur cet élément.
     private var mutedByUs = false
     private weak var mutedItem: AVPlayerItem?
@@ -190,8 +266,9 @@ final class AdBreakWatcher: ObservableObject {
     /// Minuteur de secours : fin prévue + 5 s, en temps réel.
     private var deadline: Date?
 
-    init(managesAudio: Bool = true) {
+    init(managesAudio: Bool = true, onBreak: ((String) -> Void)? = nil) {
         self.managesAudio = managesAudio
+        self.onBreak = onBreak
     }
 
     deinit {
@@ -226,16 +303,25 @@ final class AdBreakWatcher: ObservableObject {
         guard let player, let item = player.currentItem else { finish(); return }
         // Nouvel élément (qualité, source, AirPlay) : le son d'abord.
         if let mutedItem, mutedItem !== item { restore() }
-        guard let now = item.currentDate(),
-              let brk = AdBreakMonitor.monitor(of: item)?.active(at: now) else { finish(); return }
-        let left = max(0, Int(brk.end.timeIntervalSince(now).rounded(.up)))
+        guard let current = AdBreakMonitor.monitor(of: item)?.playbackBreak(on: player) else { finish(); return }
+        let now = current.clock
+        let brk = current.brk
+        let end = brk.countdownEnd
+        var left = max(0, Int(end.timeIntervalSince(now).rounded(.up)))
+        // Même fin prévue : le compteur ne remonte pas (l'horloge passe de
+        // l'image au bord de la playlist selon que le lecteur attend ou non).
+        if let currentEnd, abs(currentEnd.timeIntervalSince(end)) < 1, let remaining { left = min(left, remaining) }
         if remaining != left { remaining = left }
-        if currentId != brk.id || currentEnd != brk.end {
-            if currentId != brk.id { logger.info("PUB", "Pause pub à l'écran", "\(left) s restantes") }
+        if currentId != brk.id || currentEnd != end {
+            if currentId != brk.id {
+                logger.info("PUB", "Pause pub à l'écran",
+                            "\(left) s restantes\(brk.roll.isEmpty ? "" : " · \(brk.roll)")")
+                countOnce(brk)
+            }
             currentId = brk.id
             // Bloc prolongé par une pub annoncée après coup : secours repoussé.
-            currentEnd = brk.end
-            deadline = Date().addingTimeInterval(brk.end.timeIntervalSince(now) + 5)
+            currentEnd = end
+            deadline = Date().addingTimeInterval(end.timeIntervalSince(now) + 5)
         }
         guard managesAudio else { return }
         if let deadline, Date() > deadline {
@@ -250,6 +336,13 @@ final class AdBreakWatcher: ObservableObject {
             mutedByUs = true
             mutedItem = item
         }
+    }
+
+    private func countOnce(_ brk: AdBreak) {
+        guard let onBreak, !counted.contains(brk.id) else { return }
+        counted.append(brk.id)
+        if counted.count > 8 { counted.removeFirst() }
+        onBreak(brk.roll)
     }
 
     /// Hors pause : le son rendu, le bandeau retiré.

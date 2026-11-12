@@ -580,6 +580,8 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
             ) { [weak self] note in
                 guard let self, let item = note.object as? AVPlayerItem,
                       item === self.playerRef?.currentItem else { return }
+                // Attente d'une pause pub filtrée : pas un calage du réseau.
+                if AdBreakMonitor.monitor(of: item)?.waitingForAds == true { return }
                 if self.isLive { self.latency.noteStall() }
                 let now = Date()
                 self.stallTimes = self.stallTimes.filter { now.timeIntervalSince($0) < 60 } + [now]
@@ -955,7 +957,7 @@ struct VideoPlayerView: View {
     @State private var lastPersisted: Double = -99
     @State private var latency: Double? = nil
     /// Pause pub cousue par Twitch dans le direct : bandeau, son coupé.
-    @StateObject private var adBreaks = AdBreakWatcher()
+    @StateObject private var adBreaks = AdBreakWatcher(onBreak: UsageService.adBreakSeen)
     @State private var noticeShown: String? = nil
 
     private var qualities: [String] { sortQualities(Array(qualityLinks.keys), variants: variants) }

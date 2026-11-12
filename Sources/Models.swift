@@ -178,6 +178,9 @@ struct TwitchStream: Identifiable {
     /// GQL selon le compte, seul l'identifiant sert à masquer une catégorie.
     /// Vide si la requête ne le demande pas (listes des suivis).
     var gameId: String = ""
+    /// Début du direct (Helix `started_at`, GQL `createdAt`) : sa durée sur
+    /// les cartes et les lignes (fb_mvzf7hmv). nil si la requête ne le donne pas.
+    var startedAt: Date? = nil
 }
 
 /// Catégorie / jeu Twitch (onglet Catégories).

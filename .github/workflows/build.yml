@@ -55,15 +55,27 @@ jobs:
         id: vars
         run: |
           # Version lisible : « MAJEUR.MINEUR » vient du fichier VERSION (à
-          # modifier à la main pour passer à 1.2, 2.0…), le dernier chiffre
-          # compte les builds depuis ce changement (commits automatiques
-          # « [skip ci] » exclus). Il repart de 0 à chaque nouvelle série au
+          # modifier à la main pour passer à 1.2, 2.0…). Le dernier chiffre
+          # compte, sur la branche de test, les commits de l'app depuis ce
+          # changement (commits automatiques « [skip ci] » exclus) et, sur
+          # master, les sorties publiques (voir plus bas). Il repart de 0 à chaque nouvelle série au
           # lieu de grimper sans fin (1.0.367). Le numéro de build interne
           # (CFBundleVersion) reste github.run_number : toujours croissant,
           # c'est lui qui sert à détecter une mise à jour.
           BASE=$(tr -d ' \n\r' < VERSION 2>/dev/null || echo "1.0")
           SINCE=$(git log -1 --format=%H -- VERSION)
-          if [ -n "$SINCE" ]; then
+          if [ -n "$SINCE" ] && [ "${{ github.ref_name }}" = "master" ]; then
+            # Version publique : une par sortie (fusion de la branche de test
+            # dans master) depuis le changement de VERSION — 1.7.0, 1.7.1… —
+            # et non le nombre de commits de test (1.7.28 aurait suivi 1.7.0).
+            # Les fusions d'avant ce changement (1.6.0…) ne le contiennent pas
+            # et ne comptent pas.
+            RELEASES=0
+            for M in $(git rev-list --merges --first-parent "$SINCE"..HEAD); do
+              if git merge-base --is-ancestor "$SINCE" "$M"; then RELEASES=$((RELEASES + 1)); fi
+            done
+            PATCH=$(( RELEASES > 0 ? RELEASES - 1 : 0 ))
+          elif [ -n "$SINCE" ]; then
             # Seuls les commits qui touchent l'app comptent (pas les README…),
             # sans les fusions : sur master, les anciennes fusions de la
             # branche de test comptaient (1.4.10 au lieu de 1.4.0).

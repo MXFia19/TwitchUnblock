@@ -45,10 +45,11 @@ enum SettingsSync {
     ///  - qualityPref : qualité, selon l'écran et la connexion ;
     ///  - shareUsage : comptage anonyme, consentement donné sur chaque appareil ;
     ///  - homeList : accueil en grille ou en liste, selon la taille de l'écran.
-    /// « hiddenEmotes » : emotes masquées, codes exacts (200 au plus).
+    /// « hiddenEmotes » : emotes masquées, codes exacts (200 au plus) ;
+    /// « favoriteEmotes » : emotes favorites, codes exacts (100 au plus).
     static let commonKeys = ["topLang", "showRecent", "timestamps", "timeFormat", "keepDeleted",
                              "loadHistory", "hideBots", "hideCommands", "mutedWords", "blockedUsers",
-                             "highlightWords", "vodSpeed", "hiddenEmotes"]
+                             "highlightWords", "vodSpeed", "hiddenEmotes", "favoriteEmotes"]
 
     /// Propres à l'app : la personnalisation (onglets, accueil, boutons du
     /// lecteur, bandeaux du chat) et ce qui suit le compte plutôt que
@@ -58,7 +59,9 @@ enum SettingsSync {
     ///  - ios_higherQualities : codecs que décode l'appareil ;
     ///  - ios_downloadWifiOnly : téléchargements ;
     ///  - ios_liveActivity : écran verrouillé et Dynamic Island ;
-    ///  - ios_fillScreen, ios_landscapeChat, ios_landNoticesHidden et les
+    ///  - ios_edgeSwipeClose : geste, selon l'appareil (téléphone, iPad) ;
+    ///  - ios_fillScreen, ios_landscapeChat, ios_chatOverlayLayout,
+    ///    ios_landNoticesHidden et les
     ///    tailles du chat (ios_chatFontSize, ios_chatSpacing,
     ///    ios_chatBadgeScale, ios_chatEmoteScale, ios_chatWidthRatio) :
     ///    apparence, selon l'écran ;
@@ -156,7 +159,9 @@ enum SettingsSync {
     /// entre-temps. Les données envoyées, elles, les gardent.
     static func digestible(_ name: String, _ data: Any) -> Any {
         guard var dict = data as? [String: Any] else { return data }
-        if name == "common", (dict["hiddenEmotes"] as? [Any])?.isEmpty == true { dict["hiddenEmotes"] = nil }
+        if name == "common" {
+            for key in ["hiddenEmotes", "favoriteEmotes"] where (dict[key] as? [Any])?.isEmpty == true { dict[key] = nil }
+        }
         if name == "ios" {
             for key in iosLateDefaultOn where dict[key] as? Bool == true { dict[key] = nil }
         }
@@ -203,11 +208,12 @@ enum SettingsSync {
 
     /// Première rencontre, section commune : celle du serveur, plus les
     /// listes du chat d'ici (mots et personnes masqués, mots surlignés,
-    /// emotes masquées).
+    /// emotes masquées et favorites).
     static func firstCommon(here: [String: Any], there: Any) -> [String: Any] {
         var out = there as? [String: Any] ?? [:]
         for (key, max) in [("mutedWords", 50), ("highlightWords", 30), ("blockedUsers", 500),
-                           ("hiddenEmotes", AppStore.maxHiddenEmotes)] {
+                           ("hiddenEmotes", AppStore.maxHiddenEmotes),
+                           ("favoriteEmotes", AppStore.maxFavoriteEmotes)] {
             var seen = Set<String>()
             let theirs: [String] = ((out[key] as? [Any]) ?? []).compactMap { $0 as? String }
             let mine: [String] = (here[key] as? [String]) ?? []
@@ -443,7 +449,7 @@ extension AppStore {
             return topLang == nil && showRecentChannels && chatTimestamps && timeFormat == "auto"
                 && !chatShowDeleted && chatLoadRecent && !chatHideBots && !chatHideCommands
                 && chatMutedWords.isEmpty && chatBlockedUsers.isEmpty && chatHighlightWords.isEmpty
-                && vodSpeed == 1 && hiddenEmotes.isEmpty
+                && vodSpeed == 1 && hiddenEmotes.isEmpty && favoriteEmotes.isEmpty
         }
     }
 

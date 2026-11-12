@@ -22,24 +22,37 @@ struct EmotePickerView: View {
     /// `localizedCaseInsensitiveContains` (comparaison sensible à la locale, donc
     /// coûteuse) sur plusieurs milliers d'emotes — d'où les à-coups.
     @State private var searchIndex: [(emote: TwitchEmote, lower: String)] = []
+    /// Favoris utilisables ici : la première emote de chaque code parmi
+    /// celles chargées (pas une emote d'abonné verrouillée), dans l'ordre où
+    /// ils ont été ajoutés. Refaits quand la liste ou les emotes changent.
+    @State private var favorites: [TwitchEmote] = []
 
     // 6 colonnes fixes — bon équilibre taille / densité
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 2), count: 6)
 
+    /// Onglets : « Favoris » en tête quand il y en a ici, puis ceux du service.
+    private var tabs: [EmoteGroup] {
+        favorites.isEmpty ? groups : [EmoteGroup(label: "emotes_fav", emotes: favorites)] + groups
+    }
+
+    /// Les favoris s'ouvrent d'abord s'il y en a ici, sinon l'onglet de la chaîne.
     private var selectedTab: Int {
-        groups.firstIndex { $0.label == (chosenTab ?? "emotes_channel") } ?? 0
+        let tabs = self.tabs
+        return tabs.firstIndex { $0.label == (chosenTab ?? (favorites.isEmpty ? "emotes_channel" : "emotes_fav")) } ?? 0
     }
 
     /// « Mes emotes » ouvert, sans recherche : ses sections, chaîne par chaîne.
     private var mineSections: [EmoteSection]? {
-        guard query.isEmpty, groups.indices.contains(selectedTab),
-              groups[selectedTab].label == "emotes_mine" else { return nil }
-        return groups[selectedTab].sections
+        let tabs = self.tabs
+        guard query.isEmpty, tabs.indices.contains(selectedTab),
+              tabs[selectedTab].label == "emotes_mine" else { return nil }
+        return tabs[selectedTab].sections
     }
 
     // Emotes à afficher : recherche globale OU onglet courant
     private var displayed: [TwitchEmote] {
-        guard !groups.isEmpty else { return [] }
+        let tabs = self.tabs
+        guard !tabs.isEmpty else { return [] }
         let kw = searchText.trimmingCharacters(in: .whitespaces).lowercased()
         if !kw.isEmpty {
             // 200 résultats suffisent largement à la saisie ; au-delà on ne fait
@@ -52,7 +65,7 @@ struct EmotePickerView: View {
             }
             return out
         }
-        return groups.indices.contains(selectedTab) ? groups[selectedTab].emotes : []
+        return tabs.indices.contains(selectedTab) ? tabs[selectedTab].emotes : []
     }
 
     var body: some View {
@@ -85,12 +98,13 @@ struct EmotePickerView: View {
             .padding(.bottom, 6)
 
             // ── Onglets sources (cachés pendant la recherche) ───────
-            if query.isEmpty && !groups.isEmpty {
+            if query.isEmpty && !tabs.isEmpty {
+                let tabs = self.tabs
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 6) {
-                        ForEach(groups.indices, id: \.self) { i in
-                            Button { withAnimation(.easeInOut(duration: 0.15)) { chosenTab = groups[i].label } } label: {
-                                Text(tabLabel(groups[i].label))
+                        ForEach(tabs.indices, id: \.self) { i in
+                            Button { withAnimation(.easeInOut(duration: 0.15)) { chosenTab = tabs[i].label } } label: {
+                                Text(tabLabel(tabs[i].label))
                                     .font(.system(size: 12, weight: .semibold))
                                     .foregroundColor(selectedTab == i ? .white : .tMuted)
                                     .padding(.horizontal, 12)
@@ -199,14 +213,24 @@ struct EmotePickerView: View {
                 groups      = loaded
                 searchIndex = index
                 isLoading   = false
+                refreshFavorites()
             }
         }
+        .onChange(of: store.favoriteEmotes) { _ in refreshFavorites() }
     }
 
-    /// Onglets : noms de marque (7TV, BTTV, FFZ), sauf ceux de la chaîne et
-    /// du compte.
+    private func refreshFavorites() {
+        guard !store.favoriteEmotes.isEmpty else { favorites = []; return }
+        var byName: [String: TwitchEmote] = [:]
+        for e in groups.flatMap(\.emotes) where !e.locked && byName[e.name] == nil { byName[e.name] = e }
+        favorites = store.favoriteEmotes.compactMap { byName[$0] }
+    }
+
+    /// Onglets : noms de marque (7TV, BTTV, FFZ), sauf ceux des favoris, de
+    /// la chaîne et du compte.
     private func tabLabel(_ label: String) -> String {
         switch label {
+        case "emotes_fav":     return store.t("emotes_fav")
         case "emotes_channel": return "⭐ " + store.t("emotes_channel")
         case "emotes_mine":    return store.t("emotes_mine")
         default:               return label
@@ -323,6 +347,13 @@ private struct EmoteCell: View {
             if let onInfo {
                 Button(action: onInfo) {
                     Label(store.t("chat_info_open"), systemImage: "info.circle")
+                }
+            }
+            if !emote.locked {
+                let favorite = store.isFavoriteEmote(emote.name)
+                Button { store.toggleFavoriteEmote(emote.name) } label: {
+                    Label(store.t(favorite ? "emote_fav_remove" : "emote_fav_add"),
+                          systemImage: favorite ? "star.slash" : "star")
                 }
             }
             Button {

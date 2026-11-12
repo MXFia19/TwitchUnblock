@@ -329,6 +329,32 @@ final class AppStore: ObservableObject {
         didSet { UserDefaults.standard.set(liveSourceOrder, forKey: "liveSourceOrder") }
     }
 
+    /// « Ma source » : adresse d'un serveur luminous-ttv (voir customSourceBase).
+    @Published private(set) var customSource: String = "" {
+        didSet { UserDefaults.standard.set(customSource, forKey: "cfg_custom_source") }
+    }
+
+    /// Ordre par défaut : l'automatique, Ma source en tête si elle est réglée.
+    var defaultLiveSourceOrder: [String] {
+        customSourceBase(customSource) != nil ? ["custom"] + kLiveSources : kLiveSources
+    }
+
+    /// Ma source changée : en tête de l'ordre à l'ajout (comme sur le site),
+    /// retirée quand on l'efface. Rend faux si l'adresse est refusée.
+    @discardableResult
+    func setCustomSource(_ raw: String) -> Bool {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        let base = trimmed.isEmpty ? nil : customSourceBase(trimmed)
+        if !trimmed.isEmpty && base == nil { return false }
+        let was = customSourceBase(customSource)
+        customSource = base ?? ""
+        if was != base {
+            let rest = liveSourceOrder.filter { $0 != "custom" }
+            liveSourceOrder = base != nil ? ["custom"] + rest : rest
+        }
+        return true
+    }
+
     /// Monte (−1) ou descend (+1) une source d'un cran.
     func moveLiveSource(_ id: String, by delta: Int) {
         guard let i = liveSourceOrder.firstIndex(of: id), liveSourceOrder.indices.contains(i + delta) else { return }
@@ -423,6 +449,18 @@ final class AppStore: ObservableObject {
     }
     /// Dernière façon d'afficher le chat en paysage : le double-tap la remet.
     private(set) var lastShownLandscapeChat: LandscapeChat = .column
+
+    /// Chat posé sur l'image : côté et hauteur (demande d'Alarez, comme le
+    /// chat de l'app TV). La colonne reste à droite, sur toute la hauteur.
+    @Published var chatOverlayLayout = ChatOverlayLayout() {
+        didSet { UserDefaults.standard.set(chatOverlayLayout.raw, forKey: "cfg_chat_overlay_layout") }
+    }
+
+    /// Glisser depuis le bord gauche ferme le lecteur, comme ✕
+    /// (fb_mvxcjl88). Coupé d'office : le geste pourrait surprendre.
+    @Published var edgeSwipeClose: Bool = false {
+        didSet { UserDefaults.standard.set(edgeSwipeClose, forKey: "cfg_edge_swipe_close") }
+    }
 
     /// Chat affiché ↔ masqué en paysage (double-tap sur un direct) ; rend le
     /// nouvel état.
@@ -729,6 +767,15 @@ final class AppStore: ObservableObject {
             UserDefaults.standard.set(data, forKey: "cfg_customization")
         }
     }
+
+    /// « Sans compte Twitch » (Personnaliser l'app) en vigueur : pages
+    /// Compte, Drops et Points des réglages, cartes de connexion de l'accueil,
+    /// rappels de connexion (lecteur, chat, prédictions, clips) masqués.
+    /// Jamais pour quelqu'un de connecté (compte de l'app ou session web) :
+    /// il ne perd rien de ce dont il se sert, même réglage restauré.
+    var accountHidden: Bool {
+        customization.hideAccount && twitchToken == nil && twitchWebToken == nil
+    }
     /// Onglet Découvrir dans la barre : l'ancien réglage, lu et écrit dans la
     /// personnalisation (sauvegardes d'avant elle).
     var showDiscoverTab: Bool {
@@ -738,7 +785,10 @@ final class AppStore: ObservableObject {
     /// Réglages → Personnaliser → Rétablir : disposition et bandeaux du chat
     /// comme au premier lancement.
     func resetCustomization() {
-        customization = UICustomization()
+        // « Sans compte Twitch » n'est pas une disposition : il reste.
+        var fresh = UICustomization()
+        fresh.hideAccount = customization.hideAccount
+        customization = fresh
         showPinnedMessages = true; showDropsNotice = true; showSpecialEvents = true
         showLiveEvents = true; showPolls = true; showPredictions = true; showHypeTrain = true
         enableRaids = true; showWatchStreak = true; showFollowButton = true
@@ -776,6 +826,12 @@ final class AppStore: ObservableObject {
             UserDefaults.standard.set(liquidGlass, forKey: Theme.glassKey)
             Theme.liquidGlass = liquidGlass
         }
+    }
+    /// Onglets natifs d'iOS 26 (Liquid Glass) au lieu de la barre de l'app
+    /// (fb_mvx2y53r : mieux rangés sur l'iPhone Duo). En test, coupé
+    /// d'office ; sans effet avant iOS 26.
+    @Published var nativeTabs: Bool = UserDefaults.standard.bool(forKey: "cfg_native_tabs") {
+        didSet { UserDefaults.standard.set(nativeTabs, forKey: "cfg_native_tabs") }
     }
     /// Change avec le thème : MainTabView reconstruit les onglets dessus.
     var themeID: String { "\(accent.rawValue)-\(background.rawValue)-\(liquidGlass)" }
@@ -909,6 +965,30 @@ final class AppStore: ObservableObject {
         }
     }
 
+    /// Emotes favorites (onglet « Favoris » en tête du sélecteur), par leur
+    /// code exact, 100 au plus, la plus récente à la fin. Même clé que le
+    /// site (« favoriteEmotes »), dans la synchro des réglages et la sauvegarde
+    /// (to-do du 04/11).
+    @Published var favoriteEmotes: [String] = [] {
+        didSet { UserDefaults.standard.set(favoriteEmotes, forKey: "chat_favorite_emotes") }
+    }
+    static let maxFavoriteEmotes = 100
+
+    func isFavoriteEmote(_ code: String) -> Bool { favoriteEmotes.contains(code) }
+
+    /// Ajoute l'emote aux favoris, ou l'en retire. Au-delà de 100, les plus
+    /// anciennes repartent.
+    func toggleFavoriteEmote(_ code: String) {
+        guard let c = Self.emoteCodes([code]).first else { return }
+        if let i = favoriteEmotes.firstIndex(of: c) {
+            favoriteEmotes.remove(at: i)
+            logger.settingChanged("Emote retirée des favoris", value: c)
+        } else {
+            favoriteEmotes = Array((favoriteEmotes + [c]).suffix(Self.maxFavoriteEmotes))
+            logger.settingChanged("Emote ajoutée aux favoris", value: c)
+        }
+    }
+
     /// Codes d'emotes valides (sauvegarde, synchro, site) : sans espace ni
     /// retour à la ligne, 100 caractères au plus, sans doublon, 200 au plus
     /// (les derniers, les plus récents).
@@ -928,6 +1008,7 @@ final class AppStore: ObservableObject {
         // Assignations de l'init : didSet n'y est pas appelé, l'ensemble suit à la main.
         hiddenEmotes       = Self.emoteCodes(ud.stringArray(forKey: "chat_hidden_emotes") ?? [])
         hiddenEmoteSet     = Set(hiddenEmotes)
+        favoriteEmotes     = Array(Self.emoteCodes(ud.stringArray(forKey: "chat_favorite_emotes") ?? []).suffix(Self.maxFavoriteEmotes))
         chatHideBots       = ud.bool(forKey: "chat_hide_bots")
         chatHideCommands   = ud.bool(forKey: "chat_hide_commands")
         chatMutedWords     = ud.stringArray(forKey: "chat_muted_words") ?? []
@@ -963,6 +1044,7 @@ final class AppStore: ObservableObject {
         liveActivity       = PlayerActivity.enabled
         // Ordre des sources ; avant lui, une seule source préférée
         // (« liveSource »), mise en tête. Réécrit pour getLive.
+        customSource       = customSourceBase(ud.string(forKey: "cfg_custom_source") ?? "") ?? ""
         liveSourceOrder    = liveSourceSteps().filter { $0 != "worker" }
         ud.set(liveSourceOrder, forKey: "liveSourceOrder")
         subAdFree          = ud.object(forKey: "cfg_sub_adfree") as? Bool ?? true
@@ -977,6 +1059,9 @@ final class AppStore: ObservableObject {
         landscapeChat      = LandscapeChat(rawValue: ud.string(forKey: "cfg_landscape_chat") ?? "")
                              ?? .column
         if landscapeChat != .hidden { lastShownLandscapeChat = landscapeChat }
+        chatOverlayLayout  = ChatOverlayLayout(raw: ud.string(forKey: "cfg_chat_overlay_layout") ?? "")
+                             ?? ChatOverlayLayout()
+        edgeSwipeClose     = ud.object(forKey: "cfg_edge_swipe_close") as? Bool ?? false
         // Ramenées dans les bornes des curseurs : un import d'avant pouvait
         // les en sortir.
         chatFontSize       = Self.clamped(ud.object(forKey: "cfg_chat_font")    as? Double ?? 13, to: Self.chatFontRange)
@@ -1161,6 +1246,10 @@ final class AppStore: ObservableObject {
 
     // MARK: – History management
     func saveToHistory(_ item: HistoryItem) {
+        // « Streamers récents » coupé : les chaînes ouvertes ne sont plus
+        // retenues, comme sur le site (demande de 4). Celles déjà là restent,
+        // pour ne rien effacer du compte sur les autres appareils.
+        if item.type == .channel && !showRecentChannels { return }
         var filtered = history.filter { $0.term.lowercased() != item.term.lowercased() }
         filtered.insert(item, at: 0)
         // 50 : l'historique mélange chaînes et VODs, 20 faisait disparaître les

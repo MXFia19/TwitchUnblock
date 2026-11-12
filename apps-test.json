@@ -21,6 +21,240 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.7.28",
+          "buildVersion": "404",
+          "date": "2026-11-12",
+          "localizedDescription": "- The Twitch source asks for its stream like Streamlink does, which Twitch serves with far fewer ads (pre-rolls and long ad pods). Contributed by ihavenoface\n- During an ad pod the countdown now runs to the end of the whole pod instead of restarting with every ad. Contributed by ihavenoface\n- Animated emotes play at their real speed: held frames keep their hold and very long emotes no longer skip frames. Contributed by ihavenoface\n- Apple TV: The Twitch source asks for its stream like Streamlink does, which Twitch serves with far fewer ads, and the ad countdown runs to the end of the whole pod. Contributed by ihavenoface\n- Other improvements and fixes",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-404/TwitchUnblock.ipa",
+          "size": 4617404,
+          "commit": "1f12837f24bc4b1f63c69414c02cb6ff5d79d213"
+        },
+        {
+          "version": "1.7.25",
+          "buildVersion": "402",
+          "date": "2026-11-12",
+          "localizedDescription": "- Other improvements and fixes",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-402/TwitchUnblock.ipa",
+          "size": 4616809,
+          "commit": "a6b5521b0a7246c8b841b24aa50970587cd1bd3f"
+        },
+        {
+          "version": "1.7.24",
+          "buildVersion": "401",
+          "date": "2026-11-10",
+          "localizedDescription": "- Other improvements and fixes",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-401/TwitchUnblock.ipa",
+          "size": 4614743,
+          "commit": "8fc5a7df957cd448cb7ebe61a7d80ff12750eff5"
+        },
+        {
+          "version": "1.7.23",
+          "buildVersion": "400",
+          "date": "2026-11-10",
+          "localizedDescription": "- Ad breaks counted for the website's /stats now include the live source and whether it was a Twitch pre-roll or the channel's own break\n- Apple TV: Ad breaks counted for the website's /stats now include the live source and whether it was a Twitch pre-roll or the channel's own break",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-400/TwitchUnblock.ipa",
+          "size": 4615039,
+          "commit": "788f75b5812b372489de7dcf06c8d2b9e7ab6b96"
+        },
+        {
+          "version": "1.7.22",
+          "buildVersion": "399",
+          "date": "2026-11-10",
+          "localizedDescription": "- Swipe from the edge to close the player now works even when the swipe starts over the video or the chat\n- The mini player bar hides while the Picture-in-Picture window is open, and comes back when it closes\n- The chapters list opens on the current chapter",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-399/TwitchUnblock.ipa",
+          "size": 4611568,
+          "commit": "b9e5d2a7913ce1ee35d89d61e314d1f9d257b5e6"
+        },
+        {
+          "version": "1.7.21",
+          "buildVersion": "398",
+          "date": "2026-11-09",
+          "localizedDescription": "- Importing a backup now works in LiveContainer without turning on its Fix File Picker option",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-398/TwitchUnblock.ipa",
+          "size": 4611092,
+          "commit": "788da169718aba0ff956697e6d38acf382e774c4"
+        },
+        {
+          "version": "1.7.20",
+          "buildVersion": "397",
+          "date": "2026-11-09",
+          "localizedDescription": "- Other improvements and fixes",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-397/TwitchUnblock.ipa",
+          "size": 4610277,
+          "commit": "6f3667c73e13511a15031bc05876e09d13557a53"
+        },
+        {
+          "version": "1.7.19",
+          "buildVersion": "396",
+          "date": "2026-11-09",
+          "localizedDescription": "- Other improvements and fixes",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-396/TwitchUnblock.ipa",
+          "size": 4610371,
+          "commit": "7613bf3d829d0ce23ea17418aaeaccff3df33c85"
+        },
+        {
+          "version": "1.7.18",
+          "buildVersion": "395",
+          "date": "2026-11-07",
+          "localizedDescription": "- In landscape, the video takes the whole width of the iPhone Duo's outer screen, centered (it stopped at the status column), and the empty margin on the side away from the Dynamic Island when the chat is in a column",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-395/TwitchUnblock.ipa",
+          "size": 4607991,
+          "commit": "2c0bf7a1c27db615e608a51171d300b1ad2588b2"
+        },
+        {
+          "version": "1.7.17",
+          "buildVersion": "394",
+          "date": "2026-11-07",
+          "localizedDescription": "- Improvements and fixes",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-394/TwitchUnblock.ipa",
+          "size": 4607954,
+          "commit": "f5bddf30560694a8444d75b044dbf3cb9c70fe0c"
+        },
+        {
+          "version": "1.7.16",
+          "buildVersion": "393",
+          "date": "2026-11-07",
+          "localizedDescription": "- Lives that come straight from Twitch (Twitch source, vertical picture) now filter Twitch's ad segments: the picture holds on the last frame instead of the purple ad screen, with the countdown, and the ads aren't downloaded. Higher qualities through your account still switch to the ad-free source (1080p) during an ad break, as before. Contributed by ihavenoface",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-393/TwitchUnblock.ipa",
+          "size": 4607985,
+          "commit": "9791887621399e39fb9a5c021af1063d92499ae4"
+        },
+        {
+          "version": "1.7.15",
+          "buildVersion": "392",
+          "date": "2026-11-07",
+          "localizedDescription": "- Lives that come straight from Twitch (Twitch source, vertical picture, Higher qualities through your account) now filter Twitch's ad segments: the picture holds on the last frame instead of the purple ad screen, and the ads aren't downloaded. Contributed by ihavenoface\n- Other improvements and fixes",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-392/TwitchUnblock.ipa",
+          "size": 4605890,
+          "commit": "581034a55a31be31d80a2384c2eaceeba9460cd0"
+        },
+        {
+          "version": "1.7.13",
+          "buildVersion": "391",
+          "date": "2026-11-06",
+          "localizedDescription": "- iOS 16: the player's seek bar no longer stays on screen after minimizing the player\n- AirPlay: low latency no longer jumps to the live edge while the stream plays on the TV, which kept freezing the picture\n- An offline channel's page has a Chat button: Twitch keeps its chat open between streams, to read and write there",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-391/TwitchUnblock.ipa",
+          "size": 4582203,
+          "commit": "aceb92805268a7297555d7dd3d1755fa2edc3139"
+        },
+        {
+          "version": "1.7.12",
+          "buildVersion": "390",
+          "date": "2026-11-05",
+          "localizedDescription": "- The player's seek bar no longer stays on screen after minimizing the player (iOS 16)",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-390/TwitchUnblock.ipa",
+          "size": 4569268,
+          "commit": "eea4414913442e5bbf00c2426e5024149d3baf9e"
+        },
+        {
+          "version": "1.7.11",
+          "buildVersion": "389",
+          "date": "2026-11-04",
+          "localizedDescription": "- Every category shows its viewer count again (Top, search and followed), not only the ones followed on your Twitch account",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-389/TwitchUnblock.ipa",
+          "size": 4568792,
+          "commit": "90d837c32313ef1a42f2714b243f0196c6aea08a"
+        },
+        {
+          "version": "1.7.10",
+          "buildVersion": "388",
+          "date": "2026-11-04",
+          "localizedDescription": "- Favorite emotes: long-press an emote (in the chat or the picker) or use its card to add it to your favorites, shown first in the emote picker's new Favorites tab; synced with the website\n- Live streams show how long they've been live, on cards and in lists\n- A category's streams no longer repeat its name under each one\n- Followed categories always show their viewer count\n- Downloading a VOD: pick chapters to keep just one game or part of the stream",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-388/TwitchUnblock.ipa",
+          "size": 4568890,
+          "commit": "1428e52fa0911ec1422da562b4fbf366881e20c8"
+        },
+        {
+          "version": "1.7.9",
+          "buildVersion": "387",
+          "date": "2026-11-01",
+          "localizedDescription": "- iPhone Duo: in the full-size player, buttons and text keep clear of the screen's rounded corners",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-387/TwitchUnblock.ipa",
+          "size": 4542829,
+          "commit": "d94fb6e58b235aeb53942ea7d63461e2f9a07c44"
+        },
+        {
+          "version": "1.7.8",
+          "buildVersion": "386",
+          "date": "2026-11-01",
+          "localizedDescription": "- Landscape chat: the resize handle no longer sits on top of messages, and the chat fills the empty margin next to it\n- Traditional Chinese: channel points are now called 忠誠點數, as on Twitch",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-386/TwitchUnblock.ipa",
+          "size": 4542039,
+          "commit": "a22b672048e145cdcb19217e1a8ecdeaaa700c64"
+        },
+        {
+          "version": "1.7.7",
+          "buildVersion": "385",
+          "date": "2026-11-01",
+          "localizedDescription": "- Chat over the video can sit left or right, full height or in a corner (Settings → Chat)\n- In landscape, the chat uses the empty safe margin next to it, so the video is bigger\n- \"Streams as a list\" now also applies to categories and search results\n- New option to close the player by swiping from the left edge (Settings → Player, off by default)\n- With Recent streamers off, opened channels are no longer remembered\n- Settings: swiping back from the left edge no longer closes the settings when your finger drifts down",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-385/TwitchUnblock.ipa",
+          "size": 4542328,
+          "commit": "f7eb07ccc86ca413776099bd759b69d171202575"
+        },
+        {
+          "version": "1.7.6",
+          "buildVersion": "384",
+          "date": "2026-11-01",
+          "localizedDescription": "- iPhone Duo: tabs move into the status column, as an icon pill under the clock, and the header gets a top margin\n- New in Features in testing (iOS 26): native Liquid Glass tabs instead of the app's tab bar\n- New \"My source\" option: add your own luminous-ttv server to the live sources (Settings → Player)",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-384/TwitchUnblock.ipa",
+          "size": 4541767,
+          "commit": "3a2e8623ccc6915eb6c9e6492cf6b11668fc6bb6"
+        },
+        {
+          "version": "1.7.5",
+          "buildVersion": "383",
+          "date": "2026-11-01",
+          "localizedDescription": "- New \"My source\" option: add your own luminous-ttv server to the live sources (Settings → Player)",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-383/TwitchUnblock.ipa",
+          "size": 4529817,
+          "commit": "ba7f4539c21814468f254bffda4fdba592cbe691"
+        },
+        {
+          "version": "1.7.4",
+          "buildVersion": "382",
+          "date": "2026-11-01",
+          "localizedDescription": "- Chat over the video can sit left or right, full height or in a corner (Settings → Chat)\n- Landscape chat can be narrower (15 %) and uses the empty safe margin, so the video is bigger\n- \"Streams as a list\" now also applies to categories and search results\n- New option to close the player by swiping from the left edge (Settings → Player, off by default)\n- With Recent streamers off, opened channels are no longer remembered",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-382/TwitchUnblock.ipa",
+          "size": 4518175,
+          "commit": "ba9a6c67c9aac885273a4a5e169b2495d73e6aea"
+        },
+        {
+          "version": "1.7.3",
+          "buildVersion": "381",
+          "date": "2026-11-01",
+          "localizedDescription": "- Bug reports and ideas are signed with your Twitch account when you're logged in (a switch, on by default), or with an optional nickname otherwise, so the developer knows it's you from one report to the next",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-381/TwitchUnblock.ipa",
+          "size": 4501988,
+          "commit": "d0cd32c23dbf37b1f4f5e3f215d94410938a2c79"
+        },
+        {
+          "version": "1.7.2",
+          "buildVersion": "380",
+          "date": "2026-10-31",
+          "localizedDescription": "- New \"No Twitch account\" option at the top of Settings → General → Customize the app: hides everything that needs an account or asks you to log in (Account, Drops and Channel points pages, sign-in cards, log-in reminders, clip creation); it never hides anything while you're logged in",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-380/TwitchUnblock.ipa",
+          "size": 4496188,
+          "commit": "a39e589722092595d3eedf63b30d42c662198127"
+        },
+        {
+          "version": "1.7.1",
+          "buildVersion": "379",
+          "date": "2026-10-31",
+          "localizedDescription": "- VODs, a live's recording and clips now show the channel's name with the title next to it, like lives: tap the title to read it in full, with the broadcast date",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-379/TwitchUnblock.ipa",
+          "size": 4487336,
+          "commit": "55efbc4097d6202f609c40596e19f568e2149659"
+        },
+        {
+          "version": "1.7.0",
+          "buildVersion": "377",
+          "date": "2026-10-30",
+          "localizedDescription": "- Improvements and fixes",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-377/TwitchUnblock.ipa",
+          "size": 4486051,
+          "commit": "fe6d3aba005d3f836fe315e45b2a47ab8d60068c"
+        },
+        {
           "version": "1.6.64",
           "buildVersion": "376",
           "date": "2026-10-30",
@@ -55,250 +289,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-373/TwitchUnblock.ipa",
           "size": 4496574,
           "commit": "858417ed00ca59b09dfe09f892001b0e71d73bfc"
-        },
-        {
-          "version": "1.6.60",
-          "buildVersion": "372",
-          "date": "2026-10-27",
-          "localizedDescription": "- Live: three more sources to pick in Settings → Player (PerfProd Asia, Albania proxy 2, Luminous Europe 2); if you change nothing, each one is tried right after its neighbor.",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-372/TwitchUnblock.ipa",
-          "size": 4493961,
-          "commit": "334f786b7af8f58d61edf796434e957abae0e41d"
-        },
-        {
-          "version": "1.6.59",
-          "buildVersion": "371",
-          "date": "2026-10-27",
-          "localizedDescription": "- Live: each source now has a backup server (PerfProd Asia, nadeko's second server, Luminous Europe 2), and a Luminous mirror that no longer answered was removed.",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-371/TwitchUnblock.ipa",
-          "size": 4492756,
-          "commit": "ea868e57703d4b113f9c92fef0e7a48fb8581fc1"
-        },
-        {
-          "version": "1.6.58",
-          "buildVersion": "370",
-          "date": "2026-10-26",
-          "localizedDescription": "- New Background playback setting: keep playing, audio only or pause when the screen locks or you switch apps\n- Stream archives show the real time of day of each moment, and ⋯ → Go to a time of day jumps to it\n- Clips: ⋯ → Watch in the VOD opens the original VOD at that moment, and ⋯ → Download the clip saves it\n- The higher-quality and account notices now show only once\n- Update now opens a help page for every installer when Feather, SideStore or AltStore isn't found",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-370/TwitchUnblock.ipa",
-          "size": 4493827,
-          "commit": "af80fe92a77754bf55b3e07574e90062c5ca9f72"
-        },
-        {
-          "version": "1.6.57",
-          "buildVersion": "369",
-          "date": "2026-10-26",
-          "localizedDescription": "- A brief Twitch error at launch no longer signs you out of the web session\n- Signing out of the web session without an app account now lets you sign in with another account\n- Lists are no longer hidden behind the mini player and the multi-live bar\n- Picture in Picture now follows raids and the next VOD of Play all instead of closing\n- Apple TV: Menu now closes an open category instead of quitting the app",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-369/TwitchUnblock.ipa",
-          "size": 4458918,
-          "commit": "31ad47a7796a8851b1e1a6fbfc0a34d3dd897a8a"
-        },
-        {
-          "version": "1.6.56",
-          "buildVersion": "368",
-          "date": "2026-10-26",
-          "localizedDescription": "- Fixed: a live could be wrongly reported as \"not available in your region\".\n- Vertical video: going back now returns to the ad-free source, and drops keep progressing while the vertical picture plays.",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-368/TwitchUnblock.ipa",
-          "size": 4457983,
-          "commit": "1abc43823678d23c37847468168ee4e03a13e181"
-        },
-        {
-          "version": "1.6.55",
-          "buildVersion": "367",
-          "date": "2026-10-26",
-          "localizedDescription": "- With the chat on top of the video (vertical video, overlay chat in landscape), the pinned-message bar is now see-through instead of a black band.\n- The player's bottom bar no longer squeezes the live's duration when there are many buttons (vertical video): the buttons move to a second row.",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-367/TwitchUnblock.ipa",
-          "size": 4457344,
-          "commit": "c78dbdd12e305b24f22cc6f00fbf3cba4795f707"
-        },
-        {
-          "version": "1.6.54",
-          "buildVersion": "366",
-          "date": "2026-10-26",
-          "localizedDescription": "- The player's bottom bar no longer squeezes the live's duration when there are many buttons (vertical video): the buttons move to a second row.",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-366/TwitchUnblock.ipa",
-          "size": 4457513,
-          "commit": "413df41f091fa97701846b85db753fa50e32ad16"
-        },
-        {
-          "version": "1.6.53",
-          "buildVersion": "365",
-          "date": "2026-10-26",
-          "localizedDescription": "- Vertical streams now look like the Twitch app's vertical view: the picture fills the player and the chat sits on its bottom, see-through (double-tap or the Chat button hides it).",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-365/TwitchUnblock.ipa",
-          "size": 4458163,
-          "commit": "03c1f679365a2de317131564fad796bb03efc4de"
-        },
-        {
-          "version": "1.6.52",
-          "buildVersion": "364",
-          "date": "2026-10-26",
-          "localizedDescription": "- Vertical streams: when a streamer also sends Twitch a vertical picture (Dual Format: mobile games, IRL), a ▯ button in the player switches to it, like in the Twitch app. The choice is remembered.\n- A live that Twitch keeps to some countries now says so (“not available in your region”) instead of “No source answered”.",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-364/TwitchUnblock.ipa",
-          "size": 4455995,
-          "commit": "e7d15a1fb38530fec3eb88baab2bb9960c0ac4bf"
-        },
-        {
-          "version": "1.6.51",
-          "buildVersion": "363",
-          "date": "2026-10-26",
-          "localizedDescription": "- Other improvements and fixes",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-363/TwitchUnblock.ipa",
-          "size": 4441807,
-          "commit": "621506228d1aa21b10ccf54faed6e66235d42bd5"
-        },
-        {
-          "version": "1.6.50",
-          "buildVersion": "362",
-          "date": "2026-10-25",
-          "localizedDescription": "- Other improvements and fixes",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-362/TwitchUnblock.ipa",
-          "size": 4439779,
-          "commit": "6c598fd87cb8288cf3b163ce9afcdf740ddc8684"
-        },
-        {
-          "version": "1.6.46",
-          "buildVersion": "361",
-          "date": "2026-10-25",
-          "localizedDescription": "- The quality menus now show Source with its resolution, like “1440p (Source)” or “1080p60 (Source)”, when the stream provides it.\n- Pinch to zoom in the app's player now zooms right where you pinch, and moving both fingers while pinching moves the picture, like the Twitch app.\n- The Live Activity and Now Playing now step aside when another app takes the sound or the video stays paused in the background, so tapping the Dynamic Island opens the app that's actually playing (e.g. Spotify).\n- Channel points: when an ad blocker or filtering DNS blocks Twitch's watch-time address, the watched minute goes through the TwitchUnblock server so passive points and chests still count.",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-361/TwitchUnblock.ipa",
-          "size": 4439178,
-          "commit": "5b1bdfe558579fc8f676103cc5006fc232d92485"
-        },
-        {
-          "version": "1.6.42",
-          "buildVersion": "360",
-          "date": "2026-10-25",
-          "localizedDescription": "- Other improvements and fixes",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-360/TwitchUnblock.ipa",
-          "size": 4415376,
-          "commit": "312947eee28e7e9fa636fb479318a134d30d4d23"
-        },
-        {
-          "version": "1.6.41",
-          "buildVersion": "359",
-          "date": "2026-10-25",
-          "localizedDescription": "- Wide windows (iPhone Duo's inner display in landscape, iPad): the tab bar becomes a column of tabs on the left, leaving the whole height to the content; it follows your tab order and hidden tabs.\n- Emote picker: a new \"Mine\" tab, first, lists every Twitch emote your account can use in any chat — your subscriptions' emotes, Prime/Turbo and Twitch's global emotes — grouped by channel, and search covers it.\n- Large screens: grids of lives, VODs, clips and categories show more, smaller tiles (3 columns in portrait and 4 in landscape on the iPhone Duo's inner display, up to 5 on iPad) instead of two giant ones.\n- iPhone Duo: the header, grids, tab bar and tour bubbles no longer slide under iOS's status column on the outer display and on the inner display in landscape.",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-359/TwitchUnblock.ipa",
-          "size": 4414284,
-          "commit": "cabf32289ccd8e02941be57f9f004aa310cff314"
-        },
-        {
-          "version": "1.6.37",
-          "buildVersion": "358",
-          "date": "2026-10-25",
-          "localizedDescription": "- Improvements and fixes",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-358/TwitchUnblock.ipa",
-          "size": 4376996,
-          "commit": "6adef16519a0a35822b42ed98fb5bbc39469ec9d"
-        },
-        {
-          "version": "1.6.37",
-          "buildVersion": "357",
-          "date": "2026-10-22",
-          "localizedDescription": "- Other improvements and fixes",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-357/TwitchUnblock.ipa",
-          "size": 4547710,
-          "commit": "95e378417e8263868a27a00fac86f44c7a978232"
-        },
-        {
-          "version": "1.6.35",
-          "buildVersion": "356",
-          "date": "2026-10-22",
-          "localizedDescription": "- New setting \"PiP when leaving the player\" (Settings → Player, off by default): swiping a live stream or VOD down, or tapping back, opens it in Picture in Picture instead of the mini player\n- Picture in Picture: starting it now shrinks the player so you can keep using the app, instead of leaving a black full-screen player to close\n- Picture in Picture: the window's expand button now brings the player back full size, on the same video\n- A channel's bot commands (Nightbot, StreamElements, Fossabot, Moobot) are now on its channel page too, so they can be checked while the channel is offline.\n- New settings in Settings → General → Customize the app → Chat · banners (all on by default): hide the chat's notification bell, the chat mode badge (\"Followers for 10h\"…) and the channel points crown; the bell stays on the channel page and channel points open from the chat's ⋯ menu.\n- Channel points can be opened from the chat's ⋯ menu whenever the crown isn't shown, landscape included.\n- New setting Settings → General → Customize the app → Chat · banners → Special Events (on by default): hide Twitch's own reward campaigns such as \"1 Month of Apple TV\" while keeping the channel's drops card.\n- Other improvements and fixes",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-356/TwitchUnblock.ipa",
-          "size": 4546453,
-          "commit": "153d416e8aa8cac62c7d1a396f08ebaf815d5a8e"
-        },
-        {
-          "version": "1.6.29",
-          "buildVersion": "355",
-          "date": "2026-10-22",
-          "localizedDescription": "- Settings: the app no longer crashes when opening Settings on iOS 18",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-355/TwitchUnblock.ipa",
-          "size": 4522536,
-          "commit": "1663231a6b4a778553e55f1977cd78cc2a92d57e"
-        },
-        {
-          "version": "1.6.28",
-          "buildVersion": "354",
-          "date": "2026-10-22",
-          "localizedDescription": "- Logs are now fully in the app's language: categories, settings changes and details built while the app runs no longer stay in French\n- Settings → General: the language list moved to its own page (App language), like iOS's settings\n- Swipe from the left edge to go back in Settings, from a category's live channels and from a channel opened from search results\n- When the tool that installed the app doesn't allow changing its icon (LiveContainer, GBox…), Settings now says so instead of offering icons that fail\n- Followed categories can use compact covers (3 per row, 4 on iPad) and be sorted A → Z, in Settings → General → Customize the app\n- In landscape, the full-size player (app's or Apple's) and multi-live now let the home indicator fade after a few seconds, like video apps, instead of keeping it over the picture.\n- Multi-live: tap a tile's speaker to hear several videos at once, and long-press it for that tile's volume; tapping a tile still makes it the only one you hear.\n- Hide an emote: long-press it in the chat, or \"Hide this emote\" on its card; it then shows as the typed word, from any source, in the live, VOD and multi-live chat.\n- Settings → Chat → Hidden emotes lists them to show them again; the list follows your account and is shared with the website.\n- New setting Settings → Chat → Show the message box (on by default): hide it if you only read the chat, the room goes to the messages; channel points and the chat's ⋯ menu stay as small buttons at the bottom right.\n- Rewinding into a live's recording now brings back your chosen playback speed once you're away from its edge, instead of staying at 1×.\n- Apple's player now drops to 1× near the edge of a live recording and shows it, instead of a 2× that didn't actually play.\n- The player now checks the speed it really plays at: it applies it again, then shows the real speed if playback still can't keep up.\n- Experimental 2.25×, 2.5× and 3× speeds in the ⋯ menu of the player, for the current video; they fall back to 2× as soon as playback can't keep up.\n- Closing a channel page opened from the full-size player (name, title or chat) now brings the player back full size instead of shrinking it to the mini player.\n- Traditional Chinese interface language (thanks to trend0522)\n- Other improvements and fixes",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-354/TwitchUnblock.ipa",
-          "size": 4570361,
-          "commit": "871fa433f31d8386f343ae6dc5e93ce9f4b341aa"
-        },
-        {
-          "version": "1.6.7",
-          "buildVersion": "353",
-          "date": "2026-10-22",
-          "localizedDescription": "- The backup now carries everything to move between the app and TU Test: pinned channels, all settings (appearance, notifications, player, downloads…), the customization and Continue watching, never your Twitch sign-ins\n- Importing a backup asks Everything or Channels only, then lists what was restored\n- Long-press a video in Continue watching to resume it or remove it from the list\n- Settings → About shows the build number next to the version (tap to copy)\n- When an install tool put an old build under the latest version's number, the update alert explains how to reinstall and links to the right IPA\n- The app now follows iOS's text size (up to Accessibility 2), live: Home, Discover, search, channel pages, settings and chat messages get bigger\n- Other improvements and fixes",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-353/TwitchUnblock.ipa",
-          "size": 4442091,
-          "commit": "4040bba54215de59a78c4f897ab193ed8fc63d32"
-        },
-        {
-          "version": "1.6.0",
-          "buildVersion": "351",
-          "date": "2026-10-20",
-          "localizedDescription": "- Improvements and fixes",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-351/TwitchUnblock.ipa",
-          "size": 4381506,
-          "commit": "5375594f5890d36c97355010bc4290dea28d58e6"
-        },
-        {
-          "version": "1.5.35",
-          "buildVersion": "350",
-          "date": "2026-10-20",
-          "localizedDescription": "- Channel points: the app now joins raids with your Twitch session, so you get the raid bonus like on twitch.tv",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-350/TwitchUnblock.ipa",
-          "size": 4381511,
-          "commit": "cc4e1d685e1b217e472804d107857c69ea246589"
-        },
-        {
-          "version": "1.5.34",
-          "buildVersion": "349",
-          "date": "2026-10-20",
-          "localizedDescription": "- Player: with Higher qualities on and no sub or Turbo, 1440p now plays through your account, switching by itself to the ad-free 1080p source during Twitch ad breaks and back afterwards\n- Other improvements and fixes",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-349/TwitchUnblock.ipa",
-          "size": 4373004,
-          "commit": "1763a9961f6c3362527a6b338cd56055b7fcb665"
-        },
-        {
-          "version": "1.5.31",
-          "buildVersion": "348",
-          "date": "2026-10-20",
-          "localizedDescription": "- Other improvements and fixes",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-348/TwitchUnblock.ipa",
-          "size": 4333665,
-          "commit": "9b33d689c78b0f0dd166f1fb1b9ee5da1b5fce02"
-        },
-        {
-          "version": "1.5.30",
-          "buildVersion": "347",
-          "date": "2026-10-20",
-          "localizedDescription": "- Settings: the top streams language list (and the Categories language menu) scrolls again while a VOD or a live plays in the background\n- Chat: the emote picker's channel tab now lists the channel's own Twitch emotes, with the sub emotes you don't have greyed out behind a lock\n- Player: when the installer removed Live Activity support, the app stops asking for one until its next launch instead of filling the log\n- Player: new Higher qualities setting (off by default) asks Twitch for 1440p and above, in HEVC or AV1 when the device decodes them, on the ad-free stream through your account\n- Other improvements and fixes",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-347/TwitchUnblock.ipa",
-          "size": 4333018,
-          "commit": "c63216c5e776dbc20b01b9cf56ee69921c4a4d21"
-        },
-        {
-          "version": "1.5.28",
-          "buildVersion": "346",
-          "date": "2026-10-20",
-          "localizedDescription": "- Settings → About now credits the people who contribute to the app\n- Japanese interface language (thanks to kinboy56)\n- Other improvements and fixes",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-346/TwitchUnblock.ipa",
-          "size": 4310080,
-          "commit": "5000d324dbf353e2830d60fbe10f56cbe7704c28"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.6.64",
-      "versionDate": "2026-10-30",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-376/TwitchUnblock.ipa",
-      "size": 4486050
+      "version": "1.7.28",
+      "versionDate": "2026-11-12",
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-404/TwitchUnblock.ipa",
+      "size": 4617404
     }
   ],
   "news": []

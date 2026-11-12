@@ -11,6 +11,8 @@ struct MainTabView: View {
     /// mini-barre et la barre du multi-live se posent alors à sa droite, au
     /// bas de l'écran.
     @State private var sideTabs = SideTabRail.windowFits
+    /// Onglets dans la colonne d'état de l'iPhone Duo (voir TabScaffold).
+    @State private var railInStatusColumn = false
 
     // ── Player state ─────────────────────────────────────────────────────
     @State private var playerMode: PlayerMode? = nil
@@ -22,6 +24,9 @@ struct MainTabView: View {
     /// pour la qualité préférée ; vide quand la source ne les donne pas.
     @State private var qualityVariants: [String: VariantInfo] = [:]
     @State private var playerVisible = false
+    /// iOS 16 : commandes du lecteur retirées juste avant sa réduction
+    /// (hidePlayer) ; remis à faux quand il revient en grand.
+    @State private var playerControlsAway = false
     @State private var loading = false
     @State private var errorMsg: String? = nil
     /// Relance prévue au retour du réseau, lecteur resté sur son erreur.
@@ -122,6 +127,9 @@ struct MainTabView: View {
     /// mémorisé qui s'applique ; pendant le geste, cet état local évite de
     /// toucher à l'AppStore à chaque image (voir `playerBody`).
     @State private var chatDragRatio: Double? = nil
+    /// Paysage : l'îlot (ou l'encoche) est à droite. La marge de sécurité
+    /// d'en face peut servir au chat (voir `playerBody`).
+    @State private var notchOnTrailing = false
     /// Fermeture du lecteur en cours : le contenu survit le temps du fondu.
     @State private var closingPlayer = false
     /// Bascule entre le direct et son enregistrement, sur la même chaîne.
@@ -181,16 +189,25 @@ struct MainTabView: View {
     @State private var vodMuted: [MutedRange] = []
     @State private var vodUnmuted = 0
 
-    /// Infos affichées par-dessus l'image en mode immersif.
+    /// Infos affichées par-dessus l'image en mode immersif. Hors direct (VOD,
+    /// rembobinage, VOD retrouvée, clip), la chaîne en clair et le titre à
+    /// côté, qui ouvre sa fiche comme en direct : avant, le titre y prenait
+    /// la place du nom et rien ne le montrait en entier. Sans chaîne connue,
+    /// il reste à la place du nom.
     private var overlayInfo: PlayerOverlayInfo {
-        PlayerOverlayInfo(
-            channel: currentChannelName ?? statusTitle,
+        let streamer = isLivePlaying ? nil : (playerChannelLogin ?? (isClipPlaying ? clipChannel : nil))
+        return PlayerOverlayInfo(
+            channel: currentChannelName ?? streamer ?? statusTitle,
             avatar:  liveAvatar,
-            title:   isLivePlaying ? statusTitle : "",
+            title:   isLivePlaying || streamer != nil ? statusTitle : "",
             game:    liveGame,
             viewers: liveViewerCount,
             uptime:  liveUptimeText,
-            latency: liveLatency > 0 ? liveLatency : nil
+            latency: liveLatency > 0 ? liveLatency : nil,
+            date:    isLivePlaying ? "" : vodStartedAt.map {
+                $0.formatted(.dateTime.day().month(.abbreviated).year().hour().minute()
+                    .locale(Locale(identifier: store.lang.rawValue)))
+            } ?? ""
         )
     }
 
@@ -350,6 +367,7 @@ struct MainTabView: View {
             // colonne à gauche (fenêtre large) : voir TabScaffold.
             TabScaffold(activeTab: $activeTab,
                         sideTabs: $sideTabs,
+                        railInStatusColumn: $railInStatusColumn,
                         safeTop: headerSafeTop,
                         header: AnyView(HeaderView(title: activeTab.label(store),
                                                    onOpenSettings: { showSettings = true },
@@ -376,6 +394,8 @@ struct MainTabView: View {
             .onChange(of: onboardingDone) { _ in keepVisibleTab() }
             // Multi-live ouvert ou fermé : aperçus de Découvrir bloqués ou permis.
             .onChange(of: showMultiLive) { on in DiscoverGate.shared.blocked = on || playerMode != nil }
+            // Source du direct, jointe aux pauses pub comptées pour /stats.
+            .onChange(of: menuLiveSource) { UsageService.shared.adSource = $0 }
             // iPhone : portrait, sauf lecteur ouvert en grand ou multi-live.
             .onChange(of: landscapeAllowed) { OrientationLock.allowLandscape($0) }
             .onAppear { OrientationLock.allowLandscape(landscapeAllowed) }
@@ -385,7 +405,7 @@ struct MainTabView: View {
             // fondu de fermeture, le lecteur étant encore en place mais masqué.
             // Aussi pendant un chargement réduit (ou son erreur) : de quoi y
             // revenir.
-            if playerMode != nil && !playerVisible && !closingPlayer {
+            if miniBarShown {
                 miniBar.zIndex(99)
             }
 
@@ -401,6 +421,11 @@ struct MainTabView: View {
                     .modifier(PlayerPullEffect(pull: pull))
                     .opacity(playerVisible ? 1 : 0)
                     .allowsHitTesting(playerVisible)
+                    // Glissé depuis le bord gauche : ferme le lecteur, comme ✕
+                    // (réglage, coupé d'office).
+                    .background(EdgeSwipeCloser(enabled: store.edgeSwipeClose && playerVisible && !closingPlayer) {
+                        stopPlayer()
+                    })
                     .zIndex(100)
                     .transition(.opacity)
             }
@@ -639,7 +664,7 @@ struct MainTabView: View {
         // Visite relancée pendant une lecture : le lecteur se réduit, sinon
         // il cacherait les boutons montrés.
         .onChange(of: onboardingDone) { done in
-            if !done { withAnimation(.easeInOut(duration: 0.2)) { playerVisible = false } }
+            if !done, playerVisible { hidePlayer(.easeInOut(duration: 0.2)) { playerVisible = false } }
         }
         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: updater.showAlert)
         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: showDiscordPrompt)
@@ -657,7 +682,7 @@ struct MainTabView: View {
             if channelSheet == nil {
                 channelReturnsToPlayer = playerMode != nil && playerVisible && !closingPlayer
             }
-            withAnimation(.easeInOut(duration: 0.2)) { playerVisible = false }
+            if playerVisible { hidePlayer(.easeInOut(duration: 0.2)) { playerVisible = false } }
             channelSheet = ChannelSheetItem(login: login)
         }
         // Une vidéo lancée depuis la page s'ouvre elle-même en grand : pas
@@ -796,7 +821,11 @@ struct MainTabView: View {
         // Rouvert en grand (mini-barre, notification…) pendant un PiP :
         // l'image revient dans le lecteur, qui restait noir sinon.
         .onChange(of: playerVisible) { visible in
-            guard !visible else { PlayerPiP.shared.playerShown(); return }
+            guard !visible else {
+                playerControlsAway = false
+                PlayerPiP.shared.playerShown()
+                return
+            }
             PlayerOrientation.restorePortraitIfForced()
             UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder),
                                             to: nil, from: nil, for: nil)
@@ -863,7 +892,7 @@ struct MainTabView: View {
     /// barre d'onglets dessous (voir miniBar).
     private var floatingBarsInset: CGFloat {
         guard !playerVisible, !closingPlayer else { return 0 }
-        let bars = (playerMode != nil ? 1 : 0) + (multi.entries.isEmpty ? 0 : 1)
+        let bars = (miniBarShown ? 1 : 0) + (multi.entries.isEmpty ? 0 : 1)
         guard bars > 0 else { return 0 }
         return CGFloat((sideTabs ? 0 : 20) + 65 * bars)
     }
@@ -873,8 +902,16 @@ struct MainTabView: View {
     /// colonne) : environ 50 pt par barre, plus l'écart entre elles.
     private var listBarsInset: CGFloat {
         guard !playerVisible, !closingPlayer else { return 0 }
-        let bars = (playerMode != nil ? 1 : 0) + (multi.entries.isEmpty ? 0 : 1)
+        let bars = (miniBarShown ? 1 : 0) + (multi.entries.isEmpty ? 0 : 1)
         return CGFloat(64 * bars)
+    }
+
+    /// Mini-barre du lecteur réduit. Pas pendant un PiP : la fenêtre ramène
+    /// déjà au lecteur et le ferme, la barre ne faisait que cacher le bas de
+    /// l'écran (demande de Slowie et hippxrr, 09/11). Elle revient à la fin
+    /// du PiP si le lecteur reste réduit.
+    private var miniBarShown: Bool {
+        playerMode != nil && !playerVisible && !closingPlayer && !pipState.active
     }
 
     /// Feuilles et mosaïque attachées à cet écran : une notification touchée
@@ -926,8 +963,19 @@ struct MainTabView: View {
             ZStack(alignment: .top) {
                 Color.tDark.ignoresSafeArea()
                     // Hauteur du lecteur : seuil du glissé et glissade finale.
-                    .onAppear { pull.height = geo.size.height }
+                    .onAppear {
+                        pull.height = geo.size.height
+                        UIDevice.current.beginGeneratingDeviceOrientationNotifications()
+                        refreshNotchSide()
+                    }
                     .onChange(of: geo.size.height) { pull.height = $0 }
+                    .onChange(of: landscape) { _ in refreshNotchSide() }
+                    // Demi-tour d'un paysage à l'autre : ni la taille ni les
+                    // marges ne changent. L'interface tourne après l'appareil,
+                    // d'où la relecture une fois l'animation passée.
+                    .onReceive(NotificationCenter.default.publisher(for: UIDevice.orientationDidChangeNotification)) { _ in
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { refreshNotchSide() }
+                    }
 
                 if loading {
                     // Les sources d'un direct sont essayées l'une après
@@ -963,7 +1011,7 @@ struct MainTabView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                 } else if let links = qualityLinks {
-                    playerBody(links: links, size: geo.size, landscape: landscape)
+                    playerBody(links: links, size: geo.size, landscape: landscape, insets: geo.safeAreaInsets)
                 }
             }
             // Bascule direct ↔ enregistrement : une pastille discrète en haut,
@@ -1003,6 +1051,14 @@ struct MainTabView: View {
         }
     }
 
+    /// Côté de l'îlot (ou de l'encoche) en paysage : interface
+    /// « landscapeLeft » = haut de l'appareil à droite.
+    private func refreshNotchSide() {
+        let scene = UIApplication.shared.connectedScenes.lazy.compactMap { $0 as? UIWindowScene }.first
+        let trailing = scene?.effectiveGeometry.interfaceOrientation == .landscapeLeft
+        if trailing != notchOnTrailing { notchOnTrailing = trailing }
+    }
+
     /// Une seule disposition pour les deux orientations.
     ///
     /// `AnyLayout` échange HStack et VStack **sans changer l'identité des vues** :
@@ -1015,7 +1071,7 @@ struct MainTabView: View {
     /// paysage : le ratio « idéal » y était calculé à partir des contrôles, d'où
     /// l'image réduite en vignette dès qu'on les affichait.
     @ViewBuilder
-    private func playerBody(links: QualityLinks, size: CGSize, landscape: Bool) -> some View {
+    private func playerBody(links: QualityLinks, size: CGSize, landscape: Bool, insets: EdgeInsets) -> some View {
         // Le mode « chat seul » n'a pas de colonne vidéo : il reste empilé.
         let split  = landscape && !chatOnly
         let mode   = store.landscapeChat
@@ -1038,8 +1094,24 @@ struct MainTabView: View {
         // Chat posé sur le bas de l'image verticale : 40 % de la hauteur, là
         // où l'app de Twitch met le sien (le streamer laisse ce bas libre).
         let verticalChatHeight: CGFloat? = verticalOverlay ? max(size.height * 0.4, 220) : nil
-        // Largeur réglable, mais jamais sous 220 pt : en deçà les messages se
-        // hachent en mots isolés, quel que soit le réglage.
+        // Chat posé sur l'image : côté et hauteur choisis dans les réglages.
+        // La colonne, elle, reste à droite sur toute la hauteur.
+        let overlayLayout = split && mode == .overlay ? store.chatOverlayLayout : ChatOverlayLayout()
+        let chatOnLeft  = overlayLayout.side == .left
+        let overlayHalf = overlayLayout.half
+        // Marge de sécurité du côté du chat, reprise quand l'îlot (ou
+        // l'encoche) est de l'autre côté : 62 pt de chaque côté sur un iPhone
+        // à Dynamic Island, qui restaient vides à côté du chat (fb_mvxafsl8).
+        // 16 pt restent pour l'arrondi de l'écran.
+        let reclaim: CGFloat = {
+            guard split else { return 0 }
+            if chatOnLeft { return notchOnTrailing ? max(insets.leading - 16, 0) : 0 }
+            return notchOnTrailing ? 0 : max(insets.trailing - 16, 0)
+        }()
+        let rightReclaim: CGFloat = chatOnLeft ? 0 : reclaim
+        let leftReclaim: CGFloat  = chatOnLeft ? reclaim : 0
+        // Largeur réglable, mais jamais sous 180 pt visibles (marge reprise
+        // comprise) : en deçà les messages se hachent en mots isolés.
         //
         // Pendant un glissement la valeur vient de `chatDragRatio`, un simple
         // @State. Écrire dans le store à chaque image passait par un `didSet`
@@ -1047,12 +1119,34 @@ struct MainTabView: View {
         // soixante fois par seconde — et invalidait tout ce qui observe
         // l'AppStore, dont chaque ligne de message du chat. D'où les à-coups.
         let ratio = chatDragRatio ?? store.chatWidthRatio
-        let chatWidth: CGFloat? = split ? max(size.width * CGFloat(ratio), 220) : nil
+        let chatWidth: CGFloat? = split ? max(size.width * CGFloat(ratio), 180 - reclaim) : nil
+        // Chat dans un coin : la moitié de la hauteur, calé en haut ou en bas.
+        let chatHeight: CGFloat? = verticalOverlay ? nil : overlayHalf.map { _ in size.height / 2 }
+        let chatAlign: Alignment = overlayHalf == .top ? .top : overlayHalf == .bottom ? .bottom : .center
         // Place prise dans la rangée : seule la disposition « colonne » en
         // réclame. Superposé et replié laissent toute la largeur à l'image.
         let chatColumn: CGFloat? = {
             guard split, mode != .column else { return chatWidth }
             return CGFloat(0)
+        }()
+        // Paysage : l'image prend aussi les marges des côtés, centrée sur
+        // l'écran entier, tant que l'île (ou l'encoche) ne tombe pas sur elle
+        // (2aac64e). Une marge d'un seul côté, c'est la colonne d'état de
+        // l'iPhone Duo : sur son écran extérieur, moins large que du 16:9,
+        // l'image s'arrêtait à elle, décalée, avec 12 % de noir à côté
+        // (ElLuca). Deux marges : iPhone à île, celle-ci d'un seul côté. Chat
+        // en colonne de son côté, l'image ne la touche pas ; sinon elle ne
+        // prend les marges que si l'île reste dans une bande noire.
+        let videoSideBleed: Bool = {
+            guard split else { return false }
+            guard insets.leading >= 30 && insets.trailing >= 30 else { return true }
+            let column = chatColumn ?? 0
+            let touchesTrailing = column < 1
+            if notchOnTrailing && !touchesTrailing { return true }
+            let width = size.width - column + insets.leading + (touchesTrailing ? insets.trailing : 0)
+            let height = size.height + insets.top + insets.bottom
+            let gap = (width - min(width, height * 16 / 9)) / 2
+            return gap >= (notchOnTrailing ? insets.trailing : insets.leading)
         }()
         let chatVisible = verticalOverlay ? !verticalChatHidden : (!split || mode != .hidden)
         let overlaying  = (split && mode == .overlay) || verticalOverlay
@@ -1077,8 +1171,11 @@ struct MainTabView: View {
                 if !chatOnly {
                     videoSurface(links: links, landscape: split,
                                  controlsInset: controlsInset,
+                                 controlsOnLeft: chatOnLeft,
+                                 controlsHalf: overlayHalf,
                                  verticalLayout: verticalOverlay,
-                                 controlsBottomInset: controlsBottomInset)
+                                 controlsBottomInset: controlsBottomInset,
+                                 sideBleed: videoSideBleed)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .frame(height: videoHeight)
                 }
@@ -1103,16 +1200,31 @@ struct MainTabView: View {
             // hauteur. Le chat a sa hauteur (verticalChatHeight) mais ne prend
             // aucune place dans la pile : à zéro et aligné en bas, il déborde
             // vers le haut, sur le bas de l'image.
+            //
+            // Posé à gauche, il garde sa place dans la rangée (à droite) et se
+            // décale jusqu'au bord gauche : le changer de place dans la
+            // hiérarchie le recréerait, et couperait la connexion du chat.
+            // Marge de sécurité reprise : à droite il l'ignore (avec 16 pt
+            // gardés) ; à gauche, décalé, il s'élargit de ce côté.
+            // Calé du côté de l'image : élargi par la marge reprise, centré
+            // il débordait à moitié sur l'image, et la poignée tombait sur
+            // le texte des messages.
             chatPane(style: chatStyle)
-                .frame(width: chatWidth)
-                .frame(height: verticalChatHeight)
-                .frame(maxHeight: verticalOverlay ? nil : CGFloat.infinity)
+                .padding(.trailing, rightReclaim > 0 ? 16 : 0)
+                .ignoresSafeArea(.container, edges: rightReclaim > 0 ? .trailing : [])
+                .frame(width: chatWidth.map { $0 + leftReclaim }, alignment: chatOnLeft ? .trailing : .leading)
+                .padding(.leading, -leftReclaim)
+                .frame(height: verticalChatHeight ?? chatHeight)
                 // Bord du chat : une petite poignée pour régler sa largeur,
-                // sans trait au repos (le chat se fond dans l'image).
-                .overlay(alignment: .leading) {
-                    if split { chatResizeHandle(totalWidth: size.width) }
+                // sans trait au repos (le chat se fond dans l'image). Posée
+                // avant le cadre pleine hauteur : dans un coin, elle ne longe
+                // que le chat.
+                .overlay(alignment: chatOnLeft ? .trailing : .leading) {
+                    if split { chatResizeHandle(totalWidth: size.width, leftSide: chatOnLeft) }
                 }
+                .frame(maxHeight: verticalOverlay ? nil : CGFloat.infinity, alignment: chatAlign)
                 .frame(width: chatColumn, alignment: .trailing)
+                .offset(x: chatOnLeft ? -(size.width - (chatWidth ?? 0)) : 0)
                 .frame(height: verticalOverlay ? 0 : nil, alignment: .bottom)
                 .opacity(chatVisible ? 1 : 0)
                 .allowsHitTesting(chatVisible)
@@ -1125,8 +1237,9 @@ struct MainTabView: View {
     /// vidéo) : seule une petite poignée discrète. Le trait n'apparaît que
     /// pendant qu'on tire. Une bande transparente de 28 pt reçoit le geste,
     /// sous peine de viser un fil avec un pouce.
+    /// `leftSide` : chat posé à gauche, la poignée est sur son bord droit.
     @ViewBuilder
-    private func chatResizeHandle(totalWidth: CGFloat) -> some View {
+    private func chatResizeHandle(totalWidth: CGFloat, leftSide: Bool = false) -> some View {
         let dragging = chatDragRatio != nil
         Rectangle()
             .fill(dragging ? Color.tPrimary : Color.clear)
@@ -1150,9 +1263,10 @@ struct MainTabView: View {
                             .onChanged { value in
                                 let start = chatDragStart ?? store.chatWidthRatio
                                 if chatDragStart == nil { chatDragStart = start }
-                                // Tirer vers la gauche élargit le chat.
-                                let delta = -value.translation.width / totalWidth
-                                chatDragRatio = min(max(start + Double(delta), 0.20), 0.60)
+                                // Tirer vers l'image élargit le chat.
+                                let delta = (leftSide ? 1 : -1) * value.translation.width / totalWidth
+                                chatDragRatio = min(max(start + Double(delta), AppStore.chatWidthRange.lowerBound),
+                                                    AppStore.chatWidthRange.upperBound)
                             }
                             .onEnded { _ in
                                 // Une seule écriture dans le store, donc un seul
@@ -1220,8 +1334,11 @@ struct MainTabView: View {
     @ViewBuilder
     private func videoSurface(links: QualityLinks, landscape: Bool,
                               controlsInset: CGFloat = 0,
+                              controlsOnLeft: Bool = false,
+                              controlsHalf: VerticalEdge? = nil,
                               verticalLayout: Bool = false,
-                              controlsBottomInset: CGFloat = 0) -> some View {
+                              controlsBottomInset: CGFloat = 0,
+                              sideBleed: Bool = false) -> some View {
         if store.immersivePlayer {
             ImmersivePlayer(
                 url: URL(string: links[currentQuality(links)] ?? "") ?? URL(string: "about:blank")!,
@@ -1235,11 +1352,14 @@ struct MainTabView: View {
                 chatMode: verticalLayout ? (verticalChatHidden ? .hidden : .overlay) : store.landscapeChat,
                 isLandscape: landscape,
                 controlsInset: controlsInset,
+                controlsOnLeft: controlsOnLeft,
+                controlsHalf: controlsHalf,
                 verticalLayout: verticalLayout,
                 controlsBottomInset: controlsBottomInset,
                 // Image verticale en paysage : jamais recadrée (il n'en
                 // resterait qu'une bande).
                 fillScreen: store.fillScreen && !verticalOn,
+                sideBleed: sideBleed,
                 canReturnToLive: dvrSourceChannel != nil,
                 streamStartedAt: liveStartedAt,
                 archiveAvailable: liveDvrVideoId != nil,
@@ -1305,7 +1425,10 @@ struct MainTabView: View {
                 onAdBreak: { adBreakChanged($0) },
                 onFailed: { hqStreamFailed() },
                 onPiPStart: { pipStarted() },
-                onPiPRestore: { pipRestore() }
+                onPiPRestore: { pipRestore() },
+                // Réduction sous iOS 16 : le lecteur retire d'abord ses
+                // commandes (hidePlayer).
+                isPresented: !playerControlsAway
             )
         } else {
             VideoPlayerView(
@@ -1548,19 +1671,43 @@ struct MainTabView: View {
     /// « Réduire les animations », un simple fondu.
     private func reducePlayer() {
         guard playerVisible, !closingPlayer else { return }
+        let lead: Double
         if reduceMotion {
-            withAnimation(.easeOut(duration: 0.15)) { playerVisible = false }
+            lead = hidePlayer(.easeOut(duration: 0.15)) { playerVisible = false }
         } else {
-            withAnimation(.spring(response: 0.35, dampingFraction: 1)) {
+            lead = hidePlayer(.spring(response: 0.35, dampingFraction: 1)) {
                 pull.y = pull.height
                 playerVisible = false
             }
         }
         // Le décalage retombe une fois le lecteur masqué, pour qu'il revienne
         // à sa place à la prochaine ouverture.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5 + lead) {
             if !playerVisible { pull.y = 0 }
         }
+    }
+
+    /// Réduit le lecteur (mini-barre, page d'une chaîne, visite guidée).
+    /// Sous iOS 16, ses commandes partent d'abord, lecteur encore visible et
+    /// immobile, et il ne file qu'un instant après (fb_mw3h29pt). Présente
+    /// pendant qu'il filait en s'effaçant, la barre de progression (un
+    /// UISlider) restait dessinée par-dessus l'app ; retirée au même moment
+    /// que la réduction (TU Test 1.7.12), l'app ne répondait plus aux
+    /// touchers. Rien ne change dès iOS 17. Rend le délai avant la réduction.
+    @discardableResult
+    private func hidePlayer(_ animation: Animation, _ change: @escaping () -> Void) -> Double {
+        if #available(iOS 17, *) {
+            withAnimation(animation) { change() }
+            return 0
+        }
+        playerControlsAway = true
+        let lead = 0.08
+        DispatchQueue.main.asyncAfter(deadline: .now() + lead) {
+            // Fermé entre-temps (✕, autre lecture) : plus rien à réduire.
+            guard playerVisible, !closingPlayer else { return }
+            withAnimation(animation) { change() }
+        }
+        return lead
     }
 
     /// Doigt levé : assez loin (seuil selon la hauteur), ou lancé
@@ -1655,7 +1802,7 @@ struct MainTabView: View {
         case .vod(let id, let title, let thumb, let streamer)?:
             return VodDownloadContext(vodId: id, title: title ?? statusTitle, streamer: streamer ?? "",
                                       thumbnail: thumb ?? "", links: links, position: vodPlaybackTime,
-                                      variants: qualityVariants)
+                                      variants: qualityVariants, chapters: vodChapters)
         case .recovered(let rec)? where !rec.streamID.hasPrefix("offline-"):
             // VOD supprimée retrouvée : la garder avant qu'elle ne quitte le CDN.
             return VodDownloadContext(vodId: "r\(rec.streamID)", title: rec.title.isEmpty ? statusTitle : rec.title,
@@ -1742,8 +1889,9 @@ struct MainTabView: View {
     /// affichée — maintenant moins la latence mesurée du direct (inconnue :
     /// 5 s, celle d'un direct ordinaire).
     private var createClipAction: (() -> Void)? {
+        // Un clip se crée avec la session web : rien à proposer sans compte Twitch.
         guard case .live(let channel)? = playerMode, qualityLinks != nil, !loading,
-              errorMsg == nil else { return nil }
+              errorMsg == nil, !store.accountHidden else { return nil }
         return {
             showPlayerMenu = false
             let moment = Date().addingTimeInterval(-(liveLatency > 0 ? liveLatency : 5))
@@ -1987,7 +2135,7 @@ struct MainTabView: View {
         }
         // Onglets en colonne à gauche : la barre se pose à sa droite, au bas
         // de l'écran (plus de barre d'onglets dessous).
-        .padding(.leading, sideTabs ? SideTabRail.width : 0)
+        .padding(.leading, sideTabs && !railInStatusColumn ? SideTabRail.width : 0)
         .padding(.horizontal, TSpace.md)
         .padding(.bottom, sideTabs ? Self.sideBarsBottom : 92)
     }
@@ -1999,7 +2147,7 @@ struct MainTabView: View {
     /// Multi-live en préparation : les vidéos choisies, et « Regarder ».
     /// Au-dessus du mini-lecteur quand il est là.
     private var multiBar: some View {
-        let miniShown = playerMode != nil
+        let miniShown = miniBarShown
         return HStack(spacing: TSpace.sm) {
             Image(systemName: "square.grid.2x2.fill")
                 .font(.system(size: 14, weight: .bold))
@@ -2028,7 +2176,7 @@ struct MainTabView: View {
         .overlay(RoundedRectangle(cornerRadius: TRadius.card, style: .continuous)
             .stroke(Color.tPurple.opacity(0.35), lineWidth: 1))
         .contentShape(Rectangle())
-        .padding(.leading, sideTabs ? SideTabRail.width : 0)
+        .padding(.leading, sideTabs && !railInStatusColumn ? SideTabRail.width : 0)
         .padding(.horizontal, TSpace.md)
         .padding(.bottom, (sideTabs ? Self.sideBarsBottom : 92) + (miniShown ? 60 : 0))
     }
@@ -2338,10 +2486,9 @@ struct MainTabView: View {
                         errorMsg = store.t(apiErrorKey(err)); loading = false; switchingSource = false
                     }
                 } else if let links = data.links, !links.isEmpty {
-                    // Mode faible latence : playlist réécrite avec la vraie
-                    // durée des segments (LivePlaylistLoader), relue toutes les
-                    // 2 s au lieu de 6 — le lecteur peut tenir près du bord.
-                    let playable = store.lowLatency ? LivePlaylistLoader.wrap(links) : links
+                    // Pubs filtrées dans tous les modes. En faible latence,
+                    // la durée cible est aussi réécrite pour tenir le bord.
+                    let playable = LivePlaylistLoader.wrap(links, lowLatency: store.lowLatency)
                     // Qualités supérieures par le compte d'un non-abonné.
                     let hq = await hqLaunch(data)
                     await MainActor.run {
@@ -2493,7 +2640,7 @@ struct MainTabView: View {
     /// pubs (Twitch officiel). nil : la source habituelle, comme avant.
     private func hqLaunch(_ data: LiveData) async -> (live: HQLive, wait: TimeInterval)? {
         let wrap = { (links: QualityLinks) -> QualityLinks in
-            store.lowLatency ? LivePlaylistLoader.wrap(links) : links
+            LivePlaylistLoader.wrap(links, lowLatency: store.lowLatency)
         }
         // Aucune source habituelle n'a répondu : le compte, sans bascule possible.
         if data.accountAds, let links = data.links {
@@ -2730,7 +2877,7 @@ struct MainTabView: View {
                 logger.warn("PUB", "Source sans pub injoignable", "reste sur le flux du compte")
                 return
             }
-            now.adFree = store.lowLatency ? LivePlaylistLoader.wrap(links) : links
+            now.adFree = LivePlaylistLoader.wrap(links, lowLatency: store.lowLatency)
             now.adFreeVariants = data.variants
             now.adFreeSource = data.source
             now.adFreeAt = Date()
@@ -2846,7 +2993,7 @@ struct MainTabView: View {
                 }
             }
             verticalBackup = backup
-            qualityLinks = store.lowLatency ? LivePlaylistLoader.wrap(portrait.links) : portrait.links
+            qualityLinks = LivePlaylistLoader.wrap(portrait.links, lowLatency: store.lowLatency)
             qualityVariants = portrait.variants
             liveSourceUsed = "twitch"
             verticalOn = true

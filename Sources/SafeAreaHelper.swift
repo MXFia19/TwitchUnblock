@@ -11,4 +11,10 @@ extension UIApplication {
             .compactMap { $0 as? UIWindowScene }
             .first?.windows.first(where: { $0.isKeyWindow })?.safeAreaInsets.bottom ?? 34
     }
+    /// Marges de sécurité de la fenêtre, tous côtés (zéro sans fenêtre).
+    static var safeAreaInsets: UIEdgeInsets {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first?.windows.first(where: { $0.isKeyWindow })?.safeAreaInsets ?? .zero
+    }
 }

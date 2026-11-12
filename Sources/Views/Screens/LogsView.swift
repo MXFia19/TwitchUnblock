@@ -8,7 +8,9 @@ struct LogsView: View {
     @State private var expandedIds: Set<Int> = []
     @State private var showClearAlert = false
     /// Langue de l'app : le journal, écrit en français, s'affiche traduit
-    /// (LogTranslator) ; l'export suit la même langue.
+    /// (LogTranslator). L'export, lui, reste en français : il part surtout
+    /// vers le développeur (signalements sur Discord), qui le lisait traduit
+    /// en anglais (demande du 12/11).
     @AppStorage("lang") private var langRaw = "en"
 
     private var lang: Lang { Lang(rawValue: langRaw) ?? .en }
@@ -30,7 +32,8 @@ struct LogsView: View {
         let counts = LogLevel.allCases.map { "\($0.rawValue) \(appLogger.count($0))" }.joined(separator: " · ")
         let header = "TwitchUnblock \(version) · \(UIDevice.current.systemName) \(UIDevice.current.systemVersion)"
             + " · \(Self.deviceModel) · \(lang.rawValue)\n\(counts)\n\n"
-        return LogsExport(header: header, entries: appLogger.logs, lang: lang)
+        // L'en-tête dit la langue de l'app ; les lignes restent en français.
+        return LogsExport(header: header, entries: appLogger.logs, lang: .fr)
     }
 
     /// Modèle exact de l'appareil (« iPhone15,2 »).

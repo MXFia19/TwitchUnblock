@@ -203,6 +203,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.7.30",
+          "buildVersion": "407",
+          "date": "2026-11-12",
+          "localizedDescription": "- Bug reports and shared or exported logs now attach the log in English, whatever the app's language (the logs screen still follows your language)",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-407/TwitchUnblock.ipa",
+          "size": 4617772,
+          "commit": "4792b49ed188d0a6ed2ed47cbd4f132bc3ae2b88"
+        },
+        {
           "version": "1.7.29",
           "buildVersion": "406",
           "date": "2026-11-12",
@@ -282,25 +291,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-396/TwitchUnblock.ipa",
           "size": 4610371,
           "commit": "7613bf3d829d0ce23ea17418aaeaccff3df33c85"
-        },
-        {
-          "version": "1.7.18",
-          "buildVersion": "395",
-          "date": "2026-11-07",
-          "localizedDescription": "- In landscape, the video takes the whole width of the iPhone Duo's outer screen, centered (it stopped at the status column), and the empty margin on the side away from the Dynamic Island when the chat is in a column",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-395/TwitchUnblock.ipa",
-          "size": 4607991,
-          "commit": "2c0bf7a1c27db615e608a51171d300b1ad2588b2"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.7.29",
+      "version": "1.7.30",
       "versionDate": "2026-11-12",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-406/TwitchUnblock.ipa",
-      "size": 4617443
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-407/TwitchUnblock.ipa",
+      "size": 4617772
     }
   ],
   "news": []

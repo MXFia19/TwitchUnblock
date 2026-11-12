@@ -25,6 +25,15 @@
       },
       "versions": [
         {
+          "version": "0.1.49",
+          "buildVersion": "49",
+          "date": "2026-11-12",
+          "localizedDescription": "- Ad breaks counted for the website's /stats now include the live source and whether it was a Twitch pre-roll or the channel's own break\n- Multi-live — up to 4 lives side by side; press and hold a live's card to add it, then open Multi-live from the bar at the top of the list. The sound follows the selected tile, Select makes it full screen\n- Spatial audio is off by default, so the sound stays stereo as in the Twitch app instead of sounding like a large room in AirPods or headphones (Account → Settings turns it back on)\n- The app's version shows next to the Settings title in the Account tab\n- Other improvements and fixes",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-49/TwitchUnblockTV.ipa",
+          "size": 2896512,
+          "commit": "cbca49247bbfd4cf6ba53be30dbe048e36a5aee5"
+        },
+        {
           "version": "0.1.42",
           "buildVersion": "42",
           "date": "2026-10-30",
@@ -43,10 +52,10 @@
           "commit": "31361aace31427663ca25a06adabd44206b8dd28"
         }
       ],
-      "version": "0.1.42",
-      "versionDate": "2026-10-30",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-42/TwitchUnblockTV.ipa",
-      "size": 2724487
+      "version": "0.1.49",
+      "versionDate": "2026-11-12",
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-49/TwitchUnblockTV.ipa",
+      "size": 2896512
     }
   ]
 }

@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.7.30",
+          "buildVersion": "407",
+          "date": "2026-11-12",
+          "localizedDescription": "- Bug reports and shared or exported logs now attach the log in English, whatever the app's language (the logs screen still follows your language)",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-407/TwitchUnblock.ipa",
+          "size": 4617772,
+          "commit": "4792b49ed188d0a6ed2ed47cbd4f132bc3ae2b88"
+        },
+        {
           "version": "1.7.29",
           "buildVersion": "406",
           "date": "2026-11-12",
@@ -280,25 +289,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-375/TwitchUnblock.ipa",
           "size": 4484889,
           "commit": "8ac87e483204734d18c265bdb0fba1e6a50508c9"
-        },
-        {
-          "version": "1.6.62",
-          "buildVersion": "374",
-          "date": "2026-10-30",
-          "localizedDescription": "- Chat: tapping a GIF from Twitch's GIF keyboard opens its card (title, author, GIPHY page, link to copy) instead of the sender's messages\n- A live paused by your AirPods, earphones or iOS and resumed from them or the lock screen now picks up at the live edge instead of where it stopped",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-374/TwitchUnblock.ipa",
-          "size": 4502860,
-          "commit": "ed9b128e38adf558fb6f542addf7b856e0ad9763"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.7.29",
+      "version": "1.7.30",
       "versionDate": "2026-11-12",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-406/TwitchUnblock.ipa",
-      "size": 4617443
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-407/TwitchUnblock.ipa",
+      "size": 4617772
     }
   ],
   "news": []

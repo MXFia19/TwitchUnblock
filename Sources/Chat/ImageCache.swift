@@ -8,16 +8,47 @@ final class CachedImage {
     let frames: [UIImage]
     let duration: TimeInterval     // durée totale de l'animation (0 si statique)
     let bytes: Int
-    init(frames: [UIImage], duration: TimeInterval, bytes: Int) {
-        self.frames = frames; self.duration = duration; self.bytes = bytes
+    /// Emote trop lourde pour être décodée d'avance : `frames` n'a que la
+    /// première image, la suite est jouée depuis le fichier.
+    let stream: EmoteStream?
+    init(frames: [UIImage], duration: TimeInterval, bytes: Int, stream: EmoteStream? = nil) {
+        self.frames = frames; self.duration = duration; self.bytes = bytes; self.stream = stream
     }
-    var isAnimated: Bool { frames.count > 1 }
+    var isAnimated: Bool { frames.count > 1 || stream != nil }
     var first: UIImage? { frames.first }
     /// Ratio largeur/hauteur, borné pour éviter les emotes délirantes.
     var aspect: CGFloat {
         guard let s = first?.size, s.height > 0 else { return 1 }
         return min(4, max(0.25, s.width / s.height))
     }
+}
+
+// MARK: – Emote longue, jouée depuis le fichier
+/// ImageIO décode chaque frame au moment de l'afficher et respecte ses
+/// délais. Un seul lecteur par emote, partagé par toutes les vues qui la
+/// montrent ; il s'arrête quand il n'en reste plus. File principale seulement.
+final class EmoteStream {
+    private let data: Data
+    private let views = NSHashTable<UIImageView>.weakObjects()
+    private var running = false
+    init(_ data: Data) { self.data = data }
+
+    func add(_ view: UIImageView) {
+        views.add(view)
+        guard !running else { return }
+        let forever: [CFString: Any] = [kCGImageAnimationLoopCount: kCFNumberPositiveInfinity as Any]
+        running = CGAnimateImageDataWithBlock(data as CFData, forever as CFDictionary) { [weak self] _, frame, stop in
+            guard let self, self.views.anyObject != nil else {
+                stop.pointee = true
+                self?.running = false
+                return
+            }
+            let image = UIImage(cgImage: frame)
+            for view in self.views.allObjects { view.image = image }
+        } == noErr
+    }
+
+    func remove(_ view: UIImageView) { views.remove(view) }
 }
 
 // MARK: – Cache d'images emotes / badges (mémoire + disque)
@@ -34,9 +65,6 @@ final class ImageCache {
     private let fm = FileManager.default
     private let lock = NSLock()
     private var inFlight: [String: Task<CachedImage?, Never>] = [:]
-
-    /// Nb max de frames gardées par emote (sous-échantillonnage au-delà).
-    private let maxFrames = 90
 
     private init() {
         let caches = fm.urls(for: .cachesDirectory, in: .userDomainMask).first
@@ -72,7 +100,7 @@ final class ImageCache {
         let file = dir.appendingPathComponent(Self.key(url))
 
         // 1) Disque
-        if let data = try? Data(contentsOf: file), let img = Self.decode(data, maxFrames: maxFrames) {
+        if let data = try? Data(contentsOf: file), let img = Self.decode(data) {
             memory.setObject(img, forKey: url as NSString, cost: img.bytes)
             return img
         }
@@ -81,7 +109,7 @@ final class ImageCache {
         guard let u = URL(string: url),
               let (data, resp) = try? await URLSession.shared.data(from: u),
               (resp as? HTTPURLResponse)?.statusCode == 200 || u.isFileURL,
-              let img = Self.decode(data, maxFrames: maxFrames) else { return nil }
+              let img = Self.decode(data) else { return nil }
 
         if !u.isFileURL { try? data.write(to: file, options: .atomic) }
         memory.setObject(img, forKey: url as NSString, cost: img.bytes)
@@ -94,7 +122,7 @@ final class ImageCache {
     private static let maxSide = 256
 
     // MARK: Décodage (gère GIF / WebP animé / APNG via ImageIO)
-    private static func decode(_ data: Data, maxFrames: Int) -> CachedImage? {
+    private static func decode(_ data: Data) -> CachedImage? {
         guard let src = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
         let count = CGImageSourceGetCount(src)
         let props = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [CFString: Any]
@@ -119,27 +147,23 @@ final class ImageCache {
             return CachedImage(frames: [UIImage(cgImage: cg)], duration: 0, bytes: max(1, cost(cg)))
         }
 
-        // Animée : on sous-échantillonne si l'emote a trop de frames (moins
-        // pour une grande image, réduite elle aussi).
-        // Au moins autant qu'avant, et toutes les frames tant que l'emote
-        // décodée tient dans 4 Mo : une 56 px de 250 frames (3 Mo) en perdait
-        // deux sur trois pour rien.
-        let frameBytes = max(1, frame(0).map(cost) ?? 1)
-        let cap = max(big ? min(maxFrames, 48) : maxFrames, 4 * 1024 * 1024 / frameBytes)
-        let step = max(1, Int(ceil(Double(count) / Double(cap))))
+        // Trop lourde une fois décodée (570 frames de 86 px : 12 Mo) : jouée
+        // depuis le fichier. Avant, on en jetait jusqu'à six frames sur sept
+        // et elle passait en diaporama.
+        guard let firstFrame = frame(0) else { return nil }
+        if cost(firstFrame) * count > 4 * 1024 * 1024 {
+            return CachedImage(frames: [UIImage(cgImage: firstFrame)], duration: 0,
+                               bytes: data.count + cost(firstFrame), stream: EmoteStream(data))
+        }
+
         var kept: [UIImage] = []
         var delays: [Int] = []   // centièmes de seconde
         var bytes = 0
-        var i = 0
-        while i < count {
-            if let cg = frame(i) {
-                kept.append(UIImage(cgImage: cg))
-                bytes += cost(cg)
-                // La frame gardée couvre les frames qu'elle remplace.
-                let span = (i..<min(i + step, count)).reduce(0) { $0 + delay(src, $1) }
-                delays.append(max(1, Int((span * 100).rounded())))
-            }
-            i += step
+        for i in 0..<count {
+            guard let cg = frame(i) else { continue }
+            kept.append(UIImage(cgImage: cg))
+            bytes += cost(cg)
+            delays.append(max(1, Int((delay(src, i) * 100).rounded())))
         }
         guard !kept.isEmpty else { return nil }
         if kept.count == 1 { return CachedImage(frames: kept, duration: 0, bytes: max(1, bytes)) }

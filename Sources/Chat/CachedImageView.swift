@@ -5,6 +5,10 @@ import UIKit
 struct AnimatedImageView: UIViewRepresentable {
     let image: CachedImage
 
+    /// Lecteur de l'emote longue affichée, pour s'en détacher.
+    final class Coordinator { var stream: EmoteStream? }
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
     func makeUIView(context: Context) -> UIImageView {
         let v = UIImageView()
         v.contentMode = .scaleAspectFit
@@ -12,18 +16,30 @@ struct AnimatedImageView: UIViewRepresentable {
         v.isUserInteractionEnabled = false
         v.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         v.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
-        apply(v)
+        apply(v, context.coordinator)
         return v
     }
 
-    func updateUIView(_ v: UIImageView, context: Context) { apply(v) }
+    func updateUIView(_ v: UIImageView, context: Context) { apply(v, context.coordinator) }
 
-    static func dismantleUIView(_ v: UIImageView, coordinator: ()) {
+    static func dismantleUIView(_ v: UIImageView, coordinator: Coordinator) {
+        coordinator.stream?.remove(v)
         v.stopAnimating()
         v.animationImages = nil
     }
 
-    private func apply(_ v: UIImageView) {
+    private func apply(_ v: UIImageView, _ coordinator: Coordinator) {
+        if coordinator.stream !== image.stream {
+            coordinator.stream?.remove(v)
+            coordinator.stream = image.stream
+        }
+        if let stream = image.stream {
+            v.stopAnimating()
+            v.animationImages = nil
+            if v.image == nil { v.image = image.first }
+            stream.add(v)
+            return
+        }
         // Vue recyclée sur la même emote → on relance juste l'animation.
         if v.animationImages?.count == image.frames.count {
             if !v.isAnimating { v.startAnimating() }

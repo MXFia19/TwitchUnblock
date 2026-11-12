@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.7.25",
+          "buildVersion": "402",
+          "date": "2026-11-12",
+          "localizedDescription": "- Other improvements and fixes",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-402/TwitchUnblock.ipa",
+          "size": 4616809,
+          "commit": "a6b5521b0a7246c8b841b24aa50970587cd1bd3f"
+        },
+        {
           "version": "1.7.24",
           "buildVersion": "401",
           "date": "2026-11-10",
@@ -280,25 +289,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-372/TwitchUnblock.ipa",
           "size": 4493961,
           "commit": "334f786b7af8f58d61edf796434e957abae0e41d"
-        },
-        {
-          "version": "1.6.59",
-          "buildVersion": "371",
-          "date": "2026-10-27",
-          "localizedDescription": "- Live: each source now has a backup server (PerfProd Asia, nadeko's second server, Luminous Europe 2), and a Luminous mirror that no longer answered was removed.",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-371/TwitchUnblock.ipa",
-          "size": 4492756,
-          "commit": "ea868e57703d4b113f9c92fef0e7a48fb8581fc1"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.7.24",
-      "versionDate": "2026-11-10",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-401/TwitchUnblock.ipa",
-      "size": 4614743
+      "version": "1.7.25",
+      "versionDate": "2026-11-12",
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-402/TwitchUnblock.ipa",
+      "size": 4616809
     }
   ],
   "news": []

@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.7.29",
+          "buildVersion": "406",
+          "date": "2026-11-12",
+          "localizedDescription": "- Shared or exported logs now stay in French, the language they're written in, so I can read your reports as they are (the logs screen is still in your language)",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-406/TwitchUnblock.ipa",
+          "size": 4617443,
+          "commit": "5e5a8789e1a4ff9070531cd3d14109ec21223bdb"
+        },
+        {
           "version": "1.7.28",
           "buildVersion": "404",
           "date": "2026-11-12",
@@ -280,25 +289,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-374/TwitchUnblock.ipa",
           "size": 4502860,
           "commit": "ed9b128e38adf558fb6f542addf7b856e0ad9763"
-        },
-        {
-          "version": "1.6.61",
-          "buildVersion": "373",
-          "date": "2026-10-30",
-          "localizedDescription": "- iPhone Duo: the full-size player in landscape now hides the status column on the side, so the video fills the display\n- The player's rotate button goes away when iOS doesn't let the app turn the screen (apps in a window, as on the iPhone Duo's inner display)",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-373/TwitchUnblock.ipa",
-          "size": 4496574,
-          "commit": "858417ed00ca59b09dfe09f892001b0e71d73bfc"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.7.28",
+      "version": "1.7.29",
       "versionDate": "2026-11-12",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-404/TwitchUnblock.ipa",
-      "size": 4617404
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-406/TwitchUnblock.ipa",
+      "size": 4617443
     }
   ],
   "news": []

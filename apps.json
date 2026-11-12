@@ -194,6 +194,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.7.25",
+          "buildVersion": "402",
+          "date": "2026-11-12",
+          "localizedDescription": "- Other improvements and fixes",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-402/TwitchUnblock.ipa",
+          "size": 4616809,
+          "commit": "a6b5521b0a7246c8b841b24aa50970587cd1bd3f"
+        },
+        {
           "version": "1.7.24",
           "buildVersion": "401",
           "date": "2026-11-10",
@@ -273,25 +282,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-393/TwitchUnblock.ipa",
           "size": 4607985,
           "commit": "9791887621399e39fb9a5c021af1063d92499ae4"
-        },
-        {
-          "version": "1.7.15",
-          "buildVersion": "392",
-          "date": "2026-11-07",
-          "localizedDescription": "- Lives that come straight from Twitch (Twitch source, vertical picture, Higher qualities through your account) now filter Twitch's ad segments: the picture holds on the last frame instead of the purple ad screen, and the ads aren't downloaded. Contributed by ihavenoface\n- Other improvements and fixes",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-392/TwitchUnblock.ipa",
-          "size": 4605890,
-          "commit": "581034a55a31be31d80a2384c2eaceeba9460cd0"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.7.24",
-      "versionDate": "2026-11-10",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-401/TwitchUnblock.ipa",
-      "size": 4614743
+      "version": "1.7.25",
+      "versionDate": "2026-11-12",
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-402/TwitchUnblock.ipa",
+      "size": 4616809
     }
   ],
   "news": []

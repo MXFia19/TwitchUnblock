@@ -75,8 +75,9 @@ final class AdBreakMonitor: NSObject, AVPlayerItemMetadataCollectorPushDelegate 
             self.playlistReceived = Date()
             for brk in snapshot.breaks {
                 // Type déjà connu (lecture précédente) : gardé si celle-ci ne le dit plus.
-                let roll = brk.roll.isEmpty ? self.breaks[brk.id]?.roll ?? "" : brk.roll
-                self.breaks[brk.id] = AdBreak(id: brk.id, start: brk.start, end: brk.end, roll: roll)
+                var known = brk
+                if brk.roll.isEmpty { known.roll = self.breaks[brk.id]?.roll ?? "" }
+                self.breaks[brk.id] = known
             }
             self.breaks = self.breaks.filter { $0.value.end > Date().addingTimeInterval(-3600) }
         }
@@ -91,7 +92,7 @@ final class AdBreakMonitor: NSObject, AVPlayerItemMetadataCollectorPushDelegate 
                   let edge = playlist.segments.last?.end else { return nil }
             // Advance the countdown while the last clean video frame is held.
             // Keep a one-second indication until a clean playlist arrives.
-            let clock = min(brk.end.addingTimeInterval(-0.1),
+            let clock = min(brk.countdownEnd.addingTimeInterval(-0.1),
                             edge.addingTimeInterval(Date().timeIntervalSince(playlistReceived)))
             return (brk, clock)
         }
@@ -125,7 +126,8 @@ final class AdBreakMonitor: NSObject, AVPlayerItemMetadataCollectorPushDelegate 
             guard end > group.startDate else { continue }
             let id = group.uniqueID ?? "\(group.startDate.timeIntervalSince1970)"
             // Le type vient de la playlist lue par le chargeur (followPlaylist).
-            let brk = AdBreak(id: id, start: group.startDate, end: end, roll: breaks[id]?.roll ?? "")
+            let brk = AdBreak(id: id, start: group.startDate, end: end, roll: breaks[id]?.roll ?? "",
+                              podEnd: breaks[id]?.podEnd)
             if breaks[id] == nil {
                 logger.info("PUB", "Pause pub annoncée par la playlist",
                             String(format: "%.0f s", end.timeIntervalSince(group.startDate)))
@@ -144,10 +146,8 @@ final class AdBreakMonitor: NSObject, AVPlayerItemMetadataCollectorPushDelegate 
     func active(at date: Date) -> AdBreak? {
         var block: AdBreak? = nil
         for next in breaks.values.sorted(by: { ($0.start, $0.id) < ($1.start, $1.id) }) {
-            if let b = block, next.start <= b.end.addingTimeInterval(1) {
-                if next.end > b.end {
-                    block = AdBreak(id: b.id, start: b.start, end: next.end, roll: b.roll.isEmpty ? next.roll : b.roll)
-                }
+            if let merged = block?.merged(with: next) {
+                block = merged
                 continue
             }
             if let b = block, b.start <= date, date < b.end { return b }
@@ -306,9 +306,13 @@ final class AdBreakWatcher: ObservableObject {
         guard let current = AdBreakMonitor.monitor(of: item)?.playbackBreak(on: player) else { finish(); return }
         let now = current.clock
         let brk = current.brk
-        let left = max(0, Int(brk.end.timeIntervalSince(now).rounded(.up)))
+        let end = brk.countdownEnd
+        var left = max(0, Int(end.timeIntervalSince(now).rounded(.up)))
+        // Même fin prévue : le compteur ne remonte pas (l'horloge passe de
+        // l'image au bord de la playlist selon que le lecteur attend ou non).
+        if let currentEnd, abs(currentEnd.timeIntervalSince(end)) < 1, let remaining { left = min(left, remaining) }
         if remaining != left { remaining = left }
-        if currentId != brk.id || currentEnd != brk.end {
+        if currentId != brk.id || currentEnd != end {
             if currentId != brk.id {
                 logger.info("PUB", "Pause pub à l'écran",
                             "\(left) s restantes\(brk.roll.isEmpty ? "" : " · \(brk.roll)")")
@@ -316,8 +320,8 @@ final class AdBreakWatcher: ObservableObject {
             }
             currentId = brk.id
             // Bloc prolongé par une pub annoncée après coup : secours repoussé.
-            currentEnd = brk.end
-            deadline = Date().addingTimeInterval(brk.end.timeIntervalSince(now) + 5)
+            currentEnd = end
+            deadline = Date().addingTimeInterval(end.timeIntervalSince(now) + 5)
         }
         guard managesAudio else { return }
         if let deadline, Date() > deadline {

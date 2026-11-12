@@ -9,6 +9,19 @@ struct AdBreak: Equatable {
     /// « mid » (pause de la chaîne, lancée par le streamer ou son planning),
     /// vide si la playlist ne le dit pas (flux du compte réécrit, titres).
     var roll: String = ""
+    /// Fin prévue du bloc entier (X-TV-TWITCH-AD-POD-*) : Twitch n'annonce
+    /// chaque pub qu'à son début, le compte à rebours repartait à chacune.
+    /// Pour l'affichage seulement ; le filtrage s'en tient à `end`.
+    var podEnd: Date? = nil
+    var countdownEnd: Date { max(end, podEnd ?? end) }
+
+    /// Bloc de pubs qui se suivent (1 s de jeu : dates arrondies), sous
+    /// l'identifiant de la première ; nil si `next` commence après un trou.
+    func merged(with next: AdBreak) -> AdBreak? {
+        guard next.start <= end.addingTimeInterval(1) else { return nil }
+        return AdBreak(id: id, start: start, end: max(end, next.end), roll: roll.isEmpty ? next.roll : roll,
+                       podEnd: max(countdownEnd, next.countdownEnd))
+    }
 }
 
 /// Twitch-specific classification, independent of AVPlayer. Recognizes the same
@@ -78,7 +91,7 @@ struct TwitchAdPlaylist {
         for line in lines where line.hasPrefix("#EXT-X-DATERANGE:") {
             guard let id = Self.attribute(line, "ID") else { continue }
             for key in ["CLASS", "START-DATE", "END-DATE", "DURATION", "PLANNED-DURATION", "END-ON-NEXT",
-                        "X-TV-TWITCH-AD-ROLL-TYPE"] {
+                        "X-TV-TWITCH-AD-ROLL-TYPE", "X-TV-TWITCH-AD-POD-LENGTH", "X-TV-TWITCH-AD-POD-POSITION"] {
                 if let value = Self.attribute(line, key) { attributes[id, default: [:]][key] = value }
             }
         }
@@ -100,8 +113,15 @@ struct TwitchAdPlaylist {
                 ?? start.addingTimeInterval(duration ?? Self.maxAdLength)
             let capped = min(end, start.addingTimeInterval(Self.maxAdLength))
             if capped > start {
+                // Pubs restantes du bloc, supposées de la durée de celle-ci.
+                var podEnd: Date?
+                if let length = number(values["X-TV-TWITCH-AD-POD-LENGTH"]),
+                   let position = number(values["X-TV-TWITCH-AD-POD-POSITION"]), length > position {
+                    podEnd = start.addingTimeInterval(min((length - position) * capped.timeIntervalSince(start),
+                                                          Self.maxAdLength))
+                }
                 ranges.append(AdBreak(id: id, start: start, end: capped,
-                                      roll: Self.roll(values["X-TV-TWITCH-AD-ROLL-TYPE"])))
+                                      roll: Self.roll(values["X-TV-TWITCH-AD-ROLL-TYPE"]), podEnd: podEnd))
             }
         }
 
@@ -198,9 +218,8 @@ struct TwitchAdPlaylist {
         // earlier markers after they leave the window, so a held clean frame
         // can still be associated with the same continuous break.
         for next in (breaks + knownBreaks).sorted(by: { ($0.start, $0.id) < ($1.start, $1.id) }) {
-            if let last = blocks.last, next.start <= last.end {
-                blocks[blocks.count - 1] = AdBreak(id: last.id, start: last.start, end: max(last.end, next.end),
-                                                   roll: last.roll.isEmpty ? next.roll : last.roll)
+            if let block = blocks.last?.merged(with: next) {
+                blocks[blocks.count - 1] = block
             } else {
                 blocks.append(next)
             }

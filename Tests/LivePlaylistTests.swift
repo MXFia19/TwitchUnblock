@@ -186,6 +186,21 @@ enum LivePlaylistTests {
         expect(TwitchAdPlaylist(clean).waitingBreak(after: clock, knownBreaks: titleHistory) == nil, "Clean content clears waiting even with retained ad history")
         let separatedWindow = TwitchAdPlaylist(header + "#EXT-X-PROGRAM-DATE-TIME:2026-11-06T12:00:40Z\n#EXTINF:2,Amazon\nlater-ad.ts\n")
         expect(separatedWindow.waitingBreak(after: clock, knownBreaks: titleHistory) == nil, "Never bridge an unobserved gap between separate breaks")
+        // Twitch announces each ad of a pod only when it starts.
+        func podAd(_ position: Int) -> String {
+            "#EXT-X-DATERANGE:ID=\"stitched-ad-\(position)\",CLASS=\"twitch-stitched-ad\",START-DATE=\"2026-11-06T12:00:\(position * 30)Z\",DURATION=30,X-TV-TWITCH-AD-POD-LENGTH=\"3\",X-TV-TWITCH-AD-POD-POSITION=\"\(position)\"\n"
+        }
+        let podSegments = "#EXT-X-PROGRAM-DATE-TIME:2026-11-06T12:00:00Z\n" + (0..<5).map { "#EXTINF:2,Amazon\npod-\($0).ts\n" }.joined()
+        let podFirst = TwitchAdPlaylist(header + podAd(0) + podSegments)
+        let podBreak = podFirst.waitingBreak(after: nil)
+        expect(podBreak?.end == clock.addingTimeInterval(30), "Filtering stays on the announced ad")
+        expect(podBreak?.countdownEnd == clock.addingTimeInterval(90), "Count down to the end of the whole pod from its first ad")
+        expect(podFirst.segments.allSatisfy(\.ad) && TwitchAdPlaylist(header + podAd(0) + podSegments + "#EXT-X-PROGRAM-DATE-TIME:2026-11-06T12:00:30Z\n#EXTINF:2,live\nlive.ts\n").segments.last?.ad == false, "A pod cut short must not hide live video")
+        let podSecond = TwitchAdPlaylist(header + podAd(0) + podAd(1) + podSegments).waitingBreak(after: nil)
+        expect(podSecond?.id == podBreak?.id && podSecond?.countdownEnd == podBreak?.countdownEnd, "The next ad of the pod must not reset the countdown")
+        let rounded = AdBreak(id: "a", start: clock, end: clock.addingTimeInterval(30))
+        expect(rounded.merged(with: AdBreak(id: "b", start: clock.addingTimeInterval(30.5), end: clock.addingTimeInterval(60)))?.id == "a", "Rounded dates keep back-to-back ads in one break")
+        expect(rounded.merged(with: AdBreak(id: "b", start: clock.addingTimeInterval(40), end: clock.addingTimeInterval(60))) == nil, "A real pause separates breaks")
         print("Passed \(checks) live playlist checks")
     }
 }

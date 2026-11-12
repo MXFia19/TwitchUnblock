@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.7.1",
+          "buildVersion": "405",
+          "date": "2026-11-12",
+          "localizedDescription": "- The Twitch source asks for its stream like Streamlink does, which Twitch serves with far fewer ads (pre-rolls and long ad pods). Contributed by ihavenoface\n- During an ad pod the countdown now runs to the end of the whole pod instead of restarting with every ad. Contributed by ihavenoface\n- Animated emotes play at their real speed: held frames keep their hold and very long emotes no longer skip frames. Contributed by ihavenoface\n- Apple TV: The Twitch source asks for its stream like Streamlink does, which Twitch serves with far fewer ads, and the ad countdown runs to the end of the whole pod. Contributed by ihavenoface\n- Ad breaks counted for the website's /stats now include the live source and whether it was a Twitch pre-roll or the channel's own break\n- Apple TV: Ad breaks counted for the website's /stats now include the live source and whether it was a Twitch pre-roll or the channel's own break\n- Swipe from the edge to close the player now works even when the swipe starts over the video or the chat\n- The mini player bar hides while the Picture-in-Picture window is open, and comes back when it closes\n- The chapters list opens on the current chapter\n- Importing a backup now works in LiveContainer without turning on its Fix File Picker option\n- In landscape, the video takes the whole width of the iPhone Duo's outer screen, centered (it stopped at the status column), and the empty margin on the side away from the Dynamic Island when the chat is in a column\n- Lives that come straight from Twitch (Twitch source, vertical picture) now filter Twitch's ad segments: the picture holds on the last frame instead of the purple ad screen, with the countdown, and the ads aren't downloaded. Higher qualities through your account still switch to the ad-free source (1080p) during an ad break, as before. Contributed by ihavenoface\n- iOS 16: the player's seek bar no longer stays on screen after minimizing the player\n- AirPlay: low latency no longer jumps to the live edge while the stream plays on the TV, which kept freezing the picture\n- An offline channel's page has a Chat button: Twitch keeps its chat open between streams, to read and write there\n- Every category shows its viewer count again (Top, search and followed), not only the ones followed on your Twitch account\n- Favorite emotes: long-press an emote (in the chat or the picker) or use its card to add it to your favorites, shown first in the emote picker's new Favorites tab; synced with the website\n- Live streams show how long they've been live, on cards and in lists\n- A category's streams no longer repeat its name under each one\n- Followed categories always show their viewer count\n- Downloading a VOD: pick chapters to keep just one game or part of the stream\n- iPhone Duo: in the full-size player, buttons and text keep clear of the screen's rounded corners\n- Landscape chat: the resize handle no longer sits on top of messages, and the chat fills the empty margin next to it\n- Traditional Chinese: channel points are now called 忠誠點數, as on Twitch\n- Chat over the video can sit left or right, full height or in a corner (Settings → Chat)\n- In landscape, the chat uses the empty safe margin next to it, so the video is bigger\n- \"Streams as a list\" now also applies to categories and search results\n- New option to close the player by swiping from the left edge (Settings → Player, off by default)\n- With Recent streamers off, opened channels are no longer remembered\n- Settings: swiping back from the left edge no longer closes the settings when your finger drifts down\n- iPhone Duo: tabs move into the status column, as an icon pill under the clock, and the header gets a top margin\n- New in Features in testing (iOS 26): native Liquid Glass tabs instead of the app's tab bar\n- New \"My source\" option: add your own luminous-ttv server to the live sources (Settings → Player)\n- Bug reports and ideas are signed with your Twitch account when you're logged in (a switch, on by default), or with an optional nickname otherwise, so the developer knows it's you from one report to the next\n- New \"No Twitch account\" option at the top of Settings → General → Customize the app: hides everything that needs an account or asks you to log in (Account, Drops and Channel points pages, sign-in cards, log-in reminders, clip creation); it never hides anything while you're logged in\n- VODs, a live's recording and clips now show the channel's name with the title next to it, like lives: tap the title to read it in full, with the broadcast date\n- Other improvements and fixes",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/nightly-405/TwitchUnblock.ipa",
+          "size": 4617383,
+          "commit": "cbca49247bbfd4cf6ba53be30dbe048e36a5aee5"
+        },
+        {
           "version": "1.7.0",
           "buildVersion": "378",
           "date": "2026-10-30",
@@ -177,10 +186,10 @@
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.7.0",
-      "versionDate": "2026-10-30",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/nightly-378/TwitchUnblock.ipa",
-      "size": 4486034
+      "version": "1.7.1",
+      "versionDate": "2026-11-12",
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/nightly-405/TwitchUnblock.ipa",
+      "size": 4617383
     },
     {
       "name": "TU Test",

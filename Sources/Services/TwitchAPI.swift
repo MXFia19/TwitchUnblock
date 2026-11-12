@@ -117,7 +117,10 @@ private func workerVariants(_ value: Any?) -> [String: VariantInfo] {
 }
 
 // MARK: – GQL
-private func twitchGQL(_ query: String) async throws -> Any {
+/// `deviceID` : faux pour le jeton du direct — avec cet en-tête, Twitch coud
+/// ses pubs (pré-roll, blocs de 3 min) même pour playerType « embed »
+/// (mesuré le 2026-11-12 : 6 séances sur 28 avec pub, 0 sur 28 sans).
+private func twitchGQL(_ query: String, deviceID: Bool = true) async throws -> Any {
     guard let url = URL(string: "https://gql.twitch.tv/gql") else { throw URLError(.badURL) }
     // 10 s au plus sans réponse (au lieu de 60) : GQL répond en une seconde
     // quand il marche, et getLive l'attend avant d'essayer les sources.
@@ -126,7 +129,7 @@ private func twitchGQL(_ query: String) async throws -> Any {
     req.setValue(kGQLClientID, forHTTPHeaderField: "Client-ID")
     req.setValue("application/json", forHTTPHeaderField: "Content-Type")
     req.setValue(requestHeaders["User-Agent"], forHTTPHeaderField: "User-Agent")
-    req.setValue("MkMq8a9\(Int.random(in: 100000...999999))", forHTTPHeaderField: "Device-ID")
+    if deviceID { req.setValue("MkMq8a9\(Int.random(in: 100000...999999))", forHTTPHeaderField: "Device-ID") }
     req.httpBody = try JSONSerialization.data(withJSONObject: ["query": query])
     let (data, resp) = try await URLSession.shared.data(for: req)
     guard (resp as? HTTPURLResponse)?.statusCode == 200 else { throw URLError(.badServerResponse) }
@@ -137,9 +140,9 @@ private func twitchGQL(_ query: String) async throws -> Any {
 private func getAccessToken(id: String, isLive: Bool) async -> (value: String, signature: String)? {
     logger.debug("TOKEN", "Récupération token \(isLive ? "live" : "VOD") pour \"\(id)\"")
     let q = isLive
-        ? "query { streamPlaybackAccessToken(channelName: \"\(gqlStr(id))\", params: {platform: \"web\", playerBackend: \"mediaplayer\", playerType: \"site\"}) { value signature } }"
+        ? "query { streamPlaybackAccessToken(channelName: \"\(gqlStr(id))\", params: {platform: \"site\", playerBackend: \"mediaplayer\", playerType: \"embed\"}) { value signature } }"
         : "query { videoPlaybackAccessToken(id: \"\(gqlStr(id))\", params: {platform: \"web\", playerBackend: \"mediaplayer\", playerType: \"site\"}) { value signature } }"
-    guard let json = try? await twitchGQL(q) as? [String: Any],
+    guard let json = try? await twitchGQL(q, deviceID: !isLive) as? [String: Any],
           let data = json["data"] as? [String: Any],
           let token = (isLive ? data["streamPlaybackAccessToken"] : data["videoPlaybackAccessToken"]) as? [String: Any],
           let value = token["value"] as? String,

@@ -275,14 +275,20 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   fallback remain in use. Filtering applies with low latency on or off, in the
   app's player, Apple's player, multi-live and on Apple TV. AirPlay receivers
   use the original CDN playlist, so local filtering does not apply there.
-  Ads only reach lives that come straight from Twitch (Twitch source, vertical
-  picture, Higher qualities through your account): the usual mirrors already
-  have none. Higher qualities still switch to the ad-free source (1080p at
+  Most ads reach lives that come straight from Twitch (Twitch source, vertical
+  picture, Higher qualities through your account); since November 2026 some
+  connections get them through the mirrors too, and the same filtering covers
+  them. The Twitch source asks for its playback token like Streamlink (embed
+  player, no Device-ID), which Twitch serves with far fewer ads (pre-rolls and
+  pods of 3–6 ads every few minutes went away in the contributor's
+  measurements; the channel's own breaks still come). The countdown runs to
+  the end of the whole pod: Twitch announces each ad only as it starts, so it
+  used to restart with every ad. Higher qualities still switch to the ad-free source (1080p at
   most) for the length of a break and come back after, as before; filtering
   only covers the moment of the switch, or the whole break when there is no
   ad-free source. Waiting through a break is not counted as a stall, so it no
   longer lowers the quality or pushes the live further from the edge.
-  Contributed by [ihavenoface](https://github.com/ihavenoface) (PR #11).
+  Contributed by [ihavenoface](https://github.com/ihavenoface) (PR #11, #12).
 * ⏪ **Rewind a live stream (DVR)** — when the channel archives its broadcasts,
   the progress bar covers the *whole* stream, not just the rewindable window.
   Scrub past that window and the recording takes over at that exact moment.
@@ -395,7 +401,10 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   account** button for when you're unbanned (remembered until the app
   closes). A timeout only adds a line saying for how long.
 * 😀 **Emotes** — Twitch, BetterTTV, FrankerFaceZ and 7TV, global and
-  per-channel, animated (FrankerFaceZ included); GIFs sent with Twitch's GIF
+  per-channel, animated (FrankerFaceZ included) at their real frame timing —
+  held frames keep their hold, frames of 10 ms or less play at 100 ms like in
+  browsers, very long emotes play from their file instead of dropping frames
+  (PR #13 by [ihavenoface](https://github.com/ihavenoface)); GIFs sent with Twitch's GIF
   keyboard show in the chat on their own line. BetterTTV's live connection
   adds the personal emotes of BTTV Pro users (once BTTV announces them, i.e.
   when they open the chat) and the emotes added to the channel during the

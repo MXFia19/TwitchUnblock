@@ -137,6 +137,9 @@ private func twitchGQL(_ query: String, deviceID: Bool = true) async throws -> A
 }
 
 // MARK: – Access Token
+/// Jeton du direct demandé comme Streamlink (lecteur « embed », sans
+/// Device-ID ; PR #12 d'ihavenoface) : Twitch y coud bien moins de pubs.
+/// Le Worker (source Twitch officielle du site) et l'app Android font de même.
 private func getAccessToken(id: String, isLive: Bool) async -> (value: String, signature: String)? {
     logger.debug("TOKEN", "Récupération token \(isLive ? "live" : "VOD") pour \"\(id)\"")
     let q = isLive

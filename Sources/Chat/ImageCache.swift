@@ -122,6 +122,8 @@ final class ImageCache {
     private static let maxSide = 256
 
     // MARK: Décodage (gère GIF / WebP animé / APNG via ImageIO)
+    // Chaque image à son délai, les emotes longues jouées depuis le fichier
+    // (PR #13 d'ihavenoface).
     private static func decode(_ data: Data) -> CachedImage? {
         guard let src = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
         let count = CGImageSourceGetCount(src)

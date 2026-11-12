@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.7.28",
+          "buildVersion": "404",
+          "date": "2026-11-12",
+          "localizedDescription": "- The Twitch source asks for its stream like Streamlink does, which Twitch serves with far fewer ads (pre-rolls and long ad pods). Contributed by ihavenoface\n- During an ad pod the countdown now runs to the end of the whole pod instead of restarting with every ad. Contributed by ihavenoface\n- Animated emotes play at their real speed: held frames keep their hold and very long emotes no longer skip frames. Contributed by ihavenoface\n- Apple TV: The Twitch source asks for its stream like Streamlink does, which Twitch serves with far fewer ads, and the ad countdown runs to the end of the whole pod. Contributed by ihavenoface\n- Other improvements and fixes",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-404/TwitchUnblock.ipa",
+          "size": 4617404,
+          "commit": "1f12837f24bc4b1f63c69414c02cb6ff5d79d213"
+        },
+        {
           "version": "1.7.25",
           "buildVersion": "402",
           "date": "2026-11-12",
@@ -280,25 +289,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-373/TwitchUnblock.ipa",
           "size": 4496574,
           "commit": "858417ed00ca59b09dfe09f892001b0e71d73bfc"
-        },
-        {
-          "version": "1.6.60",
-          "buildVersion": "372",
-          "date": "2026-10-27",
-          "localizedDescription": "- Live: three more sources to pick in Settings → Player (PerfProd Asia, Albania proxy 2, Luminous Europe 2); if you change nothing, each one is tried right after its neighbor.",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-372/TwitchUnblock.ipa",
-          "size": 4493961,
-          "commit": "334f786b7af8f58d61edf796434e957abae0e41d"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.7.25",
+      "version": "1.7.28",
       "versionDate": "2026-11-12",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-402/TwitchUnblock.ipa",
-      "size": 4616809
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-404/TwitchUnblock.ipa",
+      "size": 4617404
     }
   ],
   "news": []

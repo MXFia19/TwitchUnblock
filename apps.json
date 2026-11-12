@@ -203,6 +203,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.7.29",
+          "buildVersion": "406",
+          "date": "2026-11-12",
+          "localizedDescription": "- Shared or exported logs now stay in French, the language they're written in, so I can read your reports as they are (the logs screen is still in your language)",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-406/TwitchUnblock.ipa",
+          "size": 4617443,
+          "commit": "5e5a8789e1a4ff9070531cd3d14109ec21223bdb"
+        },
+        {
           "version": "1.7.28",
           "buildVersion": "404",
           "date": "2026-11-12",
@@ -282,25 +291,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-395/TwitchUnblock.ipa",
           "size": 4607991,
           "commit": "2c0bf7a1c27db615e608a51171d300b1ad2588b2"
-        },
-        {
-          "version": "1.7.17",
-          "buildVersion": "394",
-          "date": "2026-11-07",
-          "localizedDescription": "- Improvements and fixes",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-394/TwitchUnblock.ipa",
-          "size": 4607954,
-          "commit": "f5bddf30560694a8444d75b044dbf3cb9c70fe0c"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.7.28",
+      "version": "1.7.29",
       "versionDate": "2026-11-12",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-404/TwitchUnblock.ipa",
-      "size": 4617404
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-406/TwitchUnblock.ipa",
+      "size": 4617443
     }
   ],
   "news": []

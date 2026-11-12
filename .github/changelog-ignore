@@ -21,3 +21,4 @@ ba9a6c67c9aac885273a4a5e169b2495d73e6aea  chat en paysage : ligne remplacée (mi
 eea4414913442e5bbf00c2426e5024149d3baf9e  barre de progression sous iOS 16 : ligne reprise par le commit suivant (commandes retirées avant la réduction ; retirées pendant, l'app ne répondait plus aux touchers)
 8e19753361ed0a5529d63701553cbc5d63372b1e  pubs filtrées : ligne trompeuse (les qualités supérieures par le compte passent toujours sur la source sans pub pendant une pause), remplacée par le commit suivant
 e3859bd6a6df0ecf9389b887ab74699f4ed27f57  multi-live Apple TV : notes de la TV seulement (le commit touche MultiLive.swift et project.yml, partagés)
+5e5a8789e1a4ff9070531cd3d14109ec21223bdb  journal exporté en français : sens inversé (l'export et les signalements partent en anglais), ligne remplacée par le commit suivant

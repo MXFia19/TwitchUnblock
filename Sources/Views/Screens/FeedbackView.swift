@@ -82,9 +82,13 @@ struct FeedbackSheet: View {
 
     /// Erreurs et alertes récentes du journal (20 au plus), jointes au retour :
     /// le bug arrive avec sa trace (dite dans le résumé ci-dessous).
+    /// En anglais, quelle que soit la langue de l'app (demande du 12/11) :
+    /// le journal est écrit en français, LogTranslator le traduit ; les
+    /// signalements se lisent en anglais (Discord, /stats).
     private var recentErrors: [String] {
         AppLogger.shared.logs.filter { $0.level == .error || $0.level == .warn }.prefix(20).map { e in
-            "\(e.timestamp) · \(e.category) · \(e.message)" + (e.detail.map { " — \($0)" } ?? "")
+            "\(e.timestamp) · \(LogTranslator.category(e.category, .en)) · \(LogTranslator.translate(e.message, .en))"
+                + (e.detail.map { " — \(LogTranslator.translate($0, .en))" } ?? "")
                 + (e.repeats > 1 ? " ×\(e.repeats)" : "")
         }
     }

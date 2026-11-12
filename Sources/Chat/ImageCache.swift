@@ -121,24 +121,41 @@ final class ImageCache {
 
         // Animée : on sous-échantillonne si l'emote a trop de frames (moins
         // pour une grande image, réduite elle aussi).
-        let cap = big ? min(maxFrames, 48) : maxFrames
+        // Au moins autant qu'avant, et toutes les frames tant que l'emote
+        // décodée tient dans 4 Mo : une 56 px de 250 frames (3 Mo) en perdait
+        // deux sur trois pour rien.
+        let frameBytes = max(1, frame(0).map(cost) ?? 1)
+        let cap = max(big ? min(maxFrames, 48) : maxFrames, 4 * 1024 * 1024 / frameBytes)
         let step = max(1, Int(ceil(Double(count) / Double(cap))))
-        var frames: [UIImage] = []
-        var total: TimeInterval = 0
+        var kept: [UIImage] = []
+        var delays: [Int] = []   // centièmes de seconde
         var bytes = 0
         var i = 0
         while i < count {
             if let cg = frame(i) {
-                frames.append(UIImage(cgImage: cg))
+                kept.append(UIImage(cgImage: cg))
                 bytes += cost(cg)
-                total += delay(src, i) * Double(step)   // la frame gardée couvre `step` frames
+                // La frame gardée couvre les frames qu'elle remplace.
+                let span = (i..<min(i + step, count)).reduce(0) { $0 + delay(src, $1) }
+                delays.append(max(1, Int((span * 100).rounded())))
             }
             i += step
         }
-        guard !frames.isEmpty else { return nil }
-        if frames.count == 1 { return CachedImage(frames: frames, duration: 0, bytes: max(1, bytes)) }
-        if total <= 0 { total = Double(frames.count) * 0.1 }
-        return CachedImage(frames: frames, duration: total, bytes: max(1, bytes))
+        guard !kept.isEmpty else { return nil }
+        if kept.count == 1 { return CachedImage(frames: kept, duration: 0, bytes: max(1, bytes)) }
+        let frames = zip(kept, repeats(delays)).flatMap { Array(repeating: $0, count: $1) }
+        return CachedImage(frames: frames, duration: Double(delays.reduce(0, +)) / 100, bytes: max(1, bytes))
+    }
+
+    /// UIImageView joue ses images à cadence fixe, or les délais d'une emote
+    /// varient (image tenue, puis rafale) : chaque frame est répétée selon
+    /// son délai (centièmes), au pas de leur PGCD — grossi au besoin pour
+    /// rester sous 600 entrées (des références, pas des copies).
+    static func repeats(_ delays: [Int]) -> [Int] {
+        func gcd(_ a: Int, _ b: Int) -> Int { b == 0 ? a : gcd(b, a % b) }
+        var tick = max(1, delays.reduce(0, gcd))
+        while delays.reduce(0, +) / tick > 600 { tick *= 2 }
+        return delays.map { max(1, Int((Double($0) / Double(tick)).rounded())) }
     }
 
     private static func delay(_ src: CGImageSource, _ index: Int) -> TimeInterval {
@@ -152,7 +169,9 @@ final class ImageCache {
         ]
         for (dict, unclamped, clamped) in candidates {
             guard let d = props[dict] as? [CFString: Any] else { continue }
-            if let v = d[unclamped] as? Double, v > 0.001 { return v }
+            // 10 ms ou moins : 100 ms, comme les navigateurs et Chatterino
+            // (sinon ces emotes défilaient dix fois trop vite).
+            if let v = d[unclamped] as? Double, v > 0.001 { return v < 0.011 ? 0.1 : v }
             if let v = d[clamped]   as? Double, v > 0.001 { return v }
         }
         return 0.1

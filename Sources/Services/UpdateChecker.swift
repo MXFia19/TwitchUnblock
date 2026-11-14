@@ -59,11 +59,17 @@ final class UpdateChecker: ObservableObject {
     /// Canal écrit par le CI : « test » pour les builds de la branche de test
     /// (app « TU Test »), qui ont leur propre source ; l'app normale ne lit
     /// que apps.json sur master et ne voit jamais les builds de test.
+    /// « dev » (app « TU Dev », branche dev-17d298) compte comme un build de
+    /// test, avec sa propre source.
     static var isTestBuild: Bool {
-        (Bundle.main.object(forInfoDictionaryKey: "TUChannel") as? String) == "test"
+        let channel = Bundle.main.object(forInfoDictionaryKey: "TUChannel") as? String
+        return channel == "test" || channel == "dev"
     }
     static var sourceURL: String {
-        isTestBuild
+        if DevTools.isEnabled {
+            return "https://raw.githubusercontent.com/MXFia19/TwitchUnblock/dev-17d298/apps-dev.json"
+        }
+        return isTestBuild
             ? "https://raw.githubusercontent.com/MXFia19/TwitchUnblock/test-17d298/apps-test.json"
             : "https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json"
     }

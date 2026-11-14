@@ -5,6 +5,8 @@
 
 > 💬 **Join the Discord — https://discord.gg/cEsMRdxsVq** — news, help, bug reports and ideas.
 
+> 🛠 **Branch `dev-17d298` — “TU Dev”.** A debug build for the developer only, installed next to the app and TU Test (`com.mxfia19.TwitchUnblock.dev`, source [`apps-dev.json`](https://raw.githubusercontent.com/MXFia19/TwitchUnblock/dev-17d298/apps-dev.json)). A floating bubble on every screen opens an inspector: the app’s network requests, like a browser’s Network tab (status, type, size, time, filters, search, headers, request body, GQL operation, copy as cURL — secrets masked), and live player stats from AVPlayer (source, picture size, indicated and measured bitrate, buffer, stalls, segments, dropped frames, ad break). Nothing is rerouted: each URLSession task is noted when it starts and followed until it ends; response bodies aren’t kept, and AVPlayer’s own segment loads only show in the player tab. Code in `Sources/Debug`; it only runs when the CI sets `TUChannel` to `dev`. Not counted in /stats, never announced on Discord.
+
 **TwitchUnblock** is an open-source Twitch client that lets you watch VODs and
 live streams without a subscription, at full quality. Native iOS app built with
 SwiftUI — also available [in your browser](https://twitchunblock.vercel.app).

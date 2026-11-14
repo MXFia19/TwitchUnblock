@@ -25,6 +25,8 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         PlayerActivity.endOthers()
         // VODs en téléchargement : iOS rend à la session les fichiers arrivés.
         VodDownloader.shared.activate()
+        // « TU Dev » seulement : bulle flottante de l'inspecteur réseau.
+        DevTools.install()
         return true
     }
 

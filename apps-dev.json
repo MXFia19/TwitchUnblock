@@ -1,0 +1,33 @@
+{
+  "name": "TwitchUnblock Dev",
+  "subtitle": "Builds de debug de TwitchUnblock (inspecteur réseau)",
+  "description": "Source de debug : les builds de la branche dev-17d298, installés à côté de l’app et de TU Test sous le nom « TU Dev », avec la bulle de l’inspecteur réseau.",
+  "iconURL": "https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/assets/icon.png",
+  "website": "https://github.com/MXFia19/TwitchUnblock",
+  "tintColor": "#9146ff",
+  "featuredApps": [
+    "com.mxfia19.TwitchUnblock.dev"
+  ],
+  "apps": [
+    {
+      "name": "TU Dev",
+      "bundleIdentifier": "com.mxfia19.TwitchUnblock.dev",
+      "developerName": "MXFia19",
+      "subtitle": "Builds de debug (branche dev-17d298)",
+      "localizedDescription": "TwitchUnblock avec une bulle flottante sur tous les écrans : requêtes réseau de l’app (statut, type, taille, durée, détail, cURL) et statistiques du lecteur. Pour les essais du développeur.",
+      "iconURL": "https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/assets/icon.png",
+      "tintColor": "#9146ff",
+      "category": "entertainment",
+      "screenshots": [],
+      "versions": [],
+      "appPermissions": {
+        "entitlements": [],
+        "privacy": {}
+      },
+      "version": "0",
+      "versionDate": "",
+      "downloadURL": "",
+      "size": 0
+    }
+  ]
+}

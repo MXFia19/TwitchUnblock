@@ -8,6 +8,10 @@ on:
       # pré-version, source apps-test.json). L'app normale lit apps.json sur
       # master et ne voit donc jamais ces builds.
       - test-17d298
+      # Branche de debug (cette branche seulement) : app « TU Dev », avec la
+      # bulle de l'inspecteur réseau (Sources/Debug), source apps-dev.json.
+      # Ni Discord ni la source principale n'en voient rien.
+      - dev-17d298
     # Nouvelle version seulement si l'app elle-même change : un README, la
     # source apps.json, auth.html ou le dossier worker ne déclenchent rien.
     paths:
@@ -86,6 +90,8 @@ jobs:
           NEW_VERSION="$BASE.$PATCH"
           if [ "${{ github.ref_name }}" = "master" ]; then
             CHANNEL=stable; TAG_NAME="nightly-${{ github.run_number }}"; SOURCE=apps.json
+          elif [ "${{ github.ref_name }}" = "dev-17d298" ]; then
+            CHANNEL=dev;    TAG_NAME="dev-${{ github.run_number }}";     SOURCE=apps-dev.json
           else
             CHANNEL=test;   TAG_NAME="test-${{ github.run_number }}";    SOURCE=apps-test.json
           fi
@@ -157,6 +163,9 @@ jobs:
             if [ "${{ steps.vars.outputs.channel }}" = "test" ]; then
               sed -i '' "s/PRODUCT_BUNDLE_IDENTIFIER: com.mxfia19.TwitchUnblock$/PRODUCT_BUNDLE_IDENTIFIER: com.mxfia19.TwitchUnblock.test/" project.yml
               sed -i '' "s/PRODUCT_BUNDLE_IDENTIFIER: com.mxfia19.TwitchUnblock.Widgets$/PRODUCT_BUNDLE_IDENTIFIER: com.mxfia19.TwitchUnblock.test.Widgets/" project.yml
+            elif [ "${{ steps.vars.outputs.channel }}" = "dev" ]; then
+              sed -i '' "s/PRODUCT_BUNDLE_IDENTIFIER: com.mxfia19.TwitchUnblock$/PRODUCT_BUNDLE_IDENTIFIER: com.mxfia19.TwitchUnblock.dev/" project.yml
+              sed -i '' "s/PRODUCT_BUNDLE_IDENTIFIER: com.mxfia19.TwitchUnblock.Widgets$/PRODUCT_BUNDLE_IDENTIFIER: com.mxfia19.TwitchUnblock.dev.Widgets/" project.yml
             fi
           fi
 
@@ -186,6 +195,13 @@ jobs:
             # l'une ou l'autre au toucher d'un lien twitchunblock://.
             plutil -replace CFBundleURLTypes.0.CFBundleURLSchemes.0 -string "twitchunblock-test" "$APP_PLIST"
             plutil -replace CFBundleURLTypes.0.CFBundleURLName -string "com.mxfia19.TwitchUnblock.test" "$APP_PLIST"
+          elif [ "${{ steps.vars.outputs.channel }}" = "dev" ]; then
+            plutil -replace CFBundleIdentifier -string "com.mxfia19.TwitchUnblock.dev" "$APP_PLIST"
+            plutil -replace CFBundleDisplayName -string "TU Dev" "$APP_PLIST"
+            plutil -replace CFBundleURLTypes.0.CFBundleURLSchemes.0 -string "twitchunblock-dev" "$APP_PLIST"
+            plutil -replace CFBundleURLTypes.0.CFBundleURLName -string "com.mxfia19.TwitchUnblock.dev" "$APP_PLIST"
+            # Essais du développeur : pas comptés dans /stats.
+            PING_KEY=""
           else
             plutil -replace CFBundleIdentifier -string "com.mxfia19.TwitchUnblock" "$APP_PLIST"
           fi
@@ -292,10 +308,14 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           FLAGS=""
-          [ "${{ steps.vars.outputs.channel }}" = "test" ] && FLAGS="--prerelease"
+          SUFFIX=""
+          case "${{ steps.vars.outputs.channel }}" in
+            test) FLAGS="--prerelease"; SUFFIX=" (test)" ;;
+            dev)  FLAGS="--prerelease"; SUFFIX=" (dev)" ;;
+          esac
           { echo "Automatic build of the \`${{ github.ref_name }}\` branch on ${{ steps.vars.outputs.date }}."; echo; cat changelog.md; } > release-notes.md
           gh release create "${{ steps.vars.outputs.tag }}" build/TwitchUnblock.ipa $FLAGS \
-            --title "TwitchUnblock ${{ steps.vars.outputs.version }}$([ "${{ steps.vars.outputs.channel }}" = "test" ] && echo " (test)")" \
+            --title "TwitchUnblock ${{ steps.vars.outputs.version }}$SUFFIX" \
             --notes-file release-notes.md
 
       - name: Update source (apps.json / apps-test.json)
@@ -343,10 +363,11 @@ jobs:
           }
           apply
 
-          # Seules master (apps.json) et la branche de test (apps-test.json)
-          # publient leur source ; un build lancé à la main ailleurs s'arrête là.
+          # Seules master (apps.json), la branche de test (apps-test.json) et la
+          # branche de debug (apps-dev.json) publient leur source ; un build
+          # lancé à la main ailleurs s'arrête là.
           BRANCH="${{ github.ref_name }}"
-          if [ "$BRANCH" != "master" ] && [ "$BRANCH" != "test-17d298" ]; then
+          if [ "$BRANCH" != "master" ] && [ "$BRANCH" != "test-17d298" ] && [ "$BRANCH" != "dev-17d298" ]; then
             echo "Branche $BRANCH : source laissée telle quelle."
             exit 0
           fi

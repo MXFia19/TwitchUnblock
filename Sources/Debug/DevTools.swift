@@ -12,7 +12,8 @@ import ObjectiveC
 //  Rien n'est détourné : les requêtes partent comme d'habitude. La reprise de
 //  chaque tâche URLSession (resume) est notée, puis son état suivi jusqu'à la
 //  fin (statut, en-têtes, taille, durée). Le corps des requêtes est gardé (pour
-//  lire les requêtes GQL), pas celui des réponses. Les morceaux de vidéo
+//  lire les requêtes GQL), et celui des réponses lu au passage, dans l'une ou
+//  l'autre pile réseau d'iOS (voir NetCapture). Les morceaux de vidéo
 //  qu'AVPlayer charge lui-même ne passent pas par là : l'onglet Lecteur en
 //  donne le compte.
 //
@@ -70,7 +71,7 @@ struct NetEntry: Identifiable {
     var duration: TimeInterval? = nil
     var error: String? = nil
     /// Corps de la réponse (texte, JSON, playlist ; 512 Ko au plus), s'il a pu
-    /// être lu (voir NetCapture.startBodyCapture).
+    /// être lu (voir NetCapture.received).
     var responseBody: Data? = nil
     var responseTruncated = false
     /// Corps oublié pour tenir le budget mémoire (48 Mo pour tous).
@@ -217,15 +218,65 @@ enum NetCapture {
     private static var bodies: [ObjectIdentifier: (data: Data, truncated: Bool)] = [:]
     /// Corps gardé par réponse.
     static let bodyCap = 512 * 1024
-    /// Lecture des corps branchée (la classe privée existe sur cet iOS).
-    private(set) static var bodyCaptureActive = false
+    /// Lecture des corps branchée sur l'une des deux piles réseau d'iOS.
+    static var bodyCaptureActive: Bool { classicBodies || networkBodies }
+    /// Pile classique (CFNetwork) et nouvelle pile (NWURLSession, sur
+    /// Network.framework, iOS 18.4 et après : prise quand la configuration
+    /// n'a pas usesClassicLoadingMode).
+    private(set) static var classicBodies = false
+    private(set) static var networkBodies = false
+    /// Diagnostic de l'onglet Réseau (sous le verrou) : morceaux de réponse
+    /// reçus par chaque pile, morceaux gardés (rattachés à une requête notée),
+    /// classes des tâches vues.
+    private static var classicChunks = 0
+    private static var networkChunks = 0
+    private static var keptChunks = 0
+    private static var taskClasses: Set<String> = []
+    /// resume déjà branchés (une même méthode peut venir de deux classes).
+    private static var hookedResumes: [Method] = []
+
+    struct Diagnostics {
+        let classicHooked: Bool
+        let networkHooked: Bool
+        let classicChunks: Int
+        let networkChunks: Int
+        let keptChunks: Int
+        let taskClasses: [String]
+    }
+
+    static var diagnostics: Diagnostics {
+        lock.lock(); defer { lock.unlock() }
+        return Diagnostics(classicHooked: classicBodies, networkHooked: networkBodies,
+                           classicChunks: classicChunks, networkChunks: networkChunks,
+                           keptChunks: keptChunks, taskClasses: taskClasses.sorted())
+    }
 
     static func start() {
         guard !started else { return }
         started = true
-        // La classe privée qui définit resume (grappe de NSURLSessionTask),
-        // trouvée sur une tâche jamais lancée.
-        let session = URLSession(configuration: .ephemeral)
+        // Tâches des deux piles : pile classique et nouvelle pile (iOS 18.4 et
+        // après), selon usesClassicLoadingMode, réglé par KVC (la propriété
+        // n'existe pas avant iOS 18.4 : une seule pile alors).
+        for classic in [true, false] {
+            let config = URLSessionConfiguration.ephemeral
+            if config.responds(to: NSSelectorFromString("setUsesClassicLoadingMode:")) {
+                config.setValue(classic, forKey: "usesClassicLoadingMode")
+            } else if !classic {
+                continue
+            }
+            hookResume(resumeClass(config))
+        }
+        // Au cas où : la classe des tâches de la nouvelle pile, par son nom
+        // (elles n'héritent pas de NSURLSessionTask).
+        if let nwTask = NSClassFromString("NWURLSessionTask") { hookResume(nwTask) }
+        startClassicBodies()
+        startNetworkBodies()
+    }
+
+    /// Classe privée qui définit resume pour les tâches de cette configuration
+    /// (grappe de NSURLSessionTask), trouvée sur une tâche jamais lancée.
+    private static func resumeClass(_ config: URLSessionConfiguration) -> AnyClass {
+        let session = URLSession(configuration: config)
         let probe = session.dataTask(with: URL(string: "https://127.0.0.1/")!)
         let sel = #selector(URLSessionTask.resume)
         var cls: AnyClass = type(of: probe)
@@ -237,24 +288,52 @@ enum NetCapture {
         }
         probe.cancel()
         session.invalidateAndCancel()
-        DevTools.swizzle(cls, sel, #selector(URLSessionTask.tuDev_resume))
-        startBodyCapture()
+        return cls
     }
 
-    /// Corps des réponses, lus là où la connexion de chaque tâche les reçoit
-    /// (classe privée de CFNetwork, comme Atlantis de Proxyman) : quel que
-    /// soit l'appel (async, bloc, délégué), sans rien détourner. Absente sur
-    /// une autre version d'iOS : pas de corps, le reste marche.
-    private static func startBodyCapture() {
+    /// resume de `cls` : la requête notée, puis le vrai resume. Par un bloc :
+    /// la classe des tâches de la nouvelle pile n'a pas nos extensions.
+    private static func hookResume(_ cls: AnyClass) {
+        let sel = NSSelectorFromString("resume")
+        guard let method = class_getInstanceMethod(cls, sel), !hookedResumes.contains(method) else { return }
+        hookedResumes.append(method)
+        typealias Original = @convention(c) (AnyObject, Selector) -> Void
+        let original = unsafeBitCast(method_getImplementation(method), to: Original.self)
+        let block: @convention(block) (AnyObject) -> Void = { me in
+            if let task = me as? URLSessionTask { willResume(task) }
+            original(me, sel)
+        }
+        method_setImplementation(method, imp_implementationWithBlock(block))
+    }
+
+    /// La connexion classique garde sa tâche sous « task » : un accesseur, ou
+    /// seulement une variable (_task), que KVC lit aussi. Sans rien de tel,
+    /// value(forKey:) planterait : on vérifie d'abord.
+    private static func hasTask(_ object: NSObject) -> Bool {
+        let cls: AnyClass = type(of: object)
+        return ["task", "_task", "getTask"].contains { object.responds(to: NSSelectorFromString($0)) }
+            || ["_task", "task"].contains { class_getInstanceVariable(cls, $0) != nil }
+    }
+
+    private static func countChunk(classic: Bool) {
+        lock.lock()
+        if classic { classicChunks += 1 } else { networkChunks += 1 }
+        lock.unlock()
+    }
+
+    /// Pile classique : -[__NSCFURLLocalSessionConnection _didReceiveData:],
+    /// là où la connexion de chaque tâche reçoit le corps (comme Atlantis de
+    /// Proxyman), quel que soit l'appel (async, bloc, délégué).
+    private static func startClassicBodies() {
         let sel = NSSelectorFromString("_didReceiveData:")
         let names = ["__NSCFURLLocalSessionConnection", "__NSCFURLSessionConnection"]
         guard let cls = names.compactMap({ NSClassFromString($0) }).first(where: { class_getInstanceMethod($0, sel) != nil }),
               let method = class_getInstanceMethod(cls, sel) else { return }
         typealias Original = @convention(c) (AnyObject, Selector, AnyObject) -> Void
         let original = unsafeBitCast(method_getImplementation(method), to: Original.self)
-        let taskSel = NSSelectorFromString("task")
         let block: @convention(block) (NSObject, AnyObject) -> Void = { connection, data in
-            if connection.responds(to: taskSel),
+            countChunk(classic: true)
+            if hasTask(connection),
                let task = connection.value(forKey: "task") as? URLSessionTask,
                let bytes = data as? Data {
                 received(bytes, for: task)
@@ -262,7 +341,34 @@ enum NetCapture {
             original(connection, sel, data)
         }
         method_setImplementation(method, imp_implementationWithBlock(block))
-        bodyCaptureActive = true
+        classicBodies = true
+    }
+
+    /// Nouvelle pile : le corps passe par un « consommateur de réponse »,
+    /// -[NWURLSessionResponseConsumer… task:deliverData:complete:error:
+    /// completionHandler:] (bloc et async : …DataCompletionHandler ; tâches
+    /// à délégué et bytes(for:) : …DataDelegate). Les téléchargements
+    /// (…Download) ne sont pas lus.
+    private static func startNetworkBodies() {
+        let sel = NSSelectorFromString("task:deliverData:complete:error:completionHandler:")
+        for name in ["NWURLSessionResponseConsumerDataCompletionHandler", "NWURLSessionResponseConsumerDataDelegate"] {
+            guard let cls = NSClassFromString(name), let method = class_getInstanceMethod(cls, sel) else { continue }
+            typealias Original = @convention(c) (AnyObject, Selector, AnyObject?, AnyObject?, Bool, AnyObject?, AnyObject?) -> Void
+            let original = unsafeBitCast(method_getImplementation(method), to: Original.self)
+            let block: @convention(block) (AnyObject, AnyObject?, AnyObject?, Bool, AnyObject?, AnyObject?) -> Void = {
+                me, task, data, complete, error, handler in
+                countChunk(classic: false)
+                // Avant l'original : il demande le morceau suivant, qui peut
+                // arriver tout de suite sur un autre fil.
+                if let task = task as? URLSessionTask, let bytes = data as? Data, !bytes.isEmpty {
+                    received(bytes, for: task)
+                }
+                original(me, sel, task, data, complete, error, handler)
+                if complete, let task = task as? URLSessionTask { finishLater(task) }
+            }
+            method_setImplementation(method, imp_implementationWithBlock(block))
+            networkBodies = true
+        }
     }
 
     /// Un morceau de réponse : ajouté au corps de sa tâche, 512 Ko au plus.
@@ -280,6 +386,7 @@ enum NetCapture {
         guard ids[key] != nil else { return }
         var body = bodies[key] ?? (data: Data(), truncated: false)
         guard !body.truncated else { return }
+        keptChunks += 1
         let room = bodyCap - body.data.count
         if data.count > room {
             body.data.append(data.prefix(room))
@@ -310,10 +417,24 @@ enum NetCapture {
         lock.lock()
         watched[key] = observation
         ids[key] = id
+        taskClasses.insert(NSStringFromClass(type(of: task)))
         lock.unlock()
     }
 
+    /// Fin du corps vue par le consommateur de la nouvelle pile : la requête
+    /// finie un peu après (état et erreur de la tâche posés), même si la
+    /// tâche ne prévient pas par KVO.
+    private static func finishLater(_ task: URLSessionTask) {
+        lock.lock()
+        let id = ids[ObjectIdentifier(task)]
+        lock.unlock()
+        guard let id else { return }
+        DispatchQueue.global().asyncAfter(deadline: .now() + 0.1) { finish(task, id: id) }
+    }
+
     private static func finish(_ task: URLSessionTask, id: Int) {
+        // Déjà finie (KVO et consommateur peuvent arriver tous les deux).
+        guard NetLog.shared.entry(id)?.finished == false else { return }
         let http = task.response as? HTTPURLResponse
         var headers: [String: String] = [:]
         for (k, v) in http?.allHeaderFields ?? [:] {
@@ -349,14 +470,6 @@ enum NetCapture {
         if let entry = NetLog.shared.entry(id) { DevPCStream.shared.enqueue(entry) }
         // Arrêtée hors de son propre rappel.
         DispatchQueue.main.async { observation?.invalidate() }
-    }
-}
-
-extension URLSessionTask {
-    /// Remplace resume (voir NetCapture.start) : note la requête, puis la lance.
-    @objc dynamic func tuDev_resume() {
-        NetCapture.willResume(self)
-        tuDev_resume()
     }
 }
 

@@ -162,7 +162,10 @@ struct DevNetworkList: View {
                 }
                 .listRowInsets(EdgeInsets(top: 6, leading: 12, bottom: 6, trailing: 12))
             } footer: {
-                Text("\(shown.count) sur \(all.count) requêtes · \(DevFormat.bytes(received)) reçus\(paused ? " · capture en pause" : "")\(NetCapture.bodyCaptureActive ? "" : " · corps des réponses indisponibles sur cet iOS"). Les morceaux de vidéo qu'AVPlayer charge lui-même n'y sont pas : voir l'onglet Lecteur.")
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("\(shown.count) sur \(all.count) requêtes · \(DevFormat.bytes(received)) reçus\(paused ? " · capture en pause" : ""). Les morceaux de vidéo qu'AVPlayer charge lui-même n'y sont pas : voir l'onglet Lecteur.")
+                    Text(captureDiagnostic)
+                }
             }
             Section {
                 ForEach(shown) { e in
@@ -191,6 +194,17 @@ struct DevNetworkList: View {
                 }
             }
         }
+    }
+
+    /// Où en est la lecture des corps de réponse : piles branchées, morceaux
+    /// reçus par chacune, morceaux gardés, classes des tâches vues. Si les
+    /// corps restent vides, ça dit tout de suite où ça bloque.
+    private var captureDiagnostic: String {
+        let d = NetCapture.diagnostics
+        func stack(_ hooked: Bool, _ chunks: Int) -> String { hooked ? "\(chunks) morceaux reçus" : "non branchée" }
+        var text = "Corps des réponses : pile classique \(stack(d.classicHooked, d.classicChunks)), nouvelle pile \(stack(d.networkHooked, d.networkChunks)), \(d.keptChunks) gardés."
+        if !d.taskClasses.isEmpty { text += " Tâches : " + d.taskClasses.joined(separator: ", ") + "." }
+        return text
     }
 }
 
@@ -305,10 +319,11 @@ struct DevRequestDetail: View {
         if e.bodyDropped { return "Oubliée pour tenir le budget de 48 Mo (requête ancienne)." }
         if !NetCapture.bodyCaptureActive { return "Corps des réponses indisponibles sur cette version d'iOS." }
         let mime = (e.mime ?? "").lowercased()
-        if mime.hasPrefix("image/") || mime.hasPrefix("video/") || mime.hasPrefix("audio/") || mime == "application/octet-stream" {
+        if mime.hasPrefix("image/") || mime.hasPrefix("video/") || mime == "application/octet-stream"
+            || (mime.hasPrefix("audio/") && !mime.contains("mpegurl")) {
             return "Pas gardée : image, vidéo ou son."
         }
-        return e.bytes == 0 ? "Réponse vide." : "Pas de corps lu pour cette requête."
+        return e.bytes == 0 ? "Réponse vide." : "Pas de corps lu pour cette requête (diagnostic en haut de la liste)."
     }
 
     private func shown(_ name: String, _ value: String) -> String {

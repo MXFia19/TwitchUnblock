@@ -69,6 +69,12 @@ struct NetEntry: Identifiable {
     var bytes: Int64 = 0
     var duration: TimeInterval? = nil
     var error: String? = nil
+    /// Corps de la réponse (texte, JSON, playlist ; 512 Ko au plus), s'il a pu
+    /// être lu (voir NetCapture.startBodyCapture).
+    var responseBody: Data? = nil
+    var responseTruncated = false
+    /// Corps oublié pour tenir le budget mémoire (48 Mo pour tous).
+    var bodyDropped = false
 
     var finished: Bool { duration != nil }
     var cancelled: Bool { error == NetCapture.cancelledText }
@@ -157,6 +163,25 @@ final class NetLog: ObservableObject {
         notify()
     }
 
+    /// 48 Mo de corps de réponses pour toutes les requêtes gardées : au-delà,
+    /// ceux des plus anciennes sont oubliés.
+    static let bodyBudget = 48 * 1024 * 1024
+
+    func trimBodies() {
+        lock.lock()
+        var total = items.reduce(0) { $0 + ($1.responseBody?.count ?? 0) }
+        var i = 0
+        while total > Self.bodyBudget, i < items.count {
+            if let n = items[i].responseBody?.count {
+                total -= n
+                items[i].responseBody = nil
+                items[i].bodyDropped = true
+            }
+            i += 1
+        }
+        lock.unlock()
+    }
+
     /// Écran mis à jour au plus toutes les 0,3 s (une page lance des dizaines
     /// de requêtes d'un coup).
     private func notify() {
@@ -182,6 +207,13 @@ enum NetCapture {
     private static let lock = NSLock()
     private static var watched: [ObjectIdentifier: NSKeyValueObservation] = [:]
     private static var started = false
+    /// Tâche suivie → sa requête notée, et le corps de sa réponse en cours.
+    private static var ids: [ObjectIdentifier: Int] = [:]
+    private static var bodies: [ObjectIdentifier: (data: Data, truncated: Bool)] = [:]
+    /// Corps gardé par réponse.
+    static let bodyCap = 512 * 1024
+    /// Lecture des corps branchée (la classe privée existe sur cet iOS).
+    private(set) static var bodyCaptureActive = false
 
     static func start() {
         guard !started else { return }
@@ -201,6 +233,56 @@ enum NetCapture {
         probe.cancel()
         session.invalidateAndCancel()
         DevTools.swizzle(cls, sel, #selector(URLSessionTask.tuDev_resume))
+        startBodyCapture()
+    }
+
+    /// Corps des réponses, lus là où la connexion de chaque tâche les reçoit
+    /// (classe privée de CFNetwork, comme Atlantis de Proxyman) : quel que
+    /// soit l'appel (async, bloc, délégué), sans rien détourner. Absente sur
+    /// une autre version d'iOS : pas de corps, le reste marche.
+    private static func startBodyCapture() {
+        let sel = NSSelectorFromString("_didReceiveData:")
+        let names = ["__NSCFURLLocalSessionConnection", "__NSCFURLSessionConnection"]
+        guard let cls = names.compactMap({ NSClassFromString($0) }).first(where: { class_getInstanceMethod($0, sel) != nil }),
+              let method = class_getInstanceMethod(cls, sel) else { return }
+        typealias Original = @convention(c) (AnyObject, Selector, AnyObject) -> Void
+        let original = unsafeBitCast(method_getImplementation(method), to: Original.self)
+        let taskSel = NSSelectorFromString("task")
+        let block: @convention(block) (NSObject, AnyObject) -> Void = { connection, data in
+            if connection.responds(to: taskSel),
+               let task = connection.value(forKey: "task") as? URLSessionTask,
+               let bytes = data as? Data {
+                received(bytes, for: task)
+            }
+            original(connection, sel, data)
+        }
+        method_setImplementation(method, imp_implementationWithBlock(block))
+        bodyCaptureActive = true
+    }
+
+    /// Un morceau de réponse : ajouté au corps de sa tâche, 512 Ko au plus.
+    /// Images, vidéo et son : pas gardés (lourds, illisibles ici) ; les
+    /// playlists (…mpegurl) le sont.
+    static func received(_ data: Data, for task: URLSessionTask) {
+        if let mime = task.response?.mimeType?.lowercased(),
+           mime.hasPrefix("image/") || mime.hasPrefix("video/") || mime == "application/octet-stream"
+            || (mime.hasPrefix("audio/") && !mime.contains("mpegurl")) {
+            return
+        }
+        let key = ObjectIdentifier(task)
+        lock.lock()
+        defer { lock.unlock() }
+        guard ids[key] != nil else { return }
+        var body = bodies[key] ?? (data: Data(), truncated: false)
+        guard !body.truncated else { return }
+        let room = bodyCap - body.data.count
+        if data.count > room {
+            body.data.append(data.prefix(room))
+            body.truncated = true
+        } else {
+            body.data.append(data)
+        }
+        bodies[key] = body
     }
 
     /// Juste avant le vrai resume : la requête notée, son état suivi.
@@ -220,6 +302,7 @@ enum NetCapture {
         }
         lock.lock()
         watched[key] = observation
+        ids[key] = id
         lock.unlock()
     }
 
@@ -235,6 +318,12 @@ enum NetCapture {
         let error: String? = task.error.map { err in
             (err as NSError).code == NSURLErrorCancelled ? cancelledText : err.localizedDescription
         } ?? (task.state == .canceling ? cancelledText : nil)
+        let key = ObjectIdentifier(task)
+        lock.lock()
+        let observation = watched.removeValue(forKey: key)
+        let body = bodies.removeValue(forKey: key)
+        ids.removeValue(forKey: key)
+        lock.unlock()
         NetLog.shared.update(id) { e in
             guard !e.finished else { return }
             e.status = http?.statusCode
@@ -244,10 +333,12 @@ enum NetCapture {
             e.duration = Date().timeIntervalSince(e.started)
             e.error = error
             if let final, final != e.url { e.finalURL = final }
+            if let body, !body.data.isEmpty {
+                e.responseBody = body.data
+                e.responseTruncated = body.truncated
+            }
         }
-        lock.lock()
-        let observation = watched.removeValue(forKey: ObjectIdentifier(task))
-        lock.unlock()
+        if body != nil { NetLog.shared.trimBodies() }
         // Arrêtée hors de son propre rappel.
         DispatchQueue.main.async { observation?.invalidate() }
     }

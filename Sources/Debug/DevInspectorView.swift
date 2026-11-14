@@ -51,14 +51,42 @@ enum DevFormat {
         t < 1 ? "\(Int((t * 1000).rounded())) ms" : String(format: "%.2f s", t)
     }
 
-    /// JSON indenté (clés triées), sinon le texte tel quel.
-    static func pretty(_ data: Data) -> String {
-        if let obj = try? JSONSerialization.jsonObject(with: data),
-           let out = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+    /// JSON indenté (clés triées), sinon le texte tel quel. `mask` : valeurs
+    /// des clés sensibles (jetons, signatures, cookies…) remplacées.
+    static func pretty(_ data: Data, mask: Bool = false) -> String {
+        if let obj = try? JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed]),
+           let out = try? JSONSerialization.data(withJSONObject: mask ? masked(obj) : obj,
+                                                 options: [.prettyPrinted, .sortedKeys, .fragmentsAllowed]),
            let text = String(data: out, encoding: .utf8) {
             return text.replacingOccurrences(of: "\\/", with: "/")
         }
-        return String(data: data, encoding: .utf8) ?? "\(data.count) octets"
+        return String(data: data, encoding: .utf8) ?? "\(data.count) octets (binaire)"
+    }
+
+    /// Affichage d'un long corps : les 120 000 premiers caractères (Copier
+    /// donne tout).
+    static func preview(_ text: String) -> String {
+        text.count > 120_000 ? String(text.prefix(120_000)) + "\n… (suite coupée à l'affichage)" : text
+    }
+
+    private static let secretKeys = ["token", "signature", "secret", "password", "cookie", "authorization", "integrity"]
+
+    /// Copie du JSON aux valeurs sensibles masquées. Jeton de lecture de
+    /// Twitch (« value » + « signature ») compris.
+    static func masked(_ obj: Any) -> Any {
+        if let dict = obj as? [String: Any] {
+            let playbackToken = dict["value"] != nil && dict["signature"] != nil
+            var out: [String: Any] = [:]
+            for (key, value) in dict {
+                let lower = key.lowercased()
+                let secret = (playbackToken && (lower == "value" || lower == "signature"))
+                    || secretKeys.contains { lower.contains($0) }
+                out[key] = secret && value is String ? ("•••• (masqué)" as Any) : masked(value)
+            }
+            return out
+        }
+        if let list = obj as? [Any] { return list.map { masked($0) } }
+        return obj
     }
 }
 
@@ -133,7 +161,7 @@ struct DevNetworkList: View {
                 }
                 .listRowInsets(EdgeInsets(top: 6, leading: 12, bottom: 6, trailing: 12))
             } footer: {
-                Text("\(shown.count) sur \(all.count) requêtes · \(DevFormat.bytes(received)) reçus\(paused ? " · capture en pause" : ""). Les morceaux de vidéo qu'AVPlayer charge lui-même n'y sont pas : voir l'onglet Lecteur.")
+                Text("\(shown.count) sur \(all.count) requêtes · \(DevFormat.bytes(received)) reçus\(paused ? " · capture en pause" : "")\(NetCapture.bodyCaptureActive ? "" : " · corps des réponses indisponibles sur cet iOS"). Les morceaux de vidéo qu'AVPlayer charge lui-même n'y sont pas : voir l'onglet Lecteur.")
             }
             Section {
                 ForEach(shown) { e in
@@ -240,12 +268,13 @@ struct DevRequestDetail: View {
                     }
                 }
                 headers("En-têtes de la réponse", e.responseHeaders)
+                responseSection(e)
                 Section {
                     Toggle("Afficher les secrets (jetons, cookies)", isOn: $showSecrets)
                     Button("Copier l'adresse") { UIPasteboard.general.string = e.url.absoluteString }
                     Button("Copier en cURL") { UIPasteboard.general.string = curl(e) }
                 } footer: {
-                    Text("Le corps des réponses n'est pas gardé. Les secrets restent masqués dans la copie cURL tant qu'ils le sont ici.")
+                    Text("Les secrets restent masqués dans les copies (cURL, réponse) tant qu'ils le sont ici.")
                 }
             }
             .navigationTitle(e.name)
@@ -253,6 +282,32 @@ struct DevRequestDetail: View {
         } else {
             Text("Requête effacée").foregroundColor(.secondary)
         }
+    }
+
+    /// Corps de la réponse : JSON mis en forme (secrets masqués tant que le
+    /// réglage est coupé) ou texte ; sinon pourquoi il manque.
+    @ViewBuilder private func responseSection(_ e: NetEntry) -> some View {
+        if let body = e.responseBody, !body.isEmpty {
+            let text = DevFormat.pretty(body, mask: !showSecrets)
+            Section("Réponse" + (e.responseTruncated ? " (tronquée à 512 Ko)" : "")) {
+                Text(DevFormat.preview(text)).font(.caption.monospaced()).textSelection(.enabled)
+                Button("Copier la réponse") { UIPasteboard.general.string = text }
+            }
+        } else if e.finished {
+            Section("Réponse") {
+                Text(missingBodyReason(e)).font(.callout).foregroundColor(.secondary)
+            }
+        }
+    }
+
+    private func missingBodyReason(_ e: NetEntry) -> String {
+        if e.bodyDropped { return "Oubliée pour tenir le budget de 48 Mo (requête ancienne)." }
+        if !NetCapture.bodyCaptureActive { return "Corps des réponses indisponibles sur cette version d'iOS." }
+        let mime = (e.mime ?? "").lowercased()
+        if mime.hasPrefix("image/") || mime.hasPrefix("video/") || mime.hasPrefix("audio/") || mime == "application/octet-stream" {
+            return "Pas gardée : image, vidéo ou son."
+        }
+        return e.bytes == 0 ? "Réponse vide." : "Pas de corps lu pour cette requête."
     }
 
     private func shown(_ name: String, _ value: String) -> String {

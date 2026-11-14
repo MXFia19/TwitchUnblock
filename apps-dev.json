@@ -19,15 +19,25 @@
       "tintColor": "#9146ff",
       "category": "entertainment",
       "screenshots": [],
-      "versions": [],
+      "versions": [
+        {
+          "version": "1.7.31",
+          "buildVersion": "408",
+          "date": "2026-11-14",
+          "localizedDescription": "- Bug reports and shared or exported logs now attach the log in English, whatever the app's language (the logs screen still follows your language)\n- The Twitch source asks for its stream like Streamlink does, which Twitch serves with far fewer ads (pre-rolls and long ad pods). Contributed by ihavenoface\n- During an ad pod the countdown now runs to the end of the whole pod instead of restarting with every ad. Contributed by ihavenoface\n- Animated emotes play at their real speed: held frames keep their hold and very long emotes no longer skip frames. Contributed by ihavenoface\n- Apple TV: The Twitch source asks for its stream like Streamlink does, which Twitch serves with far fewer ads, and the ad countdown runs to the end of the whole pod. Contributed by ihavenoface\n- Other improvements and fixes",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/dev-408/TwitchUnblock.ipa",
+          "size": 4676809,
+          "commit": "f532d862285b8c3f7da9690f2074907233296eb1"
+        }
+      ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "0",
-      "versionDate": "",
-      "downloadURL": "",
-      "size": 0
+      "version": "1.7.31",
+      "versionDate": "2026-11-14",
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/dev-408/TwitchUnblock.ipa",
+      "size": 4676809
     }
   ]
 }

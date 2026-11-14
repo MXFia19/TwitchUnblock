@@ -311,8 +311,10 @@ enum NetCapture {
     /// value(forKey:) planterait : on vérifie d'abord.
     private static func hasTask(_ object: NSObject) -> Bool {
         let cls: AnyClass = type(of: object)
-        return ["task", "_task", "getTask"].contains { object.responds(to: NSSelectorFromString($0)) }
-            || ["_task", "task"].contains { class_getInstanceVariable(cls, $0) != nil }
+        let getters: [String] = ["task", "_task", "getTask"]
+        return getters.contains { object.responds(to: NSSelectorFromString($0)) }
+            || class_getInstanceVariable(cls, "_task") != nil
+            || class_getInstanceVariable(cls, "task") != nil
     }
 
     private static func countChunk(classic: Bool) {

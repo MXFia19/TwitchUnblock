@@ -95,6 +95,10 @@
         <true/>
     </dict>
 
+    <!-- TU Dev (branche dev-17d298) : « Envoyer au PC » parle au serveur de tools/devlog -->
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>TU Dev sends the app's network requests to the debug server running on your computer (same Wi-Fi).</string>
+
     <!-- ── Orientation ────────────────────────────────────────── -->
     <key>UISupportedInterfaceOrientations</key>
     <array>

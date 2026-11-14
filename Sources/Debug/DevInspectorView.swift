@@ -19,14 +19,15 @@ struct DevInspectorView: View {
                 Picker("Onglet", selection: $tab) {
                     Text("Réseau").tag(0)
                     Text("Lecteur").tag(1)
+                    Text("PC").tag(2)
                 }
                 .pickerStyle(.segmented)
                 .padding(.horizontal)
                 .padding(.vertical, 8)
-                if tab == 0 {
-                    DevNetworkList()
-                } else {
-                    DevPlayerPanel()
+                switch tab {
+                case 0: DevNetworkList()
+                case 1: DevPlayerPanel()
+                default: DevPCPanel()
                 }
             }
             .navigationTitle("TU Dev")

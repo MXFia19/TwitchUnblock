@@ -163,6 +163,11 @@ final class NetLog: ObservableObject {
         notify()
     }
 
+    func entry(_ id: Int) -> NetEntry? {
+        lock.lock(); defer { lock.unlock() }
+        return items.last { $0.id == id }
+    }
+
     /// 48 Mo de corps de réponses pour toutes les requêtes gardées : au-delà,
     /// ceux des plus anciennes sont oubliés.
     static let bodyBudget = 48 * 1024 * 1024
@@ -288,7 +293,9 @@ enum NetCapture {
     /// Juste avant le vrai resume : la requête notée, son état suivi.
     static func willResume(_ task: URLSessionTask) {
         guard let request = task.originalRequest ?? task.currentRequest,
-              let scheme = request.url?.scheme?.lowercased(), scheme == "http" || scheme == "https" else { return }
+              let scheme = request.url?.scheme?.lowercased(), scheme == "http" || scheme == "https",
+              // Envois vers le PC (DevPCStream) : pas notés, sinon ils se renverraient.
+              request.value(forHTTPHeaderField: DevPCStream.marker) == nil else { return }
         let key = ObjectIdentifier(task)
         lock.lock()
         let known = watched[key] != nil
@@ -339,6 +346,7 @@ enum NetCapture {
             }
         }
         if body != nil { NetLog.shared.trimBodies() }
+        if let entry = NetLog.shared.entry(id) { DevPCStream.shared.enqueue(entry) }
         // Arrêtée hors de son propre rappel.
         DispatchQueue.main.async { observation?.invalidate() }
     }

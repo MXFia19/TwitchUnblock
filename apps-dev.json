@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.7.32",
+          "buildVersion": "409",
+          "date": "2026-11-14",
+          "localizedDescription": "- Other improvements and fixes",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/dev-409/TwitchUnblock.ipa",
+          "size": 4685118,
+          "commit": "3fd551aa118b709f9053dd6ccdebaaac10ce5705"
+        },
+        {
           "version": "1.7.31",
           "buildVersion": "408",
           "date": "2026-11-14",
@@ -34,10 +43,10 @@
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.7.31",
+      "version": "1.7.32",
       "versionDate": "2026-11-14",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/dev-408/TwitchUnblock.ipa",
-      "size": 4676809
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/dev-409/TwitchUnblock.ipa",
+      "size": 4685118
     }
   ]
 }

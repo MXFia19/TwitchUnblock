@@ -1,3 +1,14 @@
+# VOD silence probe checks
+
+Run `sh tools/test-vod-silence.sh` (macOS, Swift 5.9 or newer). It compiles
+`Sources/Services/VodSilence.swift` with `VodSilenceTests.swift`: TS and fMP4
+segments built in the test (silent 6-byte frames, sound, Twitch's 5-sample
+fMP4 fragments, partial reads, two-track fMP4), the 10/50/90 % segment
+choice around muted parts, and 300 rounds of randomly damaged bytes (no
+crash, no endless loop). No network. CI runs it when the probe, the test,
+the script or `test-vod-silence.yml` changes. The website's copy of the same
+probe has its own checks (`node tools/silence-check.mjs` in the web repo).
+
 # Live playlist checks
 
 Run `sh tools/test-live-playlists.sh` with Swift 5.9 or newer. The fixtures compile

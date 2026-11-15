@@ -721,6 +721,7 @@ let kTraditionalChineseStrings: [String: String] = [
     "cfg_sync_settings_sub": "聊天室、熱門直播語言、VOD 速度、自訂、釘選與隱藏頻道：網站與登入同一帳號的各裝置都一致。語言、畫質、通知與外觀則依各裝置而定。",
     "vod_muted_here": "Twitch 已消音（受版權保護的音樂）",
     "vod_muted_skip": "略過",
+    "vod_no_sound": "這部 VOD 在 Twitch 上就沒有聲音",
     "vod_unmuted": "靜音部分的原始聲音已還原",
     "restore_muted": "還原被消音的聲音",
     "restore_muted_sub": "Twitch 會將含版權音樂的部分消音。直播結束後一兩天內原始檔仍在：App 會盡可能還原。AirPlay 播放時無效。",

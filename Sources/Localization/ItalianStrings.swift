@@ -740,6 +740,7 @@ let kItalianStrings: [String: String] = [
     "cfg_sync_settings_sub": "Chat, lingua delle dirette più seguite, velocità dei VOD, personalizzazione, canali fissati e nascosti: gli stessi sul sito e sui tuoi dispositivi collegati a questo account. Lingua, qualità, notifiche e aspetto restano propri di ogni dispositivo.",
     "vod_muted_here": "Audio disattivato da Twitch (musica protetta da copyright)",
     "vod_muted_skip": "Salta",
+    "vod_no_sound": "Questo VOD non ha audio su Twitch",
     "vod_unmuted": "Audio originale ripristinato nelle parti silenziate",
     "restore_muted": "Ripristina l’audio silenziato",
     "restore_muted_sub": "Twitch silenzia le parti con musica protetta da copyright. Per uno o due giorni dopo la diretta l’originale è ancora disponibile: l’app lo ripristina quando possibile. Nessun effetto con AirPlay.",

@@ -466,7 +466,7 @@
  "Compte déconnecté → chat en anonyme": ["Account logged out → anonymous chat", "Cuenta desconectada → chat anónimo", "Выход из аккаунта → анонимный чат"],
  "Message non envoyé": ["Message not sent", "Mensaje no enviado", "Сообщение не отправлено"],
  "plus de 500 caractères": ["more than 500 characters", "más de 500 caracteres", "более 500 символов"],
- "Tuile sans image depuis 20 s : relance": ["Tile without picture for 20 s: restarting", "Mosaico sin imagen desde hace 20 s: reinicio", "Плитка без изображения 20 с: перезапуск"],
+ "Tuile sans image : relance après attente": ["Tile without picture: restarting after waiting", "Mosaico sin imagen: reinicio tras esperar", "Плитка без изображения: перезапуск после ожидания"],
  "Session web refusée pour les événements : lecture sans elle": ["Web session refused for live events: reading without it", "Sesión web rechazada para los eventos: lectura sin ella", "Веб-сессия отклонена для событий: чтение без неё"],
  "Chat du téléchargement indisponible": ["Download chat unavailable", "Chat de la descarga no disponible", "Чат загрузки недоступен"],
  "Réseau revenu : relance de la lecture": ["Network back: restarting playback", "Red recuperada: se relanza la reproducción", "Сеть восстановлена: воспроизведение перезапускается"],
@@ -712,5 +712,12 @@
  "réglage": ["setting", "ajuste", "настройка"],
  "Retour au premier plan : image rétablie": ["Back to the foreground: video restored", "Vuelta al primer plano: vídeo restablecido", "Возврат на передний план: видео восстановлено"],
  "Téléchargement du clip impossible": ["Couldn't download the clip", "No se pudo descargar el clip", "Не удалось скачать клип"],
- "Téléchargement du clip…": ["Downloading the clip…", "Descargando el clip…", "Загрузка клипа…"]
+ "Téléchargement du clip…": ["Downloading the clip…", "Descargando el clip…", "Загрузка клипа…"],
+ "AirPlay : filtrage local des pubs indisponible": ["AirPlay: local ad filtering unavailable","AirPlay: filtrado local de anuncios no disponible","AirPlay: локальная фильтрация рекламы недоступна"],
+ "Emote ajoutée aux favoris": ["Emote added to favorites","Emote añadido a favoritos","Эмоут добавлен в избранное"],
+ "Emote retirée des favoris": ["Emote removed from favorites","Emote quitado de favoritos","Эмоут удалён из избранного"],
+ "Fermer en glissant depuis le bord": ["Close by swiping from the edge","Cerrar deslizando desde el borde","Закрытие свайпом от края"],
+ "Onglets dans la colonne d'état": ["Tabs in the status column","Pestañas en la columna de estado","Вкладки в колонке состояния"],
+ "playlist originale sur le récepteur": ["original playlist on the receiver","lista original en el receptor","исходный плейлист на приёмнике"],
+ "VOD sans son chez Twitch : piste audio vide (silence à 10, 50 et 90 %)": ["VOD with no sound on Twitch: empty audio track (silent at 10, 50 and 90%)","VOD sin sonido en Twitch: pista de audio vacía (silencio al 10, 50 y 90 %)","VOD без звука на Twitch: пустая звуковая дорожка (тишина на 10, 50 и 90 %)"]
 }

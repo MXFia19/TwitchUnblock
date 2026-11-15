@@ -187,6 +187,9 @@ struct MainTabView: View {
     /// Passages de la VOD dont Twitch a coupé le son (et que l'app n'a pas pu
     /// rétablir), et nombre de segments rétablis (VodUnmuteLoader).
     @State private var vodMuted: [MutedRange] = []
+    /// VOD sans son chez Twitch (piste audio vide, VodSilence) : avis du
+    /// lecteur, jusqu'à sa croix.
+    @State private var vodSilent = false
     @State private var vodUnmuted = 0
 
     /// Infos affichées par-dessus l'image en mode immersif. Hors direct (VOD,
@@ -1366,6 +1369,8 @@ struct MainTabView: View {
                 chapters: vodChapters,
                 mutedRanges: vodMuted,
                 unmutedCount: vodUnmuted,
+                silentVod: vodSilent,
+                onDismissSilent: { vodSilent = false },
                 nowPlaying: nowPlayingMeta,
                 speed: playbackSpeed,
                 // Toujours une vitesse imposée par le lecteur (voir forcedVodSpeed).
@@ -2262,6 +2267,23 @@ struct MainTabView: View {
         startPlayback(.live(channelName: channel), soft: soft, keepVisibility: keepVisibility)
     }
 
+    /// VOD dont la piste audio est vide chez Twitch (VodSilence) : sondée 4 s
+    /// après le départ (les premiers segments d'abord), dite par l'avis du
+    /// lecteur. `links` : adresses du CDN, pas celles du chargeur de son
+    /// rétabli.
+    private func probeSilence(links: [String: String], gen: Int) {
+        Task {
+            try? await Task.sleep(nanoseconds: 4_000_000_000)
+            guard await MainActor.run(body: { gen == loadGeneration }) else { return }
+            let verdict = await VodSilence.probe(links: links)
+            await MainActor.run {
+                guard gen == loadGeneration, verdict == .silent else { return }
+                vodSilent = true
+                logger.info("LECTEUR", "VOD sans son chez Twitch : piste audio vide (silence à 10, 50 et 90 %)", nil)
+            }
+        }
+    }
+
     /// `soft` : on reste sur la même chaîne (direct ↔ enregistrement). Le
     /// lecteur en place continue de jouer pendant que la nouvelle source se
     /// résout, au lieu d'être démonté et remplacé par un écran d'attente.
@@ -2361,6 +2383,7 @@ struct MainTabView: View {
         vodChapters = []
         vodMuted = []
         vodUnmuted = 0
+        vodSilent = false
         Task {
             switch mode {
             case .clip(let slug, let title):
@@ -2430,6 +2453,7 @@ struct MainTabView: View {
                         loading         = false
                         switchingSource = false
                     }
+                    probeSilence(links: data.links, gen: gen)
                 }
 
             case .recovered(let rec):
@@ -2451,6 +2475,7 @@ struct MainTabView: View {
                     loading         = false
                     switchingSource = false
                 }
+                probeSilence(links: rec.links, gen: gen)
 
             case .live(let channel):
                 // Abonné sans pub sur cette chaîne : le direct passe par son
@@ -2622,6 +2647,7 @@ struct MainTabView: View {
             vodChapters        = []
             vodMuted           = []
             vodUnmuted         = 0
+            vodSilent          = false
             closingPlayer      = false
         }
     }

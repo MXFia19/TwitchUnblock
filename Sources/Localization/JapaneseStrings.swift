@@ -741,6 +741,7 @@ let kJapaneseStrings: [String: String] = [
     "cfg_sync_settings_sub": "チャット、人気の配信の言語、VOD の再生速度、カスタマイズ、固定・非表示にしたチャンネルを、Web サイトと、このアカウントでサインインしている端末で共通にします。言語、画質、通知、外観は端末ごとに保たれます。",
     "vod_muted_here": "Twitch により音声がミュートされています (著作権のある音楽)",
     "vod_muted_skip": "スキップ",
+    "vod_no_sound": "この VOD は Twitch 上でも音声がありません",
     "vod_unmuted": "ミュートされていた部分で元の音声に戻りました",
     "restore_muted": "ミュートされた音声を復元",
     "restore_muted_sub": "Twitch は著作権のある音楽を含む部分をミュートします。配信後 1～2 日は元の音声が残っているため、可能な場合はアプリが元に戻します。AirPlay 中は効果がありません。",

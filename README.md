@@ -336,6 +336,18 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   version. Muted parts that Twitch lists under a name its CDN refuses are
   fixed on the device when the backend can’t do it, and a VOD that stops on one
   starts again at the same place on its own; **Skip** works even then.
+* 🔕 **VODs with no sound on Twitch** — some channels record only an empty
+  audio track in their VODs (most likely OBS's VOD track turned on with no
+  source on it): silent from start to end, on twitch.tv too, with nothing to
+  recover. A few seconds after a VOD starts, the app reads the start of three
+  “Audio only” segments (at 10, 50 and 90 % of the VOD, away from muted parts;
+  the source quality if there's no Audio only) and measures their audio
+  frames — encoded silence takes 6 bytes a frame, sound 300 to 700. When all
+  three are silent, a notice at the top of the player says *This VOD has no
+  sound on Twitch* (× closes it); on Apple TV, the notice shows for 12 s. 160p
+  and 360p are constant-bitrate, so they're never used for this. TS and fMP4
+  VODs (`VodSilence.swift`, same probe as the website; checked by
+  `sh tools/test-vod-silence.sh`).
 * 🗂 **Unlisted & deleted broadcasts** — streams whose VOD is hidden or was
   deleted show up among the channel's VODs as "Unlisted VOD", rebuilt from
   Twitch's CDN as long as it still has them (stream IDs from `vodvod.top`,

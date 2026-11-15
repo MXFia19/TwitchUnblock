@@ -1498,6 +1498,10 @@ struct ImmersivePlayer: View {
     /// barre ; et nombre de segments dont l'app a pu remettre le son.
     var mutedRanges: [MutedRange] = []
     var unmutedCount: Int = 0
+    /// VOD dont la piste audio est vide chez Twitch (VodSilence) : un avis le
+    /// dit, jusqu'à sa croix (`onDismissSilent`).
+    var silentVod = false
+    var onDismissSilent: () -> Void = {}
     /// Rembobinage au-delà de la fenêtre DVR : le direct ne sait pas y aller,
     /// on bascule sur l'enregistrement à ce nombre de secondes du début.
     var onSeekToArchive: (Double) -> Void = { _ in }
@@ -1653,6 +1657,8 @@ struct ImmersivePlayer: View {
          chapters: [VodChapter] = [],
          mutedRanges: [MutedRange] = [],
          unmutedCount: Int = 0,
+         silentVod: Bool = false,
+         onDismissSilent: @escaping () -> Void = {},
          nowPlaying: NowPlayingMeta = NowPlayingMeta(),
          speed: Double = 1,
          onSpeedChange: @escaping (Double) -> Void = { _ in },
@@ -1705,6 +1711,7 @@ struct ImmersivePlayer: View {
         self.vodStartedAt = vodStartedAt
         self.onSpeedRestore = onSpeedRestore
         self.mutedRanges = mutedRanges; self.unmutedCount = unmutedCount
+        self.silentVod = silentVod; self.onDismissSilent = onDismissSilent
         self.onReduce = onReduce; self.onClose = onClose
         self.onMenu = onMenu; self.onRefresh = onRefresh
         self.onToggleChat = onToggleChat; self.onSleep = onSleep
@@ -1848,9 +1855,17 @@ struct ImmersivePlayer: View {
             // (le lecteur relit alors les liens). Visible commandes masquées.
             if model.failed { failureCard }
 
-            // Passage dont Twitch a coupé le son : on le dit (sinon on croit à
-            // une panne) et on propose de le sauter.
-            if let muted = currentMuted {
+            // VOD sans son chez Twitch (piste audio vide, toute la VOD) : on le
+            // dit, sinon on croit à une panne ; la croix le ferme.
+            if silentVod && !isLive {
+                silentNotice
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    .padding(.top, showControls ? 58 : TSpace.sm)
+                    .padding(controlsEdge, controlsInset)
+                    .transition(.opacity)
+            } else if let muted = currentMuted {
+                // Passage dont Twitch a coupé le son : on le dit (sinon on
+                // croit à une panne) et on propose de le sauter.
                 mutedNotice(muted)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                     .padding(.top, showControls ? 58 : TSpace.sm)
@@ -2646,6 +2661,36 @@ struct ImmersivePlayer: View {
                 .clipShape(Capsule())
             }
             .buttonStyle(.plain)
+        }
+        .foregroundColor(.white)
+        .padding(.leading, 11).padding(.trailing, 4).frame(height: 32)
+        .background(Color.black.opacity(0.62))
+        .clipShape(Capsule())
+        .overlay(Capsule().stroke(Color.tWarning.opacity(0.6), lineWidth: 1))
+    }
+
+    /// VOD dont la piste audio est vide chez Twitch : même pastille que les
+    /// passages coupés, avec une croix au lieu de « Passer ».
+    private var silentNotice: some View {
+        HStack(spacing: TSpace.sm) {
+            Image(systemName: "speaker.slash.fill").font(.system(size: 11, weight: .bold))
+            Text(store.t("vod_no_sound"))
+                .font(.system(size: 12, weight: .semibold))
+                .lineLimit(1)
+            Button {
+                PlayerPull.guarded {
+                    onDismissSilent()
+                    scheduleAutoHide()
+                }
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .bold))
+                    .frame(width: 24, height: 24)
+                    .background(Color.white.opacity(0.18))
+                    .clipShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(store.t("close"))
         }
         .foregroundColor(.white)
         .padding(.leading, 11).padding(.trailing, 4).frame(height: 32)

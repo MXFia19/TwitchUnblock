@@ -203,6 +203,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.7.31",
+          "buildVersion": "413",
+          "date": "2026-11-15",
+          "localizedDescription": "- VODs with no sound on Twitch: some channels record only an empty audio track in their VODs. A few seconds in, the player now notices it and says so at the top of the video (\"This VOD has no sound on Twitch\"), instead of looking broken.\n- Apple TV: VODs with no sound on Twitch are now announced at the top of the video.",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-413/TwitchUnblock.ipa",
+          "size": 4635011,
+          "commit": "4f1e8c11054d3f06874db5b1e47f6408d367dd69"
+        },
+        {
           "version": "1.7.30",
           "buildVersion": "407",
           "date": "2026-11-12",
@@ -282,25 +291,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-397/TwitchUnblock.ipa",
           "size": 4610277,
           "commit": "6f3667c73e13511a15031bc05876e09d13557a53"
-        },
-        {
-          "version": "1.7.19",
-          "buildVersion": "396",
-          "date": "2026-11-09",
-          "localizedDescription": "- Other improvements and fixes",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-396/TwitchUnblock.ipa",
-          "size": 4610371,
-          "commit": "7613bf3d829d0ce23ea17418aaeaccff3df33c85"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.7.30",
-      "versionDate": "2026-11-12",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-407/TwitchUnblock.ipa",
-      "size": 4617772
+      "version": "1.7.31",
+      "versionDate": "2026-11-15",
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-413/TwitchUnblock.ipa",
+      "size": 4635011
     }
   ],
   "news": []

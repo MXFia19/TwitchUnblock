@@ -25,6 +25,15 @@
       },
       "versions": [
         {
+          "version": "0.1.50",
+          "buildVersion": "50",
+          "date": "2026-11-15",
+          "localizedDescription": "- VODs with no sound on Twitch are now announced at the top of the video.",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-test-50/TwitchUnblockTV.ipa",
+          "size": 2911730,
+          "commit": "4f1e8c11054d3f06874db5b1e47f6408d367dd69"
+        },
+        {
           "version": "0.1.48",
           "buildVersion": "48",
           "date": "2026-11-12",
@@ -194,21 +203,12 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-test-28/TwitchUnblockTV.ipa",
           "size": 2520114,
           "commit": "ff7053ac8f7eb1af374a4128e71740033ab32795"
-        },
-        {
-          "version": "0.1.27",
-          "buildVersion": "27",
-          "date": "2026-10-19",
-          "localizedDescription": "- Other improvements and fixes",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-test-27/TwitchUnblockTV.ipa",
-          "size": 2520113,
-          "commit": "7510455c72b7845c006557bcec606033620890b5"
         }
       ],
-      "version": "0.1.48",
-      "versionDate": "2026-11-12",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-test-48/TwitchUnblockTV.ipa",
-      "size": 2896511
+      "version": "0.1.50",
+      "versionDate": "2026-11-15",
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-test-50/TwitchUnblockTV.ipa",
+      "size": 2911730
     }
   ]
 }

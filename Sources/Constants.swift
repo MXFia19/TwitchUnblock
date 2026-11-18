@@ -136,35 +136,28 @@ enum APIConfig {
     }
 }
 
-/// Proxys au format Luminous (/live/<chaîne>) : un serveur par source
-/// (sondés le 2026-10-27 sur trois directs, sans pré-roll). Pas « sans pub »
-/// pour autant : les pauses pub de la chaîne y arrivent comme sur Twitch
-/// (mesuré le 2026-10-14). as = Luminous Asie (sortie Ouzbékistan), pp =
-/// PerfProd Asie (Maurice), al2 = l'autre serveur de nadeko
-/// (twitch.zzls.xyz n'est qu'une redirection vers lui), eu / eu2 = Luminous
-/// Europe et Europe 2 (eu3 ne répondait plus).
-let kLiveProxyHosts = [
-    "as": "as.luminous.dev",
-    "pp": "lb-as.cdn-perfprod.com",
-    "al2": "twitch.nadeko.net",
-    "eu": "eu.luminous.dev",
-    "eu2": "eu2.luminous.dev"
-]
+/// Source « Bulgarie » (id « bg », en test depuis le 2026-11-18) : le relais
+/// TwitchUnblock d'un VPS à Sofia (LIVE_SOURCE=twitch, README du site) prend
+/// le jeton, la liste maîtresse et les playlists de la vidéo depuis la
+/// Bulgarie — par son IPv6 : Twitch situe son IPv4 en Allemagne —, les
+/// segments restant en direct. Pour mesurer si Twitch y sert moins de pubs
+/// (/stats, source « bg »).
+let kBulgariaRelay = "https://2-58-32-226.sslip.io"
 
-/// Proxys au format TTV.LOL v1 (source « al »). Celui-ci est en Albanie ; ses
-/// variantes se lisent de n'importe quelle adresse et annoncent leurs
-/// segments d'avance. Les pauses pub de la chaîne y passent aussi.
-let kTTVLOLHosts = ["twitch-al.nadeko.net"]
+/// Proxys retirés le 2026-11-18 (Luminous, PerfProd, nadeko) : ils
+/// laissaient passer les pubs (des centaines par jour dans /stats). Un ordre
+/// enregistré qui en contient encore date d'avant : il reprend l'ordre
+/// automatique (completeLiveSourceOrder).
+let kRetiredLiveSources: Set<String> = ["as", "pp", "al", "al2", "eu", "eu2"]
 
 /// Sources du direct proposées dans les réglages et le menu du lecteur.
-let kLiveSourceChoices = ["auto", "as", "pp", "al", "al2", "eu", "eu2", "twitch"]
-/// Sources du direct, dans l'ordre automatique : Luminous Asie, PerfProd
-/// Asie, proxy albanais (TTV.LOL) et son second serveur, Luminous Europe et
-/// Europe 2, Twitch officiel (avec ses pubs).
-let kLiveSources = ["as", "pp", "al", "al2", "eu", "eu2", "twitch"]
+let kLiveSourceChoices = ["auto", "bg", "twitch"]
+/// Sources du direct, dans l'ordre automatique : Bulgarie (test), puis
+/// Twitch officiel.
+let kLiveSources = ["bg", "twitch"]
 /// Source ajoutée → celle qu'elle secourt : un ordre enregistré avant elle
-/// la reçoit juste après (comme le site et le Worker).
-let kLiveSourceBackupOf = ["pp": "as", "al2": "al", "eu2": "eu"]
+/// la reçoit juste après (comme le site et le Worker). Aucune aujourd'hui.
+let kLiveSourceBackupOf: [String: String] = [:]
 
 /// « Ma source » (id « custom ») : adresse d'un serveur luminous-ttv à soi,
 /// comme sur le site (demande de hippxrr). https://, un nom de domaine, sans
@@ -193,7 +186,10 @@ func customSourceHost() -> String? {
 /// Ordre complet des sources : celles de `saved` connues, sans doublon ;
 /// une source qui manque va juste après celle qu'elle secourt, sinon à la
 /// fin, dans l'ordre automatique. Ma source reste tant qu'elle est réglée.
+/// Un ordre qui contient un proxy retiré reprend l'ordre automatique (Ma
+/// source gardée, en tête).
 func completeLiveSourceOrder(_ saved: [String]) -> [String] {
+    let saved = saved.contains(where: kRetiredLiveSources.contains) ? saved.filter { $0 == "custom" } : saved
     var order: [String] = []
     let custom = customSourceHost() != nil
     for id in saved where (kLiveSources.contains(id) || (custom && id == "custom")) && !order.contains(id) {
@@ -777,6 +773,7 @@ private let translations: [Lang: [String: String]] = [
         "cfg_sync_settings_sub": "Chat, langue du top, vitesse des VODs, personnalisation, chaînes épinglées et masquées : les mêmes sur le site et sur tes appareils connectés à ce compte. La langue, la qualité, les notifications et l'apparence restent propres à chaque appareil.",
         "vod_muted_here": "Son coupé par Twitch (musique protégée)",
         "vod_muted_skip": "Passer",
+        "vod_no_sound": "Cette VOD n’a pas de son chez Twitch",
         "vod_unmuted": "Son d'origine rétabli sur les passages coupés",
         "restore_muted": "Rétablir le son des passages coupés",
         "restore_muted_sub": "Twitch coupe le son des passages avec de la musique protégée. Un jour ou deux après le live, l'original est encore disponible : l'app le remet quand elle peut. Sans effet sur AirPlay.",
@@ -804,12 +801,7 @@ private let translations: [Lang: [String: String]] = [
         "native_tabs": "Onglets natifs (Liquid Glass)",
         "native_tabs_sub": "La barre d'onglets d'iOS 26 au lieu de celle de l'app : elle se replie quand tu défiles et le système la range selon l'écran (iPad, iPhone Duo). En test : signale ce qui cloche.",
         "src_auto": "Automatique",
-        "src_as": "Luminous Asie",
-        "src_al": "Proxy Albanie (TTV.LOL)",
-        "src_eu": "Luminous Europe",
-        "src_pp": "PerfProd Asie",
-        "src_al2": "Proxy Albanie 2",
-        "src_eu2": "Luminous Europe 2",
+        "src_bg": "Bulgarie (test)",
         "src_twitch": "Twitch officiel (pubs)",
         "src_worker": "Serveur TwitchUnblock",
         "chat_unreachable": "Le chat ne répond pas. Vérifie ta connexion (VPN, réseau filtré) ou touche « Reconnecter le chat » dans le menu du chat.",
@@ -1568,6 +1560,7 @@ private let translations: [Lang: [String: String]] = [
         "cfg_sync_settings_sub": "Chat, top streams language, VOD speed, customization, pinned and hidden channels: the same on the website and on your devices signed in to this account. Language, quality, notifications and appearance stay specific to each device.",
         "vod_muted_here": "Sound muted by Twitch (copyrighted music)",
         "vod_muted_skip": "Skip",
+        "vod_no_sound": "This VOD has no sound on Twitch",
         "vod_unmuted": "Original sound restored on muted parts",
         "restore_muted": "Restore muted sound",
         "restore_muted_sub": "Twitch mutes parts with copyrighted music. For a day or two after the stream the original is still available: the app puts it back when it can. No effect over AirPlay.",
@@ -1595,12 +1588,7 @@ private let translations: [Lang: [String: String]] = [
         "native_tabs": "Native tabs (Liquid Glass)",
         "native_tabs_sub": "iOS 26's own tab bar instead of the app's: it shrinks while you scroll and the system places it for the screen (iPad, iPhone Duo). In testing: report what's off.",
         "src_auto": "Automatic",
-        "src_as": "Luminous Asia",
-        "src_al": "Albania proxy (TTV.LOL)",
-        "src_eu": "Luminous Europe",
-        "src_pp": "PerfProd Asia",
-        "src_al2": "Albania proxy 2",
-        "src_eu2": "Luminous Europe 2",
+        "src_bg": "Bulgaria (test)",
         "src_twitch": "Official Twitch (ads)",
         "src_worker": "TwitchUnblock server",
         "chat_unreachable": "The chat isn't responding. Check your connection (VPN, filtered network) or tap “Reconnect chat” in the chat menu.",
@@ -2359,6 +2347,7 @@ private let translations: [Lang: [String: String]] = [
         "cfg_sync_settings_sub": "Chat, idioma del top, velocidad de los VODs, personalización, canales fijados y ocultos: los mismos en el sitio y en tus dispositivos con esta cuenta. El idioma, la calidad, las notificaciones y la apariencia siguen siendo propios de cada dispositivo.",
         "vod_muted_here": "Sonido silenciado por Twitch (música protegida)",
         "vod_muted_skip": "Saltar",
+        "vod_no_sound": "Este VOD no tiene sonido en Twitch",
         "vod_unmuted": "Sonido original restaurado en las partes silenciadas",
         "restore_muted": "Restaurar el sonido silenciado",
         "restore_muted_sub": "Twitch silencia las partes con música protegida. Uno o dos días después del directo, el original aún está disponible: la app lo restaura cuando puede. Sin efecto por AirPlay.",
@@ -2386,12 +2375,7 @@ private let translations: [Lang: [String: String]] = [
         "native_tabs": "Pestañas nativas (Liquid Glass)",
         "native_tabs_sub": "La barra de pestañas de iOS 26 en lugar de la de la app: se reduce al desplazarte y el sistema la coloca según la pantalla (iPad, iPhone Duo). En pruebas: avisa de lo que falle.",
         "src_auto": "Automática",
-        "src_as": "Luminous Asia",
-        "src_al": "Proxy de Albania (TTV.LOL)",
-        "src_eu": "Luminous Europa",
-        "src_pp": "PerfProd Asia",
-        "src_al2": "Proxy de Albania 2",
-        "src_eu2": "Luminous Europa 2",
+        "src_bg": "Bulgaria (prueba)",
         "src_twitch": "Twitch oficial (anuncios)",
         "src_worker": "Servidor de TwitchUnblock",
         "chat_unreachable": "El chat no responde. Revisa tu conexión (VPN, red filtrada) o toca «Reconectar el chat» en el menú del chat.",

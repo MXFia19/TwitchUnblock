@@ -699,11 +699,9 @@ func getLive(channelName: String, webToken: String? = nil,
     for src in steps where found.links.isEmpty {
         onSource?(src)
         switch src {
-        case "al":     found = await ttvlolLiveLinks(login: login, lowLatency: lowLatency)
+        case "bg":     found = await bulgariaLiveLinks(login: login)
         case "twitch": if let token { found = await usherLiveLinks(login: login, token: token, lowLatency: lowLatency, geo: geo) }
         case "custom": if let host = customSourceHost() { found = await luminousLiveLinks(hosts: [host], login: login, lowLatency: lowLatency) }
-        case let id where kLiveProxyHosts[id] != nil:
-            found = await luminousLiveLinks(hosts: [kLiveProxyHosts[id]!], login: login, lowLatency: lowLatency)
         default:
             let worker = await workerLiveLinks(login: login)
             found = worker.master
@@ -869,10 +867,10 @@ func liveSourceSteps() -> [String] {
     return completeLiveSourceOrder(saved) + ["worker"]
 }
 
-/// Proxys au format Luminous (/live/<chaîne>), essayés dans l'ordre ; vide
-/// si aucun ne répond. Pas « sans pub » : les pré-rolls et les pauses pub
-/// de la chaîne y arrivent comme sur Twitch (écran « Commercial break in
-/// progress » ou vraie pub, cousus dans la playlist ; voir AdBreakMonitor).
+/// Serveurs au format Luminous (/live/<chaîne>), essayés dans l'ordre ; vide
+/// si aucun ne répond. Ne sert plus qu'à « Ma source » (un luminous-ttv à
+/// soi) : les proxys publics ont été retirés le 2026-11-18, ils laissaient
+/// passer les pubs (voir kRetiredLiveSources).
 private func luminousLiveLinks(hosts: [String], login: String, lowLatency: Bool) async -> MasterPlaylist {
     for host in hosts {
         logger.info("LIVE", "Tentative proxy…", host)
@@ -908,30 +906,27 @@ private func luminousLiveLinks(hosts: [String], login: String, lowLatency: Bool)
     return ([:], [:])
 }
 
-/// Proxy albanais (format TTV.LOL : la requête usher encodée après
-/// /playlist/<chaîne>.m3u8). Mêmes pauses pub de la chaîne que Luminous.
-private func ttvlolLiveLinks(login: String, lowLatency: Bool) async -> MasterPlaylist {
-    var allowed = CharacterSet.alphanumerics
-    allowed.insert(charactersIn: "-._~")
-    let query = "allow_source=true&allow_audio_only=true&fast_bread=\(lowLatency)"
-        .addingPercentEncoding(withAllowedCharacters: allowed) ?? ""
-    for host in kTTVLOLHosts {
-        guard let url = URL(string: "https://\(host)/playlist/\(login).m3u8%3F\(query)") else { continue }
-        logger.info("LIVE", "Tentative proxy TTV.LOL…", host)
-        var req = URLRequest(url: url, timeoutInterval: 10)
-        req.setValue("https://ttv.lol/donate", forHTTPHeaderField: "X-Donate-To")
-        guard let (data, resp) = try? await URLSession.shared.data(for: req),
-              (resp as? HTTPURLResponse)?.statusCode == 200 else {
-            logger.warn("LIVE", "⚠️ Proxy \(host) indisponible", "source suivante…")
-            continue
+/// Source « Bulgarie » (bg, test) : le relais du VPS de Sofia
+/// (kBulgariaRelay) prend le jeton, la liste maîtresse et les playlists de la
+/// vidéo depuis la Bulgarie — ses liens passent par lui —, les segments
+/// restant en direct. Même réponse que /api/get-live du Worker ; 404 quand
+/// Twitch ne répond pas de là-bas : Twitch officiel, qui suit, prend le relais.
+private func bulgariaLiveLinks(login: String) async -> MasterPlaylist {
+    logger.info("LIVE", "Tentative relais Bulgarie…", kBulgariaRelay)
+    guard let url = URL(string: "\(kBulgariaRelay)/api/get-live?name=\(login)") else { return ([:], [:]) }
+    do {
+        // 8 s au plus, comme les autres sources : un relais muet ne fait pas
+        // attendre Twitch officiel.
+        let (data, resp) = try await URLSession.shared.data(for: URLRequest(url: url, timeoutInterval: 8))
+        let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+        if code == 200, let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let links = json["links"] as? QualityLinks, !links.isEmpty {
+            logger.success("LIVE", "✅ Relais Bulgarie OK", "\(links.count) qualités")
+            return (links, workerVariants(json["variants"]))
         }
-        let body = String(decoding: data, as: UTF8.self)
-        guard body.contains("#EXT-X-STREAM-INF") else { continue }
-        let master = parseMaster(body, baseURL: url)
-        if !master.links.isEmpty {
-            logger.success("LIVE", "✅ Proxy TTV.LOL OK (\(host))", "\(master.links.count) qualités")
-            return master
-        }
+        logger.warn("LIVE", "⚠️ Relais Bulgarie sans direct (\(code))", "source suivante…")
+    } catch {
+        logger.error("LIVE", "❌ Erreur relais Bulgarie", error.localizedDescription)
     }
     return ([:], [:])
 }
@@ -1085,7 +1080,9 @@ func parsePortraitMaster(_ content: String, baseURL: URL? = nil) -> MasterPlayli
 /// n'a rien dit à l'app.
 private func workerLiveLinks(login: String) async -> (master: MasterPlaylist, info: [String: Any]?) {
     logger.info("LIVE", "Tentative Cloudflare Worker...")
-    guard let json = await workerJSON("/api/get-live?name=\(login)&proxy=false"),
+    // Twitch d'abord chez le Worker : ses proxys (Luminous…), retirés de
+    // l'app parce qu'ils laissaient passer les pubs, ne viennent qu'après.
+    guard let json = await workerJSON("/api/get-live?name=\(login)&source=twitch"),
           let links = json["links"] as? QualityLinks else { return (([:], [:]), nil) }
     logger.success("LIVE", "✅ Cloudflare Worker : \(links.count) qualités")
     return ((links, workerVariants(json["variants"])), json)

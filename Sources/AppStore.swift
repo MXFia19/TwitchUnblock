@@ -323,7 +323,7 @@ final class AppStore: ObservableObject {
         }
     }
 
-    /// Ordre des sources du direct (« as », « al », « eu », « twitch ») :
+    /// Ordre des sources du direct (« bg », « twitch », « custom ») :
     /// getLive les essaie l'une après l'autre (liveSourceSteps, même clé).
     @Published var liveSourceOrder: [String] = kLiveSources {
         didSet { UserDefaults.standard.set(liveSourceOrder, forKey: "liveSourceOrder") }

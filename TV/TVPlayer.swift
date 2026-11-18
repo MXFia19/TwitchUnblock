@@ -128,11 +128,14 @@ final class TVPlayerModel: ObservableObject {
     /// tvOS n'a pas de bouton pour le remettre.
     let adBreaks = AdBreakWatcher(managesAudio: false, onBreak: { TVUsage.countAdBreak(roll: $0) })
 
-    private func flash(_ text: String) {
+    /// VOD sans son chez Twitch (VodSilence) : sondée 4 s après le départ.
+    private var silenceTask: Task<Void, Never>?
+
+    private func flash(_ text: String, seconds: UInt64 = 4) {
         notice = text
         noticeTask?.cancel()
         noticeTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 4_000_000_000)
+            try? await Task.sleep(nanoseconds: seconds * 1_000_000_000)
             guard !Task.isCancelled else { return }
             self?.notice = nil
         }
@@ -143,6 +146,8 @@ final class TVPlayerModel: ObservableObject {
     func load(_ item: TVPlayback, session: TVSession) async -> Bool {
         current = item
         error = nil
+        silenceTask?.cancel()
+        silenceTask = nil
         clipVodId = nil
         clipOffset = 0
         switch item {
@@ -193,6 +198,17 @@ final class TVPlayerModel: ObservableObject {
             // peut-être encore sur le CDN (VodUnmuteLoader).
             links = VodUnmuteLoader.worthTrying(markers) ? VodUnmuteLoader.wrap(data.links) : data.links
             variants = data.variants
+            // VOD dont la piste audio est vide chez Twitch : dit par l'avis du
+            // haut (12 s : pas de croix à la télécommande), comme sur l'iPhone.
+            let raw = data.links
+            silenceTask = Task { [weak self] in
+                try? await Task.sleep(nanoseconds: 4_000_000_000)
+                guard !Task.isCancelled else { return }
+                let verdict = await VodSilence.probe(links: raw)
+                guard !Task.isCancelled, verdict == .silent, let self, self.vodId == id else { return }
+                logger.info("TV/LECTEUR", "VOD sans son chez Twitch : piste audio vide (silence à 10, 50 et 90 %)")
+                self.flash(session.t("vod_no_sound"), seconds: 12)
+            }
         case .clip(let slug, let clipTitle, _):
             isLive = false
             title = clipTitle
@@ -288,6 +304,8 @@ final class TVPlayerModel: ObservableObject {
     func stop() {
         // Lecteur fermé : une fin d'interruption ne doit plus le relancer.
         interruptions = nil
+        silenceTask?.cancel()
+        silenceTask = nil
         adBreaks.detach()
         if let p = player, let id = vodId {
             let duration = p.currentItem?.duration.seconds ?? 0

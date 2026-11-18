@@ -78,6 +78,8 @@ targets:
       - path: Sources/Services/LivePlaylistLoader.swift
       - path: Sources/Services/TwitchAdPlaylist.swift
       - path: Sources/Services/VodUnmute.swift
+      # VOD sans son chez Twitch (piste audio vide) : avis de TVPlayer.
+      - path: Sources/Services/VodSilence.swift
       # Pauses pub du direct : VodUnmuteLoader.playerItem y fait appel.
       - path: Sources/Services/AdBreakMonitor.swift
       - path: Sources/Services/SpatialAudio.swift

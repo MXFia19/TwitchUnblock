@@ -94,15 +94,24 @@ struct LiveProxyRow: View {
     /// Proxy saisi : gardé si l'adresse est valable (sinon on le dit, et
     /// l'ancien reste). Rien ne se passe si rien n'a changé.
     private func apply() {
-        let wanted = address.trimmingCharacters(in: .whitespacesAndNewlines)
+        var raw = address, name = user, secret = password
+        // Adresse collée avec ses identifiants (« id:mdp@hôte:port »,
+        // « hôte:port:id:mdp ») : chacun remis dans son champ.
+        if let pasted = LiveProxy.credentialsSplit(raw) {
+            (raw, name, secret) = (pasted.address, pasted.user, pasted.password)
+            address = raw
+            user = name
+            password = secret
+        }
+        let wanted = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         let normalized = wanted.isEmpty ? "" : (LiveProxy.normalized(wanted) ?? wanted)
-        let name = user.trimmingCharacters(in: .whitespacesAndNewlines)
-        let secret = store.liveProxy.isEmpty ? "" : LiveProxy.password
-        guard normalized != store.liveProxy || name != store.liveProxyUser || password != secret else {
+        name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let stored = store.liveProxy.isEmpty ? "" : LiveProxy.password
+        guard normalized != store.liveProxy || name != store.liveProxyUser || secret != stored else {
             refused = false
             return
         }
-        refused = !store.setLiveProxy(wanted, user: name, password: password)
+        refused = !store.setLiveProxy(wanted, user: name, password: secret)
         guard !refused else { return }
         address = store.liveProxy
         user = store.liveProxyUser

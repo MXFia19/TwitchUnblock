@@ -38,6 +38,25 @@ enum LiveProxy {
         return parts.host.contains(":") ? "[\(parts.host)]:\(parts.port)" : "\(parts.host):\(parts.port)"
     }
 
+    /// Adresse collée avec ses identifiants, sous l'une des formes des
+    /// fournisseurs : « identifiant:mot de passe@hôte:port » (celle de TTV LOL
+    /// PRO) ou « hôte:port:identifiant:mot de passe ». Rend l'adresse et les
+    /// identifiants à part (LiveProxyRow les remet dans leurs champs), nil
+    /// pour une autre forme.
+    static func credentialsSplit(_ raw: String) -> (address: String, user: String, password: String)? {
+        var v = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if v.lowercased().hasPrefix("http://") { v = String(v.dropFirst("http://".count)) }
+        if let at = v.lastIndex(of: "@") {
+            let creds = v[..<at]
+            let address = String(v[v.index(after: at)...])
+            guard let colon = creds.firstIndex(of: ":") else { return (address, String(creds), "") }
+            return (address, String(creds[..<colon]), String(creds[creds.index(after: colon)...]))
+        }
+        let parts = v.split(separator: ":", maxSplits: 3, omittingEmptySubsequences: false)
+        guard !v.hasPrefix("["), parts.count == 4, Int(parts[1]) != nil else { return nil }
+        return ("\(parts[0]):\(parts[1])", String(parts[2]), String(parts[3]))
+    }
+
     /// « hôte:port » → hôte (sans crochets) et port, ou nil.
     private static func split(_ v: String) -> (host: String, port: Int)? {
         guard !v.isEmpty, v.count <= 260, let colon = v.lastIndex(of: ":"),

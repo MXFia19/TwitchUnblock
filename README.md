@@ -201,7 +201,9 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   under the website's name (`customSource`).
   **My proxy** (same place): your own HTTP proxy —
   `host:port`, with an optional username and password, like the proxies of
-  [TTV LOL PRO](https://github.com/younesaassila/ttv-lol-pro). The playback
+  [TTV LOL PRO](https://github.com/younesaassila/ttv-lol-pro) (pasting
+  `user:password@host:port` or `host:port:user:password` fills the three
+  fields). The playback
   token (GQL), usher's master playlist and the stream's playlists go through
   it (HTTPS through `CONNECT`), so Twitch sees the proxy's address; the video
   segments still come straight from Twitch's CDN, as in the TwitchAdBlock

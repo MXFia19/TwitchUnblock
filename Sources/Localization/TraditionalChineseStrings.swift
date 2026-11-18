@@ -755,6 +755,7 @@ let kTraditionalChineseStrings: [String: String] = [
     "chat_unreachable": "聊天室沒有回應。請檢查連線（VPN、受限制的網路），或在聊天室選單點「重新連線聊天室」。",
     "hide_gift_subs": "隱藏贈送的訂閱",
     "hide_gift_subs_sub": "「X 贈送訂閱給 Y」：每人一行，有人整批贈送時一次好幾十行。整批贈送的訊息會保留。",
+    "vod_games_all": "所有遊戲",
     "src_account": "你的帳號（無廣告）",
     "src_account_toast": "因為你的訂閱而無廣告",
     "src_account_hq": "你的帳號（更高畫質）",

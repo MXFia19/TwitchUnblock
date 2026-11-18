@@ -662,7 +662,11 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   a clip link still opens directly. The last 10 searches are kept on the
   device under the field, each removable, or **Clear** them all (also
   cleared with the history in Settings). On a channel, the VOD keyword
-  filter can also look through older VODs (**Search older VODs**).
+  filter can also look through older VODs (**Search older VODs**). Next to
+  it, a game filter (**All games** by default) lists the games of the
+  loaded VODs with their count; picking one shows only its VODs (and the
+  unlisted broadcasts of that game), and when fewer than 12 are loaded,
+  older pages are fetched (up to 5 at a time).
 * 🗓 **Schedule** — a channel with a streaming schedule gets a **Schedule**
   tab: its next streams in your device's day and time, with length, title,
   category, **Every week** for recurring ones and **Canceled** ones struck

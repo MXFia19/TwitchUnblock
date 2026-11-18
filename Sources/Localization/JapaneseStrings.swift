@@ -773,6 +773,7 @@ let kJapaneseStrings: [String: String] = [
     "chat_unreachable": "チャットが応答していません。接続 (VPN、フィルタリングされたネットワーク) を確認するか、チャットのメニューで「チャットを再接続」をタップしてください。",
     "hide_gift_subs": "ギフトサブを非表示",
     "hide_gift_subs_sub": "「X が Y にサブをギフトしました」：1 人につき 1 行で、まとめてギフトされると一度に何十行も流れます。まとめてギフトしたことを伝えるメッセージは残ります。",
+    "vod_games_all": "すべてのゲーム",
     "src_account": "あなたのアカウント (広告なし)",
     "src_account_toast": "サブスクの特典で広告なし",
     "src_account_hq": "あなたのアカウント (高画質)",

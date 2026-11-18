@@ -84,6 +84,10 @@ enum Backup {
         fileprivate let root: [String: Any]
         /// 1 pour les anciennes sauvegardes de l'app et celles du site.
         let version: Int
+        /// App qui l'a écrite (« TwitchUnblock », « TU Test »), si elle le dit.
+        var app: String? {
+            (root["app"] as? String).flatMap { $0.isEmpty ? nil : String($0.prefix(40)) }
+        }
     }
 
     /// Ce qu'un import a repris, pour son résumé.
@@ -161,6 +165,7 @@ enum Backup {
             "keepDeleted": store.chatShowDeleted,
             "loadHistory": store.chatLoadRecent,
             "hideBots": store.chatHideBots,
+            "hideGiftSubs": store.chatHideGiftSubs,
             "hideCommands": store.chatHideCommands,
             "mutedWords": store.chatMutedWords,
             "blockedUsers": store.chatBlockedUsers,
@@ -250,7 +255,8 @@ enum Backup {
             }
     }
 
-    static func export(store: AppStore) -> Data {
+    /// `compact` : sans mise en page (envoi à l'autre app, BackupTransfer).
+    static func export(store: AppStore, compact: Bool = false) -> Data {
         let info = Bundle.main.infoDictionary ?? [:]
         let root: [String: Any] = [
             "format": format,
@@ -270,7 +276,8 @@ enum Backup {
             "settings": settingsJSON(store),
             "continueWatching": continueJSON(store),
         ]
-        return (try? JSONSerialization.data(withJSONObject: root, options: [.prettyPrinted, .sortedKeys])) ?? Data()
+        let options: JSONSerialization.WritingOptions = compact ? [.sortedKeys] : [.prettyPrinted, .sortedKeys]
+        return (try? JSONSerialization.data(withJSONObject: root, options: options)) ?? Data()
     }
 
     /// Lit un fichier sans rien appliquer ; refusé s'il n'est pas une
@@ -358,6 +365,31 @@ enum Backup {
         return summary
     }
 
+    /// Résumé d'un import, une ligne par sorte de chose reprise (dans la
+    /// langue de l'app, peut-être changée par l'import) : Réglages →
+    /// Importer, et réglages reçus de l'autre app (BackupTransfer).
+    static func summaryText(_ s: Summary, scope: Scope, store: AppStore) -> String {
+        func line(_ key: String, _ n: Int) -> String {
+            store.t(key).replacingOccurrences(of: "{n}", with: "\(n)")
+        }
+        var follows = line("import_sum_follows", s.follows)
+        // Au-delà de 300 suivis sur l'appareil, le reste n'est pas pris :
+        // dit, plutôt que compté comme ajouté.
+        if s.followsSkipped > 0 { follows += " " + String(format: store.t("import_capped"), s.followsSkipped) }
+        var lines = [follows,
+                     line("import_sum_categories", s.categories),
+                     line("import_sum_pinned", s.pinned),
+                     line("import_sum_hidden", s.hidden)]
+        if scope == .all {
+            lines.append(line("import_sum_settings", s.settings))
+            if s.settingsIgnored > 0 { lines.append(line("import_sum_ignored", s.settingsIgnored)) }
+            lines.append(line("import_sum_continue", s.continueWatching))
+        } else {
+            lines.append(store.t("import_sum_channels_only"))
+        }
+        return lines.joined(separator: "\n")
+    }
+
     /// VODs entamées d'une sauvegarde : identifiant numérique, position de
     /// plus de 30 s ; titre, image et chaîne bornés. Rend le nombre de VODs
     /// ajoutées à l'historique ou avancées.
@@ -434,6 +466,7 @@ enum Backup {
         bool("keepDeleted") { store.chatShowDeleted = $0 }
         bool("loadHistory") { store.chatLoadRecent = $0 }
         bool("hideBots") { store.chatHideBots = $0 }
+        bool("hideGiftSubs") { store.chatHideGiftSubs = $0 }
         bool("hideCommands") { store.chatHideCommands = $0 }
         words("mutedWords", 50) { store.chatMutedWords = $0 }
         words("blockedUsers", 500) { store.chatBlockedUsers = $0 }

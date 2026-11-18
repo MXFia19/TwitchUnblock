@@ -890,6 +890,15 @@ final class AppStore: ObservableObject {
     @Published var chatHideCommands = false {
         didSet { UserDefaults.standard.set(chatHideCommands, forKey: "chat_hide_commands") }
     }
+    /// Subs offerts à une personne masqués (« X gifted a Tier 1 sub to Y! »,
+    /// USERNOTICE subgift et anonsubgift) : une ligne par personne, des
+    /// dizaines d'un coup quand quelqu'un en offre en lot (demande de
+    /// kayne92). Le résumé du lot (submysterygift) reste. Coupé par défaut ;
+    /// même clé que le site (« hideGiftSubs »), dans la synchro des réglages
+    /// et la sauvegarde.
+    @Published var chatHideGiftSubs = false {
+        didSet { UserDefaults.standard.set(chatHideGiftSubs, forKey: "chat_hide_gift_subs") }
+    }
     /// Mots masqués (minuscules) : les messages qui les contiennent disparaissent.
     @Published var chatMutedWords: [String] = [] {
         didSet { UserDefaults.standard.set(chatMutedWords, forKey: "chat_muted_words") }
@@ -903,8 +912,14 @@ final class AppStore: ObservableObject {
         "wizebot", "soundalerts", "sery_bot", "botisimo", "own3d", "kofistreambot",
         "pokemoncommunitygame", "deepbot", "coebot", "phantombot", "creatisbot", "blerp"]
 
-    /// Vrai si le message doit être masqué (réglages de filtres).
+    /// USERNOTICE d'un sub offert à une personne (chatHideGiftSubs).
+    static let giftSubKinds: Set<String> = ["subgift", "anonsubgift"]
+
+    /// Vrai si le message doit être masqué (réglages de filtres). Appliqué à
+    /// l'affichage : un filtre activé fait aussi disparaître les lignes déjà là.
     func isChatFiltered(_ m: ChatMessage) -> Bool {
+        // Sub offert : avant tout le reste, même offert par soi (comme le site).
+        if chatHideGiftSubs, let kind = m.noticeKind, Self.giftSubKinds.contains(kind) { return true }
         let login = m.userName.lowercased()
         guard !login.isEmpty, m.userId != "system" else { return false }
         if login == twitchLogin?.lowercased() { return false }
@@ -1011,6 +1026,7 @@ final class AppStore: ObservableObject {
         favoriteEmotes     = Array(Self.emoteCodes(ud.stringArray(forKey: "chat_favorite_emotes") ?? []).suffix(Self.maxFavoriteEmotes))
         chatHideBots       = ud.bool(forKey: "chat_hide_bots")
         chatHideCommands   = ud.bool(forKey: "chat_hide_commands")
+        chatHideGiftSubs   = ud.bool(forKey: "chat_hide_gift_subs")
         chatMutedWords     = ud.stringArray(forKey: "chat_muted_words") ?? []
         chatBlockedUsers   = ud.stringArray(forKey: "chat_blocked_users") ?? []
         if let l = ud.string(forKey: "lang"), let parsed = Lang(rawValue: l) { lang = parsed }

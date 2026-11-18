@@ -54,6 +54,11 @@ struct VodData: Identifiable {
     let previewThumbnailURL: String
     let publishedAt: String
     let lengthSeconds: Int
+    /// Jeu de la VOD (identifiant et nom de Twitch), pour le filtre par jeu
+    /// des VODs d'une chaîne. nil si Twitch n'en dit rien, ou si la requête
+    /// ne le demande pas (seule la liste des VODs d'une chaîne le demande).
+    var gameId: String? = nil
+    var gameName: String? = nil
 }
 
 /// Playlist (collection) d'une chaîne et ses vidéos.

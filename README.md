@@ -514,6 +514,11 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   incoming raids shown with a link to the raider. Each of these can be switched off.
 * 🔦 **Highlights & filters** — messages mentioning you or containing your words
   stand out; hide bots, `!commands`, muted words or someone in particular.
+  **Hide gifted subs** (Settings → Chat, off by default) hides the
+  "X gifted a sub to Y" lines, one per person and dozens at once when
+  someone gifts a batch; the batch message stays, and the lines already in
+  the chat go too. Synced with the website (`hideGiftSubs`) and kept in the
+  backup.
 * 🤖 **Bot commands** — a channel's Nightbot, StreamElements, Fossabot and
   Moobot commands without typing `!commands`: from the chat's ⋯ menu, or from
   the channel page, live or offline (tap one to copy it).
@@ -657,7 +662,11 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   a clip link still opens directly. The last 10 searches are kept on the
   device under the field, each removable, or **Clear** them all (also
   cleared with the history in Settings). On a channel, the VOD keyword
-  filter can also look through older VODs (**Search older VODs**).
+  filter can also look through older VODs (**Search older VODs**). Next to
+  it, a game filter (**All games** by default) lists the games of the
+  loaded VODs with their count; picking one shows only its VODs (and the
+  unlisted broadcasts of that game), and when fewer than 12 are loaded,
+  older pages are fetched (up to 5 at a time).
 * 🗓 **Schedule** — a channel with a streaming schedule gets a **Schedule**
   tab: its next streams in your device's day and time, with length, title,
   category, **Every week** for recurring ones and **Canceled** ones struck
@@ -688,8 +697,8 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
 * ⚙️ **Synced settings** — signed in, your settings follow your Twitch account
   on the website and your other devices (Settings → Twitch Account → **Sync my
   settings**, on by default): the chat settings shared with the website
-  (timestamps, 12/24 h, deleted messages, bots, commands, hidden words and
-  people, highlighted words), the top streams language, the VOD speed, pinned
+  (timestamps, 12/24 h, deleted messages, bots, gifted subs, commands, hidden
+  words and people, highlighted words), the top streams language, the VOD speed, pinned
   channels, hidden channels and categories, and the app's own customization
   (tabs, home, player buttons, chat banners, channel points chests, raids,
   ad-free with your sub, chat autocomplete and keyboard suggestions). Not
@@ -718,6 +727,16 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   and TU Test; older backups and the website's still import. The file picker
   copies the file into the app before reading it, so importing also works in
   LiveContainer without its « Fix File Picker » option.
+* 🔁 **Send my settings to TU Test** (or **to TwitchUnblock** from TU Test) —
+  same section, shown only when the other app is installed: it opens the
+  other app with the whole backup in the link (compressed), and the other app
+  asks **Everything** / **Channels only** / Cancel before importing, like a
+  file. A backup too long for a link goes through the clipboard instead
+  (kept 10 minutes, never sent to your other devices): the other app reads it
+  after you confirm (iOS asks to allow pasting), or from **Import from
+  clipboard** in its Backup section. A one-time transfer, not a live sync:
+  install tools (Feather, SideStore, AltStore…) rewrite the app's
+  entitlements, so a shared App Group wouldn't be reliable.
 * ⬆️ **Update check** — the app tells you when a new version is out on the
   source, with a shortcut to Feather / SideStore / AltStore.
 * 🔢 **Build number** — Settings → About shows the version and its build

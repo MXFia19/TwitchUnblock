@@ -56,6 +56,8 @@ struct SearchView: View {
     @State private var vodsMoreFailed = false
     /// Filtre par mot-clé : pages suivantes demandées pour y chercher.
     @State private var searchingOlder = false
+    /// Filtre par jeu des VODs (identifiant du jeu), nil = tous les jeux.
+    @State private var gameFilter: String? = nil
 
     // Recherche par texte : résultats en onglets, gardés pendant qu'on ouvre
     // une chaîne ou une catégorie trouvée (retour sans les redemander).
@@ -148,11 +150,46 @@ struct SearchView: View {
         return store.accountFollowLogins.contains(l)
     }
 
+    /// VODs chargées, filtrées par le mot-clé et par le jeu.
     private var filteredVods: [VodData] {
         let kw = filterText.trimmingCharacters(in: .whitespaces).lowercased()
-        guard !kw.isEmpty else { return vods }
-        return vods.filter { $0.title.lowercased().contains(kw) }
+        let game = gameFilter
+        guard !kw.isEmpty || game != nil else { return vods }
+        return vods.filter { v in
+            (game == nil || v.gameId == game) && (kw.isEmpty || v.title.lowercased().contains(kw))
+        }
     }
+
+    /// Jeu des VODs chargées, pour le filtre par jeu (demande n° 7).
+    private struct VodGame: Identifiable {
+        let id: String
+        let name: String
+        let count: Int
+        var title: String { "\(name) (\(count))" }
+    }
+
+    /// Jeux présents dans les VODs chargées, le plus représenté d'abord.
+    private var vodGames: [VodGame] {
+        var counts: [String: Int] = [:]
+        var names: [String: String] = [:]
+        for v in vods {
+            guard let id = v.gameId, !id.isEmpty else { continue }
+            counts[id, default: 0] += 1
+            if names[id] == nil, let name = v.gameName, !name.isEmpty { names[id] = name }
+        }
+        return counts.map { VodGame(id: $0.key, name: names[$0.key] ?? $0.key, count: $0.value) }
+            .sorted { $0.count != $1.count ? $0.count > $1.count
+                                           : $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+    }
+
+    /// Nom du jeu choisi dans le filtre ; nil = tous les jeux.
+    private var gameFilterName: String? {
+        guard let id = gameFilter else { return nil }
+        return vods.first { $0.gameId == id }?.gameName ?? id
+    }
+
+    /// Moins de VODs du jeu choisi parmi celles chargées : la suite est cherchée.
+    private static let gameFilterMin = 12
 
     /// Entrée de la grille des VODs : une vraie VOD, ou une diffusion dont la
     /// VOD n'est pas listée.
@@ -193,10 +230,14 @@ struct SearchView: View {
     }
 
     /// VODs et diffusions non listées, de la plus récente à la plus ancienne,
-    /// filtrées par le mot-clé.
+    /// filtrées par le mot-clé et par le jeu (celui d'une diffusion non
+    /// listée, par son nom).
     private var vodEntries: [VodEntry] {
         let kw = filterText.trimmingCharacters(in: .whitespaces).lowercased()
-        let extra = unlistedStreams.filter { kw.isEmpty || $0.title.lowercased().contains(kw) }
+        let game = gameFilterName?.lowercased()
+        let extra = unlistedStreams.filter { s in
+            (kw.isEmpty || s.title.lowercased().contains(kw)) && (game == nil || s.game.lowercased() == game)
+        }
         guard !extra.isEmpty else { return filteredVods.map { VodEntry.vod($0) } }
         var items: [(date: Date, entry: VodEntry)] = []
         for v in filteredVods {
@@ -751,6 +792,15 @@ struct SearchView: View {
                     TSearchField(text: $filterText, placeholder: store.t("ph_keyword"))
                         .padding(.horizontal, TSpace.lg)
 
+                    // Filtre par jeu : dès que les VODs chargées en ont plusieurs.
+                    if vodGames.count > 1 || gameFilter != nil {
+                        HStack(spacing: 0) {
+                            gameMenu
+                            Spacer(minLength: 0)
+                        }
+                        .padding(.horizontal, TSpace.lg)
+                    }
+
                     // D'où viennent les cartes « VOD non listée », une fois.
                     if unlistedCount > 0 {
                         Label(store.t("unlisted_hint"), systemImage: "eye.slash")
@@ -808,9 +858,10 @@ struct SearchView: View {
                         }
                     } else if vodsRefused {
                         TListEndNote(key: "more_unavailable")
-                    } else if !filterText.trimmingCharacters(in: .whitespaces).isEmpty, vodCursor != nil {
-                        // Le filtre ne voit que les VODs chargées : sans
-                        // correspondance, rien ne demandait la suite.
+                    } else if !filterText.trimmingCharacters(in: .whitespaces).isEmpty || gameFilter != nil,
+                              vodCursor != nil {
+                        // Les filtres (mot-clé, jeu) ne voient que les VODs
+                        // chargées : sans correspondance, rien ne demandait la suite.
                         TLoadMoreButton(busy: false, titleKey: "vods_search_older") {
                             Task { await searchOlderVods() }
                         }
@@ -820,6 +871,50 @@ struct SearchView: View {
                 TEmptyState(icon: "film", title: store.t("no_vod"))
             }
         }
+    }
+
+    /// Filtre par jeu : tous les jeux, ou l'un de ceux des VODs chargées
+    /// (avec leur nombre de VODs). Même allure que la langue des catégories.
+    private var gameMenu: some View {
+        let games = vodGames
+        let current = gameFilter
+        return Menu {
+            Button { pickGame(nil) } label: {
+                if current == nil { Label(store.t("vod_games_all"), systemImage: "checkmark") }
+                else { Text(store.t("vod_games_all")) }
+            }
+            Divider()
+            ForEach(games) { g in
+                Button { pickGame(g.id) } label: {
+                    if current == g.id { Label(g.title, systemImage: "checkmark") } else { Text(g.title) }
+                }
+            }
+        } label: {
+            HStack(spacing: TSpace.xs) {
+                Image(systemName: "gamecontroller.fill").font(.tSystem(size: 11, weight: .semibold))
+                Text(gameFilterName ?? store.t("vod_games_all"))
+                    .font(.tLabel).lineLimit(1)
+                Image(systemName: "chevron.down").font(.tSystem(size: 8, weight: .bold))
+            }
+            .foregroundColor(current == nil ? .tMuted : .white)
+            .padding(.horizontal, TSpace.md)
+            .padding(.vertical, 4)
+            .frame(minHeight: 32)
+            .background(current == nil ? Color.tSurface : Color.tPrimary)
+            .cornerRadius(TRadius.chip)
+        }
+    }
+
+    /// Jeu choisi dans le filtre. Peu de VODs de ce jeu parmi celles
+    /// chargées : la suite est cherchée (5 pages au plus), jusqu'à en
+    /// montrer assez.
+    private func pickGame(_ id: String?) {
+        guard id != gameFilter else { return }
+        gameFilter = id
+        logger.debug("VIDEOS", "Filtre des VODs par jeu", gameFilterName ?? "tous les jeux")
+        let target = Self.gameFilterMin
+        guard id != nil, filteredVods.count < target, vodCursor != nil else { return }
+        Task { await searchOlderVods(atLeast: target) }
     }
 
     // MARK: – Highlights
@@ -1244,7 +1339,7 @@ struct SearchView: View {
         loading = true; errorMsg = nil; retryLogin = nil; liveData = nil; lastBroadcastAt = nil; vods = []
         // Le suivi de la chaîne précédente ne doit ni s'afficher ni se modifier ici.
         follow.reset(); confirmUnfollow = false
-        filterText = ""; searchedName = login; suggestions = []
+        filterText = ""; gameFilter = nil; searchedName = login; suggestions = []
         clips = []; clipsFor = ""; loadingClips = false
         clipsLocked = false; clipsCursor = nil; loadingMoreClips = false
         about = nil; aboutFor = ""; loadingAbout = false; schedule = nil
@@ -1353,10 +1448,11 @@ struct SearchView: View {
         hasMoreVods = ch.cursor != nil && !fresh.isEmpty
     }
 
-    /// Filtre par mot-clé : il ne voit que les VODs chargées. Page après
-    /// page (5 au plus par toucher, soit 500 VODs), jusqu'à ce que la suite
-    /// apporte une nouvelle correspondance, s'arrête ou échoue.
-    @MainActor private func searchOlderVods() async {
+    /// Filtres (mot-clé, jeu) : ils ne voient que les VODs chargées. Page
+    /// après page (5 au plus par toucher, soit 500 VODs), jusqu'à ce que la
+    /// suite apporte une nouvelle correspondance (avec `atLeast` : jusqu'à en
+    /// montrer autant), s'arrête ou échoue.
+    @MainActor private func searchOlderVods(atLeast target: Int = 0) async {
         let login = searchedName.lowercased()
         guard !login.isEmpty, !searchingOlder, !isLoadingMore else { return }
         searchingOlder = true
@@ -1367,7 +1463,9 @@ struct SearchView: View {
             isLoadingMore = true
             await loadMoreVods()
             guard login == searchedName.lowercased() else { break }
-            if filteredVods.count > before || vodsMoreFailed || vodsRefused { break }
+            if vodsMoreFailed || vodsRefused { break }
+            let enough = target > 0 ? filteredVods.count >= target : filteredVods.count > before
+            if enough { break }
         }
     }
 

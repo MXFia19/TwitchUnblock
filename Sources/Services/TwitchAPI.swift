@@ -1165,12 +1165,13 @@ func getChannelVideosPage(channelName: String, cursor: String? = nil) async
     logger.info("VIDEOS", "Chargement VODs de \"\(channelName)\"\(cursor != nil ? " (Page suivante)" : "")")
 
     let afterCursor = cursor != nil ? ", after: \"\(gqlStr(cursor!))\"" : ""
+    // `game` : filtre par jeu de la liste des VODs (SearchView).
     let q = """
     query {
         user(login: "\(gqlStr(channelName))") {
             profileImageURL(width: 70)
             videos(first: 100, type: ARCHIVE, sort: TIME\(afterCursor)) {
-                edges { cursor node { id title previewThumbnailURL(height: 180, width: 320) publishedAt lengthSeconds } }
+                edges { cursor node { id title previewThumbnailURL(height: 180, width: 320) publishedAt lengthSeconds game { id displayName } } }
                 pageInfo { hasNextPage }
             }
         }
@@ -1206,11 +1207,14 @@ func getChannelVideosPage(channelName: String, cursor: String? = nil) async
         guard let node  = e["node"] as? [String: Any],
               let id    = node["id"] as? String,
               let title = node["title"] as? String else { return nil }
+        let game = node["game"] as? [String: Any]
         return VodData(
             id: id, title: title,
             previewThumbnailURL: node["previewThumbnailURL"] as? String ?? "",
             publishedAt: node["publishedAt"] as? String ?? "",
-            lengthSeconds: node["lengthSeconds"] as? Int ?? 0
+            lengthSeconds: node["lengthSeconds"] as? Int ?? 0,
+            gameId: game?["id"] as? String,
+            gameName: game?["displayName"] as? String
         )
     }
 

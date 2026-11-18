@@ -9,6 +9,8 @@ import SwiftUI
 //  rotation (côte à côte ↔ les uns sous les autres) ne relance rien. Par
 //  défaut, le son ne vient que d'une vidéo à la fois (celle qu'on touche) ;
 //  le haut-parleur d'une tuile en ajoute d'autres, chacune à son volume.
+//  Une tuile qui a le son peut passer en « son seul » (variante audio_only,
+//  un fond à la place de l'image).
 // ═══════════════════════════════════════════════════════════════════════════
 
 struct MultiLiveEntry: Codable, Equatable, Identifiable {
@@ -170,6 +172,12 @@ final class MultiLive: ObservableObject {
         return key.flatMap { links[$0] }.flatMap { URL(string: $0) }
     }
 
+    /// « Son seul » d'une tuile : la variante audio_only, nil si le flux
+    /// n'en a pas (la tuile garde alors l'image).
+    nonisolated static func audioOnlyURL(_ links: QualityLinks) -> URL? {
+        links.keys.sorted().first(where: isAudioQuality).flatMap { links[$0] }.flatMap { URL(string: $0) }
+    }
+
     /// Reprise d'une VOD : la progression enregistrée, sauf sous 10 s ou à
     /// moins de 30 s de la fin (même règle que le site) — alors le début.
     nonisolated static func startPoint(saved: Double, length: Double) -> Double {
@@ -207,6 +215,14 @@ final class MultiTileModel: ObservableObject {
     /// Lecteur à l'arrêt, d'après AVPlayer : redessine la tuile (voir
     /// `heldBySystem`).
     @Published private var playerPaused = false { didSet { onPlayState() } }
+    /// « Son seul » (demande de Liathono) : la variante audio_only, et un fond
+    /// à la place de l'image — moins de données et de batterie. Seulement
+    /// pour une tuile qui a le son (MultiLiveSession.toggleAudioOnly) ; elle
+    /// retrouve son image dès qu'elle le perd.
+    @Published private(set) var audioOnly = false
+    /// Variante de l'élément en place (son seul ou image) : une VOD finie
+    /// qui a changé de choix repart sur la bonne (`restartIfStale`).
+    private var playingAudioOnly = false
     /// Lecture qui part ou s'arrête (phase, pauses) : la mosaïque revoit si
     /// l'écran doit rester allumé (MultiLiveSession.keepsScreenOn).
     var onPlayState: @MainActor () -> Void = {}
@@ -294,14 +310,18 @@ final class MultiTileModel: ObservableObject {
             let data = await getLive(channelName: login, webToken: web, integrity: integrity)
             guard let self, !Task.isCancelled else { return }
             if let id = data.userId { self.channelId = id }
-            guard let links = data.links, !links.isEmpty,
-                  let url = MultiLive.pick(LivePlaylistLoader.wrap(links, lowLatency: false), count: count, variants: data.variants) else {
+            let links = data.links.map { LivePlaylistLoader.wrap($0, lowLatency: false) } ?? [:]
+            // Son seul : la variante audio_only, si le direct en a une.
+            let audio = self.audioOnly ? MultiLive.audioOnlyURL(links) : nil
+            guard !links.isEmpty,
+                  let url = audio ?? MultiLive.pick(links, count: count, variants: data.variants) else {
                 // Hors ligne ou chaîne inexistante ; une panne (réseau,
                 // aucune source) n'est pas « hors ligne ».
                 let gone = data.error == "offline" || data.error == "not_found"
                 self.phase = gone ? .offline : .failed
                 return
             }
+            self.settleVariant(audio: audio != nil)
             // Même fabrique que les autres lecteurs : audio spatial, pauses pub.
             let item = VodUnmuteLoader.playerItem(url: url)
             self.observe(item)
@@ -329,11 +349,14 @@ final class MultiTileModel: ObservableObject {
                 #endif
             }
             if let meta, !meta.login.isEmpty { self.login = meta.login }
+            // Son seul : la variante audio_only, si la VOD en a une.
+            let audio = self.audioOnly ? MultiLive.audioOnlyURL(data.links) : nil
             guard !data.links.isEmpty,
-                  let url = MultiLive.pick(data.links, count: count, variants: data.variants) else {
+                  let url = audio ?? MultiLive.pick(data.links, count: count, variants: data.variants) else {
                 self.phase = .failed
                 return
             }
+            self.settleVariant(audio: audio != nil)
             if !self.started {
                 self.started = true
                 self.onStarted(id, meta)
@@ -359,6 +382,41 @@ final class MultiTileModel: ObservableObject {
         restarts = 0
         userPaused = false
         start(count: count)
+    }
+
+    /// « Son seul » pris ou quitté : la lecture repart sur l'autre variante,
+    /// une VOD là où elle en était, un direct au bord. Hors ligne, en échec
+    /// ou finie, rien ne repart : la lecture suivante (Réessayer, Revoir)
+    /// prendra la bonne.
+    func setAudioOnly(_ on: Bool) {
+        guard on != audioOnly else { return }
+        audioOnly = on
+        logger.info("MULTI", on ? "Tuile en son seul" : "Tuile revenue à l'image", login)
+        guard phase == .playing || phase == .loading else { return }
+        restarts = 0
+        start(count: count)
+    }
+
+    /// Variante de l'élément qui part. Son seul demandé sur un flux sans
+    /// audio_only (rare) : la tuile garde l'image, et ne prétend plus le
+    /// contraire.
+    private func settleVariant(audio: Bool) {
+        playingAudioOnly = audio
+        guard audioOnly, !audio else { return }
+        audioOnly = false
+        logger.warn("MULTI", "Pas de variante son seul : la tuile garde l'image", login)
+    }
+
+    /// VOD finie dont le choix a changé depuis (son seul pris ou quitté) :
+    /// l'élément en place est l'autre variante, la lecture repart de `t` sur
+    /// la bonne — un peu avant la fin au plus, sinon elle n'aurait rien à
+    /// lire. Faux s'il n'y avait rien à changer.
+    private func restartIfStale(at t: Double) -> Bool {
+        guard playingAudioOnly != audioOnly else { return false }
+        position = duration > 3 ? min(t, duration - 3) : t
+        userPaused = false
+        start(count: count)
+        return true
     }
 
     func stop() {
@@ -569,6 +627,7 @@ final class MultiTileModel: ObservableObject {
         guard isVod, let item = player.currentItem, pendingSeek == nil else { return }
         var target = max(0, t)
         if duration > 0 { target = min(target, duration) }
+        if phase == .ended, restartIfStale(at: target) { return }
         jump(to: bounded(target, in: item))
         if phase == .ended {
             // Revenu en arrière depuis la fin : la lecture reprend.
@@ -582,6 +641,7 @@ final class MultiTileModel: ObservableObject {
     /// « Revoir » : depuis le début.
     func replay() {
         guard isVod, player.currentItem != nil, pendingSeek == nil else { return }
+        if restartIfStale(at: 0) { return }
         phase = .playing
         userPaused = false
         jump(to: 0)
@@ -780,6 +840,15 @@ final class MultiLiveSession: ObservableObject {
         if !soundOn.contains(id) { soundOn.insert(id) }
     }
 
+    /// Bouton « Son seul » d'une tuile : la variante audio_only et un fond à
+    /// la place de l'image, ou l'image de retour. Seulement pour une tuile qui
+    /// a le son : sans lui, il n'y aurait rien à écouter.
+    func toggleAudioOnly(_ id: String) {
+        guard let model = tiles[id] else { return }
+        if model.audioOnly { model.setAudioOnly(false) }
+        else if soundOn.contains(id) { model.setAudioOnly(true) }
+    }
+
     /// Son et volume de chaque tuile. Le son n'est reposé que là où il
     /// change : sinon un volume réglé pendant une pause pub rendait la pub
     /// audible le temps que son bandeau la recoupe.
@@ -788,6 +857,9 @@ final class MultiLiveSession: ObservableObject {
             let volume = volumes[id] ?? 1
             if model.player.volume != volume { model.player.volume = volume }
             let on = soundOn.contains(id)
+            // Son seul sans le son (une autre tuile touchée, haut-parleur
+            // coupé) : rien à écouter, la tuile retrouve son image.
+            if !on, model.audioOnly { model.setAudioOnly(false) }
             guard appliedSound[id] != on else { continue }
             appliedSound[id] = on
             model.player.isMuted = !on

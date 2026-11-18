@@ -405,6 +405,11 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
 * 🔊 **Several sounds in multi-live** — tapping a tile still makes it the
   only one you hear; tap the speaker on other tiles to hear them too, and
   long-press it for that tile's volume (100 %, 75 %, 50 %, 25 %).
+* 🎧 **Audio only in multi-live** — the 🎧 button on a tile you hear switches
+  it to the stream's audio-only version, live or VOD: a plain background
+  replaces the picture, for less data and battery. The same button brings the
+  picture back, and a tile that loses the sound (you tap another one) gets
+  its picture back on its own.
 
 ### Chat
 

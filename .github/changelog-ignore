@@ -22,3 +22,7 @@ eea4414913442e5bbf00c2426e5024149d3baf9e  barre de progression sous iOS 16 : lig
 8e19753361ed0a5529d63701553cbc5d63372b1e  pubs filtrées : ligne trompeuse (les qualités supérieures par le compte passent toujours sur la source sans pub pendant une pause), remplacée par le commit suivant
 e3859bd6a6df0ecf9389b887ab74699f4ed27f57  multi-live Apple TV : notes de la TV seulement (le commit touche MultiLive.swift et project.yml, partagés)
 5e5a8789e1a4ff9070531cd3d14109ec21223bdb  journal exporté en français : sens inversé (l'export et les signalements partent en anglais), ligne remplacée par le commit suivant
+56a704e96f232c7c7023e1e5f32368144a822916  Journal : traductions du son seul, du chat déplacé et des gestes (série du 18/11, sans note : fait partie de la fonction annoncée)
+48465ad697e83b5b5202ee0f329b47915a39544f  Gestes du lecteur : liaisons optionnelles écrites en entier (série du 18/11, sans note : fait partie de la fonction annoncée)
+0f29e1156427691b9088db7710644bf4436e6e07  Chat déplacé : chaîne de modificateurs du chat allégée (série du 18/11, sans note : fait partie de la fonction annoncée)
+4675646d8767637aa19ad3d7fae82b84b347065b  Mon proxy : adresse collée avec ses identifiants (série du 18/11, sans note : fait partie de la fonction annoncée)

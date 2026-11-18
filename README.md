@@ -179,14 +179,20 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   is read from the playlist, so “720p” also finds a channel whose Source is
   720p60. Picking a quality in the player replaces the preference (as on the
   website); backups carry it under the website's name (`qualityPref`).
-* 🛡 **Live sources, in the order you pick** — lives come from sources that
-  avoid most ads (Luminous Asia, PerfProd Asia, an Albania proxy based on
-  TTV.LOL and its second server, Luminous Europe and Europe 2) or official
-  Twitch (with ads), tried one after the other until one answers — a source
-  added later goes right after the one it backs up in an order saved before
-  it —, without waiting a minute on one that stays silent: the loading
-  screen says which one is being tried, and the player can be minimized or
-  closed while it loads.
+* 🛡 **Live sources, in the order you pick** — lives come from **Bulgaria**
+  (test) or official Twitch, tried one after the other until one answers,
+  without waiting a minute on one that stays silent: the loading screen says
+  which one is being tried, and the player can be minimized or closed while
+  it loads. **Bulgaria** is a TwitchUnblock relay on a server in Sofia: the
+  playback token, the master playlist and the stream's playlists are asked
+  from there (over its IPv6 address — Twitch places its IPv4 one in
+  Germany), the video segments still come straight from Twitch's CDN; it is
+  there to measure whether Twitch serves fewer ads to a Bulgarian address
+  (/stats counts its ads apart, as « Bulgaria (test) »). When it doesn't
+  answer, official Twitch takes over. The public proxies (Luminous,
+  PerfProd, nadeko/TTV.LOL) were removed: they let hundreds of ads a day
+  through. An order saved with them goes back to the default one (My source
+  kept, at the top).
   Reorder them in Settings → Player; picking a source from the player's ⋯
   menu (which also ticks the source in use) moves it to the top, or tries it
   again. **My source** (same place, like on the website): the address of your
@@ -300,8 +306,8 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   ahead or **Live** stop there too. It never changes the playback speed
   (speeding up could pull the sound out of sync): the player only makes a
   small jump when it really falls behind, and never undoes a rewind. Turned
-  off, the proxies (Luminous, TTV.LOL) serve the regular stream too, like
-  official Twitch.
+  off, official Twitch serves the regular stream (the Bulgaria relay always
+  asks for the low-latency one, like the Worker).
 * 🖥 **Fill the screen** — crops the video to remove the black bars in
   landscape. Cuts off the top and bottom: 16:9 in a phone screen can't do both.
   Otherwise the picture never goes under the Dynamic Island or the notch in

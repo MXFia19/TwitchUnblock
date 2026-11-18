@@ -196,7 +196,8 @@ extension AdBreakMonitor {
 enum AdHours {
     private static let key = "usage_ad_hours"
     /// Sources connues du Worker (comme le site) ; une autre part en « other ».
-    private static let sources: Set<String> = ["as", "pp", "al", "al2", "eu", "eu2", "custom", "worker", "account", "twitch"]
+    /// (Les proxys retirés restent, pour les pauses comptées avant la mise à jour.)
+    private static let sources: Set<String> = ["as", "pp", "al", "al2", "eu", "eu2", "bg", "custom", "worker", "account", "twitch"]
 
     /// Source pour /stats : les deux formes du compte (sans pub, qualités
     /// supérieures) sous « account ».

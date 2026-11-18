@@ -474,6 +474,9 @@
  "Chat du téléchargement indisponible": ["Download chat unavailable", "Chat de la descarga no disponible", "Чат загрузки недоступен"],
  "Réseau revenu : relance de la lecture": ["Network back: restarting playback", "Red recuperada: se relanza la reproducción", "Сеть восстановлена: воспроизведение перезапускается"],
  "Réseau revenu : relance des tuiles en échec": ["Network back: restarting failed tiles", "Red recuperada: se relanzan los mosaicos fallidos", "Сеть восстановлена: перезапуск неудавшихся плиток"],
+ "Tuile en son seul": ["Tile switched to audio only", "Mosaico en solo audio", "Плитка переключена на только звук"],
+ "Tuile revenue à l'image": ["Tile back to the picture", "Mosaico de vuelta a la imagen", "Плитка снова с изображением"],
+ "Pas de variante son seul : la tuile garde l'image": ["No audio-only variant: the tile keeps its picture", "Sin variante de solo audio: el mosaico conserva la imagen", "Нет варианта «только звук»: плитка сохраняет изображение"],
  "En attente du Wi-Fi (Wi-Fi seulement)": ["Waiting for Wi-Fi (Wi-Fi only)", "Esperando el Wi-Fi (solo con Wi-Fi)", "Ожидание Wi-Fi (только по Wi-Fi)"],
  "Reprise du téléchargement qui attendait le Wi-Fi": ["Resuming the download that was waiting for Wi-Fi", "Se reanuda la descarga que esperaba el Wi-Fi", "Возобновление загрузки, ожидавшей Wi-Fi"],
  "Chaîne hors ligne : pas de clip": ["Channel offline: no clip", "Canal sin conexión: sin clip", "Канал не в эфире: клипа не будет"],
@@ -720,6 +723,8 @@
  "Emote ajoutée aux favoris": ["Emote added to favorites","Emote añadido a favoritos","Эмоут добавлен в избранное"],
  "Emote retirée des favoris": ["Emote removed from favorites","Emote quitado de favoritos","Эмоут удалён из избранного"],
  "Fermer en glissant depuis le bord": ["Close by swiping from the edge","Cerrar deslizando desde el borde","Закрытие свайпом от края"],
+ "Volume et luminosité en glissant": ["Volume and brightness by swiping","Volumen y brillo deslizando","Громкость и яркость свайпом"],
+ "Chat déplacé au doigt": ["Chat moved by dragging","Chat movido arrastrando","Чат перемещён перетаскиванием"],
  "Onglets dans la colonne d'état": ["Tabs in the status column","Pestañas en la columna de estado","Вкладки в колонке состояния"],
  "playlist originale sur le récepteur": ["original playlist on the receiver","lista original en el receptor","исходный плейлист на приёмнике"],
  "VOD sans son chez Twitch : piste audio vide (silence à 10, 50 et 90 %)": ["VOD with no sound on Twitch: empty audio track (silent at 10, 50 and 90%)","VOD sin sonido en Twitch: pista de audio vacía (silencio al 10, 50 y 90 %)","VOD без звука на Twitch: пустая звуковая дорожка (тишина на 10, 50 и 90 %)"]

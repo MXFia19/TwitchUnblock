@@ -1106,8 +1106,9 @@ struct MainTabView: View {
         // La colonne, elle, reste à droite sur toute la hauteur.
         let overlayLayout = split && mode == .overlay ? store.chatOverlayLayout : ChatOverlayLayout()
         // Posé sur l'image, le chat se déplace aussi au doigt, par sa poignée
-        // du haut (ChatMove.swift).
+        // du haut (ChatMove.swift), qui a sa place au-dessus des messages.
         let chatMovable = split && mode == .overlay
+        let chatHandleRoom: CGFloat = chatMovable ? 14 : 0
         let chatOnLeft  = overlayLayout.side == .left
         let overlayHalf = overlayLayout.half
         // Marge de sécurité du côté du chat, reprise quand l'îlot (ou
@@ -1222,7 +1223,7 @@ struct MainTabView: View {
             // le texte des messages.
             chatPane(style: chatStyle)
                 // Posé sur l'image : de la place en haut pour sa poignée.
-                .padding(.top, chatMovable ? 14 : 0)
+                .padding(.top, chatHandleRoom)
                 .padding(.trailing, rightReclaim > 0 ? 16 : 0)
                 .ignoresSafeArea(.container, edges: rightReclaim > 0 ? .trailing : [])
                 .frame(width: chatWidth.map { $0 + leftReclaim }, alignment: chatOnLeft ? .trailing : .leading)
@@ -1241,11 +1242,7 @@ struct MainTabView: View {
                 .overlay(alignment: .top) {
                     if chatMovable {
                         ChatMoveHandle(move: chatMove, layout: overlayLayout, size: size,
-                                       chatWidth: chatWidth ?? 0) { target in
-                            guard target != store.chatOverlayLayout else { return }
-                            store.chatOverlayLayout = target
-                            logger.info("LECTEUR", "Chat déplacé au doigt", target.raw)
-                        }
+                                       chatWidth: chatWidth ?? 0, onDrop: dropChat)
                     }
                 }
                 .frame(maxHeight: verticalOverlay ? nil : CGFloat.infinity, alignment: chatAlign)
@@ -1263,6 +1260,14 @@ struct MainTabView: View {
                 ChatSlotPreview(move: chatMove, layout: overlayLayout, size: size, chatWidth: chatWidth ?? 0)
             }
         }
+    }
+
+    /// Chat posé sur l'image lâché par sa poignée (ChatMoveHandle) : sa
+    /// nouvelle place, gardée comme celle des Réglages.
+    private func dropChat(_ target: ChatOverlayLayout) {
+        guard target != store.chatOverlayLayout else { return }
+        store.chatOverlayLayout = target
+        logger.info("LECTEUR", "Chat déplacé au doigt", target.raw)
     }
 
     /// Poignée du bord vidéo / chat, qui se saisit pour régler la largeur.

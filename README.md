@@ -47,6 +47,14 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
 **Apple TV**: see [Apple TV (test)](#-apple-tv-test) below. **No install**: the
 [web version](https://twitchunblock.vercel.app) runs in any browser.
 
+**Mac (Apple Silicon)**: the iPhone app also runs on Macs with an M1 chip or
+newer through [PlayCover](https://playcover.io) (free and open source): install
+PlayCover (or `brew install --cask playcover-community`), download the `.ipa`
+above and open it with PlayCover. It runs like an iPad app, in a window. The
+brightness and volume swipes of the player are turned off on a Mac. I can't
+test it on a Mac myself, so tell me what doesn't work. Intel Macs can't run
+iPhone apps.
+
 ---
 
 ## ✨ Features

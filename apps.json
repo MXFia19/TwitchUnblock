@@ -203,6 +203,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.7.32",
+          "buildVersion": "414",
+          "date": "2026-11-18",
+          "localizedDescription": "- Live sources: the public proxies (Luminous, PerfProd, nadeko) are gone — they let hundreds of ads a day through.\n- New test source \"Bulgaria\": a TwitchUnblock relay in Sofia fetches the stream's playlists from Bulgaria, to see whether Twitch serves fewer ads there. Official Twitch takes over when it doesn't answer.\n- Apple TV: live sources are now Bulgaria (test) and official Twitch; the public proxies were removed.",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-414/TwitchUnblock.ipa",
+          "size": 4631456,
+          "commit": "1389c9091367cc6fd046c036fcb4824fda12bfd1"
+        },
+        {
           "version": "1.7.31",
           "buildVersion": "413",
           "date": "2026-11-15",
@@ -282,25 +291,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-398/TwitchUnblock.ipa",
           "size": 4611092,
           "commit": "788da169718aba0ff956697e6d38acf382e774c4"
-        },
-        {
-          "version": "1.7.20",
-          "buildVersion": "397",
-          "date": "2026-11-09",
-          "localizedDescription": "- Other improvements and fixes",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-397/TwitchUnblock.ipa",
-          "size": 4610277,
-          "commit": "6f3667c73e13511a15031bc05876e09d13557a53"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.7.31",
-      "versionDate": "2026-11-15",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-413/TwitchUnblock.ipa",
-      "size": 4635011
+      "version": "1.7.32",
+      "versionDate": "2026-11-18",
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-414/TwitchUnblock.ipa",
+      "size": 4631456
     }
   ],
   "news": []

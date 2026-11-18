@@ -203,6 +203,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.7.45",
+          "buildVersion": "417",
+          "date": "2026-11-18",
+          "localizedDescription": "- Connect an LG TV: Settings → Twitch Account → Connect an LG TV scans the QR code shown by the TwitchUnblock app on an LG TV and, after you confirm, sends it your Twitch web session, encrypted end to end, so the TV watches with your account (ad-free subs, followed channels). Only TwitchUnblock's Workers (or your own Worker) can receive it.",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-417/TwitchUnblock.ipa",
+          "size": 4800349,
+          "commit": "bb272b6de899ec97716740da43c64e9fa9c4524f"
+        },
+        {
           "version": "1.7.44",
           "buildVersion": "416",
           "date": "2026-11-18",
@@ -282,25 +291,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-400/TwitchUnblock.ipa",
           "size": 4615039,
           "commit": "788f75b5812b372489de7dcf06c8d2b9e7ab6b96"
-        },
-        {
-          "version": "1.7.22",
-          "buildVersion": "399",
-          "date": "2026-11-10",
-          "localizedDescription": "- Swipe from the edge to close the player now works even when the swipe starts over the video or the chat\n- The mini player bar hides while the Picture-in-Picture window is open, and comes back when it closes\n- The chapters list opens on the current chapter",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-399/TwitchUnblock.ipa",
-          "size": 4611568,
-          "commit": "b9e5d2a7913ce1ee35d89d61e314d1f9d257b5e6"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.7.44",
+      "version": "1.7.45",
       "versionDate": "2026-11-18",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-416/TwitchUnblock.ipa",
-      "size": 4742202
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-417/TwitchUnblock.ipa",
+      "size": 4800349
     }
   ],
   "news": []

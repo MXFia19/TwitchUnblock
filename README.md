@@ -198,13 +198,29 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   answer, official Twitch takes over. The public proxies (Luminous,
   PerfProd, nadeko/TTV.LOL) were removed: they let hundreds of ads a day
   through. An order saved with them goes back to the default one (My source
-  kept, at the top).
+  and My proxy kept, at the top).
   Reorder them in Settings → Player; picking a source from the player's ⋯
   menu (which also ticks the source in use) moves it to the top, or tries it
   again. **My source** (same place, like on the website): the address of your
   own luminous-ttv server (https://, a domain name, no port or parameters)
   goes to the top of the order; empty it to remove it. Kept in the backup
   under the website's name (`customSource`).
+  **My proxy** (same place): your own HTTP proxy —
+  `host:port`, with an optional username and password, like the proxies of
+  [TTV LOL PRO](https://github.com/younesaassila/ttv-lol-pro) (pasting
+  `user:password@host:port` or `host:port:user:password` fills the three
+  fields). The playback
+  token (GQL), usher's master playlist and the stream's playlists go through
+  it (HTTPS through `CONNECT`), so Twitch sees the proxy's address; the video
+  segments still come straight from Twitch's CDN, as in the TwitchAdBlock
+  tweak. It goes to the top of the order and is only offered once set; when
+  it can't be reached, refuses the credentials (407) or Twitch refuses it,
+  the log says so, Settings shows it under the proxy (**Test the proxy**
+  checks it on demand) and the next source takes over. The address and the
+  username are kept in the backup (`customProxy`, `customProxyUser`); the
+  password stays in the device's keychain and never goes in the backup.
+  Over AirPlay, the receiver reads the playlists itself, without the proxy.
+  Its ad breaks are sent to /stats as « proxy ».
   Channels that stream with multiple encodes (Enhanced Broadcasting) keep each
   quality's own name on every source. No source escapes the channel's own ad
   breaks: Twitch stitches them into the stream itself. When Twitch's own API
@@ -662,6 +678,10 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   since November 2026, Twitch refuses a GQL request with more than 15 aliases,
   and the single request for 100 returned nothing. A category you follow on Twitch shows as followed on its page, and
   unfollowing it there removes it from your Twitch account (web session).
+  With the web session connected, **Follow** on a category's page also
+  follows it on your Twitch account (the same request as twitch.tv's heart);
+  if Twitch refuses (integrity check, session), it stays followed in the app
+  and the log says why. Without it, follows stay on the device, as before.
   Errors and empty lists have **Retry** / pull to refresh.
 * 🗂️ **Followed categories your way** — Settings → General → Customize the app → Followed categories: **Compact** covers (3 per row on iPhone, more on a wider screen) and the order (most watched first, as before, or A → Z).
 * 🏷 **Stream tags** — language, DropsEnabled… under each live stream, like on

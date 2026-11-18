@@ -1645,6 +1645,9 @@ struct SettingsView: View {
             .onChange(of: customSourceFocused) { focused in
                 if !focused { applyCustomSource() }
             }
+            Divider().background(Color.tBorder)
+            // Mon proxy : un proxy HTTP à soi (hôte:port, identifiants).
+            LiveProxyRow()
         }
         .onChange(of: store.liveSourceOrder) { order in
             logger.settingChanged("Ordre des sources", value: order.joined(separator: ","))

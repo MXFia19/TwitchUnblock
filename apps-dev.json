@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.7.37",
+          "buildVersion": "415",
+          "date": "2026-11-18",
+          "localizedDescription": "- Live sources: the public proxies (Luminous, PerfProd, nadeko) are gone — they let hundreds of ads a day through.\n- New test source \"Bulgaria\": a TwitchUnblock relay in Sofia fetches the stream's playlists from Bulgaria, to see whether Twitch serves fewer ads there. Official Twitch takes over when it doesn't answer.\n- Apple TV: live sources are now Bulgaria (test) and official Twitch; the public proxies were removed.\n- VODs with no sound on Twitch: some channels record only an empty audio track in their VODs. A few seconds in, the player now notices it and says so at the top of the video (\"This VOD has no sound on Twitch\"), instead of looking broken.\n- Apple TV: VODs with no sound on Twitch are now announced at the top of the video.",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/dev-415/TwitchUnblock.ipa",
+          "size": 4719789,
+          "commit": "99d24a441b0242cdc77f5a669427ccaa91684201"
+        },
+        {
           "version": "1.7.35",
           "buildVersion": "412",
           "date": "2026-11-14",
@@ -61,10 +70,10 @@
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.7.35",
-      "versionDate": "2026-11-14",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/dev-412/TwitchUnblock.ipa",
-      "size": 4707384
+      "version": "1.7.37",
+      "versionDate": "2026-11-18",
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/dev-415/TwitchUnblock.ipa",
+      "size": 4719789
     }
   ]
 }

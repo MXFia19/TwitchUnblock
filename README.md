@@ -929,6 +929,25 @@ iPhone apps.
   account — when the session changes, drop progress stops or carries on with
   the new one, and a live playing through your account (ad-free with your sub)
   reloads with the new session or without one.
+* 📺 **Connect an LG TV** — Settings → Twitch Account → **Connect an LG TV**
+  (offered once the web session is connected) scans the QR code shown by the
+  TwitchUnblock app for LG TVs (webOS) and hands that TV your Twitch web
+  session, so it watches with your account (ad-free on channels you're subbed
+  to, followed channels) without typing anything on the remote. How I keep it
+  safe: the session is encrypted end to end on the iPhone (AES-256-GCM, a
+  fresh nonce each time) with a key the TV draws at random and that only
+  exists inside the QR code — the Worker only ever holds the encrypted packet,
+  hands it to the TV once and drops it after 5 minutes at most. The packet
+  only goes to a Worker the app already knows (the official one, its fallback,
+  or your own Worker from Expert settings), at the address written in the app:
+  a code pointing anywhere else is refused, so a rigged QR code can't send
+  your session to someone else's server. Nothing leaves the iPhone before you
+  confirm, and the token never appears in the logs. Limits: whoever shows you
+  a code receives your session if you confirm, so only scan the one on your
+  own TV; the TV then has the same access as twitch.tv signed in, and logging
+  out on the iPhone doesn't sign it out (log out on the TV, or change your
+  Twitch password to end every session); the TV must use the same Worker as
+  the iPhone. The camera is used for nothing else, and nothing is recorded.
 * 📊 **Usage count** — logged in, your Twitch account (counted once across the
   app and the website); logged out, a random install ID. Plus the app version,
   the app language, iPhone or iPad, the iOS version and how many lives and

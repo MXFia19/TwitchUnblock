@@ -754,5 +754,18 @@
  "Réglages envoyés à une autre app": ["Settings sent to another app","Ajustes enviados a otra app","Настройки отправлены в другое приложение"],
  "Réglages reçus : import annulé": ["Settings received: import canceled","Ajustes recibidos: importación cancelada","Настройки получены: импорт отменён"],
  "Réglages reçus d'une autre app": ["Settings received from another app","Ajustes recibidos de otra app","Настройки получены из другого приложения"],
- "Réglages reçus illisibles": ["Received settings can't be read","Ajustes recibidos ilegibles","Полученные настройки не читаются"]
+ "Réglages reçus illisibles": ["Received settings can't be read","Ajustes recibidos ilegibles","Полученные настройки не читаются"],
+ "Accès à la caméra refusé": ["Camera access denied", "Acceso a la cámara denegado", "Доступ к камере запрещён"],
+ "Caméra indisponible": ["Camera unavailable", "Cámara no disponible", "Камера недоступна"],
+ "Chiffrement impossible": ["Encryption failed", "Cifrado imposible", "Шифрование не удалось"],
+ "Code de TV d'une version plus récente": ["TV code from a newer version", "Código de TV de una versión más reciente", "Код телевизора из более новой версии"],
+ "Code de TV déjà utilisé ou expiré": ["TV code already used or expired", "Código de TV ya usado o caducado", "Код телевизора уже использован или истёк"],
+ "Code de TV mal formé": ["Malformed TV code", "Código de TV mal formado", "Неверный формат кода телевизора"],
+ "Code de TV refusé : serveur inconnu": ["TV code refused: unknown server", "Código de TV rechazado: servidor desconocido", "Код телевизора отклонён: неизвестный сервер"],
+ "Code de TV refusé par le serveur": ["TV code refused by the server", "Código de TV rechazado por el servidor", "Код телевизора отклонён сервером"],
+ "Envoi à la TV impossible": ["Sending to the TV failed", "Envío a la TV imposible", "Отправка на телевизор не удалась"],
+ "Envoi à la TV refusé": ["Sending to the TV refused", "Envío a la TV rechazado", "Отправка на телевизор отклонена"],
+ "rien n'a été envoyé à la TV": ["nothing was sent to the TV", "no se envió nada a la TV", "на телевизор ничего не отправлено"],
+ "Session envoyée à la TV": ["Session sent to the TV", "Sesión enviada a la TV", "Сессия отправлена на телевизор"],
+ "Trop d'envois à la TV": ["Too many sends to the TV", "Demasiados envíos a la TV", "Слишком много отправок на телевизор"]
 }

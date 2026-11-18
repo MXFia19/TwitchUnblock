@@ -586,6 +586,11 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   height or in a corner (top or bottom half), like on Apple TV (Settings →
   Chat → Chat on the video). The player's buttons shift with the chat's width
   and side so nothing is ever covered.
+* 🧲 **Drag the chat around** — over the picture, grab the small handle at the
+  top of the chat and drag it away from the facecam: when you let go, it snaps
+  to the nearest of its six places (the four corners, or the middle of the
+  left or right edge at full height), shown while you drag. The place is kept,
+  the same as in Settings → Chat → Chat on the video.
 * 🔠 **Sizing** — font size, message spacing, badge and emote scale,
   timestamps, with a live preview. The time shows in 12 h or 24 h: Auto
   follows the device, or pick one (Settings → Chat; the log follows it too).

@@ -741,6 +741,7 @@ let kTraditionalChineseStrings: [String: String] = [
     "multi_audio_only": "僅音訊",
     "multi_audio_only_off": "恢復畫面",
     "multi_audio_only_sub": "更省數據用量與電量",
+    "cfg_chat_overlay_drag": "在播放器中拖曳聊天室頂端的把手，它會停靠到最近的角落或邊緣。",
     "q_source": "來源（原始）",
     "q_audio": "僅音訊",
     "src_up": "上移",

@@ -759,6 +759,7 @@ let kJapaneseStrings: [String: String] = [
     "multi_audio_only": "音声のみ",
     "multi_audio_only_off": "映像に戻す",
     "multi_audio_only_sub": "通信量とバッテリーを節約",
+    "cfg_chat_overlay_drag": "プレーヤーでチャット上部のつまみをドラッグすると、いちばん近い角か端に吸着します。",
     "q_source": "ソース (原画)",
     "q_audio": "音声のみ",
     "src_up": "上へ移動",

@@ -760,6 +760,7 @@ let kItalianStrings: [String: String] = [
     "multi_audio_only": "Solo audio",
     "multi_audio_only_off": "Rimetti il video",
     "multi_audio_only_sub": "Consuma meno dati e batteria",
+    "cfg_chat_overlay_drag": "Nel lettore, trascina la maniglia in cima alla chat: si aggancia all'angolo o al bordo più vicino.",
     "q_source": "Sorgente (originale)",
     "q_audio": "Solo audio",
     "src_up": "Sposta su",

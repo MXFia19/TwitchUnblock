@@ -1351,6 +1351,10 @@ struct SettingsView: View {
                     }
                     .pickerStyle(.segmented)
                     .labelsHidden()
+                    // Aussi au doigt, dans le lecteur (ChatMove.swift).
+                    Text(store.t("cfg_chat_overlay_drag"))
+                        .font(.tMeta).foregroundColor(.tMuted)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
 
                 Button {

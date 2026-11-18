@@ -127,6 +127,11 @@ struct MainTabView: View {
     /// mémorisé qui s'applique ; pendant le geste, cet état local évite de
     /// toucher à l'AppStore à chaque image (voir `playerBody`).
     @State private var chatDragRatio: Double? = nil
+    /// Chat posé sur l'image, glissé par sa poignée (demande de joey) : au
+    /// lâcher, il s'aimante à la plus proche des six places. Objet gardé en
+    /// @State sans être observé ici, comme `pull` : seuls le chat, sa poignée
+    /// et l'aperçu de sa place se redessinent pendant le geste (ChatMove.swift).
+    @State private var chatMove = ChatMove()
     /// Paysage : l'îlot (ou l'encoche) est à droite. La marge de sécurité
     /// d'en face peut servir au chat (voir `playerBody`).
     @State private var notchOnTrailing = false
@@ -1100,6 +1105,9 @@ struct MainTabView: View {
         // Chat posé sur l'image : côté et hauteur choisis dans les réglages.
         // La colonne, elle, reste à droite sur toute la hauteur.
         let overlayLayout = split && mode == .overlay ? store.chatOverlayLayout : ChatOverlayLayout()
+        // Posé sur l'image, le chat se déplace aussi au doigt, par sa poignée
+        // du haut (ChatMove.swift).
+        let chatMovable = split && mode == .overlay
         let chatOnLeft  = overlayLayout.side == .left
         let overlayHalf = overlayLayout.half
         // Marge de sécurité du côté du chat, reprise quand l'îlot (ou
@@ -1213,6 +1221,8 @@ struct MainTabView: View {
             // il débordait à moitié sur l'image, et la poignée tombait sur
             // le texte des messages.
             chatPane(style: chatStyle)
+                // Posé sur l'image : de la place en haut pour sa poignée.
+                .padding(.top, chatMovable ? 14 : 0)
                 .padding(.trailing, rightReclaim > 0 ? 16 : 0)
                 .ignoresSafeArea(.container, edges: rightReclaim > 0 ? .trailing : [])
                 .frame(width: chatWidth.map { $0 + leftReclaim }, alignment: chatOnLeft ? .trailing : .leading)
@@ -1225,12 +1235,33 @@ struct MainTabView: View {
                 .overlay(alignment: chatOnLeft ? .trailing : .leading) {
                     if split { chatResizeHandle(totalWidth: size.width, leftSide: chatOnLeft) }
                 }
+                // Haut du chat posé sur l'image : la poignée qui le déplace.
+                // Au lâcher, il se pose à la plus proche des six places (le
+                // réglage « Chat posé sur l'image » suit).
+                .overlay(alignment: .top) {
+                    if chatMovable {
+                        ChatMoveHandle(move: chatMove, layout: overlayLayout, size: size,
+                                       chatWidth: chatWidth ?? 0) { target in
+                            guard target != store.chatOverlayLayout else { return }
+                            store.chatOverlayLayout = target
+                            logger.info("LECTEUR", "Chat déplacé au doigt", target.raw)
+                        }
+                    }
+                }
                 .frame(maxHeight: verticalOverlay ? nil : CGFloat.infinity, alignment: chatAlign)
                 .frame(width: chatColumn, alignment: .trailing)
                 .offset(x: chatOnLeft ? -(size.width - (chatWidth ?? 0)) : 0)
+                // Glissé par sa poignée : le chat suit le doigt.
+                .modifier(ChatMoveEffect(move: chatMove, enabled: chatMovable))
                 .frame(height: verticalOverlay ? 0 : nil, alignment: .bottom)
                 .opacity(chatVisible ? 1 : 0)
                 .allowsHitTesting(chatVisible)
+        }
+        // Chat glissé par sa poignée : la place où il va se poser.
+        .overlay(alignment: .topLeading) {
+            if chatMovable {
+                ChatSlotPreview(move: chatMove, layout: overlayLayout, size: size, chatWidth: chatWidth ?? 0)
+            }
         }
     }
 

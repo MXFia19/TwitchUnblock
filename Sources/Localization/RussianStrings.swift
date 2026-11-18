@@ -698,6 +698,7 @@ let kRussianStrings: [String: String] = [
     "multi_audio_only": "Только звук",
     "multi_audio_only_off": "Вернуть изображение",
     "multi_audio_only_sub": "Экономит трафик и заряд батареи",
+    "cfg_chat_overlay_drag": "В плеере перетащите полоску вверху чата: он встанет в ближайший угол или к ближайшему краю.",
     "q_source": "Источник (оригинал)",
     "q_audio": "Только звук",
     "src_up": "Выше",

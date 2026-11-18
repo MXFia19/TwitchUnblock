@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.7.32",
+          "buildVersion": "414",
+          "date": "2026-11-18",
+          "localizedDescription": "- Live sources: the public proxies (Luminous, PerfProd, nadeko) are gone — they let hundreds of ads a day through.\n- New test source \"Bulgaria\": a TwitchUnblock relay in Sofia fetches the stream's playlists from Bulgaria, to see whether Twitch serves fewer ads there. Official Twitch takes over when it doesn't answer.\n- Apple TV: live sources are now Bulgaria (test) and official Twitch; the public proxies were removed.",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-414/TwitchUnblock.ipa",
+          "size": 4631456,
+          "commit": "1389c9091367cc6fd046c036fcb4824fda12bfd1"
+        },
+        {
           "version": "1.7.31",
           "buildVersion": "413",
           "date": "2026-11-15",
@@ -280,25 +289,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-377/TwitchUnblock.ipa",
           "size": 4486051,
           "commit": "fe6d3aba005d3f836fe315e45b2a47ab8d60068c"
-        },
-        {
-          "version": "1.6.64",
-          "buildVersion": "376",
-          "date": "2026-10-30",
-          "localizedDescription": "- Going back in a live (−10 s or the bar) now plays at your chosen speed, up to 2×, to catch up, then back to 1× at the live edge; the speed is also in the player's ⋯ menu during a live\n- The player no longer shows your VOD speed next to the timer during a live when it doesn't apply\n- Rewinding into a live's recording now brings back your chosen playback speed once you're away from its edge, instead of staying at 1×\n- Apple's player now drops to 1× near the edge of a live recording and shows it, instead of a 2× that didn't actually play\n- The player now checks the speed it really plays at: it applies it again, then shows the real speed if playback still can't keep up",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-376/TwitchUnblock.ipa",
-          "size": 4486050,
-          "commit": "bb0b73cf3071659fe779f19a259da7516fb98195"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.7.31",
-      "versionDate": "2026-11-15",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-413/TwitchUnblock.ipa",
-      "size": 4635011
+      "version": "1.7.32",
+      "versionDate": "2026-11-18",
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-414/TwitchUnblock.ipa",
+      "size": 4631456
     }
   ],
   "news": []

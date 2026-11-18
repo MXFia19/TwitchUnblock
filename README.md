@@ -139,6 +139,12 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
 * 👈 **Swipe from the edge to close** (Settings → Player, off by default) —
   swipe in from the left edge of the screen to close the player, like ✕, even
   when the swipe starts over the video or the chat.
+* ☀️ **Volume and brightness by swiping** (Settings → Player, off by default) —
+  in landscape, in the app's player, swipe up or down on the right third of
+  the picture for the phone's volume, on the left third for the screen's
+  brightness, like VLC; a small indicator shows the level. The middle third
+  keeps the swipe down that minimizes the player (that's why it's off by
+  default: on the sides, it takes that swipe's place). Not on Mac or Apple TV.
 * 📋 **Streams as a list** (Settings → General, or the button on Home) —
   live streams in a list like on Twitch, thumbnail on the left, on Home, in a
   category and in search results.
@@ -405,6 +411,11 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
 * 🔊 **Several sounds in multi-live** — tapping a tile still makes it the
   only one you hear; tap the speaker on other tiles to hear them too, and
   long-press it for that tile's volume (100 %, 75 %, 50 %, 25 %).
+* 🎧 **Audio only in multi-live** — the 🎧 button on a tile you hear switches
+  it to the stream's audio-only version, live or VOD: a plain background
+  replaces the picture, for less data and battery. The same button brings the
+  picture back, and a tile that loses the sound (you tap another one) gets
+  its picture back on its own.
 
 ### Chat
 
@@ -586,6 +597,11 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   height or in a corner (top or bottom half), like on Apple TV (Settings →
   Chat → Chat on the video). The player's buttons shift with the chat's width
   and side so nothing is ever covered.
+* 🧲 **Drag the chat around** — over the picture, grab the small handle at the
+  top of the chat and drag it away from the facecam: when you let go, it snaps
+  to the nearest of its six places (the four corners, or the middle of the
+  left or right edge at full height), shown while you drag. The place is kept,
+  the same as in Settings → Chat → Chat on the video.
 * 🔠 **Sizing** — font size, message spacing, badge and emote scale,
   timestamps, with a live preview. The time shows in 12 h or 24 h: Auto
   follows the device, or pick one (Settings → Chat; the log follows it too).

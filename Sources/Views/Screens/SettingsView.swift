@@ -1355,6 +1355,10 @@ struct SettingsView: View {
                     }
                     .pickerStyle(.segmented)
                     .labelsHidden()
+                    // Aussi au doigt, dans le lecteur (ChatMove.swift).
+                    Text(store.t("cfg_chat_overlay_drag"))
+                        .font(.tMeta).foregroundColor(.tMuted)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
 
                 Button {
@@ -1389,6 +1393,12 @@ struct SettingsView: View {
                 toggleRow(store.t("cfg_edge_swipe"), store.t("cfg_edge_swipe_sub"),
                           $store.edgeSwipeClose, log: "Fermer en glissant depuis le bord")
                 Divider().background(Color.tBorder)
+                // Pas sur Mac (PlayerSwipe.supported) : rien à y régler ainsi.
+                if PlayerSwipe.supported {
+                    toggleRow(store.t("cfg_player_swipes"), store.t("cfg_player_swipes_sub"),
+                              $store.playerSwipes, log: "Volume et luminosité en glissant")
+                    Divider().background(Color.tBorder)
+                }
                 backgroundPlaybackRow
                 Divider().background(Color.tBorder)
                 toggleRow(store.t("low_latency"), store.t("low_latency_sub"),

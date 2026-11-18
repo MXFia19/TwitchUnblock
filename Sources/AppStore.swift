@@ -462,6 +462,13 @@ final class AppStore: ObservableObject {
         didSet { UserDefaults.standard.set(edgeSwipeClose, forKey: "cfg_edge_swipe_close") }
     }
 
+    /// Volume et luminosité au doigt dans le lecteur, en paysage
+    /// (PlayerSwipes.swift). Coupé d'office : sur les côtés de l'image, il
+    /// prend la place du glissé vers le bas qui réduit le lecteur.
+    @Published var playerSwipes: Bool = false {
+        didSet { UserDefaults.standard.set(playerSwipes, forKey: "cfg_player_swipes") }
+    }
+
     /// Chat affiché ↔ masqué en paysage (double-tap sur un direct) ; rend le
     /// nouvel état.
     @discardableResult
@@ -1078,6 +1085,7 @@ final class AppStore: ObservableObject {
         chatOverlayLayout  = ChatOverlayLayout(raw: ud.string(forKey: "cfg_chat_overlay_layout") ?? "")
                              ?? ChatOverlayLayout()
         edgeSwipeClose     = ud.object(forKey: "cfg_edge_swipe_close") as? Bool ?? false
+        playerSwipes       = ud.object(forKey: "cfg_player_swipes") as? Bool ?? false
         // Ramenées dans les bornes des curseurs : un import d'avant pouvait
         // les en sortir.
         chatFontSize       = Self.clamped(ud.object(forKey: "cfg_chat_font")    as? Double ?? 13, to: Self.chatFontRange)

@@ -727,6 +727,16 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   and TU Test; older backups and the website's still import. The file picker
   copies the file into the app before reading it, so importing also works in
   LiveContainer without its « Fix File Picker » option.
+* 🔁 **Send my settings to TU Test** (or **to TwitchUnblock** from TU Test) —
+  same section, shown only when the other app is installed: it opens the
+  other app with the whole backup in the link (compressed), and the other app
+  asks **Everything** / **Channels only** / Cancel before importing, like a
+  file. A backup too long for a link goes through the clipboard instead
+  (kept 10 minutes, never sent to your other devices): the other app reads it
+  after you confirm (iOS asks to allow pasting), or from **Import from
+  clipboard** in its Backup section. A one-time transfer, not a live sync:
+  install tools (Feather, SideStore, AltStore…) rewrite the app's
+  entitlements, so a shared App Group wouldn't be reliable.
 * ⬆️ **Update check** — the app tells you when a new version is out on the
   source, with a shortcut to Feather / SideStore / AltStore.
 * 🔢 **Build number** — Settings → About shows the version and its build

@@ -1877,6 +1877,40 @@ struct SettingsView: View {
                         }
                     }
                 }
+                // Envoi direct à l'autre app (TwitchUnblock ↔ TU Test), sans
+                // fichier : seulement si elle est installée (BackupTransfer).
+                let targets = BackupTransfer.installedTargets()
+                ForEach(targets) { peer in
+                    TSecondaryButton(title: store.t("transfer_send").replacingOccurrences(of: "{app}", with: peer.name),
+                                     icon: "arrow.up.forward.app", tint: .tPrimary, fullWidth: true) {
+                        backupMessage = nil
+                        BackupTransfer.send(to: peer, store: store) { ok in
+                            if !ok {
+                                backupMessage = store.t("transfer_failed")
+                                    .replacingOccurrences(of: "{app}", with: peer.name)
+                            }
+                        }
+                    }
+                }
+                if !targets.isEmpty {
+                    Text(store.t("transfer_sub"))
+                        .font(.tMeta).foregroundColor(.tMuted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                // Réglages laissés dans le presse-papiers par l'autre app
+                // (sauvegarde trop longue pour un lien).
+                if BackupTransfer.pasteboardHasBackup {
+                    TSecondaryButton(title: store.t("transfer_clip_import"), icon: "doc.on.clipboard",
+                                     tint: .tPrimary, fullWidth: true) {
+                        guard let file = BackupTransfer.readPasteboard() else {
+                            backupMessage = store.t("transfer_clip_none"); return
+                        }
+                        backupMessage = nil
+                        pendingImport = file
+                        // L'alerte de collage d'iOS se ferme encore.
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { showImportChoice = true }
+                    }
+                }
                 if let backupMessage {
                     Text(backupMessage)
                         .font(.tMeta).foregroundColor(.tMuted)
@@ -1925,7 +1959,7 @@ struct SettingsView: View {
             }
         }
         // Après l'import : dans la langue qu'il a peut-être changée.
-        importSummary = importSummaryText(summary, scope: scope)
+        importSummary = Backup.summaryText(summary, scope: scope, store: store)
         backupMessage = importSummary
         if scope == .all {
             logger.info("SAUVEGARDE", "Import : \(summary.follows) chaîne(s) ajoutée(s)",
@@ -1935,29 +1969,6 @@ struct SettingsView: View {
         }
         // La feuille du choix se ferme encore.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { showImportSummary = true }
-    }
-
-    /// Une ligne par sorte de chose reprise.
-    private func importSummaryText(_ s: Backup.Summary, scope: Backup.Scope) -> String {
-        func line(_ key: String, _ n: Int) -> String {
-            store.t(key).replacingOccurrences(of: "{n}", with: "\(n)")
-        }
-        var follows = line("import_sum_follows", s.follows)
-        // Au-delà de 300 suivis sur l'appareil, le reste n'est pas pris :
-        // dit, plutôt que compté comme ajouté.
-        if s.followsSkipped > 0 { follows += " " + String(format: store.t("import_capped"), s.followsSkipped) }
-        var lines = [follows,
-                     line("import_sum_categories", s.categories),
-                     line("import_sum_pinned", s.pinned),
-                     line("import_sum_hidden", s.hidden)]
-        if scope == .all {
-            lines.append(line("import_sum_settings", s.settings))
-            if s.settingsIgnored > 0 { lines.append(line("import_sum_ignored", s.settingsIgnored)) }
-            lines.append(line("import_sum_continue", s.continueWatching))
-        } else {
-            lines.append(store.t("import_sum_channels_only"))
-        }
-        return lines.joined(separator: "\n")
     }
 
     @ViewBuilder private var usageCard: some View {

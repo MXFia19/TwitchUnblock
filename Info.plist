@@ -77,6 +77,12 @@
         <string>feather</string>
         <string>sidestore</string>
         <string>altstore</string>
+        <!-- Les autres apps de la famille (TwitchUnblock, TU Test, TU Dev :
+             schémas posés par la CI) : « Envoyer mes réglages à … » ne
+             s'affiche que si l'autre est installée (BackupTransfer). -->
+        <string>twitchunblock</string>
+        <string>twitchunblock-test</string>
+        <string>twitchunblock-dev</string>
     </array>
 
     <!-- ── Privacy ───────────────────────────────────────────── -->

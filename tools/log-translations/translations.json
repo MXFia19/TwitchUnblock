@@ -725,5 +725,16 @@
  "VOD sans son chez Twitch : piste audio vide (silence à 10, 50 et 90 %)": ["VOD with no sound on Twitch: empty audio track (silent at 10, 50 and 90%)","VOD sin sonido en Twitch: pista de audio vacía (silencio al 10, 50 y 90 %)","VOD без звука на Twitch: пустая звуковая дорожка (тишина на 10, 50 и 90 %)"],
  "Masquer les subs offerts": ["Hide gifted subs","Ocultar suscripciones regaladas","Скрывать подаренные подписки"],
  "Filtre des VODs par jeu": ["VOD filter by game","Filtro de VODs por juego","Фильтр VOD по игре"],
- "tous les jeux": ["all games","todos los juegos","все игры"]
+ "tous les jeux": ["all games","todos los juegos","все игры"],
+ "· dans le lien": ["· in the link","· en el enlace","· в ссылке"],
+ "· par le presse-papiers": ["· through the clipboard","· por el portapapeles","· через буфер обмена"],
+ "Envoi des réglages impossible": ["Settings can't be sent","No se pueden enviar los ajustes","Не удалось отправить настройки"],
+ "compression": ["compression","compresión","сжатие"],
+ "L'autre app ne s'ouvre pas": ["The other app doesn't open","La otra app no se abre","Другое приложение не открывается"],
+ "Pas de fenêtre pour les réglages reçus": ["No window for the received settings","No hay ventana para los ajustes recibidos","Нет окна для полученных настроек"],
+ "Pas de réglages dans le presse-papiers": ["No settings in the clipboard","No hay ajustes en el portapapeles","В буфере обмена нет настроек"],
+ "Réglages envoyés à une autre app": ["Settings sent to another app","Ajustes enviados a otra app","Настройки отправлены в другое приложение"],
+ "Réglages reçus : import annulé": ["Settings received: import canceled","Ajustes recibidos: importación cancelada","Настройки получены: импорт отменён"],
+ "Réglages reçus d'une autre app": ["Settings received from another app","Ajustes recibidos de otra app","Настройки получены из другого приложения"],
+ "Réglages reçus illisibles": ["Received settings can't be read","Ajustes recibidos ilegibles","Полученные настройки не читаются"]
 }

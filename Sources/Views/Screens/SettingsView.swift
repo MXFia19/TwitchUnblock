@@ -45,6 +45,7 @@ struct SettingsView: View {
     @State private var showClearAlert  = false
     @State private var showWebLogin    = false   // login web (points de chaîne)
     @State private var webLoginClear   = false
+    @State private var showTVPair      = false   // connecter une TV LG (QR code)
     @State private var apiLoggingIn    = false
     @State private var cacheBytes: Int64 = 0
     @State private var cacheFiles      = 0
@@ -154,6 +155,11 @@ struct SettingsView: View {
                 },
                 onCancel: { showWebLogin = false }
             )
+        }
+        // ── Connecter une TV LG : la session web part vers l'app TV ──
+        .sheet(isPresented: $showTVPair) {
+            TVPairSheet().environmentObject(store)
+                .tTypeRoot()
         }
         // ── Retour : bug, idée ─────────────────────────────────────────
         // Compte admin ? Demandé au Worker à l'ouverture et à chaque
@@ -1839,8 +1845,45 @@ struct SettingsView: View {
                         startWebLogin()
                     }
                 }
+
+                Divider().background(Color.tBorder)
+
+                // Connecter une TV LG : la TV reçoit cette session web,
+                // chiffrée (QR code de l'app TV, TVPairSheet).
+                tvPairRow
             }
         }
+    }
+
+    /// « Connecter une TV LG » : seulement avec la session web, que la TV
+    /// reçoit ; sans elle, la ligne dit de la connecter d'abord.
+    @ViewBuilder private var tvPairRow: some View {
+        let ready = store.twitchWebToken != nil
+        Button { showTVPair = true } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "tv")
+                    .font(.tSystem(size: 17))
+                    .foregroundColor(ready ? .tPrimary : .tMuted)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(store.t("tvpair_title"))
+                        .font(.tCardTitle)
+                        .foregroundColor(ready ? .tText : .tMuted)
+                    Text(store.t(ready ? "tvpair_sub" : "tvpair_needs_web"))
+                        .font(.tMeta)
+                        .foregroundColor(.tMuted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 8)
+                if ready {
+                    Image(systemName: "qrcode.viewfinder")
+                        .font(.tSystem(size: 17, weight: .semibold))
+                        .foregroundColor(.tPrimary)
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!ready)
     }
 
     @ViewBuilder private var historiqueCard: some View {

@@ -514,6 +514,11 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   incoming raids shown with a link to the raider. Each of these can be switched off.
 * 🔦 **Highlights & filters** — messages mentioning you or containing your words
   stand out; hide bots, `!commands`, muted words or someone in particular.
+  **Hide gifted subs** (Settings → Chat, off by default) hides the
+  "X gifted a sub to Y" lines, one per person and dozens at once when
+  someone gifts a batch; the batch message stays, and the lines already in
+  the chat go too. Synced with the website (`hideGiftSubs`) and kept in the
+  backup.
 * 🤖 **Bot commands** — a channel's Nightbot, StreamElements, Fossabot and
   Moobot commands without typing `!commands`: from the chat's ⋯ menu, or from
   the channel page, live or offline (tap one to copy it).
@@ -688,8 +693,8 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
 * ⚙️ **Synced settings** — signed in, your settings follow your Twitch account
   on the website and your other devices (Settings → Twitch Account → **Sync my
   settings**, on by default): the chat settings shared with the website
-  (timestamps, 12/24 h, deleted messages, bots, commands, hidden words and
-  people, highlighted words), the top streams language, the VOD speed, pinned
+  (timestamps, 12/24 h, deleted messages, bots, gifted subs, commands, hidden
+  words and people, highlighted words), the top streams language, the VOD speed, pinned
   channels, hidden channels and categories, and the app's own customization
   (tabs, home, player buttons, chat banners, channel points chests, raids,
   ad-free with your sub, chat autocomplete and keyboard suggestions). Not

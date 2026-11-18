@@ -161,6 +161,7 @@ enum Backup {
             "keepDeleted": store.chatShowDeleted,
             "loadHistory": store.chatLoadRecent,
             "hideBots": store.chatHideBots,
+            "hideGiftSubs": store.chatHideGiftSubs,
             "hideCommands": store.chatHideCommands,
             "mutedWords": store.chatMutedWords,
             "blockedUsers": store.chatBlockedUsers,
@@ -434,6 +435,7 @@ enum Backup {
         bool("keepDeleted") { store.chatShowDeleted = $0 }
         bool("loadHistory") { store.chatLoadRecent = $0 }
         bool("hideBots") { store.chatHideBots = $0 }
+        bool("hideGiftSubs") { store.chatHideGiftSubs = $0 }
         bool("hideCommands") { store.chatHideCommands = $0 }
         words("mutedWords", 50) { store.chatMutedWords = $0 }
         words("blockedUsers", 500) { store.chatBlockedUsers = $0 }

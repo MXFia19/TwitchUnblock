@@ -1209,6 +1209,10 @@ struct SettingsView: View {
                 toggleRow(store.t("hide_bots"), store.t("hide_bots_sub"),
                           $store.chatHideBots, log: "Masquer les bots")
                 Divider().background(Color.tBorder)
+                // « X gifted a sub to Y » : coupé par défaut, synchronisé avec le site.
+                toggleRow(store.t("hide_gift_subs"), store.t("hide_gift_subs_sub"),
+                          $store.chatHideGiftSubs, log: "Masquer les subs offerts")
+                Divider().background(Color.tBorder)
                 toggleRow(store.t("hide_commands"), store.t("hide_commands_sub"),
                           $store.chatHideCommands, log: "Masquer les commandes")
                 Divider().background(Color.tBorder)

@@ -403,6 +403,7 @@ enum LogTranslator {
         "masqué": ["hidden", "oculto", "скрыто"],
         "Masquer les bots": ["Hide bots", "Ocultar bots", "Скрывать ботов"],
         "Masquer les commandes": ["Hide commands", "Ocultar comandos", "Скрывать команды"],
+        "Masquer les subs offerts": ["Hide gifted subs", "Ocultar suscripciones regaladas", "Скрывать подаренные подписки"],
         "Mauvais compte refusé": ["Wrong account refused", "Cuenta equivocada rechazada", "Неверный аккаунт отклонён"],
         "Message envoyé → #": ["Message sent → #", "Mensaje enviado → #", "Сообщение отправлено → #"],
         "Message non envoyé": ["Message not sent", "Mensaje no enviado", "Сообщение не отправлено"],

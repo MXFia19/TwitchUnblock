@@ -722,5 +722,6 @@
  "Fermer en glissant depuis le bord": ["Close by swiping from the edge","Cerrar deslizando desde el borde","Закрытие свайпом от края"],
  "Onglets dans la colonne d'état": ["Tabs in the status column","Pestañas en la columna de estado","Вкладки в колонке состояния"],
  "playlist originale sur le récepteur": ["original playlist on the receiver","lista original en el receptor","исходный плейлист на приёмнике"],
- "VOD sans son chez Twitch : piste audio vide (silence à 10, 50 et 90 %)": ["VOD with no sound on Twitch: empty audio track (silent at 10, 50 and 90%)","VOD sin sonido en Twitch: pista de audio vacía (silencio al 10, 50 y 90 %)","VOD без звука на Twitch: пустая звуковая дорожка (тишина на 10, 50 и 90 %)"]
+ "VOD sans son chez Twitch : piste audio vide (silence à 10, 50 et 90 %)": ["VOD with no sound on Twitch: empty audio track (silent at 10, 50 and 90%)","VOD sin sonido en Twitch: pista de audio vacía (silencio al 10, 50 y 90 %)","VOD без звука на Twitch: пустая звуковая дорожка (тишина на 10, 50 и 90 %)"],
+ "Masquer les subs offerts": ["Hide gifted subs","Ocultar suscripciones regaladas","Скрывать подаренные подписки"]
 }

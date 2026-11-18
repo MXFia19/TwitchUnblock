@@ -772,6 +772,8 @@ let kItalianStrings: [String: String] = [
     "src_twitch": "Twitch ufficiale (pubblicità)",
     "src_worker": "Server TwitchUnblock",
     "chat_unreachable": "La chat non risponde. Controlla la connessione (VPN, rete filtrata) o tocca “Riconnetti chat” nel menu della chat.",
+    "hide_gift_subs": "Nascondi gli abbonamenti regalati",
+    "hide_gift_subs_sub": "«X ha regalato un abbonamento a Y»: una riga per persona, decine in un colpo quando qualcuno ne regala un pacchetto. Il messaggio del pacchetto resta.",
     "src_account": "Il tuo account (senza pubblicità)",
     "src_account_toast": "Senza pubblicità grazie al tuo abbonamento",
     "src_account_hq": "Il tuo account (qualità superiore)",

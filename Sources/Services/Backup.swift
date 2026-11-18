@@ -173,6 +173,10 @@ enum Backup {
             "liveSourceOrder": store.liveSourceOrder,
             // Même nom que dans la sauvegarde du site.
             "customSource": store.customSource.isEmpty ? (NSNull() as Any) : (store.customSource as Any),
+            // Mon proxy (propre aux apps, nommé comme Ma source) : jamais le
+            // mot de passe, qui reste dans le trousseau.
+            "customProxy": store.liveProxy.isEmpty ? (NSNull() as Any) : (store.liveProxy as Any),
+            "customProxyUser": store.liveProxyUser,
             "multiChat": store.multiLiveChat,
         ]
         let app: [String: Any] = [
@@ -460,6 +464,16 @@ enum Backup {
             ok("customSource")
         } else if let v = s["customSource"] as? String, store.setCustomSource(v) {
             ok("customSource")
+        }
+        // Mon proxy (hôte:port, identifiant) avant l'ordre aussi, qui ne garde
+        // « proxy » que s'il est réglé. Le mot de passe n'est jamais dans la
+        // sauvegarde : celui du trousseau reste.
+        if s["customProxy"] is NSNull {
+            store.setLiveProxy("", user: "", password: nil)
+            ok("customProxy"); ok("customProxyUser")
+        } else if let v = s["customProxy"] as? String,
+                  store.setLiveProxy(v, user: s["customProxyUser"] as? String ?? "", password: nil) {
+            ok("customProxy"); ok("customProxyUser")
         }
         if let v = s["liveSourceOrder"] as? [String], v.contains(where: { kLiveSources.contains($0) }) {
             store.liveSourceOrder = completeLiveSourceOrder(v)

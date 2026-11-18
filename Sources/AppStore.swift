@@ -323,7 +323,7 @@ final class AppStore: ObservableObject {
         }
     }
 
-    /// Ordre des sources du direct (« bg », « twitch », « custom ») :
+    /// Ordre des sources du direct (« bg », « twitch », « custom », « proxy ») :
     /// getLive les essaie l'une après l'autre (liveSourceSteps, même clé).
     @Published var liveSourceOrder: [String] = kLiveSources {
         didSet { UserDefaults.standard.set(liveSourceOrder, forKey: "liveSourceOrder") }
@@ -334,9 +334,46 @@ final class AppStore: ObservableObject {
         didSet { UserDefaults.standard.set(customSource, forKey: "cfg_custom_source") }
     }
 
-    /// Ordre par défaut : l'automatique, Ma source en tête si elle est réglée.
+    /// « Mon proxy » : « hôte:port » d'un proxy HTTP à soi et son identifiant
+    /// (voir LiveProxy) ; le mot de passe est dans le trousseau.
+    @Published private(set) var liveProxy: String = "" {
+        didSet { UserDefaults.standard.set(liveProxy, forKey: LiveProxy.addressKey) }
+    }
+    @Published private(set) var liveProxyUser: String = "" {
+        didSet { UserDefaults.standard.set(liveProxyUser, forKey: LiveProxy.userKey) }
+    }
+
+    /// Ordre par défaut : l'automatique, Ma source puis Mon proxy en tête
+    /// s'ils sont réglés.
     var defaultLiveSourceOrder: [String] {
-        customSourceBase(customSource) != nil ? ["custom"] + kLiveSources : kLiveSources
+        var order: [String] = []
+        if customSourceBase(customSource) != nil { order.append("custom") }
+        if !liveProxy.isEmpty { order.append("proxy") }
+        return order + kLiveSources
+    }
+
+    /// Mon proxy changé : en tête de l'ordre à l'ajout ou au changement
+    /// d'adresse (comme Ma source), retiré avec ses identifiants quand on
+    /// l'efface. `password` nil : celui du trousseau ne change pas (sauvegarde
+    /// reprise). Rend faux si l'adresse est refusée.
+    @discardableResult
+    func setLiveProxy(_ raw: String, user: String, password: String?) -> Bool {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        let address = trimmed.isEmpty ? nil : LiveProxy.normalized(trimmed)
+        if !trimmed.isEmpty && address == nil { return false }
+        let was = liveProxy
+        liveProxyUser = address == nil ? "" : String(user.trimmingCharacters(in: .whitespacesAndNewlines).prefix(200))
+        if address == nil {
+            LiveProxy.setPassword(nil)
+        } else if let password {
+            LiveProxy.setPassword(password)
+        }
+        liveProxy = address ?? ""
+        if was != liveProxy {
+            let rest = liveSourceOrder.filter { $0 != "proxy" }
+            liveSourceOrder = address != nil ? ["proxy"] + rest : rest
+        }
+        return true
     }
 
     /// Ma source changée : en tête de l'ordre à l'ajout (comme sur le site),
@@ -1045,6 +1082,8 @@ final class AppStore: ObservableObject {
         // Ordre des sources ; avant lui, une seule source préférée
         // (« liveSource »), mise en tête. Réécrit pour getLive.
         customSource       = customSourceBase(ud.string(forKey: "cfg_custom_source") ?? "") ?? ""
+        liveProxy          = LiveProxy.normalized(ud.string(forKey: LiveProxy.addressKey) ?? "") ?? ""
+        liveProxyUser      = liveProxy.isEmpty ? "" : (ud.string(forKey: LiveProxy.userKey) ?? "")
         liveSourceOrder    = liveSourceSteps().filter { $0 != "worker" }
         ud.set(liveSourceOrder, forKey: "liveSourceOrder")
         subAdFree          = ud.object(forKey: "cfg_sub_adfree") as? Bool ?? true

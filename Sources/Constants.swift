@@ -185,16 +185,23 @@ func customSourceHost() -> String? {
 
 /// Ordre complet des sources : celles de `saved` connues, sans doublon ;
 /// une source qui manque va juste après celle qu'elle secourt, sinon à la
-/// fin, dans l'ordre automatique. Ma source reste tant qu'elle est réglée.
-/// Un ordre qui contient un proxy retiré reprend l'ordre automatique (Ma
-/// source gardée, en tête).
+/// fin, dans l'ordre automatique. Ma source (« custom ») et Mon proxy
+/// (« proxy », LiveProxy), hors de kLiveSourceChoices, restent tant qu'ils
+/// sont réglés ; Mon proxy réglé mais absent de `saved` (ordre venu d'une
+/// sauvegarde sans lui) va en tête, comme à son ajout. Un ordre qui contient
+/// un proxy retiré reprend l'ordre automatique (Ma source et Mon proxy
+/// gardés, en tête).
 func completeLiveSourceOrder(_ saved: [String]) -> [String] {
-    let saved = saved.contains(where: kRetiredLiveSources.contains) ? saved.filter { $0 == "custom" } : saved
+    let mine: Set<String> = ["custom", "proxy"]
+    let saved = saved.contains(where: kRetiredLiveSources.contains) ? saved.filter { mine.contains($0) } : saved
     var order: [String] = []
     let custom = customSourceHost() != nil
-    for id in saved where (kLiveSources.contains(id) || (custom && id == "custom")) && !order.contains(id) {
+    let proxy = LiveProxy.isConfigured
+    for id in saved where !order.contains(id)
+        && (kLiveSources.contains(id) || (custom && id == "custom") || (proxy && id == "proxy")) {
         order.append(id)
     }
+    if proxy && !order.contains("proxy") { order.insert("proxy", at: 0) }
     for id in kLiveSources where !order.contains(id) {
         if let parent = kLiveSourceBackupOf[id], let i = order.firstIndex(of: parent) {
             order.insert(id, at: i + 1)
@@ -798,6 +805,16 @@ private let translations: [Lang: [String: String]] = [
         "src_custom": "Ma source",
         "src_custom_sub": "Adresse de ton propre serveur luminous-ttv (https://…) : il prend place en tête de l'ordre ci-dessus. Vide : pas de source perso.",
         "src_custom_bad": "Adresse refusée : https://, un nom de domaine, sans port ni paramètres.",
+        "src_proxy": "Mon proxy",
+        "src_proxy_sub": "Ton propre proxy HTTP (hôte:port, par exemple un proxy de TTV LOL PRO) : le jeton de lecture et les playlists du direct passent par lui, la vidéo reste lue chez Twitch. Il prend place en tête de l'ordre ci-dessus ; s'il ne répond pas, la source suivante prend le relais. Le mot de passe reste dans le trousseau de l'appareil, hors de la sauvegarde. Vide : pas de proxy.",
+        "src_proxy_bad": "Adresse refusée : hôte:port (port de 1 à 65535), sans https:// ni chemin.",
+        "src_proxy_user": "Identifiant (facultatif)",
+        "src_proxy_password": "Mot de passe (facultatif)",
+        "src_proxy_test": "Tester le proxy",
+        "src_proxy_ok": "Proxy OK : Twitch répond par lui.",
+        "src_proxy_unreachable": "Proxy injoignable : vérifie l'hôte, le port et ta connexion.",
+        "src_proxy_auth": "Le proxy refuse l'accès (407) : vérifie l'identifiant et le mot de passe.",
+        "src_proxy_failed": "Twitch ne répond pas par ce proxy ({c}).",
         "native_tabs": "Onglets natifs (Liquid Glass)",
         "native_tabs_sub": "La barre d'onglets d'iOS 26 au lieu de celle de l'app : elle se replie quand tu défiles et le système la range selon l'écran (iPad, iPhone Duo). En test : signale ce qui cloche.",
         "src_auto": "Automatique",
@@ -1585,6 +1602,16 @@ private let translations: [Lang: [String: String]] = [
         "src_custom": "My source",
         "src_custom_sub": "Address of your own luminous-ttv server (https://…): it goes to the top of the order above. Empty: no custom source.",
         "src_custom_bad": "Address refused: https://, a domain name, no port or parameters.",
+        "src_proxy": "My proxy",
+        "src_proxy_sub": "Your own HTTP proxy (host:port, e.g. a TTV LOL PRO proxy): the playback token and the stream's playlists go through it, the video itself still comes from Twitch. It goes to the top of the order above; if it doesn't answer, the next source takes over. The password stays in the device's keychain, not in the backup. Empty: no proxy.",
+        "src_proxy_bad": "Address refused: host:port (port 1 to 65535), no https:// or path.",
+        "src_proxy_user": "Username (optional)",
+        "src_proxy_password": "Password (optional)",
+        "src_proxy_test": "Test the proxy",
+        "src_proxy_ok": "Proxy OK: Twitch answers through it.",
+        "src_proxy_unreachable": "Proxy unreachable: check the host, the port and your connection.",
+        "src_proxy_auth": "The proxy refuses access (407): check the username and password.",
+        "src_proxy_failed": "Twitch doesn't answer through this proxy ({c}).",
         "native_tabs": "Native tabs (Liquid Glass)",
         "native_tabs_sub": "iOS 26's own tab bar instead of the app's: it shrinks while you scroll and the system places it for the screen (iPad, iPhone Duo). In testing: report what's off.",
         "src_auto": "Automatic",
@@ -2372,6 +2399,16 @@ private let translations: [Lang: [String: String]] = [
         "src_custom": "Mi fuente",
         "src_custom_sub": "Dirección de tu propio servidor luminous-ttv (https://…): se coloca al principio del orden de arriba. Vacío: sin fuente propia.",
         "src_custom_bad": "Dirección rechazada: https://, un nombre de dominio, sin puerto ni parámetros.",
+        "src_proxy": "Mi proxy",
+        "src_proxy_sub": "Tu propio proxy HTTP (host:puerto, por ejemplo un proxy de TTV LOL PRO): el token de reproducción y las listas del directo pasan por él, el vídeo se sigue leyendo desde Twitch. Se coloca al principio del orden de arriba; si no responde, la siguiente fuente toma el relevo. La contraseña se queda en el llavero del dispositivo, fuera de la copia de seguridad. Vacío: sin proxy.",
+        "src_proxy_bad": "Dirección rechazada: host:puerto (puerto de 1 a 65535), sin https:// ni ruta.",
+        "src_proxy_user": "Usuario (opcional)",
+        "src_proxy_password": "Contraseña (opcional)",
+        "src_proxy_test": "Probar el proxy",
+        "src_proxy_ok": "Proxy OK: Twitch responde a través de él.",
+        "src_proxy_unreachable": "Proxy inaccesible: revisa el host, el puerto y tu conexión.",
+        "src_proxy_auth": "El proxy rechaza el acceso (407): revisa el usuario y la contraseña.",
+        "src_proxy_failed": "Twitch no responde a través de este proxy ({c}).",
         "native_tabs": "Pestañas nativas (Liquid Glass)",
         "native_tabs_sub": "La barra de pestañas de iOS 26 en lugar de la de la app: se reduce al desplazarte y el sistema la coloca según la pantalla (iPad, iPhone Duo). En pruebas: avisa de lo que falle.",
         "src_auto": "Automática",

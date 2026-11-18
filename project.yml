@@ -73,6 +73,9 @@ targets:
       - path: Sources/Localization/TraditionalChineseStrings.swift
       - path: Sources/Services/Logger.swift
       - path: Sources/Services/Keychain.swift
+      # Mon proxy (source « proxy ») : getLive et completeLiveSourceOrder y
+      # font appel ; jamais réglé sur la TV.
+      - path: Sources/Services/LiveProxy.swift
       - path: Sources/Services/TopLanguage.swift
       - path: Sources/Services/TwitchAPI.swift
       - path: Sources/Services/LivePlaylistLoader.swift

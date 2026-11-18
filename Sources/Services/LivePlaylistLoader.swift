@@ -35,12 +35,23 @@ final class LivePlaylistLoader: NSObject, AVAssetResourceLoaderDelegate {
         return URLSession(configuration: config)
     }()
 
+    /// Playlists lues par une autre session que celle du chargeur (PlaylistRoutes).
+    private static let routes = PlaylistRoutes()
+
     // MARK: Adresses
     static func wrap(_ links: QualityLinks, lowLatency: Bool = true) -> QualityLinks {
         links.mapValues { LivePlaylistRewriter.wrap($0, lowLatency: lowLatency) }
     }
 
     static func unwrap(_ url: URL) -> URL? { LivePlaylistRewriter.unwrap(url) }
+
+    /// Ces playlists (liens d'un direct, en https ou déjà enveloppés) seront
+    /// lues par `session` : celle de Mon proxy (LiveProxy), pour que Twitch
+    /// voie son adresse et pas celle de l'appareil. Les segments, eux,
+    /// restent lus en direct sur le CDN.
+    static func route(_ links: [String], through session: URLSession) {
+        routes.add(links.compactMap { URL(string: $0).map { LivePlaylistRewriter.unwrap($0) } }, session: session)
+    }
 
     // MARK: Chargement
     func resourceLoader(_ resourceLoader: AVAssetResourceLoader,
@@ -71,7 +82,11 @@ final class LivePlaylistLoader: NSObject, AVAssetResourceLoaderDelegate {
 
     private func playlist(_ url: URL, lowLatency: Bool) async -> Data? {
         let req = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 8)
-        guard let (data, resp) = try? await session.data(for: req), !Task.isCancelled,
+        // Direct lancé par Mon proxy : ses playlists (et les variantes d'une
+        // maîtresse qui vient de lui) repassent par lui ; les autres, par nous.
+        let via = Self.routes.session(for: url)
+            ?? owners.owner(of: url).flatMap { Self.routes.session(for: $0) } ?? session
+        guard let (data, resp) = try? await via.data(for: req), !Task.isCancelled,
               (resp as? HTTPURLResponse)?.statusCode == 200 else { return nil }
         let text = String(decoding: data, as: UTF8.self)
         guard text.hasPrefix("#EXTM3U") else { return nil }
@@ -117,6 +132,33 @@ final class PlaylistOwners {
     }
 
     func owner(of url: URL) -> URL? {
+        lock.lock(); defer { lock.unlock() }
+        return map[url.absoluteString]
+    }
+}
+
+/// Playlist → session qui la lit (source « Mon proxy » : celle du proxy),
+/// adresses https en texte. Appelé depuis plusieurs tâches à la fois :
+/// protégé par un verrou ; les plus anciennes oubliées au-delà de 400
+/// (adresses de séance renouvelées au fil des heures), jamais les dernières.
+final class PlaylistRoutes {
+    private let lock = NSLock()
+    private var map: [String: URLSession] = [:]
+    private var order: [String] = []
+
+    func add(_ urls: [URL], session: URLSession) {
+        lock.lock(); defer { lock.unlock() }
+        for url in urls {
+            let key = url.absoluteString
+            if map.updateValue(session, forKey: key) == nil { order.append(key) }
+        }
+        guard order.count > 400 else { return }
+        let drop = order.count - 300
+        for key in order.prefix(drop) { map.removeValue(forKey: key) }
+        order.removeFirst(drop)
+    }
+
+    func session(for url: URL) -> URLSession? {
         lock.lock(); defer { lock.unlock() }
         return map[url.absoluteString]
     }

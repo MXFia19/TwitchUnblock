@@ -192,13 +192,27 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   answer, official Twitch takes over. The public proxies (Luminous,
   PerfProd, nadeko/TTV.LOL) were removed: they let hundreds of ads a day
   through. An order saved with them goes back to the default one (My source
-  kept, at the top).
+  and My proxy kept, at the top).
   Reorder them in Settings → Player; picking a source from the player's ⋯
   menu (which also ticks the source in use) moves it to the top, or tries it
   again. **My source** (same place, like on the website): the address of your
   own luminous-ttv server (https://, a domain name, no port or parameters)
   goes to the top of the order; empty it to remove it. Kept in the backup
   under the website's name (`customSource`).
+  **My proxy** (same place): your own HTTP proxy —
+  `host:port`, with an optional username and password, like the proxies of
+  [TTV LOL PRO](https://github.com/younesaassila/ttv-lol-pro). The playback
+  token (GQL), usher's master playlist and the stream's playlists go through
+  it (HTTPS through `CONNECT`), so Twitch sees the proxy's address; the video
+  segments still come straight from Twitch's CDN, as in the TwitchAdBlock
+  tweak. It goes to the top of the order and is only offered once set; when
+  it can't be reached, refuses the credentials (407) or Twitch refuses it,
+  the log says so, Settings shows it under the proxy (**Test the proxy**
+  checks it on demand) and the next source takes over. The address and the
+  username are kept in the backup (`customProxy`, `customProxyUser`); the
+  password stays in the device's keychain and never goes in the backup.
+  Over AirPlay, the receiver reads the playlists itself, without the proxy.
+  Its ad breaks are sent to /stats as « proxy ».
   Channels that stream with multiple encodes (Enhanced Broadcasting) keep each
   quality's own name on every source. No source escapes the channel's own ad
   breaks: Twitch stitches them into the stream itself. When Twitch's own API

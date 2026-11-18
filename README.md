@@ -139,6 +139,12 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
 * 👈 **Swipe from the edge to close** (Settings → Player, off by default) —
   swipe in from the left edge of the screen to close the player, like ✕, even
   when the swipe starts over the video or the chat.
+* ☀️ **Volume and brightness by swiping** (Settings → Player, off by default) —
+  in landscape, in the app's player, swipe up or down on the right third of
+  the picture for the phone's volume, on the left third for the screen's
+  brightness, like VLC; a small indicator shows the level. The middle third
+  keeps the swipe down that minimizes the player (that's why it's off by
+  default: on the sides, it takes that swipe's place). Not on Mac or Apple TV.
 * 📋 **Streams as a list** (Settings → General, or the button on Home) —
   live streams in a list like on Twitch, thumbnail on the left, on Home, in a
   category and in search results.

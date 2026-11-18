@@ -1634,6 +1634,15 @@ struct ImmersivePlayer: View {
     /// contrôle, appel) : remis à faux dans onEnded seulement, il bloquait
     /// ensuite le glissé vers le bas.
     @GestureState private var pinching = false
+    /// Volume et luminosité au doigt (PlayerSwipes.swift) : le glissé en
+    /// cours sur un côté de l'image, l'indicateur affiché (son niveau vit
+    /// dans `swipeLevel`, observé par lui seul), le cadre de la boîte dans
+    /// l'écran, et l'effacement prévu de l'indicateur.
+    @State private var swipeAdjust: PlayerSwipeAdjust? = nil
+    @State private var swipeShown = false
+    @State private var swipeLevel = PlayerSwipeLevel()
+    @State private var swipeArea = PlayerSwipeArea()
+    @State private var swipeHideTask: Task<Void, Never>? = nil
     /// Relance prévue au retour du réseau (une seule à la fois).
     @State private var networkRetry: Task<Void, Never>? = nil
 
@@ -1851,6 +1860,14 @@ struct ImmersivePlayer: View {
 
             if showControls { controls }
 
+            // Volume ou luminosité réglés au doigt : l'indicateur, centré sur
+            // la partie visible de l'image (à la place de ▶).
+            if swipeShown {
+                PlayerSwipeHUD(state: swipeLevel)
+                    .offset(x: centerShift, y: -controlsBottomInset / 2)
+                    .transition(.opacity)
+            }
+
             // Lecture arrêtée sur une erreur : on le dit, avec de quoi relancer
             // (le lecteur relit alors les liens). Visible commandes masquées.
             if model.failed { failureCard }
@@ -1887,6 +1904,20 @@ struct ImmersivePlayer: View {
         // l'image réellement affichée, y compris pendant un GAP publicitaire.
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.black)
+        // Volume et luminosité au doigt : le cadre de la boîte dans l'écran
+        // (côtés du geste), relevé sans rien redessiner, et le curseur caché
+        // du volume d'iOS. Seulement quand le réglage peut servir.
+        .overlay {
+            if swipesOn {
+                GeometryReader { geo in
+                    SystemVolumeHost()
+                        .frame(width: 1, height: 1)
+                        .onAppear { swipeArea.frame = geo.frame(in: .global) }
+                        .onChange(of: geo.frame(in: .global)) { swipeArea.frame = $0 }
+                }
+                .allowsHitTesting(false)
+            }
+        }
         // Pas de `clipped()` : il rognerait précisément le débordement que
         // « remplir l'écran » vient de demander. AVPlayerLayer borne déjà son
         // image à ses propres limites, y compris en `resizeAspectFill`.
@@ -1907,6 +1938,8 @@ struct ImmersivePlayer: View {
                 pulling = nil
                 PlayerPull.noteEnd()
                 pinch.drag = .zero
+                // Volume ou luminosité : la valeur atteinte reste.
+                endSwipe()
                 // Pincement interrompu avec lui (Centre de contrôle, appel) :
                 // sans onEnded, il se termine ici.
                 if pinch.start != nil, !pinching { finishPinch(showScale: false) }
@@ -2028,6 +2061,9 @@ struct ImmersivePlayer: View {
             // Retirée en plein glissé (relance, rotation) : ni onEnded ni fin
             // du geste, la garde des boutons ne doit pas rester levée.
             if pulling != nil { PlayerPull.noteEnd() }
+            // Ni le réglage du volume en cours (le curseur d'iOS se recache).
+            endSwipe()
+            swipeHideTask?.cancel()
             // Pas de retour au portrait ici : la vue disparaît aussi à chaque
             // relance (⟳, « Réessayer », raid suivi, VOD suivante), et le
             // lecteur suivant s'ouvrait en portrait malgré le paysage forcé.
@@ -2187,7 +2223,7 @@ struct ImmersivePlayer: View {
             // restait que les bords. Pas de place au-dessus ni au-dessous : en
             // portrait, la boîte 16:9 ne laisse qu'une vingtaine de points entre
             // la barre du haut et le bouton, et quelques-uns sous lui.
-            if !model.failed, seekFlash == nil {
+            if !model.failed, seekFlash == nil, !swipeShown {
                 Button {
                     PlayerPull.guarded { model.togglePlay(); scheduleAutoHide() }
                 } label: {
@@ -3012,6 +3048,7 @@ struct ImmersivePlayer: View {
                 guard !dragging else {
                     if pulling == true { onPull(0) }
                     pulling = false
+                    endSwipe()
                     return
                 }
                 // Deux doigts : c'est un zoom, le lecteur reste en place, et
@@ -3019,6 +3056,7 @@ struct ImmersivePlayer: View {
                 if pinching {
                     if pulling == true { onPull(0) }
                     pulling = false
+                    endSwipe()
                     return
                 }
                 if zoom > 1 {
@@ -3028,6 +3066,19 @@ struct ImmersivePlayer: View {
                     if pulling == true { onPull(0); pulling = false }
                     pan = clampedPan(CGSize(width: panBase.width + value.translation.width,
                                             height: panBase.height + value.translation.height))
+                    return
+                }
+                // Réglage « Volume et luminosité en glissant », en paysage :
+                // parti d'un côté de l'image, un geste franchement vertical
+                // règle le volume (à droite) ou la luminosité (à gauche) ; de
+                // côté, rien. Le milieu garde le glissé vers le bas.
+                if pulling == nil, let kind = swipeKind(at: value.startLocation) {
+                    guard let vertical = PlayerSwipe.direction(for: value.translation) else { return }
+                    pulling = false
+                    if vertical { beginSwipe(kind) }
+                }
+                if swipeAdjust != nil {
+                    updateSwipe(value.translation)
                     return
                 }
                 // Taille normale : seul un geste qui part vers le bas compte ;
@@ -3048,6 +3099,13 @@ struct ImmersivePlayer: View {
                     PlayerPull.noteEnd()
                 }
                 pinch.drag = .zero
+                // Volume ou luminosité : la dernière valeur, puis l'indicateur
+                // s'efface.
+                if swipeAdjust != nil {
+                    updateSwipe(value.translation)
+                    endSwipe()
+                    return
+                }
                 if zoom > 1 {
                     if pulling == true { onPull(0) }
                     panBase = pan
@@ -3078,6 +3136,62 @@ struct ImmersivePlayer: View {
         }
         panBase = .zero
         pinch.start = nil
+    }
+
+    // MARK: – Volume et luminosité au doigt (PlayerSwipes.swift)
+    /// Réglage allumé, en paysage, pas sur Mac.
+    private var swipesOn: Bool { store.playerSwipes && PlayerSwipe.supported && isLandscape }
+
+    /// Ce que règle un geste parti de ce point (repère de l'écran) : tiers
+    /// droit de la partie visible de l'image, le volume ; tiers gauche, la
+    /// luminosité ; nil au milieu, ou réglage coupé.
+    private func swipeKind(at point: CGPoint) -> PlayerSwipe? {
+        guard swipesOn else { return nil }
+        var area = swipeArea.frame
+        // Chat posé sur l'image : il prend ses propres touchers, les tiers se
+        // comptent sur ce qu'il laisse voir.
+        if controlsInset > 0 {
+            area.size.width -= controlsInset
+            if controlsOnLeft { area.origin.x += controlsInset }
+        }
+        return PlayerSwipe.zone(at: point, in: area)
+    }
+
+    private func beginSwipe(_ kind: PlayerSwipe) {
+        let start = kind == .volume ? SystemVolume.current : ScreenBrightness.current
+        swipeAdjust = PlayerSwipeAdjust(kind: kind, start: start)
+        swipeLevel.show(kind, start)
+        if kind == .volume { SystemVolume.begin() }
+        swipeHideTask?.cancel()
+        withAnimation(.easeOut(duration: 0.15)) { swipeShown = true }
+    }
+
+    /// Vers le haut, plus fort ou plus clair ; vers le bas, l'inverse.
+    private func updateSwipe(_ translation: CGSize) {
+        guard let adjust = swipeAdjust else { return }
+        let travel = PlayerSwipe.travel(for: swipeArea.frame.height)
+        let value = min(1, max(0, adjust.start - translation.height / travel))
+        // Boutons du lecteur sous le doigt : rien au doigt levé (PlayerPull.guarded).
+        PlayerPull.noteMove(abs(translation.height))
+        swipeLevel.set(value)
+        switch adjust.kind {
+        case .volume:     SystemVolume.set(value)
+        case .brightness: ScreenBrightness.set(value)
+        }
+    }
+
+    /// Fin du geste, ou geste interrompu : la valeur atteinte reste,
+    /// l'indicateur s'efface peu après.
+    private func endSwipe() {
+        guard let adjust = swipeAdjust else { return }
+        swipeAdjust = nil
+        if adjust.kind == .volume { SystemVolume.end() }
+        swipeHideTask?.cancel()
+        swipeHideTask = Task {
+            try? await Task.sleep(nanoseconds: 700_000_000)
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeOut(duration: 0.2)) { swipeShown = false }
+        }
     }
 
     /// Retard sur le direct, à côté de « Direct » : « · −45 s », « · −2:05 » ;

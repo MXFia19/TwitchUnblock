@@ -524,6 +524,8 @@ struct CategoryStreamsView: View {
     @State private var showHidden = false
     /// Suivi Twitch retiré depuis cette page.
     @State private var leftOnTwitch = false
+    /// Suivie sur Twitch depuis cette page (Suivre, session web connectée).
+    @State private var joinedOnTwitch = false
     @State private var confirmTwitchUnfollow = false
     @State private var unfollowBusy = false
     /// Twitch a refusé de la retirer (ou la session web manque).
@@ -663,10 +665,12 @@ struct CategoryStreamsView: View {
         !store.followsCategory(category.id) && store.hidden.hides(category: category.id)
     }
 
-    /// Suivre la catégorie (gardé sur cet appareil). Suivie sur Twitch : le
-    /// cœur est plein, et le toucher la retire de Twitch, après confirmation.
+    /// Suivre la catégorie : sur cet appareil, et aussi sur le compte Twitch
+    /// quand la session web est connectée (followOnTwitch). Suivie sur
+    /// Twitch : le cœur est plein, et le toucher la retire de Twitch (et de
+    /// l'appareil), après confirmation.
     @ViewBuilder private var followButton: some View {
-        let onTwitch = followedOnTwitch && !leftOnTwitch
+        let onTwitch = (followedOnTwitch && !leftOnTwitch) || joinedOnTwitch
         let on = onTwitch || store.isCategoryFollowed(category.id)
         Button {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
@@ -674,7 +678,9 @@ struct CategoryStreamsView: View {
                 confirmTwitchUnfollow = true
                 return
             }
+            let follows = !store.isCategoryFollowed(category.id)
             withAnimation(.easeInOut(duration: 0.15)) { store.toggleCategoryFollow(category) }
+            if follows { Task { await followOnTwitch() } }
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: on ? "heart.fill" : "heart")
@@ -712,9 +718,27 @@ struct CategoryStreamsView: View {
             return
         }
         leftOnTwitch = true
+        joinedOnTwitch = false
         store.accountFollowedCategoryIds.remove(category.id)
         if store.isCategoryFollowed(category.id) { store.toggleCategoryFollow(category) }
         onTwitchUnfollowed()
+    }
+
+    /// Suivie ici, session web connectée : aussi sur le compte Twitch, comme
+    /// le cœur de twitch.tv. Twitch refuse (jeton d'intégrité, session) : elle
+    /// reste suivie sur l'appareil, le journal le dit (followCategoryOnTwitch)
+    /// et rien ne bloque. Plus suivie ici quand Twitch répond (second
+    /// toucher) : retirée de Twitch aussi. Sans session : l'appareil seul.
+    @MainActor private func followOnTwitch() async {
+        guard let web = store.twitchWebToken, !web.isEmpty,
+              await followCategoryOnTwitch(gameId: category.id, token: web),
+              store.twitchWebToken == web else { return }
+        guard store.isCategoryFollowed(category.id) else {
+            _ = await unfollowCategoryOnTwitch(gameId: category.id, token: web)
+            return
+        }
+        joinedOnTwitch = true
+        store.accountFollowedCategoryIds.insert(category.id)
     }
 
     /// Masquer la catégorie (œil barré) ; rien si elle est suivie, ni si elle

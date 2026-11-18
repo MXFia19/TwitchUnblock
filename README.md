@@ -641,6 +641,10 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
   since November 2026, Twitch refuses a GQL request with more than 15 aliases,
   and the single request for 100 returned nothing. A category you follow on Twitch shows as followed on its page, and
   unfollowing it there removes it from your Twitch account (web session).
+  With the web session connected, **Follow** on a category's page also
+  follows it on your Twitch account (the same request as twitch.tv's heart);
+  if Twitch refuses (integrity check, session), it stays followed in the app
+  and the log says why. Without it, follows stay on the device, as before.
   Errors and empty lists have **Retry** / pull to refresh.
 * 🗂️ **Followed categories your way** — Settings → General → Customize the app → Followed categories: **Compact** covers (3 per row on iPhone, more on a wider screen) and the order (most watched first, as before, or A → Z).
 * 🏷 **Stream tags** — language, DropsEnabled… under each live stream, like on

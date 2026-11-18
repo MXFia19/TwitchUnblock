@@ -118,7 +118,7 @@ enum SystemVolume {
     }
 
     static func set(_ value: CGFloat) {
-        guard let slider else { return }
+        guard let slider = slider else { return }
         let v = Float(min(1, max(0, value)))
         guard abs(slider.value - v) >= 0.005 else { return }
         slider.value = v
@@ -160,7 +160,7 @@ enum ScreenBrightness {
     static var current: CGFloat { screen?.brightness ?? 0.5 }
 
     static func set(_ value: CGFloat) {
-        guard let screen else { return }
+        guard let screen = screen else { return }
         let v = min(1, max(0, value))
         if abs(screen.brightness - v) >= 0.005 { screen.brightness = v }
     }

@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.7.44",
+          "buildVersion": "416",
+          "date": "2026-11-18",
+          "localizedDescription": "- New live source \"My proxy\" (Settings → Player): your own HTTP proxy (host:port, optional username and password, e.g. a TTV LOL PRO proxy). The playback token and the stream's playlists go through it while the video still comes straight from Twitch; if it can't be reached or refuses the credentials, the next source takes over and Settings says why.\n- Following a category while your Twitch web session is connected now also follows it on your Twitch account; if Twitch refuses, it stays followed in the app.\n- Player: new setting \"Volume and brightness by swiping\" (Settings → Player, off by default) — in landscape, swipe up or down on the right third of the picture for the volume, on the left third for the brightness, with a small indicator; the middle keeps the swipe down that minimizes the player.\n- Settings → Backup: \"Send my settings to TU Test\" (or \"to TwitchUnblock\" from TU Test), shown when the other app is installed, opens it with your channels, settings and Continue watching; it asks Everything / Channels only before importing. Large backups go through the clipboard (Import from clipboard).\n- Channel VODs: a game filter (All games by default) next to the keyword filter shows only the VODs of the game you pick, with the number of VODs per game, and loads older VODs when few are found.\n- Player: in landscape, drag the chat over the picture by the small handle at its top — when you let go, it snaps to the nearest corner or edge (the six places of Settings → Chat → Chat on the video), to keep it clear of the facecam.\n- Chat: new \"Hide gifted subs\" setting (Settings → Chat, off by default) hides the \"X gifted a sub to Y\" lines that flood the chat when someone gifts a batch, including the ones already shown; the batch message stays. Synced with the website and kept in the backup.\n- Multi-live: the tile you hear can switch to audio only (🎧 on the tile) — a plain background replaces the picture, for less data and battery; the same button brings the picture back.",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-416/TwitchUnblock.ipa",
+          "size": 4742202,
+          "commit": "2526a3381794a5164a045c3dcf30be884c396a41"
+        },
+        {
           "version": "1.7.32",
           "buildVersion": "414",
           "date": "2026-11-18",
@@ -280,25 +289,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-379/TwitchUnblock.ipa",
           "size": 4487336,
           "commit": "55efbc4097d6202f609c40596e19f568e2149659"
-        },
-        {
-          "version": "1.7.0",
-          "buildVersion": "377",
-          "date": "2026-10-30",
-          "localizedDescription": "- Improvements and fixes",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-377/TwitchUnblock.ipa",
-          "size": 4486051,
-          "commit": "fe6d3aba005d3f836fe315e45b2a47ab8d60068c"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.7.32",
+      "version": "1.7.44",
       "versionDate": "2026-11-18",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-414/TwitchUnblock.ipa",
-      "size": 4631456
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-416/TwitchUnblock.ipa",
+      "size": 4742202
     }
   ],
   "news": []

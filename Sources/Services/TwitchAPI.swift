@@ -812,6 +812,8 @@ private func higherQualitiesMaster(login: String, token: (value: String, signatu
 private func accountPlaybackIfAsked(login: String, webToken: String?,
                                     integrity: (() async -> (token: String, deviceId: String)?)?) async -> AccountPlayback {
     guard let webToken, !webToken.isEmpty else { return .unavailable }
+    // Jeton sans pub lu à l'instant pendant une pause pub : repris tel quel.
+    if let fresh = FreshAccountToken.shared.take(login: login) { return .token(fresh) }
     let work = Task { await accountPlaybackToken(login: login, webToken: webToken, integrity: integrity) }
     let gate = AccountPlaybackGate()
     return await withTaskCancellationHandler {
@@ -827,6 +829,28 @@ private func accountPlaybackIfAsked(login: String, webToken: String?,
         }
     } onCancel: {
         gate.resume(.unavailable)
+    }
+}
+
+/// Jeton du compte sans pub lu pendant une pause pub (MainTabView) : le
+/// rechargement qui suit le reprend au lieu de le redemander, sans l'attente
+/// de 6 s qui l'avait peut-être fait manquer à l'ouverture. Une minute au
+/// plus, une seule fois.
+final class FreshAccountToken: @unchecked Sendable {
+    static let shared = FreshAccountToken()
+    private let lock = NSLock()
+    private var entry: (login: String, token: AccountPlaybackToken, at: Date)?
+
+    func put(_ token: AccountPlaybackToken, login: String) {
+        lock.lock(); defer { lock.unlock() }
+        entry = (login.lowercased(), token, Date())
+    }
+
+    func take(login: String) -> AccountPlaybackToken? {
+        lock.lock(); defer { lock.unlock() }
+        guard let e = entry, e.login == login.lowercased(), Date().timeIntervalSince(e.at) < 60 else { return nil }
+        entry = nil
+        return e.token
     }
 }
 
@@ -1894,8 +1918,12 @@ func isValidLogin(_ login: String) -> Bool {
     login.range(of: #"^[a-z0-9_]{1,25}$"#, options: .regularExpression) != nil
 }
 
+/// 950, 27.4k, 1.2M. Avant, tout passait en milliers : « 1234.6k » pour un
+/// direct à plus d'un million de spectateurs (fb_mwm13xxd). Millions dès
+/// 999 950, qui s'écrirait sinon « 1000.0k ».
 func formatViewers(_ count: Int) -> String {
-    count >= 1000 ? String(format: "%.1fk", Double(count) / 1000) : "\(count)"
+    if count >= 999_950 { return String(format: "%.1fM", Double(count) / 1_000_000) }
+    return count >= 1000 ? String(format: "%.1fk", Double(count) / 1000) : "\(count)"
 }
 
 func formatDuration(_ seconds: Int) -> String {

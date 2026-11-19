@@ -65,6 +65,9 @@ struct MainTabView: View {
     /// Bascule annoncée dans le lecteur (4 s), et son effacement.
     @State private var hqNotice: String? = nil
     @State private var hqNoticeTask: Task<Void, Never>? = nil
+    /// Chaîne dont le jeton du compte a été redemandé pendant une pause pub
+    /// (voir subAdFreeOnAdBreak) : une fois par chaîne.
+    @State private var adBreakAccountChecked: String? = nil
     /// Image verticale du direct en cours (Dual Format, voir portraitLive),
     /// quand Twitch en a une ; jouée à la place de l'habituelle quand
     /// `verticalOn`, l'habituelle gardée pour le retour (`verticalBackup`).
@@ -2754,6 +2757,12 @@ struct MainTabView: View {
     /// elle, la refait). Sur la source sans pub : une pause de la chaîne
     /// (écran violet), que le retour attend.
     private func adBreakChanged(_ left: Int?) {
+        // Pause pub sur une source habituelle : un abonné y a peut-être droit
+        // au direct sans pub par son compte.
+        if hqLive == nil, left != nil, linksAreLive, dvrSourceChannel == nil,
+           !switchingSource, !closingPlayer, liveSourceUsed != "account" {
+            subAdFreeOnAdBreak()
+        }
         guard var live = hqLive, linksAreLive, dvrSourceChannel == nil,
               !switchingSource, !closingPlayer else { return }
         if live.onAdFree {
@@ -2762,6 +2771,36 @@ struct MainTabView: View {
             hqLive = live
         } else if let left, playerPlaying {
             switchToAdFree(remaining: left)
+        }
+    }
+
+    /// Pause pub sur une source habituelle (pub coupée, image figée) alors
+    /// qu'un abonné y aurait droit au direct sans pub : jeton du compte trop
+    /// lent à l'ouverture (6 s au plus), ou abonnement pris entre-temps. Il est
+    /// redemandé une fois ; sans pub, le direct est relu par le compte. Sans
+    /// session web, l'app dit une fois comment l'avoir (dave, abonné :
+    /// « Channel ad break », puis image figée).
+    private func subAdFreeOnAdBreak() {
+        guard let channel = currentChannelName, adBreakAccountChecked != channel else { return }
+        adBreakAccountChecked = channel
+        guard let web = store.accountPlaybackWebToken(for: channel) else {
+            if !(store.twitchLogin ?? "").isEmpty, store.subAdFree, (store.twitchWebToken ?? "").isEmpty {
+                showHQNotice(store.t("sub_adfree_hint"), once: "sub_adfree_hint")
+            }
+            return
+        }
+        let gen = loadGeneration
+        Task { @MainActor in
+            let reply = await accountPlaybackToken(login: channel, webToken: web,
+                                                   integrity: dropsIntegrity(for: web))
+            guard gen == loadGeneration, currentChannelName == channel else { return }
+            guard case .token(let pat) = reply, pat.adFree, !pat.forbidden else {
+                logger.info("PUB", "Pause pub : le compte n'est pas sans pub ici", channel)
+                return
+            }
+            FreshAccountToken.shared.put(pat, login: channel)
+            logger.info("PUB", "Pause pub : compte sans pub sur cette chaîne, direct relu par le compte", channel)
+            reloadCurrent()
         }
     }
 

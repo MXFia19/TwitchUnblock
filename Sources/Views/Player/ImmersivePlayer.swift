@@ -770,7 +770,8 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
         latency.adjust(player: player, item: item, behind: endTime - position,
                        total: currentDate.map { Date().timeIntervalSince($0) },
                        enabled: lowLatency && isLive && isPlaying && endTime > position,
-                       settled: Date().timeIntervalSince(lastCatchUp) > 4)
+                       settled: Date().timeIntervalSince(lastCatchUp) > 4,
+                       catchingUp: liveCatchUpActive)
     }
 
     /// Au bord du direct : à moins de 12 s, ou du recul que le flux

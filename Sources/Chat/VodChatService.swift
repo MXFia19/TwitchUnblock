@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 import SwiftUI
 
 // MARK: – Chat de VOD (relecture des commentaires, synchronisée à la lecture)
@@ -25,6 +26,33 @@ final class VodChatService: ObservableObject {
 
     /// Tampon des commentaires à venir, trié par offset croissant.
     private var buffer: [(offset: Double, msg: ChatMessage)] = []
+    /// Emotes BTTV, FFZ ou 7TV arrivées après coup (voir refreshEmotes).
+    private var emotesSub: AnyCancellable?
+
+    /// Emotes BTTV, FFZ ou 7TV arrivées après les commentaires (plus de 3,5 s
+    /// de chargement, nouvel essai) : leurs mots deviennent des emotes, à
+    /// l'écran comme dans le tampon.
+    func refreshEmotes() async {
+        let found = await lateEmotes(in: [messages, buffer.map { $0.msg }], channelId: channelId)
+        guard !found.isEmpty else { return }
+        var list = messages, changed = false
+        for i in list.indices { if list[i].adoptEmotes(found) { changed = true } }
+        if changed { messages = list }
+        for i in buffer.indices { _ = buffer[i].msg.adoptEmotes(found) }
+    }
+
+    private func observeLateEmotes() {
+        guard emotesSub == nil else { return }
+        emotesSub = NotificationCenter.default.publisher(for: .thirdPartyEmotesLoaded)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] note in
+                let cid = note.userInfo?["channelId"] as? String
+                Task { @MainActor [weak self] in
+                    guard let self, cid == nil || cid == self.channelId else { return }
+                    await self.refreshEmotes()
+                }
+            }
+    }
     /// Identifiants déjà reçus → instant (les pages se chevauchent).
     private var seen: [String: Double] = [:]
     /// Plus grand instant reçu depuis le dernier saut (−1 : rien encore).
@@ -424,6 +452,7 @@ final class VodChatService: ObservableObject {
         // qui ne répond pas laissait le chat vide 20 à 40 s ; le reste arrive
         // derrière.
         let cid = channelId, name = channelLogin
+        observeLateEmotes()
         // Jeton dans le trousseau (il n'est plus dans UserDefaults) ; sans
         // jeton, BadgeService passe par la requête GQL publique.
         let tok = Keychain.loadToken("twitch_token")

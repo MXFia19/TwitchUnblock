@@ -88,7 +88,9 @@ iPhone apps.
   the live"); the timer only shows the speed while it applies. Catching up with
   a live recording drops back to 1× near its edge (Apple's player too, whose
   menu used to keep showing 2×), and the chosen speed comes back once you
-  rewind away from the edge. A speed the player can't keep (AirPlay, slow
+  rewind away from the edge. With Low latency on, catching up used to be
+  undone every second (Low latency put 1× back right after the 2×), and the
+  player got stuck. A speed the player can't keep (AirPlay, slow
   motion refused, or measured lower than asked once applied again) is
   announced and shown as it really plays, for the current video only. No
   faster than 2×: Twitch publishes no I-frame playlists, and iOS doesn't play
@@ -242,7 +244,11 @@ iPhone apps.
   would get ads (except for Higher qualities, below, with the ad-free source
   taking over during Twitch's ad breaks); if your account's stream doesn't
   answer, the usual sources take over. Picking a source in the ⋯ menu skips
-  your account for that channel until the app restarts.
+  your account for that channel until the app restarts. If an ad break still
+  comes on a usual source (your account's token too slow when the live opened,
+  or a sub taken since), the app asks your account once more and, if it's
+  ad-free there, reloads the live through it; logged in without the web
+  session, it says once how to get there.
 * 💎 **Higher qualities (if the channel offers them)** — off by default
   (each of its notices, like the one for a stream played through your
   account, shows only once, then stays quiet)
@@ -447,7 +453,17 @@ iPhone apps.
   3.5 s to load before the chat connects (each request gives up after 10 s),
   so a slow or blocked service no longer leaves it on “Connecting…”; after
   three failed attempts in a row, a line in the chat says so and points to
-  **Reconnect chat**.
+  **Reconnect chat**. BetterTTV, FFZ and 7TV emotes that arrive later turn
+  the words already shown (history, first messages, VOD chat) into emotes; a
+  service that didn't answer is tried again 30 s later, then each time the
+  chat reopens (once a minute at most) instead of never until the app
+  restarts, and its failure goes to the log with the reason. A chat opened
+  without the channel's id (Twitch didn't answer when the live opened) takes
+  it from the chat room, for the channel's emotes and badges. In landscape,
+  when the chat follows the live but its last message is no longer on screen
+  (SwiftUI's lazy list measuring wrong in a narrow column: the chat looked
+  empty until you rotated the phone), the list is rebuilt like a rotation
+  would.
 * 🚫 **Banned from a chat? Still readable** — when Twitch refuses your account
   in a channel's chat (banned), the chat keeps going read-only without your
   account, with a banner in place of the message box and a **Retry with my
@@ -681,7 +697,8 @@ iPhone apps.
 * 🎮 **Categories** — browse by game, then the live channels in it, filtered
   by language if you like (all, or a single one — kept for every category).
   Search puts the exact match first ("valorant" → VALORANT), with sharp box
-  art. Every category shows its viewers — the Top, search results and the
+  art. Counts past a million read 1.2M (they read 1234.6k before, on iPhone,
+  Apple TV and Android). Every category shows its viewers — the Top, search results and the
   followed ones, those of your Twitch account included —, asked 15 at a time:
   since November 2026, Twitch refuses a GQL request with more than 15 aliases,
   and the single request for 100 returned nothing. A category you follow on Twitch shows as followed on its page, and

@@ -46,6 +46,8 @@ actor EmoteService {
 
     private var twitchById:     [String: TwitchEmote] = [:]
     private var loadedChannels: Set<String> = []
+    /// Dernier nouvel essai des services d'une chaîne restés sans réponse.
+    private var channelRetryAt: [String: Date] = [:]
     /// Nom affiché de la chaîne (« Trymacs »), donné par FFZ ou 7TV : BTTV ne
     /// le donne pas pour les emotes mises en ligne par la chaîne.
     private var channelDisplayNames: [String: String] = [:]
@@ -107,18 +109,27 @@ actor EmoteService {
         }
         logger.success("EMOTES", "Emotes globales chargées",
                        "BTTV:\(globalBTTV.count) FFZ:\(globalFFZ.count) 7TV:\(global7TV.count)")
+        NotificationCenter.default.post(name: .thirdPartyEmotesLoaded, object: nil)
     }
 
     // MARK: – Load per channel
     func loadChannel(channelId: String, channelName: String) async {
-        guard !loadedChannels.contains(channelId) else { return }
+        guard !loadedChannels.contains(channelId) else {
+            // Déjà chargée, mais un service est resté sans réponse (délai,
+            // coupure) : nouvel essai à la réouverture du chat, au plus une
+            // fois par minute. Avant, plus rien jusqu'au redémarrage de l'app
+            // — des jours, l'app restant ouverte en arrière-plan.
+            guard missingSources(channelId),
+                  Date().timeIntervalSince(channelRetryAt[channelId] ?? .distantPast) > 60 else { return }
+            await loadChannelSources(channelId: channelId, channelName: channelName, onlyMissing: true)
+            return
+        }
         loadedChannels.insert(channelId)
         await loadChannelSources(channelId: channelId, channelName: channelName, onlyMissing: false)
         // Un service sans réponse (coupure, erreur 5xx) : nouvel essai 30 s plus
-        // tard, une seule fois — « catJAM » restait en texte jusqu'au
-        // redémarrage. Une chaîne sans compte FFZ ou 7TV ne répond pas non
-        // plus : un essai de plus, pas une boucle.
-        if channelBTTV[channelId] == nil || channelFFZ[channelId] == nil || channel7TV[channelId] == nil {
+        // tard — « catJAM » restait en texte jusqu'au redémarrage. Une chaîne
+        // sans compte BTTV, FFZ ou 7TV (404) est une réponse : rien à retenter.
+        if missingSources(channelId) {
             Task { [weak self] in
                 try? await Task.sleep(nanoseconds: 30_000_000_000)
                 await self?.loadChannelSources(channelId: channelId, channelName: channelName, onlyMissing: true)
@@ -126,11 +137,18 @@ actor EmoteService {
         }
     }
 
+    /// Un service de la chaîne n'a pas encore répondu (un 404 est une
+    /// réponse : sa liste est alors vide).
+    private func missingSources(_ channelId: String) -> Bool {
+        channelBTTV[channelId] == nil || channelFFZ[channelId] == nil || channel7TV[channelId] == nil
+    }
+
     private func loadChannelSources(channelId: String, channelName: String, onlyMissing: Bool) async {
         let bttv = !onlyMissing || channelBTTV[channelId] == nil
         let ffz  = !onlyMissing || channelFFZ[channelId] == nil
         let stv  = !onlyMissing || channel7TV[channelId] == nil
         guard bttv || ffz || stv else { return }
+        if onlyMissing { channelRetryAt[channelId] = Date() }
         await withTaskGroup(of: Void.self) { group in
             if bttv { group.addTask { await self.loadBTTVChannel(channelId: channelId, channelName: channelName) } }
             // FFZ reçoit maintenant les deux : channelId pour stocker, channelName pour l'API
@@ -151,6 +169,10 @@ actor EmoteService {
                        "BTTV:\(channelBTTV[channelId]?.count ?? 0) " +
                        "FFZ:\(channelFFZ[channelId]?.count ?? 0) " +
                        "7TV:\(channel7TV[channelId]?.count ?? 0) — total:\(total)")
+        // Messages déjà affichés sans elles (chat connecté au bout de 3,5 s,
+        // nouvel essai) : les chats de la chaîne les relisent.
+        NotificationCenter.default.post(name: .thirdPartyEmotesLoaded, object: nil,
+                                        userInfo: ["channelId": channelId])
     }
 
     // MARK: – Register Twitch emote from chat tag
@@ -194,6 +216,14 @@ actor EmoteService {
     }
 
     func resolveById(_ id: String) -> TwitchEmote? { twitchById[id] }
+
+    /// Emotes tierces de ces mots en une fois (sans les personnelles BTTV) :
+    /// pour relire les messages affichés avant leur arrivée.
+    func resolveMany(_ names: Set<String>, channelId: String?) -> [String: TwitchEmote] {
+        var found: [String: TwitchEmote] = [:]
+        for name in names { if let e = resolve(name: name, channelId: channelId) { found[name] = e } }
+        return found
+    }
 
     /// Emote Twitch par son nom, pour l'écho de nos propres messages, qui n'a
     /// pas de balises d'emotes : parmi celles déjà vues dans ce chat (celles
@@ -516,16 +546,15 @@ actor EmoteService {
     // ─────────────────────────────────────────────────────────────────────
     // MARK: – BTTV
     private func loadBTTVGlobal() async {
-        guard let url = URL(string: "https://api.betterttv.net/3/cached/emotes/global"),
-              let (data, _) = try? await chatAssetSession.data(from: url),
-              let arr = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { return }
+        guard case .json(let value) = await fetch("https://api.betterttv.net/3/cached/emotes/global", service: "BTTV"),
+              let arr = value as? [[String: Any]] else { return }
         for obj in arr { if let e = bttvEmote(obj, scope: .global) { globalBTTV[e.name] = e } }
     }
 
     private func loadBTTVChannel(channelId: String, channelName: String) async {
-        guard let url = URL(string: "https://api.betterttv.net/3/cached/users/twitch/\(channelId)"),
-              let (data, _) = try? await chatAssetSession.data(from: url),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
+        let reply = await fetch("https://api.betterttv.net/3/cached/users/twitch/\(channelId)", service: "BTTV")
+        if case .absent = reply { channelBTTV[channelId] = [:]; return }
+        guard case .json(let value) = reply, let json = value as? [String: Any] else { return }
         var map: [String: TwitchEmote] = [:]
         // channelEmotes : mises en ligne par la chaîne ; sharedEmotes : leur
         // créateur est dans `user`.
@@ -598,9 +627,8 @@ actor EmoteService {
     // ─────────────────────────────────────────────────────────────────────
     // MARK: – FFZ
     private func loadFFZGlobal() async {
-        guard let url = URL(string: "https://api.frankerfacez.com/v1/set/global"),
-              let (data, _) = try? await chatAssetSession.data(from: url),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+        guard case .json(let value) = await fetch("https://api.frankerfacez.com/v1/set/global", service: "FFZ"),
+              let json = value as? [String: Any],
               let sets = json["sets"] as? [String: Any] else { return }
         for (_, setValue) in sets {
             guard let setObj = setValue as? [String: Any],
@@ -611,10 +639,10 @@ actor EmoteService {
 
     // Fix : stockage par channelId (API appellée avec channelName)
     private func loadFFZChannel(channelId: String, channelName: String) async {
-        guard let url = URL(string: "https://api.frankerfacez.com/v1/room/\(channelName)"),
-              let (data, _) = try? await chatAssetSession.data(from: url),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let sets = json["sets"] as? [String: Any] else { return }
+        let reply = await fetch("https://api.frankerfacez.com/v1/room/\(channelName)", service: "FFZ")
+        if case .absent = reply { channelFFZ[channelId] = [:]; return }
+        guard case .json(let value) = reply, let json = value as? [String: Any] else { return }
+        let sets = json["sets"] as? [String: Any] ?? [:]
         if let shown = (json["room"] as? [String: Any])?["display_name"] as? String, !shown.isEmpty {
             channelDisplayNames[channelId] = shown
         }
@@ -650,19 +678,18 @@ actor EmoteService {
     // ─────────────────────────────────────────────────────────────────────
     // MARK: – 7TV
     private func load7TVGlobal() async {
-        guard let url = URL(string: "https://7tv.io/v3/emote-sets/global"),
-              let (data, _) = try? await chatAssetSession.data(from: url),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+        guard case .json(let value) = await fetch("https://7tv.io/v3/emote-sets/global", service: "7TV"),
+              let json = value as? [String: Any],
               let emotes = json["emotes"] as? [[String: Any]] else { return }
         for obj in emotes { if let e = stvEmote(obj, scope: .global) { global7TV[e.name] = e } }
     }
 
     private func load7TVChannel(channelId: String) async {
-        guard let url = URL(string: "https://7tv.io/v3/users/twitch/\(channelId)"),
-              let (data, _) = try? await chatAssetSession.data(from: url),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let setObj = json["emote_set"] as? [String: Any],
-              let emotes = setObj["emotes"] as? [[String: Any]] else { return }
+        let reply = await fetch("https://7tv.io/v3/users/twitch/\(channelId)", service: "7TV")
+        if case .absent = reply { channel7TV[channelId] = [:]; return }
+        guard case .json(let value) = reply, let json = value as? [String: Any] else { return }
+        // Compte 7TV sans jeu d'emotes actif : une réponse, liste vide.
+        let emotes = (json["emote_set"] as? [String: Any])?["emotes"] as? [[String: Any]] ?? []
         if channelDisplayNames[channelId] == nil,
            let shown = json["display_name"] as? String, !shown.isEmpty {
             channelDisplayNames[channelId] = shown
@@ -670,6 +697,39 @@ actor EmoteService {
         var map: [String: TwitchEmote] = [:]
         for obj in emotes { if let e = stvEmote(obj, scope: .channel) { map[e.name] = e } }
         channel7TV[channelId] = map
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // MARK: – Requêtes
+    /// Réponse de BTTV, FFZ ou 7TV.
+    private enum ServiceReply {
+        case json(Any)
+        /// 404 : la chaîne n'a pas de compte chez ce service. Une réponse, pas
+        /// une panne : sa liste est vide, sans nouvel essai.
+        case absent
+        case failed
+    }
+
+    /// Requête à un service d'emotes. Un échec va au journal avec sa raison
+    /// (délai, code HTTP, réponse illisible) : avant, rien ne disait quel
+    /// service manquait ni pourquoi (fb_mwmcdrvb, emotes 7TV absentes).
+    private func fetch(_ address: String, service: String) async -> ServiceReply {
+        guard let url = URL(string: address) else { return .failed }
+        do {
+            let (data, response) = try await chatAssetSession.data(from: url)
+            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+            if status == 404 { return .absent }
+            guard (200..<300).contains(status), let json = try? JSONSerialization.jsonObject(with: data) else {
+                logger.warn("EMOTES", "Service d'emotes indisponible", "\(service) · HTTP \(status) · \(data.count) o")
+                return .failed
+            }
+            return .json(json)
+        } catch {
+            if !Task.isCancelled {
+                logger.warn("EMOTES", "Service d'emotes sans réponse", "\(service) · \(error.localizedDescription)")
+            }
+            return .failed
+        }
     }
 
     private func stvEmote(_ obj: [String: Any], scope: EmoteScope) -> TwitchEmote? {
@@ -688,4 +748,11 @@ actor EmoteService {
                            zeroWidth: ((obj["flags"] as? Int) ?? 0) & 1 != 0,
                            largeURL: "https:\(host)/4x.webp")
     }
+}
+
+extension Notification.Name {
+    /// Emotes BTTV, FFZ ou 7TV chargées : globales (sans `userInfo`) ou d'une
+    /// chaîne (`userInfo["channelId"]`). Les chats y relisent les messages
+    /// affichés avant leur arrivée.
+    static let thirdPartyEmotesLoaded = Notification.Name("TUThirdPartyEmotesLoaded")
 }

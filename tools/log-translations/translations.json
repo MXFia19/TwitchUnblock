@@ -767,5 +767,14 @@
  "Envoi à la TV refusé": ["Sending to the TV refused", "Envío a la TV rechazado", "Отправка на телевизор отклонена"],
  "rien n'a été envoyé à la TV": ["nothing was sent to the TV", "no se envió nada a la TV", "на телевизор ничего не отправлено"],
  "Session envoyée à la TV": ["Session sent to the TV", "Sesión enviada a la TV", "Сессия отправлена на телевизор"],
- "Trop d'envois à la TV": ["Too many sends to the TV", "Demasiados envíos a la TV", "Слишком много отправок на телевизор"]
+ "Trop d'envois à la TV": ["Too many sends to the TV", "Demasiados envíos a la TV", "Слишком много отправок на телевизор"],
+ "Emotes arrivées après les messages": ["Emotes arrived after the messages", "Emotes llegados después de los mensajes", "Эмоуты пришли после сообщений"],
+ "Id de la chaîne lu dans le salon": ["Channel id read from the chat room", "Id del canal leído en la sala", "ID канала получен из комнаты чата"],
+ "Service d'emotes indisponible": ["Emote service unavailable", "Servicio de emotes no disponible", "Сервис эмоутов недоступен"],
+ "Service d'emotes sans réponse": ["Emote service not responding", "El servicio de emotes no responde", "Сервис эмоутов не отвечает"],
+ "messages relus": ["messages updated", "mensajes actualizados", "сообщений обновлено"],
+ "Bas du chat hors de l'écran : liste reconstruite": ["Bottom of the chat off screen: list rebuilt", "Final del chat fuera de la pantalla: lista reconstruida", "Низ чата за пределами экрана: список перестроен"],
+ "Pause pub : compte sans pub sur cette chaîne, direct relu par le compte": ["Ad break: account is ad-free on this channel, stream reloaded through the account", "Pausa publicitaria: la cuenta no tiene anuncios en este canal, directo recargado con la cuenta", "Рекламная пауза: аккаунт без рекламы на этом канале, трансляция перезапущена через аккаунт"],
+ "Pause pub : le compte n'est pas sans pub ici": ["Ad break: the account is not ad-free here", "Pausa publicitaria: la cuenta no está sin anuncios aquí", "Рекламная пауза: аккаунт здесь не без рекламы"],
+ "sentinelle absente": ["sentinel missing", "centinela ausente", "метка отсутствует"]
 }

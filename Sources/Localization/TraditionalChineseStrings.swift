@@ -813,6 +813,7 @@ let kTraditionalChineseStrings: [String: String] = [
     "sub_adfree": "用我的訂閱無廣告觀看",
     "sub_adfree_sub": "若你訂閱了該頻道（或擁有 Turbo），直播會走你的 Twitch 帳號：沒有廣告，與在 Twitch 上相同。Twitch 也會看到是你的帳號在觀看。需要網頁工作階段。",
     "sub_adfree_connect": "連上網頁工作階段",
+    "sub_adfree_hint": "有訂閱這個頻道嗎？連上網頁工作階段（設定 → 影片播放器），直播就會透過你的帳號播放，不會有廣告時段。",
     "ad_break_title": "頻道廣告時間",
     "ad_break_sub": "Twitch 廣告時間。直播預計在 {n} 秒後恢復。",
     "ad_break_login_hint": "訂閱了這個頻道？連上網頁工作階段（設定 → Twitch 帳號）即可無廣告觀看。",

@@ -203,6 +203,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.7.46",
+          "buildVersion": "418",
+          "date": "2026-11-19",
+          "localizedDescription": "- Landscape chat: when the chat kept following the live but showed an empty area (it only came back after rotating the phone), the list now rebuilds itself.\n- BetterTTV, FFZ and 7TV emotes that load after the chat has connected now also show in the messages already on screen; a service that didn't answer is tried again when you reopen the chat instead of never until the app restarts, and its failure is written to the log.\n- Live rewind at 2×: with Low latency on, the catch-up speed was undone every second and the player got stuck; it now plays at the chosen speed up to the live edge.\n- Channel ad break while subscribed: if an ad break comes although your account watches that channel ad-free, the app checks your account again and reloads the live through it; logged in without the web session, it tells you once how to watch ad-free with your sub.\n- Viewer counts past a million now read 1.2M instead of 1234.6k.",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-418/TwitchUnblock.ipa",
+          "size": 4817415,
+          "commit": "719f8b7c24a5d91f171164e0d40acb281549814d"
+        },
+        {
           "version": "1.7.45",
           "buildVersion": "417",
           "date": "2026-11-18",
@@ -282,25 +291,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-401/TwitchUnblock.ipa",
           "size": 4614743,
           "commit": "8fc5a7df957cd448cb7ebe61a7d80ff12750eff5"
-        },
-        {
-          "version": "1.7.23",
-          "buildVersion": "400",
-          "date": "2026-11-10",
-          "localizedDescription": "- Ad breaks counted for the website's /stats now include the live source and whether it was a Twitch pre-roll or the channel's own break\n- Apple TV: Ad breaks counted for the website's /stats now include the live source and whether it was a Twitch pre-roll or the channel's own break",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-400/TwitchUnblock.ipa",
-          "size": 4615039,
-          "commit": "788f75b5812b372489de7dcf06c8d2b9e7ab6b96"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.7.45",
-      "versionDate": "2026-11-18",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-417/TwitchUnblock.ipa",
-      "size": 4800349
+      "version": "1.7.46",
+      "versionDate": "2026-11-19",
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-418/TwitchUnblock.ipa",
+      "size": 4817415
     }
   ],
   "news": []

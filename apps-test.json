@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.7.46",
+          "buildVersion": "418",
+          "date": "2026-11-19",
+          "localizedDescription": "- Landscape chat: when the chat kept following the live but showed an empty area (it only came back after rotating the phone), the list now rebuilds itself.\n- BetterTTV, FFZ and 7TV emotes that load after the chat has connected now also show in the messages already on screen; a service that didn't answer is tried again when you reopen the chat instead of never until the app restarts, and its failure is written to the log.\n- Live rewind at 2×: with Low latency on, the catch-up speed was undone every second and the player got stuck; it now plays at the chosen speed up to the live edge.\n- Channel ad break while subscribed: if an ad break comes although your account watches that channel ad-free, the app checks your account again and reloads the live through it; logged in without the web session, it tells you once how to watch ad-free with your sub.\n- Viewer counts past a million now read 1.2M instead of 1234.6k.",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-418/TwitchUnblock.ipa",
+          "size": 4817415,
+          "commit": "719f8b7c24a5d91f171164e0d40acb281549814d"
+        },
+        {
           "version": "1.7.45",
           "buildVersion": "417",
           "date": "2026-11-18",
@@ -280,25 +289,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-381/TwitchUnblock.ipa",
           "size": 4501988,
           "commit": "d0cd32c23dbf37b1f4f5e3f215d94410938a2c79"
-        },
-        {
-          "version": "1.7.2",
-          "buildVersion": "380",
-          "date": "2026-10-31",
-          "localizedDescription": "- New \"No Twitch account\" option at the top of Settings → General → Customize the app: hides everything that needs an account or asks you to log in (Account, Drops and Channel points pages, sign-in cards, log-in reminders, clip creation); it never hides anything while you're logged in",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-380/TwitchUnblock.ipa",
-          "size": 4496188,
-          "commit": "a39e589722092595d3eedf63b30d42c662198127"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.7.45",
-      "versionDate": "2026-11-18",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-417/TwitchUnblock.ipa",
-      "size": 4800349
+      "version": "1.7.46",
+      "versionDate": "2026-11-19",
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-418/TwitchUnblock.ipa",
+      "size": 4817415
     }
   ],
   "news": []

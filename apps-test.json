@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.7.47",
+          "buildVersion": "419",
+          "date": "2026-11-21",
+          "localizedDescription": "- Hidden tags: type the tags whose streams you don't want to see (“vtuber”, for example) in the hidden list in Settings, or long-press a stream → Hide the tag. Those streams leave Top, categories and search; synced with your account and the website.\n- Picture in Picture is turned off in LiveContainer's multitasking mode, where it doesn't work (it stays in single-app mode).\n- When a streamer delays their own stream (against stream sniping), the app says so once and shows the delay under the qualities, so it isn't mistaken for lag from the app.\n- Channels that Twitch doesn't transcode only have the Source quality: the quality picker now explains it instead of looking broken.\n- If your network blocks the Bulgaria source (often a DNS filter such as NextDNS or AdGuard), the app tells you which address to allow.",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-419/TwitchUnblock.ipa",
+          "size": 4839696,
+          "commit": "900924dfa3f08b886767d3b9c6d409535252aa0e"
+        },
+        {
           "version": "1.7.46",
           "buildVersion": "418",
           "date": "2026-11-19",
@@ -280,25 +289,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-382/TwitchUnblock.ipa",
           "size": 4518175,
           "commit": "ba9a6c67c9aac885273a4a5e169b2495d73e6aea"
-        },
-        {
-          "version": "1.7.3",
-          "buildVersion": "381",
-          "date": "2026-11-01",
-          "localizedDescription": "- Bug reports and ideas are signed with your Twitch account when you're logged in (a switch, on by default), or with an optional nickname otherwise, so the developer knows it's you from one report to the next",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-381/TwitchUnblock.ipa",
-          "size": 4501988,
-          "commit": "d0cd32c23dbf37b1f4f5e3f215d94410938a2c79"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.7.46",
-      "versionDate": "2026-11-19",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-418/TwitchUnblock.ipa",
-      "size": 4817415
+      "version": "1.7.47",
+      "versionDate": "2026-11-21",
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-419/TwitchUnblock.ipa",
+      "size": 4839696
     }
   ],
   "news": []

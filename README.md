@@ -1189,6 +1189,19 @@ If you **fork** the project and want your own backend, the Worker code and
 deployment notes are in [`worker/`](worker/); change `kAPIURL` in
 [`Sources/Constants.swift`](Sources/Constants.swift) to point at it.
 
+**Daily quota reserve** (the website's README, *Daily quota reserve*): the
+free Worker has 100,000 requests a day, and Cloudflare counts even the ones it
+refuses. Past 80%, the Worker says so on the usage count, the announcement and
+the poll (`X-TU-Quota: reserve`, `Retry-After` until midnight UTC):
+[`QuotaPause`](Sources/Services/QuotaPause.swift) then holds those automatic
+calls (UsageService, AnnouncementService, PollService, and TVUsage on the Apple
+TV) until midnight UTC — pending counters stay on the device. The channel
+points relay (`/api/spade`) answers 429 `quota_reserve`: ChannelPointsService
+leaves that Worker until the given time instead of 10 minutes, and sends the
+minutes through the fallback. Past 95%, the main Worker answers playback like
+Cloudflare's daily limit (`1027`), and the app already moves to the fallback
+until midnight UTC.
+
 ---
 
 ## 🙌 Contributors

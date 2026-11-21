@@ -63,6 +63,8 @@ enum TVUsage {
         let ud = UserDefaults.standard
         let last = ud.double(forKey: lastKey)
         if last > 0, Date().timeIntervalSince1970 - last < 3600 { return }
+        // Réserve du quota du Worker (QuotaPause) : les compteurs attendent, gardés ici.
+        if QuotaPause.active { return }
         guard await workerCountsTV(), var req = request() else { return }
         if let key = buildPingKey { req.setValue(key, forHTTPHeaderField: "X-TU-Key") }
         if let token, !token.isEmpty { req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
@@ -78,8 +80,9 @@ enum TVUsage {
         let adHours = AdHours.pending
         if !adHours.isEmpty { body["adh"] = adHours }
         req.httpBody = try? JSONSerialization.data(withJSONObject: body)
-        guard let (_, resp) = try? await URLSession.shared.data(for: req),
-              (resp as? HTTPURLResponse)?.statusCode == 200 else { return }
+        guard let (_, resp) = try? await URLSession.shared.data(for: req) else { return }
+        QuotaPause.note(resp)
+        guard (resp as? HTTPURLResponse)?.statusCode == 200 else { return }
         ud.set(Date().timeIntervalSince1970, forKey: lastKey)
         // Partis : retirés (ceux arrivés pendant l'envoi restent).
         var left = pendingEvents

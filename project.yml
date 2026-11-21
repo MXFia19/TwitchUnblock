@@ -88,6 +88,8 @@ targets:
       - path: Sources/Services/SpatialAudio.swift
       - path: Sources/Services/HiddenContent.swift
       - path: Sources/Services/ChannelDelay.swift
+      # Réserve du quota du Worker : comptage en pause (TVUsage).
+      - path: Sources/Services/QuotaPause.swift
       # Reprise après une interruption du son (Siri, FaceTime) : TVPlayer.
       - path: Sources/Services/PlaybackAudio.swift
       - path: Sources/Services/PlaybackDiagnostics.swift

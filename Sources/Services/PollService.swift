@@ -39,6 +39,8 @@ final class PollService: ObservableObject {
 
     func refresh(force: Bool = false) async {
         if !force, let lastFetch, Date().timeIntervalSince(lastFetch) < 5 * 60 { return }
+        // Réserve du quota du Worker (QuotaPause) : le sondage déjà là reste, sans relecture.
+        if QuotaPause.active { return }
         let r = await post("/api/poll", ["device": UsageService.shared.installId])
         guard r.status == 200, let json = r.json else { return }
         lastFetch = Date()
@@ -101,6 +103,7 @@ final class PollService: ObservableObject {
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try? JSONSerialization.data(withJSONObject: body)
         guard let (data, resp) = try? await URLSession.shared.data(for: req) else { return (nil, 0) }
+        QuotaPause.note(resp)
         return (try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                 (resp as? HTTPURLResponse)?.statusCode ?? 0)
     }

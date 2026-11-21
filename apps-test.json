@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.7.49",
+          "buildVersion": "421",
+          "date": "2026-11-21",
+          "localizedDescription": "- The website moved to twitchunblock-web.pages.dev: the app's links to it now open the new address",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-421/TwitchUnblock.ipa",
+          "size": 4840121,
+          "commit": "277fe0ab7586ecd102a9bdac8ed11f60fb636f48"
+        },
+        {
           "version": "1.7.48",
           "buildVersion": "420",
           "date": "2026-11-21",
@@ -280,25 +289,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-384/TwitchUnblock.ipa",
           "size": 4541767,
           "commit": "3a2e8623ccc6915eb6c9e6492cf6b11668fc6bb6"
-        },
-        {
-          "version": "1.7.5",
-          "buildVersion": "383",
-          "date": "2026-11-01",
-          "localizedDescription": "- New \"My source\" option: add your own luminous-ttv server to the live sources (Settings → Player)",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-383/TwitchUnblock.ipa",
-          "size": 4529817,
-          "commit": "ba7f4539c21814468f254bffda4fdba592cbe691"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.7.48",
+      "version": "1.7.49",
       "versionDate": "2026-11-21",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-420/TwitchUnblock.ipa",
-      "size": 4840107
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-421/TwitchUnblock.ipa",
+      "size": 4840121
     }
   ],
   "news": []

@@ -203,6 +203,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.7.48",
+          "buildVersion": "420",
+          "date": "2026-11-21",
+          "localizedDescription": "- When the server gets close to its daily limit, the app pauses the usage count, announcements and polls until midnight UTC, so live streams and VODs keep working.",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-420/TwitchUnblock.ipa",
+          "size": 4840107,
+          "commit": "0a45b0112b0d63b88b661aaa4598bcaa120cf308"
+        },
+        {
           "version": "1.7.47",
           "buildVersion": "419",
           "date": "2026-11-21",
@@ -282,25 +291,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-404/TwitchUnblock.ipa",
           "size": 4617404,
           "commit": "1f12837f24bc4b1f63c69414c02cb6ff5d79d213"
-        },
-        {
-          "version": "1.7.25",
-          "buildVersion": "402",
-          "date": "2026-11-12",
-          "localizedDescription": "- Other improvements and fixes",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-402/TwitchUnblock.ipa",
-          "size": 4616809,
-          "commit": "a6b5521b0a7246c8b841b24aa50970587cd1bd3f"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.7.47",
+      "version": "1.7.48",
       "versionDate": "2026-11-21",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-419/TwitchUnblock.ipa",
-      "size": 4839696
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-420/TwitchUnblock.ipa",
+      "size": 4840107
     }
   ],
   "news": []

@@ -7,7 +7,7 @@
 
 **TwitchUnblock** is an open-source Twitch client that lets you watch VODs and
 live streams without a subscription, at full quality. Native iOS app built with
-SwiftUI — also available [in your browser](https://twitchunblock.vercel.app).
+SwiftUI — also available [in your browser](https://twitchunblock-web.pages.dev).
 
 > 🤖 **Vibe-coded project.** TwitchUnblock is built with AI coding assistants
 > (prompted, reviewed and tested by a human). Expect rough edges: bug reports
@@ -19,7 +19,7 @@ no key to paste. The backend is already hosted and shared by every install.
 | | |
 |---|---|
 | **iOS** | SwiftUI, iOS 16+, sideloaded |
-| **Web** | [twitchunblock.vercel.app](https://twitchunblock.vercel.app) — source in [TwitchUnblock-Web](https://github.com/MXFia19/TwitchUnblock-Web) |
+| **Web** | [twitchunblock-web.pages.dev](https://twitchunblock-web.pages.dev) — source in [TwitchUnblock-Web](https://github.com/MXFia19/TwitchUnblock-Web) |
 | **Setup needed** | None — sign in with Twitch and watch |
 
 ---
@@ -45,7 +45,7 @@ https://raw.githubusercontent.com/MXFia19/TwitchUnblock/master/apps.json
 ```
 
 **Apple TV**: see [Apple TV (test)](#-apple-tv-test) below. **No install**: the
-[web version](https://twitchunblock.vercel.app) runs in any browser.
+[web version](https://twitchunblock-web.pages.dev) runs in any browser.
 
 **Mac (Apple Silicon)**: the iPhone app also runs on Macs with an M1 chip or
 newer through [PlayCover](https://playcover.io) (free and open source): install
@@ -999,7 +999,7 @@ iPhone apps.
   pre-roll or the channel's own break — counters only, so the website's
   /stats keeps the ad-free proxies apart from the account and official Twitch),
   at most once an hour. No channels watched, no IP address. Switching it off
-  erases it server-side. Public numbers: [/stats](https://twitchunblock.vercel.app/stats). See
+  erases it server-side. Public numbers: [/stats](https://twitchunblock-web.pages.dev/stats). See
   [`Sources/Services/UsageService.swift`](Sources/Services/UsageService.swift).
 * 🪵 **System logs** — everything the app does, visible in Settings, in the
   app's language (written in French, translated when shown: numbers and names
@@ -1121,7 +1121,7 @@ Its GitHub releases can't be used for that: they also hold the iPhone IPAs.
 
 ## 🌐 Web version
 
-**No install? Use it in your browser: https://twitchunblock.vercel.app**
+**No install? Use it in your browser: https://twitchunblock-web.pages.dev**
 
 No sideloading? Add the website to your Home Screen: it opens like an app
 and gets live notifications (iOS 16.4+).

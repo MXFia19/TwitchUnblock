@@ -5,7 +5,7 @@ let kAPIURL          = "https://test2.kurzmathis4.workers.dev"
 let kDiscordURL      = "https://discord.gg/cEsMRdxsVq"
 /// Notifications de live instantanées : le site installé en web app (à la
 /// place de ntfy). Ce lien ouvre ses étapes d'installation et d'activation.
-let kNotifInstallURL = URL(string: "https://twitchunblock.vercel.app/?install=notifications")!
+let kNotifInstallURL = URL(string: "https://twitchunblock-web.pages.dev/?install=notifications")!
 let kHelixClientID   = "1e68ku2ehgzy5cy0di3xvfy82sxpf6"
 let kGQLClientID     = "kimne78kx3ncx6brgo4mv6wki5h1ko"
 /// Client-ID public de l'app Android de Twitch (technique d'Xtra). Twitch

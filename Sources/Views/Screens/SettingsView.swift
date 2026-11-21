@@ -2382,7 +2382,7 @@ struct SettingsView: View {
                            url: "https://github.com/MXFia19/TwitchUnblock")
                 creditLink(icon: "globe",
                            title: store.t("web_version"),
-                           url: "https://twitchunblock.vercel.app")
+                           url: "https://twitchunblock-web.pages.dev")
                 creditLink(icon: "bubble.left.and.bubble.right.fill",
                            title: store.t("discord_join"),
                            url: kDiscordURL)

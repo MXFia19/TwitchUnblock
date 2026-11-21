@@ -91,6 +91,10 @@ struct MainTabView: View {
     // ── Débogage / synchro ────────────────────────────────────────────────
     /// Latence mesurée du direct, arrondie à la seconde (affichée).
     @State private var liveLatency: Double = 0
+    /// Délai mis par la chaîne du direct en cours (ChannelDelay), 0 sans.
+    @State private var channelDelay = 0
+    /// Chaînes dont le délai a déjà été dit pendant ce lancement.
+    @State private var delayToldFor: Set<String> = []
     /// Glissé vers le bas du lecteur en cours : décalage suivi au doigt.
     /// Objet gardé en @State sans être observé ici : seul PlayerPullEffect
     /// se redessine pendant le geste (voir PlayerPull.swift).
@@ -441,6 +445,24 @@ struct MainTabView: View {
                     .transition(.opacity)
             }
         }
+        // Délai mis par la chaîne (lecteurs, ChannelDelay) : dit une fois par
+        // chaîne pendant ce lancement, puis écrit sous les qualités.
+        .onReceive(NotificationCenter.default.publisher(for: ChannelDelay.changed)) { n in
+            let s = n.userInfo?["s"] as? Int ?? 0
+            channelDelay = isLivePlaying ? s : 0
+            guard s > 0, isLivePlaying, case .live(let ch)? = playerMode,
+                  !delayToldFor.contains(ch.lowercased()) else { return }
+            delayToldFor.insert(ch.lowercased())
+            logger.info("LECTEUR", "Délai ajouté par la chaîne : \(s) s", ch)
+            InAppNotices.shared.show(InAppNotice(kind: .info, title: store.t("channel_delay_title"),
+                                                 body: store.t("channel_delay_body").replacingOccurrences(of: "{s}", with: "\(s)")))
+        }
+        // Source Bulgarie refusée par le réseau (filtre DNS) : dit une fois
+        // par lancement (BulgariaRelayBlock).
+        .onReceive(NotificationCenter.default.publisher(for: BulgariaRelayBlock.blocked)) { _ in
+            InAppNotices.shared.show(InAppNotice(kind: .info, title: store.t("bg_blocked_title"),
+                                                 body: store.t("bg_blocked_body")))
+        }
         // Menu « ⋯ » du lecteur immersif.
         .sheet(isPresented: $showPlayerMenu) {
             PlayerMenuSheet(
@@ -449,6 +471,7 @@ struct MainTabView: View {
                 canRewind: liveDvrVideoId != nil,
                 isDvr: dvrSourceChannel != nil,
                 variants: qualityVariants,
+                qualityNote: menuQualityNote,
                 onSelectQuality: { q in
                     // Toucher la qualité déjà cochée ne change pas la préférence.
                     if q != currentQuality(qualityLinks ?? [:]) {
@@ -1698,6 +1721,16 @@ struct MainTabView: View {
     }
 
     /// Arrondi à la seconde : sinon la vue se recalculerait à chaque tick.
+    /// Menu ⋯ : sous les qualités d'un direct, le délai mis par la chaîne et
+    /// la qualité unique (chaîne sans transcodage), comme sur le site.
+    private var menuQualityNote: String? {
+        guard isLivePlaying else { return nil }
+        var parts: [String] = []
+        if channelDelay > 0 { parts.append(store.t("channel_delay_note").replacingOccurrences(of: "{s}", with: "\(channelDelay)")) }
+        if isSourceOnly(Array((qualityLinks ?? [:]).keys)) { parts.append(store.t("q_source_only")) }
+        return parts.isEmpty ? nil : parts.joined(separator: "\n")
+    }
+
     private func updateLatency(_ value: Double?) {
         let rounded = (value ?? 0).rounded()
         if abs(rounded - liveLatency) >= 1 { liveLatency = rounded }
@@ -2363,6 +2396,7 @@ struct MainTabView: View {
         vodPlaybackTime = 0
         liveDvrVideoId  = nil
         liveLatency     = 0
+        channelDelay    = 0
         ChatSync.shared.reset()
         pull.y          = 0
         loadingSource   = nil
@@ -2655,6 +2689,7 @@ struct MainTabView: View {
             liveStartedAt      = nil
             liveUptimeText     = ""
             liveLatency        = 0
+            channelDelay       = 0
             ChatSync.shared.reset()
             pull.y             = 0
             liveAvatar         = nil

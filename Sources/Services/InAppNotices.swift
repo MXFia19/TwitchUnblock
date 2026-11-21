@@ -11,7 +11,7 @@ import UserNotifications
 /// retour dans l'app.
 struct InAppNotice: Identifiable, Codable, Equatable {
     enum Kind: String, Codable {
-        case feedback, dropReady, dropClaimed, download
+        case feedback, dropReady, dropClaimed, download, info
 
         var icon: String {
             switch self {
@@ -19,12 +19,13 @@ struct InAppNotice: Identifiable, Codable, Equatable {
             case .dropReady:   return "gift.fill"
             case .dropClaimed: return "checkmark.seal.fill"
             case .download:    return "arrow.down.circle.fill"
+            case .info:        return "info.circle.fill"
             }
         }
 
         var tint: Color {
             switch self {
-            case .feedback:                return .tPrimary
+            case .feedback, .info:         return .tPrimary
             case .dropReady, .dropClaimed: return .tPurple
             case .download:                return .tSuccess
             }

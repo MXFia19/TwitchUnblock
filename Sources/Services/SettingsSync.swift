@@ -47,10 +47,12 @@ enum SettingsSync {
     ///  - homeList : accueil en grille ou en liste, selon la taille de l'écran.
     /// « hiddenEmotes » : emotes masquées, codes exacts (200 au plus) ;
     /// « favoriteEmotes » : emotes favorites, codes exacts (100 au plus) ;
-    /// « hideGiftSubs » : subs offerts masqués dans le chat (coupé par défaut).
+    /// « hideGiftSubs » : subs offerts masqués dans le chat (coupé par défaut) ;
+    /// « hiddenTags » : tags masqués des listes de découverte (100 au plus).
     static let commonKeys = ["topLang", "showRecent", "timestamps", "timeFormat", "keepDeleted",
                              "loadHistory", "hideBots", "hideCommands", "mutedWords", "blockedUsers",
-                             "highlightWords", "vodSpeed", "hiddenEmotes", "favoriteEmotes", "hideGiftSubs"]
+                             "highlightWords", "vodSpeed", "hiddenEmotes", "favoriteEmotes", "hideGiftSubs",
+                             "hiddenTags"]
 
     /// Propres à l'app : la personnalisation (onglets, accueil, boutons du
     /// lecteur, bandeaux du chat) et ce qui suit le compte plutôt que
@@ -162,7 +164,7 @@ enum SettingsSync {
     static func digestible(_ name: String, _ data: Any) -> Any {
         guard var dict = data as? [String: Any] else { return data }
         if name == "common" {
-            for key in ["hiddenEmotes", "favoriteEmotes"] where (dict[key] as? [Any])?.isEmpty == true { dict[key] = nil }
+            for key in ["hiddenEmotes", "favoriteEmotes", "hiddenTags"] where (dict[key] as? [Any])?.isEmpty == true { dict[key] = nil }
             if dict["hideGiftSubs"] as? Bool == false { dict["hideGiftSubs"] = nil }
         }
         if name == "ios" {
@@ -216,7 +218,8 @@ enum SettingsSync {
         var out = there as? [String: Any] ?? [:]
         for (key, max) in [("mutedWords", 50), ("highlightWords", 30), ("blockedUsers", 500),
                            ("hiddenEmotes", AppStore.maxHiddenEmotes),
-                           ("favoriteEmotes", AppStore.maxFavoriteEmotes)] {
+                           ("favoriteEmotes", AppStore.maxFavoriteEmotes),
+                           ("hiddenTags", HiddenContent.maxTags)] {
             var seen = Set<String>()
             let theirs: [String] = ((out[key] as? [Any]) ?? []).compactMap { $0 as? String }
             let mine: [String] = (here[key] as? [String]) ?? []
@@ -453,6 +456,7 @@ extension AppStore {
                 && !chatShowDeleted && chatLoadRecent && !chatHideBots && !chatHideCommands
                 && chatMutedWords.isEmpty && chatBlockedUsers.isEmpty && chatHighlightWords.isEmpty
                 && vodSpeed == 1 && hiddenEmotes.isEmpty && favoriteEmotes.isEmpty && !chatHideGiftSubs
+                && hiddenTags.isEmpty
         }
     }
 

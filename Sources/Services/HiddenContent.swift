@@ -51,6 +51,30 @@ struct HiddenContent: Codable, Equatable {
         !s.isEmpty && s.count <= 20 && s.allSatisfy { $0.isASCII && $0.isNumber }
     }
 
+    // MARK: Tags masqués
+    // Gardés à part (AppStore.hiddenTags, « hiddenTags » comme sur le site :
+    // section « common » de la synchro et réglages de la sauvegarde), pas dans
+    // la section « hidden », que le Worker ne garde qu'avec ses chaînes et ses
+    // catégories. Demande fb_mwpac0z4 (« vtuber »).
+    static let maxTags = 100
+    /// Tag nettoyé comme sur le site : minuscules, sans « # » ; lettres et
+    /// chiffres seulement (25 au plus, comme chez Twitch), sinon nil.
+    static func cleanTag(_ s: String) -> String? {
+        var v = s.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        while v.hasPrefix("#") { v.removeFirst() }
+        guard !v.isEmpty, v.count <= 25, v.allSatisfy({ $0.isLetter || $0.isNumber }) else { return nil }
+        return v
+    }
+    /// Liste nettoyée, sans doublon, dans l'ordre, `maxTags` au plus.
+    static func cleanTags(_ list: [String]) -> [String] {
+        var seen = Set<String>()
+        return Array(list.compactMap(cleanTag).filter { seen.insert($0).inserted }.prefix(maxTags))
+    }
+    /// Le live porte-t-il un de ces tags ? Twitch les compare sans la casse.
+    static func hasHiddenTag(_ s: TwitchStream, in tags: [String]) -> Bool {
+        !tags.isEmpty && s.tags.contains { tags.contains($0.lowercased()) }
+    }
+
     // MARK: Lecture
     func hides(channel login: String) -> Bool {
         let l = login.lowercased()

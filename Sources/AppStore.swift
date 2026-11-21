@@ -730,6 +730,14 @@ final class AppStore: ObservableObject {
     @Published var hidden = HiddenContent.load() {
         didSet { if hidden != oldValue { hidden.save() } }
     }
+    /// Tags masqués (demande fb_mwpac0z4, « vtuber ») : un live qui en porte un
+    /// sort du top, des lives d'une catégorie et de la recherche, comme une
+    /// chaîne masquée (ce qu'on suit ou épingle reste). Minuscules, sans « # »
+    /// (HiddenContent.cleanTag), 100 au plus ; « hiddenTags » comme sur le
+    /// site : sauvegarde et section « common » de la synchro.
+    @Published var hiddenTags: [String] = HiddenContent.cleanTags(UserDefaults.standard.stringArray(forKey: "hidden_tags") ?? []) {
+        didSet { if hiddenTags != oldValue { UserDefaults.standard.set(hiddenTags, forKey: "hidden_tags") } }
+    }
 
     /// Chaîne suivie (compte ou appareil) ou épinglée : jamais masquée.
     func isFollowedOrPinned(_ login: String) -> Bool {
@@ -745,11 +753,18 @@ final class AppStore: ObservableObject {
     func showsChannel(_ login: String) -> Bool {
         isFollowedOrPinned(login) || !hidden.hides(channel: login)
     }
-    /// Un live du top : ni sa chaîne ni sa catégorie ne sont masquées, sauf
-    /// si on suit l'une ou l'autre.
+    /// Un live d'une catégorie ouverte : sa chaîne et ses tags comptent (la
+    /// catégorie elle-même, masquée ou non, reste consultable).
+    func showsCategoryStream(_ s: TwitchStream) -> Bool {
+        isFollowedOrPinned(s.userLogin)
+            || (!hidden.hides(channel: s.userLogin) && !HiddenContent.hasHiddenTag(s, in: hiddenTags))
+    }
+    /// Un live du top : ni sa chaîne, ni un de ses tags, ni sa catégorie ne
+    /// sont masqués, sauf si on suit la chaîne ou la catégorie.
     func showsStream(_ s: TwitchStream) -> Bool {
         isFollowedOrPinned(s.userLogin)
-            || (!hidden.hides(channel: s.userLogin) && (followsCategory(s.gameId) || !hidden.hides(category: s.gameId)))
+            || (!hidden.hides(channel: s.userLogin) && !HiddenContent.hasHiddenTag(s, in: hiddenTags)
+                && (followsCategory(s.gameId) || !hidden.hides(category: s.gameId)))
     }
     /// Une carte de la grille « Toutes » des catégories.
     func showsCategory(_ c: TwitchCategory) -> Bool {
@@ -765,6 +780,12 @@ final class AppStore: ObservableObject {
         guard !followsCategory(id) else { return }
         hidden.hide(category: id, name: name, box: box)
         logger.info("MASQUÉS", "Catégorie masquée \(id) (\(name))", nil)
+    }
+    /// Masque les lives qui portent ce tag (appui long sur un live).
+    func hideTag(_ tag: String) {
+        guard let t = HiddenContent.cleanTag(tag), !hiddenTags.contains(t) else { return }
+        hiddenTags = HiddenContent.cleanTags([t] + hiddenTags)
+        logger.info("MASQUÉS", "Tag masqué #\(t)", nil)
     }
     func unhideChannel(_ login: String) {
         guard hidden.hides(channel: login) else { return }

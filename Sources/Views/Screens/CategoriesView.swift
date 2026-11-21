@@ -542,7 +542,7 @@ struct CategoryStreamsView: View {
 
     /// Chaînes masquées écartées ; la catégorie, elle, reste consultable
     /// même masquée (on l'a ouverte exprès).
-    private var sorted: [TwitchStream] { sort.apply(streams.filter { store.showsChannel($0.userLogin) }) }
+    private var sorted: [TwitchStream] { sort.apply(streams.filter { store.showsCategoryStream($0) }) }
 
     var body: some View {
         VStack(spacing: 0) {

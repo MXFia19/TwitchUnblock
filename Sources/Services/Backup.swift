@@ -172,6 +172,7 @@ enum Backup {
             "highlightWords": store.chatHighlightWords,
             "hiddenEmotes": store.hiddenEmotes,
             "favoriteEmotes": store.favoriteEmotes,
+            "hiddenTags": store.hiddenTags,
             "shareUsage": store.shareUsage,
             "vodSpeed": store.vodSpeed,
             "qualityPref": store.preferredQuality,
@@ -486,6 +487,11 @@ enum Backup {
         if let v = s["favoriteEmotes"] as? [String] {
             store.favoriteEmotes = Array(AppStore.emoteCodes(v).suffix(AppStore.maxFavoriteEmotes))
             ok("favoriteEmotes")
+        }
+        // Tags masqués (nom du site) : nettoyés comme ici (minuscules, sans « # »).
+        if let v = s["hiddenTags"] as? [String] {
+            store.hiddenTags = HiddenContent.cleanTags(v)
+            ok("hiddenTags")
         }
         bool("shareUsage") { store.shareUsage = $0 }
         num("vodSpeed", 0.25...2) { store.vodSpeed = VodSpeed.nearest($0) }

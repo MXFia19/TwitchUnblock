@@ -966,6 +966,9 @@ private func bulgariaLiveLinks(login: String) async -> MasterPlaylist {
         logger.warn("LIVE", "⚠️ Relais Bulgarie sans direct (\(code))", "source suivante…")
     } catch {
         logger.error("LIVE", "❌ Erreur relais Bulgarie", error.localizedDescription)
+        // Nom introuvable ou connexion refusée : souvent un filtre DNS (dit
+        // une fois par lancement, MainTabView).
+        BulgariaRelayBlock.note(error)
     }
     return ([:], [:])
 }

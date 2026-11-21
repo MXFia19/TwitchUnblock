@@ -1393,7 +1393,7 @@ struct SettingsView: View {
                           $store.immersivePlayer, log: "Lecteur immersif")
                 Divider().background(Color.tBorder)
                 // Lecteur immersif seulement : le natif ne sait pas lancer son PiP.
-                toggleRow(store.t("pip_on_leave"), store.t("pip_on_leave_sub"),
+                toggleRow(store.t("pip_on_leave"), HostEnvironment.pipBlocked ? store.t("pip_lc_off") : store.t("pip_on_leave_sub"),
                           $store.pipOnLeave, log: "PiP en quittant le lecteur")
                 Divider().background(Color.tBorder)
                 toggleRow(store.t("cfg_edge_swipe"), store.t("cfg_edge_swipe_sub"),

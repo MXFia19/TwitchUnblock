@@ -116,6 +116,14 @@ final class TVPlayerModel: ObservableObject {
     var hasChat: Bool { isLive || vodId != nil || clipVodId != nil }
     private var statusObs: NSKeyValueObservation?
     private var timeObs: Any?
+    /// Direct : relevé du délai mis par la chaîne (ChannelDelay), toutes les 5 s.
+    private var delayObs: Any?
+    /// Délai mis par la chaîne du direct (0 sans) : écrit sous les qualités.
+    @Published private(set) var channelDelay = 0
+    /// Chaînes dont le délai a déjà été dit (avis du haut) pendant ce lancement.
+    private static var delayTold: Set<String> = []
+    /// Textes de la session (avis du délai), pris au chargement.
+    private var tr: @MainActor (String) -> String = { $0 }
     /// Siri, FaceTime… : la lecture mise en pause par tvOS repart à la fin
     /// (PlaybackInterruptions) — VOD à l'endroit, direct relu au bord.
     private var interruptions: PlaybackInterruptions?
@@ -130,6 +138,16 @@ final class TVPlayerModel: ObservableObject {
 
     /// VOD sans son chez Twitch (VodSilence) : sondée 4 s après le départ.
     private var silenceTask: Task<Void, Never>?
+
+    /// Délai mesuré : gardé pour le menu, et dit une fois par chaîne.
+    private func noteChannelDelay(_ d: Int) {
+        guard isLive, d != channelDelay else { return }
+        channelDelay = d
+        guard d > 0, !title.isEmpty, !Self.delayTold.contains(title) else { return }
+        Self.delayTold.insert(title)
+        logger.info("TV/LECTEUR", "Délai ajouté par la chaîne : \(d) s", title)
+        flash(tr("channel_delay_body").replacingOccurrences(of: "{s}", with: "\(d)"), seconds: 10)
+    }
 
     private func flash(_ text: String, seconds: UInt64 = 4) {
         notice = text
@@ -146,6 +164,8 @@ final class TVPlayerModel: ObservableObject {
     func load(_ item: TVPlayback, session: TVSession) async -> Bool {
         current = item
         error = nil
+        channelDelay = 0
+        tr = { [weak session] key in session?.t(key) ?? key }
         silenceTask?.cancel()
         silenceTask = nil
         clipVodId = nil
@@ -261,6 +281,18 @@ final class TVPlayerModel: ObservableObject {
             interruptions?.watch(p)
             // Direct : pauses pub suivies d'après l'image affichée.
             if isLive { adBreaks.attach(p) }
+            // Direct : délai mis par la chaîne (retard affiché moins distance au
+            // bord), dit une fois par chaîne, puis écrit sous les qualités.
+            if isLive {
+                delayObs = p.addPeriodicTimeObserver(forInterval: CMTime(seconds: 5, preferredTimescale: 1),
+                                                     queue: .main) { [weak self, weak p] _ in
+                    guard let model = self, let item = p?.currentItem,
+                          let edge = item.seekableTimeRanges.last?.timeRangeValue.end, edge.isNumeric else { return }
+                    let total = item.currentDate().map { Date().timeIntervalSince($0) }
+                    let d = ChannelDelay.seconds(total: total, behind: (edge - item.currentTime()).seconds)
+                    Task { @MainActor in model.noteChannelDelay(d) }
+                }
+            }
             // Avancement d'une VOD gardé toutes les 10 s (reprise au même endroit).
             if let id = vodId {
                 timeObs = p.addPeriodicTimeObserver(forInterval: CMTime(seconds: 10, preferredTimescale: 1),
@@ -313,6 +345,9 @@ final class TVPlayerModel: ObservableObject {
         }
         if let o = timeObs { player?.removeTimeObserver(o) }
         timeObs = nil
+        if let o = delayObs { player?.removeTimeObserver(o) }
+        delayObs = nil
+        channelDelay = 0
         statusObs = nil
         player?.pause()
         player?.replaceCurrentItem(with: nil)
@@ -397,9 +432,22 @@ struct TVPlayerController: UIViewControllerRepresentable {
     private func menus() -> [UIMenuElement] {
         let model = self.model
         let session = self.session
-        let qualities: [UIMenuElement] = sortQualities(Array(model.links.keys), variants: model.variants).map { key in
+        var qualities: [UIMenuElement] = sortQualities(Array(model.links.keys), variants: model.variants).map { key in
             UIAction(title: label(key), state: key == model.quality ? .on : .off) { _ in
                 Task { @MainActor in model.setQuality(key, session: session) }
+            }
+        }
+        // Grisés sous les qualités d'un direct : le délai mis par la chaîne, la
+        // qualité unique (chaîne sans transcodage), comme l'iPhone et le site.
+        if model.isLive {
+            var notes: [String] = []
+            if model.channelDelay > 0 {
+                notes.append(session.t("channel_delay_note").replacingOccurrences(of: "{s}", with: "\(model.channelDelay)"))
+            }
+            if isSourceOnly(Array(model.links.keys)) { notes.append(session.t("q_source_only_short")) }
+            if !notes.isEmpty {
+                qualities.append(UIMenu(title: "", options: .displayInline,
+                                        children: notes.map { UIAction(title: $0, attributes: .disabled) { _ in } }))
             }
         }
         var items: [UIMenuElement] = [

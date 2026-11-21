@@ -87,6 +87,7 @@ targets:
       - path: Sources/Services/AdBreakMonitor.swift
       - path: Sources/Services/SpatialAudio.swift
       - path: Sources/Services/HiddenContent.swift
+      - path: Sources/Services/ChannelDelay.swift
       # Reprise après une interruption du son (Siri, FaceTime) : TVPlayer.
       - path: Sources/Services/PlaybackAudio.swift
       - path: Sources/Services/PlaybackDiagnostics.swift

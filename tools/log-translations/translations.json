@@ -1,4 +1,8 @@
 {
+ "Délai ajouté par la chaîne :": ["Delay added by the channel:", "Retraso añadido por el canal:", "Задержка, добавленная каналом:"],
+ "Image dans l'image coupée : mode multitâche de LiveContainer": ["Picture in Picture off: LiveContainer multitasking mode", "Imagen en imagen desactivada: modo multitarea de LiveContainer", "Картинка в картинке отключена: многозадачный режим LiveContainer"],
+ "Relais Bulgarie refusé par le réseau (filtre DNS ?)": ["Bulgaria relay refused by the network (DNS filter?)", "Relé de Bulgaria rechazado por la red (¿filtro DNS?)", "Ретранслятор «Болгария» отклонён сетью (DNS-фильтр?)"],
+ "Tags masqués": ["Hidden tags", "Etiquetas ocultas", "Скрытые теги"],
  "— rien n'est envoyé": ["— nothing is sent", "— no se envía nada", "— ничего не отправляется"],
  "— signée «": ["— signed «", "— firmada «", "— подписана «"],
  "— total:": ["— total:", "— total:", "— всего:"],

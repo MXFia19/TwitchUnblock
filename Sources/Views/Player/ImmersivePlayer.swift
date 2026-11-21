@@ -268,6 +268,8 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
     private var restoringUI = false
     private var lastCatchUp = Date.distantPast
     private var latency = LiveLatencyController()
+    /// Délai mis par la chaîne (ChannelDelay), annoncé quand il change.
+    private var channelDelay = 0
     private var sync = LiveSyncEstimator()
     private var diagnostics: LiveDiagnostics?
 
@@ -537,6 +539,8 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
         // Même modèle pour un changement de qualité ou une bascule direct ↔
         // enregistrement : la tenue du direct repart de zéro (recalage compris).
         latency.reset()
+        // Délai de la chaîne remesuré pour cette source (annoncé s'il change).
+        channelDelay = 0
         // Nouvelle source, lancée : plus de reprise en attente, ni de pause
         // voulue (l'appelant la remet s'il le faut).
         interruptions?.settle()
@@ -732,6 +736,11 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
         currentDate = item.currentDate()
         let total = isLive ? currentDate.map { Date().timeIntervalSince($0) } : nil
         onLatency(total)
+        // Délai mis par la chaîne : retard affiché moins distance au bord.
+        if isLive, endTime > position {
+            let d = ChannelDelay.seconds(total: total, behind: endTime - position)
+            if d != channelDelay { channelDelay = d; ChannelDelay.post(d) }
+        }
         // Retard sur le direct tel que le voient les autres spectateurs : c'est
         // lui qui sépare le chat de l'image (voir LiveSyncEstimator). Bornes
         // pas encore connues (rechargement, autre qualité) : rien d'envoyé —
@@ -1124,6 +1133,9 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
 
     // MARK: PiP
     func attachPiP(layer: AVPlayerLayer) {
+        // Mode multitâche de LiveContainer : pas d'image dans l'image (elle n'y
+        // marche pas) — ni bouton, ni départ en quittant l'app ou le lecteur.
+        if HostEnvironment.pipBlocked { HostEnvironment.notePiPBlocked(); return }
         guard pip == nil, !tornDown, AVPictureInPictureController.isPictureInPictureSupported(),
               let p = AVPictureInPictureController(playerLayer: layer) else { return }
         p.delegate = self

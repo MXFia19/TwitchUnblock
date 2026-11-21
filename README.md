@@ -106,6 +106,10 @@ iPhone apps.
   rest of the app with the player reduced. Closing the player, opening another
   video or switching to chat only ends it, along with its chat connection and
   lock screen activity.
+  In LiveContainer's multitasking mode, where it doesn't work, it's turned off
+  (no button, no automatic start, a line under « PiP when leaving the
+  player ») — that mode runs the app inside an app extension, which the app
+  reads from its process's real executable; single-app mode keeps it.
   Starting it shrinks the player out of the way, so you can browse the app right away (no more black full-size player to close). The mini player bar stays hidden while the window is open (the window brings you back and closes the video), and comes back when it closes if the player is still reduced.
   The PiP window's expand button brings the player back full size on the same video, without reloading.
   On iOS 16, the app's player removes its controls a moment before it shrinks into the mini player: its seek bar used to stay drawn over the app.
@@ -195,6 +199,17 @@ iPhone apps.
   is read from the playlist, so “720p” also finds a channel whose Source is
   720p60. Picking a quality in the player replaces the preference (as on the
   website); backups carry it under the website's name (`qualityPref`).
+* ⏱ **Delay added by the channel** — some streamers delay their stream on
+  purpose (against stream sniping). Twitch only publishes each segment after
+  that delay, so the playlist's newest segment is as old as the delay (less
+  than a second or two without one): from 10 s on, the app says it once per
+  channel (« about 30 s, set by the streamer: not TwitchUnblock ») and writes
+  it under the qualities (⋯ menu, native player's quality picker, Apple TV's
+  quality menu).
+* 🎞 **Channels with the Source quality only** — Twitch doesn't transcode every
+  channel (often smaller affiliates): there's then nothing below the original
+  quality, on twitch.tv too. The quality picker says so (and suggests « Audio
+  only ») instead of a one-line list that looked like a bug.
 * 🛡 **Live sources, in the order you pick** — lives come from **Bulgaria**
   (test) or official Twitch, tried one after the other until one answers,
   without waiting a minute on one that stays silent: the loading screen says
@@ -205,7 +220,10 @@ iPhone apps.
   Germany), the video segments still come straight from Twitch's CDN; it is
   there to measure whether Twitch serves fewer ads to a Bulgarian address
   (/stats counts its ads apart, as « Bulgaria (test) »). When it doesn't
-  answer, official Twitch takes over. The public proxies (Luminous,
+  answer, official Twitch takes over. When the network refuses it outright
+  (name not found, connection refused: often a DNS filter — NextDNS,
+  AdGuard, Pi-hole… — blocking `sslip.io` with the other « dynamic DNS »
+  names), a notice says so once per launch, with the address to allow. The public proxies (Luminous,
   PerfProd, nadeko/TTV.LOL) were removed: they let hundreds of ads a day
   through. An order saved with them goes back to the default one (My source
   and My proxy kept, at the top).
@@ -694,6 +712,14 @@ iPhone apps.
   (with **Hidden · Show again**) but leaves out their live streams and VODs,
   and Settings → General lists them to show them again. Kept on the
   device and in the backup file (same format as the website).
+* 🏷 **Hidden tags** — in the same list (Settings → General → hidden), type
+  the tags whose streams you don't want to see (« vtuber », for example),
+  separated by commas, or long-press a stream → **Hide the "…" tag** (its
+  tags, five at most). Streams carrying one leave Top, category pages and
+  search, like a hidden channel; what you follow or pin still shows.
+  Compared without case, as Twitch does (letters and digits, no « # »), 100
+  at most; synced with your account and the website (« hiddenTags ») and
+  kept in the backup file.
 * 🎮 **Categories** — browse by game, then the live channels in it, filtered
   by language if you like (all, or a single one — kept for every category).
   Search puts the exact match first ("valorant" → VALORANT), with sharp box

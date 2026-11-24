@@ -30,6 +30,20 @@ enum HostEnvironment {
     /// quittant le lecteur »). En mode « une seule app », rien ne change.
     static let pipBlocked: Bool = inAppExtension
 
+    /// Nom de l'app hôte quand l'app tourne dans une autre (LiveContainer, ou
+    /// un outil du même genre) ; nil pour une installation normale. Joint aux
+    /// signalements : l'écran verrouillé et la Dynamic Island ouvrent alors
+    /// l'hôte, et lui ce qu'il veut — Spotify chez un utilisateur
+    /// (fb_mwqgdld9). En mode « une seule app », Bundle.main est le nôtre
+    /// mais pas l'exécutable du processus.
+    static let hostName: String? = {
+        let process = (processExecutable as NSString).lastPathComponent
+        if inAppExtension { return process + " (extension)" }
+        guard !process.isEmpty, let ours = Bundle.main.executableURL?.lastPathComponent,
+              process != ours else { return nil }
+        return process
+    }()
+
     /// Pour le journal : ce qui a été vu au lancement, sans le chemin entier.
     static var summary: String {
         let name = (processExecutable as NSString).lastPathComponent

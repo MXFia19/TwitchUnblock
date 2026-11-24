@@ -46,6 +46,12 @@ final class VodUnmuteLoader: NSObject, AVAssetResourceLoaderDelegate {
     private var probed: [String: Bool] = [:]
     /// Dernier bilan écrit au journal, par playlist.
     private var summaries: [String: String] = [:]
+    /// Dossiers de VOD sur le CDN dont les originaux ne sont plus crus : une
+    /// lecture en `tuunmute://` y a échoué (original sondé « servi » puis
+    /// refusé en 403 : effacé depuis, ou sonde servie par un cache du CDN).
+    /// Leurs playlists sont réécrites sans les originaux jusqu'au prochain
+    /// lancement, toutes qualités comprises.
+    private var distrusted = Set<String>()
     private let lock = NSLock()
 
     // MARK: Adresses
@@ -77,9 +83,18 @@ final class VodUnmuteLoader: NSObject, AVAssetResourceLoaderDelegate {
     }
 
     /// VOD relancée après un arrêt : réécrite sur l'appareil, sans Worker (une
-    /// adresse de son proxy redevient celle du CDN). Déjà réécrite, ou pas une
-    /// playlist (clip MP4, fichier téléchargé) : telle quelle.
+    /// adresse de son proxy redevient celle du CDN) et sans les originaux des
+    /// passages coupés. Une adresse `tuunmute://` passe en `tumuted://` : un
+    /// original sondé « servi » puis refusé (403) arrêtait la lecture à chaque
+    /// essai, la playlist réécrite et la sonde étant gardées — et rien ne la
+    /// relançait. Les originaux de cette VOD ne sont alors plus crus
+    /// (`distrustOriginals`). Déjà en `tumuted://`, ou pas une playlist (clip
+    /// MP4, fichier téléchargé) : telle quelle.
     static func mutedSafe(_ url: URL) -> URL {
+        if url.scheme == scheme, let plain = unwrap(url) {
+            distrustOriginals(plain)
+            return URL(string: wrapped(plain.absoluteString, mutedScheme)) ?? url
+        }
         guard url.scheme == "https",
               url.path.hasSuffix(".m3u8") || url.path.hasSuffix("/api/proxy") else { return url }
         var plain = url
@@ -229,6 +244,35 @@ final class VodUnmuteLoader: NSObject, AVAssetResourceLoaderDelegate {
         cache[key] = (data, outcome)
     }
 
+    /// Originaux des passages coupés de cette VOD écartés jusqu'au prochain
+    /// lancement (voir `distrusted`) : ses playlists réécrites et ses sondes
+    /// gardées sont oubliées. `url` : une de ses playlists (CDN ou maison).
+    static func distrustOriginals(_ url: URL) {
+        guard let plain = unwrap(url) else { return }
+        shared.distrust(folder: folderKey(plain))
+    }
+
+    /// Dossier de la VOD sur le CDN : l'adresse sans la qualité ni la playlist
+    /// (…/<dossier>/<qualité>/index-dvr.m3u8 → …/<dossier>/).
+    private static func folderKey(_ url: URL) -> String {
+        url.deletingLastPathComponent().deletingLastPathComponent().absoluteString
+    }
+
+    private func distrust(folder: String) {
+        lock.lock(); defer { lock.unlock() }
+        distrusted.insert(folder)
+        // Clés des playlists sondées : l'adresse du CDN (celles sans sonde
+        // commencent par « muted| » et restent bonnes). Sondes : adresses des
+        // originaux, dans le même dossier.
+        cache = cache.filter { !$0.key.hasPrefix(folder) }
+        probed = probed.filter { !$0.key.hasPrefix(folder) }
+    }
+
+    private func isDistrusted(_ url: URL) -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        return distrusted.contains(Self.folderKey(url))
+    }
+
     /// Résultat déjà connu pour cet original (nil : jamais sondé).
     private func probeResult(_ url: URL) -> Bool? {
         lock.lock(); defer { lock.unlock() }
@@ -252,7 +296,10 @@ final class VodUnmuteLoader: NSObject, AVAssetResourceLoaderDelegate {
 
     /// `probe` faux (`mutedScheme`) : rien n'est sondé, les passages coupés
     /// restent muets — mais lisibles.
-    private func playlist(_ url: URL, probe: Bool) async -> Data? {
+    private func playlist(_ url: URL, probe wanted: Bool) async -> Data? {
+        // Originaux écartés pour cette VOD (lecture en échec) : sans sonde,
+        // même pour une autre qualité encore en `tuunmute://`.
+        let probe = wanted && !isDistrusted(url)
         let key = (probe ? "" : "muted|") + url.absoluteString
         // Playlist déjà réécrite : on refait l'annonce. Le lecteur remet la
         // barre aux passages coupés de GQL à chaque ouverture : sans elle, une

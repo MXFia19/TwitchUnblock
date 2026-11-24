@@ -77,6 +77,9 @@ struct FeedbackSheet: View {
             "lang": store.lang.rawValue,
         ]
         if let context, !context.isEmpty { out["watching"] = context }
+        // App lancée dans une autre (LiveContainer…) : écran verrouillé et
+        // Dynamic Island ouvrent l'hôte, PiP limité — à savoir pour comprendre.
+        if let host = HostEnvironment.hostName { out["host"] = host }
         return out
     }
 

@@ -27,6 +27,9 @@ struct MainTabView: View {
     /// iOS 16 : commandes du lecteur retirées juste avant sa réduction
     /// (hidePlayer) ; remis à faux quand il revient en grand.
     @State private var playerControlsAway = false
+    /// iOS 16 : lecteur réduit et effacé, rangé derrière l'app (zIndex) ; remis
+    /// à faux dès qu'il revient. Voir l'onChange de playerVisible.
+    @State private var playerTucked = false
     @State private var loading = false
     @State private var errorMsg: String? = nil
     /// Relance prévue au retour du réseau, lecteur resté sur son erreur.
@@ -441,7 +444,9 @@ struct MainTabView: View {
                     .background(EdgeSwipeCloser(enabled: store.edgeSwipeClose && playerVisible && !closingPlayer) {
                         stopPlayer()
                     })
-                    .zIndex(100)
+                    // Réduit sous iOS 16, une fois effacé : derrière l'app
+                    // (playerTucked), plus par-dessus tout.
+                    .zIndex(playerVisible || !playerTucked ? 100 : -1)
                     .transition(.opacity)
             }
         }
@@ -863,6 +868,21 @@ struct MainTabView: View {
             PlayerOrientation.restorePortraitIfForced()
             UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder),
                                             to: nil, from: nil, for: nil)
+        }
+        // Lecteur réduit sous iOS 16 (fb_mwens1m9, fb_mw3h29pt) : effacé mais
+        // resté au-dessus de tout (zIndex 100), avec allowsHitTesting(false).
+        // iOS 16 ne transmet pas toujours ce refus aux vues UIKit qu'il
+        // contient (surface vidéo, listes du chat) : invisibles, elles
+        // prenaient les touchers, et l'app ne répondait plus — le son et le
+        // PiP, eux, continuaient. Une fois le fondu fini, il passe derrière
+        // l'app, sans quitter la fenêtre (son, PiP) ; il repasse devant dès
+        // qu'il revient. iOS 17 et plus : rien ne change.
+        .onChange(of: playerVisible) { visible in
+            if visible { playerTucked = false; return }
+            if #available(iOS 17, *) { return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                if !playerVisible { playerTucked = true }
+            }
         }
         // Chat seul (empilé, sans image) après le bouton de rotation : retour
         // au portrait aussi. Le lecteur ne le fait plus en disparaissant (il

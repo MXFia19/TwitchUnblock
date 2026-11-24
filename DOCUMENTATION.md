@@ -382,7 +382,10 @@ iPhone apps.
   plays and downloads them as they are instead of swapping in the silent
   version. Muted parts that Twitch lists under a name its CDN refuses are
   fixed on the device when the backend can’t do it, and a VOD that stops on one
-  starts again at the same place on its own; **Skip** works even then.
+  starts again at the same place on its own; **Skip** works even then. Twitch
+  now often deletes the original sound within hours: when one the app was
+  about to play is refused, the VOD starts again at the same place with that
+  VOD’s muted parts kept silent (Apple TV too).
 * 🔕 **VODs with no sound on Twitch** — some channels record only an empty
   audio track in their VODs (most likely OBS's VOD track turned on with no
   source on it): silent from start to end, on twitch.tv too, with nothing to

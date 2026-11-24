@@ -85,6 +85,11 @@ struct PlayerLayerView: UIViewRepresentable {
         let v = PlayerLayerUIView()
         v.configure(player: player, fill: fill)
         v.backgroundColor = .black
+        // Surface d'affichage seulement : les gestes du lecteur sont ceux de
+        // SwiftUI, autour d'elle. Sous iOS 16, une fois le lecteur réduit
+        // (effacé, allowsHitTesting faux), elle prenait encore les touchers
+        // de tout l'écran (fb_mwens1m9).
+        v.isUserInteractionEnabled = false
         onLayer?(v.playerLayer)
         return v
     }
@@ -656,8 +661,10 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
         }
         // VOD lue telle quelle : un passage coupé listé « -unmuted.ts », que
         // le CDN refuse, l'arrête net. Relancée une fois au même endroit,
-        // réécrite sur l'appareil (une adresse déjà réécrite ne change plus :
-        // pas de seconde relance).
+        // réécrite sur l'appareil. En `tuunmute://` (passages coupés
+        // rétablis), un original sondé « servi » puis refusé (403) l'arrêtait
+        // à chaque essai : relancée sans les originaux (`tumuted://`). Une
+        // adresse `tumuted://` ne change plus : pas de seconde relance.
         if !isLive, let asset = item.asset as? AVURLAsset {
             let safe = VodUnmuteLoader.mutedSafe(asset.url)
             if safe != asset.url {

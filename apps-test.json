@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.7.51",
+          "buildVersion": "423",
+          "date": "2026-11-24",
+          "localizedDescription": "- Minimized player: the mini player at the bottom now shows the video, with play/pause\n- New setting (Settings → Player): double-tap ±10 s on lives, instead of showing or hiding the chat\n- @names in a stream's title (tap the title in the player) open their channel\n- Followed categories: your Twitch account's categories also show without the web session",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-423/TwitchUnblock.ipa",
+          "size": 4855747,
+          "commit": "6f5580d0183e0cd43b6d0727b418051ced10aad2"
+        },
+        {
           "version": "1.7.50",
           "buildVersion": "422",
           "date": "2026-11-24",
@@ -280,25 +289,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-386/TwitchUnblock.ipa",
           "size": 4542039,
           "commit": "a22b672048e145cdcb19217e1a8ecdeaaa700c64"
-        },
-        {
-          "version": "1.7.7",
-          "buildVersion": "385",
-          "date": "2026-11-01",
-          "localizedDescription": "- Chat over the video can sit left or right, full height or in a corner (Settings → Chat)\n- In landscape, the chat uses the empty safe margin next to it, so the video is bigger\n- \"Streams as a list\" now also applies to categories and search results\n- New option to close the player by swiping from the left edge (Settings → Player, off by default)\n- With Recent streamers off, opened channels are no longer remembered\n- Settings: swiping back from the left edge no longer closes the settings when your finger drifts down",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-385/TwitchUnblock.ipa",
-          "size": 4542328,
-          "commit": "f7eb07ccc86ca413776099bd759b69d171202575"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.7.50",
+      "version": "1.7.51",
       "versionDate": "2026-11-24",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-422/TwitchUnblock.ipa",
-      "size": 4844579
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-423/TwitchUnblock.ipa",
+      "size": 4855747
     }
   ],
   "news": []

@@ -1,4 +1,7 @@
 {
+ "Badges du compte indisponibles": ["Account badges unavailable", "Insignias de la cuenta no disponibles", "Значки аккаунта недоступны"],
+ "Badge du chat refusé": ["Chat badge refused", "Insignia del chat rechazada", "Значок чата отклонён"],
+ "Badge du chat choisi": ["Chat badge chosen", "Insignia del chat elegida", "Значок чата выбран"],
  "Délai ajouté par la chaîne :": ["Delay added by the channel:", "Retraso añadido por el canal:", "Задержка, добавленная каналом:"],
  "Image dans l'image coupée : mode multitâche de LiveContainer": ["Picture in Picture off: LiveContainer multitasking mode", "Imagen en imagen desactivada: modo multitarea de LiveContainer", "Картинка в картинке отключена: многозадачный режим LiveContainer"],
  "Relais Bulgarie refusé par le réseau (filtre DNS ?)": ["Bulgaria relay refused by the network (DNS filter?)", "Relé de Bulgaria rechazado por la red (¿filtro DNS?)", "Ретранслятор «Болгария» отклонён сетью (DNS-фильтр?)"],

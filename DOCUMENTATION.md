@@ -535,6 +535,10 @@ iPhone apps.
   emotes lists them (up to 200) to show them again; the list follows your
   account, shared with the website (`hiddenEmotes`).
 * 🏅 **Badges** — global and channel-specific, resolved through Helix.
+* 🪪 **Chat identity** (Settings → Chat, with the web session) — pick the
+  global badge shown next to your name (Prime Gaming, Turbo, an event…), in
+  every chat, on Twitch too, like twitch.tv's own setting. A channel's badges
+  (subscription, bits) are still picked on twitch.tv.
 * 🕘 **Recent messages** — Twitch sends nothing from before you join, so the
   last messages are fetched from `recent-messages.robotty.de` (third party) and
   marked with a clock.

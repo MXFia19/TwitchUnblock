@@ -1266,6 +1266,9 @@ struct SettingsView: View {
                 // Emotes masquées : affichées comme le mot tapé (HiddenEmotes.swift).
                 HiddenEmotesRow()
                 Divider().background(Color.tBorder)
+                // Badge montré à côté de son nom (ChatIdentity.swift, session web).
+                ChatIdentityRow()
+                Divider().background(Color.tBorder)
                 // Mots surlignés : en plus des mentions, séparés par des virgules.
                 VStack(alignment: .leading, spacing: 6) {
                     Text(store.t("highlight_words"))

@@ -203,6 +203,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.7.50",
+          "buildVersion": "422",
+          "date": "2026-11-24",
+          "localizedDescription": "- VODs no longer stop with an error when Twitch has deleted the original sound of a muted part: the VOD starts again at the same place, with that part kept silent\n- iOS 16: the app responds to touches again after minimizing the player",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-422/TwitchUnblock.ipa",
+          "size": 4844579,
+          "commit": "78273a873ba92218db527cce6cd12247c5a73704"
+        },
+        {
           "version": "1.7.49",
           "buildVersion": "421",
           "date": "2026-11-21",
@@ -282,25 +291,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-407/TwitchUnblock.ipa",
           "size": 4617772,
           "commit": "4792b49ed188d0a6ed2ed47cbd4f132bc3ae2b88"
-        },
-        {
-          "version": "1.7.29",
-          "buildVersion": "406",
-          "date": "2026-11-12",
-          "localizedDescription": "- Shared or exported logs now stay in French, the language they're written in, so I can read your reports as they are (the logs screen is still in your language)",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-406/TwitchUnblock.ipa",
-          "size": 4617443,
-          "commit": "5e5a8789e1a4ff9070531cd3d14109ec21223bdb"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.7.49",
-      "versionDate": "2026-11-21",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-421/TwitchUnblock.ipa",
-      "size": 4840121
+      "version": "1.7.50",
+      "versionDate": "2026-11-24",
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-422/TwitchUnblock.ipa",
+      "size": 4844579
     }
   ],
   "news": []

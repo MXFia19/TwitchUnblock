@@ -203,6 +203,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.7.52",
+          "buildVersion": "424",
+          "date": "2026-11-24",
+          "localizedDescription": "- Settings → Chat → Chat identity: pick the global badge shown next to your name in every chat (web session)",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-424/TwitchUnblock.ipa",
+          "size": 4880505,
+          "commit": "3e8915648034b62335204fd3cdc6a9e687cf286e"
+        },
+        {
           "version": "1.7.51",
           "buildVersion": "423",
           "date": "2026-11-24",
@@ -282,25 +291,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-414/TwitchUnblock.ipa",
           "size": 4631456,
           "commit": "1389c9091367cc6fd046c036fcb4824fda12bfd1"
-        },
-        {
-          "version": "1.7.31",
-          "buildVersion": "413",
-          "date": "2026-11-15",
-          "localizedDescription": "- VODs with no sound on Twitch: some channels record only an empty audio track in their VODs. A few seconds in, the player now notices it and says so at the top of the video (\"This VOD has no sound on Twitch\"), instead of looking broken.\n- Apple TV: VODs with no sound on Twitch are now announced at the top of the video.",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-413/TwitchUnblock.ipa",
-          "size": 4635011,
-          "commit": "4f1e8c11054d3f06874db5b1e47f6408d367dd69"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.7.51",
+      "version": "1.7.52",
       "versionDate": "2026-11-24",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-423/TwitchUnblock.ipa",
-      "size": 4855747
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-424/TwitchUnblock.ipa",
+      "size": 4880505
     }
   ],
   "news": []

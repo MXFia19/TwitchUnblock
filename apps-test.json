@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.7.52",
+          "buildVersion": "424",
+          "date": "2026-11-24",
+          "localizedDescription": "- Settings → Chat → Chat identity: pick the global badge shown next to your name in every chat (web session)",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-424/TwitchUnblock.ipa",
+          "size": 4880505,
+          "commit": "3e8915648034b62335204fd3cdc6a9e687cf286e"
+        },
+        {
           "version": "1.7.51",
           "buildVersion": "423",
           "date": "2026-11-24",
@@ -280,25 +289,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-387/TwitchUnblock.ipa",
           "size": 4542829,
           "commit": "d94fb6e58b235aeb53942ea7d63461e2f9a07c44"
-        },
-        {
-          "version": "1.7.8",
-          "buildVersion": "386",
-          "date": "2026-11-01",
-          "localizedDescription": "- Landscape chat: the resize handle no longer sits on top of messages, and the chat fills the empty margin next to it\n- Traditional Chinese: channel points are now called 忠誠點數, as on Twitch",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-386/TwitchUnblock.ipa",
-          "size": 4542039,
-          "commit": "a22b672048e145cdcb19217e1a8ecdeaaa700c64"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.7.51",
+      "version": "1.7.52",
       "versionDate": "2026-11-24",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-423/TwitchUnblock.ipa",
-      "size": 4855747
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-424/TwitchUnblock.ipa",
+      "size": 4880505
     }
   ],
   "news": []

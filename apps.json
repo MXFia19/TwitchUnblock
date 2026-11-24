@@ -203,6 +203,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.7.53",
+          "buildVersion": "425",
+          "date": "2026-11-24",
+          "localizedDescription": "- Chat identity: also pick the badge shown on the channel you're watching (subscription, bits…), next to the global one",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-425/TwitchUnblock.ipa",
+          "size": 4892105,
+          "commit": "3429ac416f45f1b5410d1d1d02a8ef0593ab12f2"
+        },
+        {
           "version": "1.7.52",
           "buildVersion": "424",
           "date": "2026-11-24",
@@ -282,25 +291,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-416/TwitchUnblock.ipa",
           "size": 4742202,
           "commit": "2526a3381794a5164a045c3dcf30be884c396a41"
-        },
-        {
-          "version": "1.7.32",
-          "buildVersion": "414",
-          "date": "2026-11-18",
-          "localizedDescription": "- Live sources: the public proxies (Luminous, PerfProd, nadeko) are gone — they let hundreds of ads a day through.\n- New test source \"Bulgaria\": a TwitchUnblock relay in Sofia fetches the stream's playlists from Bulgaria, to see whether Twitch serves fewer ads there. Official Twitch takes over when it doesn't answer.\n- Apple TV: live sources are now Bulgaria (test) and official Twitch; the public proxies were removed.",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-414/TwitchUnblock.ipa",
-          "size": 4631456,
-          "commit": "1389c9091367cc6fd046c036fcb4824fda12bfd1"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.7.52",
+      "version": "1.7.53",
       "versionDate": "2026-11-24",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-424/TwitchUnblock.ipa",
-      "size": 4880505
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-425/TwitchUnblock.ipa",
+      "size": 4892105
     }
   ],
   "news": []

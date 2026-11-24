@@ -499,6 +499,13 @@ final class AppStore: ObservableObject {
         didSet { UserDefaults.standard.set(edgeSwipeClose, forKey: "cfg_edge_swipe_close") }
     }
 
+    /// En direct, double appui à gauche ou à droite de l'image : ±10 s, comme
+    /// sur une VOD (carte de dave, 20/11), au lieu d'afficher ou de masquer le
+    /// chat en paysage. Coupé d'office : le double appui garde son rôle connu.
+    @Published var liveDoubleTapSeek: Bool = false {
+        didSet { UserDefaults.standard.set(liveDoubleTapSeek, forKey: "cfg_live_double_tap_seek") }
+    }
+
     /// Volume et luminosité au doigt dans le lecteur, en paysage
     /// (PlayerSwipes.swift). Coupé d'office : sur les côtés de l'image, il
     /// prend la place du glissé vers le bas qui réduit le lecteur.
@@ -1145,6 +1152,7 @@ final class AppStore: ObservableObject {
         chatOverlayLayout  = ChatOverlayLayout(raw: ud.string(forKey: "cfg_chat_overlay_layout") ?? "")
                              ?? ChatOverlayLayout()
         edgeSwipeClose     = ud.object(forKey: "cfg_edge_swipe_close") as? Bool ?? false
+        liveDoubleTapSeek  = ud.object(forKey: "cfg_live_double_tap_seek") as? Bool ?? false
         playerSwipes       = ud.object(forKey: "cfg_player_swipes") as? Bool ?? false
         // Ramenées dans les bornes des curseurs : un import d'avant pouvait
         // les en sortir.

@@ -73,6 +73,31 @@ final class PlayerLayerUIView: UIView {
     func stopObserving() { geometry.stopObserving() }
 }
 
+/// Adresse interne d'un @pseudo de titre (voir titleWithMentions).
+fileprivate let titleMentionScheme = "tumention"
+
+/// Titre avec ses @pseudo en liens internes (`tumention://c/<pseudo>`), que
+/// la fiche du titre ouvre comme une chaîne. Pas d'adresse e-mail : il faut un
+/// blanc ou une ponctuation avant le @ ; un pseudo Twitch fait 3 à 25 signes.
+fileprivate func titleWithMentions(_ text: String) -> AttributedString {
+    guard let regex = try? NSRegularExpression(pattern: #"(?<![\w@])@([A-Za-z0-9_]{3,25})\b"#) else {
+        return AttributedString(text)
+    }
+    var out = AttributedString()
+    var last = text.startIndex
+    for m in regex.matches(in: text, range: NSRange(text.startIndex..., in: text)) {
+        guard let whole = Range(m.range, in: text), let name = Range(m.range(at: 1), in: text) else { continue }
+        out += AttributedString(String(text[last..<whole.lowerBound]))
+        var link = AttributedString(String(text[whole]))
+        link.link = URL(string: "\(titleMentionScheme)://c/\(text[name].lowercased())")
+        link.foregroundColor = .tPrimary
+        out += link
+        last = whole.upperBound
+    }
+    out += AttributedString(String(text[last...]))
+    return out
+}
+
 struct PlayerLayerView: UIViewRepresentable {
     let player: AVPlayer
     /// `resizeAspectFill` recadre pour occuper toute la surface : plus de bandes
@@ -297,7 +322,8 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
     /// Lecteur qui a publié « À l'écoute » en dernier : la fermeture d'un
     /// ancien lecteur, arrivée après l'ouverture du suivant, effaçait ses
     /// infos (écran verrouillé et Centre de contrôle vides quelques secondes).
-    private static weak var nowPlayingOwner: ImmersivePlayerModel?
+    /// Lu aussi par le mini-lecteur (MainTabView), qui montre sa vidéo.
+    private(set) static weak var nowPlayingOwner: ImmersivePlayerModel?
 
     init(url: URL, isLive: Bool, savedTime: Double,
          onProgress: @escaping (Double) -> Void,
@@ -1629,6 +1655,9 @@ struct ImmersivePlayer: View {
     /// touchant le titre ; « Voir la chaîne » l'ouvre une fois la fiche fermée.
     @State private var showInfo = false
     @State private var channelAfterInfo = false
+    /// @pseudo touché dans le titre de la fiche : sa chaîne s'ouvre une fois
+    /// la fiche fermée, comme « Voir la chaîne ».
+    @State private var mentionAfterInfo: String? = nil
     /// Largeur de la bulle du temps visé, mesurée : elle la garde dans la barre
     /// près des bords.
     @State private var bubbleWidth: CGFloat = 0
@@ -1850,11 +1879,12 @@ struct ImmersivePlayer: View {
             .ignoresSafeArea(isLandscape ? SafeAreaRegions.all : [],
                              edges: isLandscape && !croppingFill && !sideBleed ? .vertical : .all)
 
-            // Double-tap ±10 s, en VOD seulement. En direct, avancer n'a pas
-            // de sens (on est au bord, ou presque) : en paysage, le double-tap
+            // Double-tap ±10 s en VOD. En direct : en paysage, le double-tap
             // affiche ou masque le chat, et le bouton « Direct » des commandes
-            // ramène au bord après une pause ou un retard.
-            if !isLive {
+            // ramène au bord après une pause ou un retard. Avec le réglage
+            // « Double appui en direct : ±10 s » (liveDoubleTapSeek), ±10 s
+            // aussi, dans la fenêtre du direct (seek s'arrête avant le bord).
+            if !isLive || store.liveDoubleTapSeek {
                 HStack(spacing: 0) {
                     tapZone(.back)
                     tapZone(.forward)
@@ -2102,8 +2132,11 @@ struct ImmersivePlayer: View {
         }
         .sheet(isPresented: $showInfo, onDismiss: {
             let openChannel = channelAfterInfo
+            let mention = mentionAfterInfo
             channelAfterInfo = false
-            if openChannel { onChannel?() } else { scheduleAutoHide() }
+            mentionAfterInfo = nil
+            if let mention { store.openChannelPage(mention) }
+            else if openChannel { onChannel?() } else { scheduleAutoHide() }
         }) {
             infoSheet
         }
@@ -2114,11 +2147,21 @@ struct ImmersivePlayer: View {
         NavigationStack {
             List {
                 Section {
-                    Text(info.title.isEmpty ? info.channel : info.title)
+                    // Les @pseudo du titre (« playing with @test ») ouvrent leur
+                    // chaîne (carte de deputize7538, 22/11), comme sur le site.
+                    Text(titleWithMentions(info.title.isEmpty ? info.channel : info.title))
                         .font(.system(size: 17, weight: .semibold))
                         .foregroundColor(.tText)
                         .fixedSize(horizontal: false, vertical: true)
                         .textSelection(.enabled)
+                        .environment(\.openURL, OpenURLAction { url in
+                            guard url.scheme == titleMentionScheme else { return .systemAction }
+                            let login = url.lastPathComponent
+                            guard !login.isEmpty, login != "/" else { return .discarded }
+                            mentionAfterInfo = login
+                            showInfo = false
+                            return .handled
+                        })
                 }
                 .listRowBackground(Color.tCard)
                 if !info.game.isEmpty || info.viewers > 0 || !info.uptime.isEmpty || !info.date.isEmpty {
@@ -2785,9 +2828,10 @@ struct ImmersivePlayer: View {
     }
 
     /// Touchers du voile des commandes : mêmes zones que sur l'image (±10 s en
-    /// VOD, chat en paysage pendant un direct), voir `tap`.
+    /// VOD, ou en direct avec liveDoubleTapSeek ; sinon chat en paysage
+    /// pendant un direct), voir `tap`.
     @ViewBuilder private var controlsTapLayer: some View {
-        if !isLive {
+        if !isLive || store.liveDoubleTapSeek {
             HStack(spacing: 0) {
                 tapZone(.back)
                 tapZone(.forward)

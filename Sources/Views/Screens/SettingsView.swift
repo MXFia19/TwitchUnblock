@@ -1399,6 +1399,9 @@ struct SettingsView: View {
                 toggleRow(store.t("cfg_edge_swipe"), store.t("cfg_edge_swipe_sub"),
                           $store.edgeSwipeClose, log: "Fermer en glissant depuis le bord")
                 Divider().background(Color.tBorder)
+                toggleRow(store.t("cfg_live_dtap"), store.t("cfg_live_dtap_sub"),
+                          $store.liveDoubleTapSeek, log: "Double appui en direct : ±10 s")
+                Divider().background(Color.tBorder)
                 // Pas sur Mac (PlayerSwipe.supported) : rien à y régler ainsi.
                 if PlayerSwipe.supported {
                     toggleRow(store.t("cfg_player_swipes"), store.t("cfg_player_swipes_sub"),

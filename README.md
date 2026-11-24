@@ -31,7 +31,7 @@ An open-source app for iPhone, iPad and Apple TV.
 - **No subscription needed:** every live and every VOD, at full quality.
 - **Fewer ads:** the ad segments it recognizes are cut before playback. Subscribed or on Turbo? No ads at all, through your account.
 - **Live sources in your order:** the Bulgaria relay (test), official Twitch, or your own source or proxy.
-- **A real player:** picture in picture, background audio, AirPlay, sleep timer, speed from 0.25× to 2×, double-tap ±10 s, pinch to zoom.
+- **A real player:** picture in picture, a mini player, background audio, AirPlay, sleep timer, speed from 0.25× to 2×, double-tap ±10 s, pinch to zoom.
 - **Rewind a live** (DVR), or stay close to the live edge with low latency.
 - **Multi-live:** up to four lives and VODs side by side.
 - **Offline downloads:** a whole VOD or just a part, with its chat.

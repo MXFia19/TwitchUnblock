@@ -62,7 +62,7 @@ enum SettingsSync {
     ///  - ios_higherQualities : codecs que décode l'appareil ;
     ///  - ios_downloadWifiOnly : téléchargements ;
     ///  - ios_liveActivity : écran verrouillé et Dynamic Island ;
-    ///  - ios_edgeSwipeClose, ios_playerSwipes : gestes, selon l'appareil
+    ///  - ios_edgeSwipeClose, ios_playerSwipes, ios_liveDoubleTapSeek : gestes, selon l'appareil
     ///    (téléphone, iPad) ;
     ///  - ios_fillScreen, ios_landscapeChat, ios_chatOverlayLayout,
     ///    ios_landNoticesHidden et les

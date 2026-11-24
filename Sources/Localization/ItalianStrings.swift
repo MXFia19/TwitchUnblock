@@ -584,6 +584,8 @@ let kItalianStrings: [String: String] = [
     "chat_height_bottom": "In basso",
     "cfg_edge_swipe": "Chiudi scorrendo dal bordo",
     "cfg_edge_swipe_sub": "Scorri dal bordo sinistro dello schermo per chiudere il lettore, come con ✕.",
+    "cfg_live_dtap": "Doppio tocco ±10 s nelle dirette",
+    "cfg_live_dtap_sub": "Tocca due volte a sinistra o a destra dell'immagine per tornare indietro o andare avanti di 10 s, come in un VOD, invece di mostrare o nascondere la chat.",
     "reset_defaults": "Ripristina i valori predefiniti",
     "vlc_player": "Lettore VLC",
     "vlc_player_sub": "Controlli personalizzati: doppio tocco ±10 s, riavvolgimento della diretta. (senza PiP)",

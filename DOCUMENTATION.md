@@ -83,8 +83,10 @@ iPhone apps.
   faster than 2×: Twitch publishes no I-frame playlists, and iOS doesn't play
   its streams above 2× (2.25× to 3× were tried in TU Test and removed).
 * ⏩ **Double-tap to skip ±10 s** — consecutive taps add up, so three taps read
-  "+30 s" instead of three separate "+10 s". On a live there's nothing to skip
-  ahead to: in landscape, double-tap shows or hides the chat instead, and once
+  "+30 s" instead of three separate "+10 s". On a live, double-tap shows or
+  hides the chat in landscape instead — unless **Double-tap ±10 s on lives**
+  is on (Settings → Player, off by default): it then skips ±10 s like on a
+  VOD, within what the live keeps, never past its edge. Once
   you fall behind (pause, network drop) a red **Live** button with the delay
   brings you back to the edge. Double-tapping works with the controls shown
   too. With **Show latency** on (Settings → Player), tapping the delay brings
@@ -99,7 +101,7 @@ iPhone apps.
   reads from its process's real executable; single-app mode keeps it.
   Starting it shrinks the player out of the way, so you can browse the app right away (no more black full-size player to close). The mini player bar stays hidden while the window is open (the window brings you back and closes the video), and comes back when it closes if the player is still reduced.
   The PiP window's expand button brings the player back full size on the same video, without reloading.
-  On iOS 16, the app's player removes its controls a moment before it shrinks into the mini player: its seek bar used to stay drawn over the app.
+  On iOS 16, the app's player removes its controls a moment before it shrinks into the mini player: its seek bar used to stay drawn over the app. Once shrunk, it now moves behind the app: invisible, its video and chat could still take every touch, and the app stopped responding.
   A followed raid or the next VOD of **Play all** keeps playing in the same window: the player only changes what it plays (the window used to close while the sound went on).
 * 🌙 **Background playback** — Settings → Player: when the screen locks or you
   switch to another app without Picture-in-Picture, the video keeps playing
@@ -113,6 +115,11 @@ iPhone apps.
   original VOD at the moment you're watching in the clip; ⋯ → **Download the
   clip** saves the MP4 in the quality being played, through iOS's share sheet
   (Save Video, Files, AirDrop…).
+* 🎞 **Mini player** — the shrunk player (swipe down, or the back arrow)
+  shows the video in small at the bottom, with play/pause and ✕; tap it to
+  bring the player back full size. It's the same picture and sound as the
+  full player, nothing more to load. With the app's player only (not the
+  native one), and not while loading, in audio only or in PiP.
 * 🪟 **PiP when leaving the player** — optional, off by default (Settings → Player): swiping a live or VOD down, or the back arrow, opens it in Picture-in-Picture instead of the mini player while it plays (app's player; Apple's player keeps the mini player).
 * 🔒 **Lock Screen and Dynamic Island** — the live or VOD you're watching
   (channel, title, playback) as a Live Activity; turn it off in Settings →
@@ -135,7 +142,8 @@ iPhone apps.
 * 🏷️ **Full title** — tap the title at the top of the player (often cut off)
   to read it in full, with the category, viewers, uptime and a shortcut to the
   channel. VODs, a live's recording and clips have it too: the channel's name
-  first, then the title, whose card adds the broadcast date. Closing a channel page opened from the full-size player (name,
+  first, then the title, whose card adds the broadcast date. The @names in it
+  (“playing with @name”) open their channel. Closing a channel page opened from the full-size player (name,
   title or chat) brings the player back full size instead of the mini player.
 * 👈 **Swipe from the edge to close** (Settings → Player, off by default) —
   swipe in from the left edge of the screen to close the player, like ✕, even
@@ -722,7 +730,9 @@ iPhone apps.
   With the web session connected, **Follow** on a category's page also
   follows it on your Twitch account (the same request as twitch.tv's heart);
   if Twitch refuses (integrity check, session), it stays followed in the app
-  and the log says why. Without it, follows stay on the device, as before.
+  and the log says why. Without it, follows stay on the device, as before,
+  and the categories your Twitch account follows still show (read from your
+  username, like on the website).
   Errors and empty lists have **Retry** / pull to refresh.
 * 🗂️ **Followed categories your way** — Settings → General → Customize the app → Followed categories: **Compact** covers (3 per row on iPhone, more on a wider screen) and the order (most watched first, as before, or A → Z).
 * 🏷 **Stream tags** — language, DropsEnabled… under each live stream, like on

@@ -2188,11 +2188,25 @@ struct MainTabView: View {
     }
 
     // MARK: – Mini-barre (lecteur réduit)
+    /// Lecteur immersif dont la vidéo passe dans la mini-barre (cartes de dave
+    /// et fb_mwsp2g51 : une image plutôt que le son seul, comme sur Android).
+    /// Seulement avec une image à montrer : ni chargement, ni erreur, ni PiP
+    /// (l'image est déjà dans la fenêtre), ni chat seul, ni son seul. Le
+    /// lecteur natif n'a pas d'AVPlayer à partager : la barre reste comme avant.
+    private var miniPlayerModel: ImmersivePlayerModel? {
+        guard store.immersivePlayer, !loading, errorMsg == nil, !pipState.active, !chatOnly,
+              let links = qualityLinks, !isAudioQuality(currentQuality(links)) else { return nil }
+        return ImmersivePlayerModel.nowPlayingOwner
+    }
+
     @ViewBuilder
     private var miniBar: some View {
+        let mini = miniPlayerModel
         HStack(spacing: TSpace.md) {
             // Chargement réduit : il tourne encore ; en échec, on le dit.
-            if loading {
+            if let mini {
+                MiniPlayerVideo(player: mini.player)
+            } else if loading {
                 ProgressView().tint(.tPrimary).scaleEffect(0.7)
                     .frame(width: 16, height: 16)
             } else if errorMsg != nil {
@@ -2213,6 +2227,7 @@ struct MainTabView: View {
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
+            if let mini { MiniPlayerPlayButton(model: mini) }
             TIconButton(icon: "xmark", size: 30) { stopPlayer() }
         }
         .padding(.horizontal, TSpace.md)
@@ -2275,7 +2290,8 @@ struct MainTabView: View {
         .contentShape(Rectangle())
         .padding(.leading, sideTabs && !railInStatusColumn ? SideTabRail.width : 0)
         .padding(.horizontal, TSpace.md)
-        .padding(.bottom, (sideTabs ? Self.sideBarsBottom : 92) + (miniShown ? 60 : 0))
+        // Mini-barre avec sa vidéo (miniPlayerModel) : plus haute.
+        .padding(.bottom, (sideTabs ? Self.sideBarsBottom : 92) + (miniShown ? (miniPlayerModel != nil ? 76 : 60) : 0))
     }
 
     /// Un seul son à la fois : le lecteur se ferme.
@@ -3385,4 +3401,34 @@ private struct HQLive {
     var quickAds = 0
     /// Bascules faites : l'avis « par ton compte » n'est plus redit après.
     var switches = 0
+}
+
+// MARK: – Mini-lecteur (lecteur réduit)
+/// Image du mini-lecteur : la vidéo du lecteur immersif dans une seconde
+/// surface, sur le même AVPlayer (même son, rien de plus à télécharger). Pas
+/// observée : elle ne se redessine pas à chaque instant de la lecture.
+private struct MiniPlayerVideo: View {
+    let player: AVPlayer
+
+    var body: some View {
+        PlayerLayerView(player: player)
+            .frame(width: 89, height: 50)
+            .background(Color.black)
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+    }
+}
+
+/// Lecture / pause depuis le mini-lecteur, sans rouvrir le lecteur.
+private struct MiniPlayerPlayButton: View {
+    @ObservedObject var model: ImmersivePlayerModel
+    @EnvironmentObject var store: AppStore
+
+    var body: some View {
+        TIconButton(icon: model.isPlaying ? "pause.fill" : "play.fill", tint: .tText, size: 30) {
+            model.setPlaying(!model.isPlaying)
+        }
+        .accessibilityLabel(store.t(model.isPlaying ? "multi_pause" : "multi_play"))
+    }
 }

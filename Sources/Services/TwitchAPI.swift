@@ -2438,6 +2438,26 @@ func getFollowedCategoriesGQL(webToken: String) async -> [TwitchCategory]? {
     }
 }
 
+/// Catégories suivies par un compte, sans session : publiques, lues par son
+/// pseudo (GQL `user(login:)`). Connecté sans session web, l'onglet « Suivies »
+/// ne montrait que celles de l'appareil — le site s'en sert aussi. nil si
+/// indisponible.
+func getFollowedCategoriesPublic(login: String) async -> [TwitchCategory]? {
+    let l = login.lowercased()
+    guard !l.isEmpty else { return nil }
+    let d = await gqlRequest("query($l: String!) { user(login: $l) { followedGames(first: 100, type: ALL) { nodes { id displayName boxArtURL(width: 285, height: 380) viewersCount } } } }", ["l": l])
+    guard let nodes = ((d?["user"] as? [String: Any])?["followedGames"] as? [String: Any])?["nodes"] as? [[String: Any]] else {
+        logger.warn("GQL", "Catégories suivies refusées", nil)
+        return nil
+    }
+    return nodes.compactMap { n in
+        guard let id = n["id"] as? String else { return nil }
+        return TwitchCategory(id: id, name: n["displayName"] as? String ?? "",
+                              boxArtURL: n["boxArtURL"] as? String ?? "",
+                              viewers: n["viewersCount"] as? Int)
+    }
+}
+
 /// Identifiant Twitch d'une chaîne (GQL public).
 func getUserIdGQL(login: String) async -> String? {
     let d = await gqlRequest("query($l: String!) { user(login: $l) { id } }", ["l": login.lowercased()])

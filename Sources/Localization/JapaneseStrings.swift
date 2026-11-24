@@ -585,6 +585,8 @@ let kJapaneseStrings: [String: String] = [
     "chat_height_bottom": "下",
     "cfg_edge_swipe": "端からスワイプして閉じる",
     "cfg_edge_swipe_sub": "画面の左端からスワイプすると、✕と同じようにプレーヤーを閉じます。",
+    "cfg_live_dtap": "ライブでダブルタップ ±10秒",
+    "cfg_live_dtap_sub": "映像の左右をダブルタップすると、VODと同じように10秒戻る・進みます（チャットの表示切り替えの代わりに）。",
     "reset_defaults": "初期設定に戻す",
     "vlc_player": "VLCプレーヤー",
     "vlc_player_sub": "独自のコントロール。ダブルタップで±10秒移動、ライブの巻き戻しに対応。（PiP非対応）",

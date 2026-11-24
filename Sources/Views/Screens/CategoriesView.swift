@@ -204,12 +204,15 @@ struct CategoriesView: View {
         // Session web partie ou changée : les catégories suivies sur Twitch
         // ne sont plus celles de ce compte (elles restaient affichées).
         .onChange(of: store.twitchWebToken) { _ in Task { await loadFollowed() } }
+        // Autre compte (ou déconnexion) sans session web : ses catégories à lui.
+        .onChange(of: store.twitchLogin) { _ in Task { await loadFollowed() } }
         .sheet(isPresented: $showHidden) {
             HiddenContentSheet().environmentObject(store)
         }
     }
 
-    /// Catégories suivies : Twitch (si session web) + appareil, avec audience.
+    /// Catégories suivies : Twitch (avec la session web, sinon lues par le
+    /// pseudo du compte) + appareil, avec audience.
     @MainActor private func loadFollowed() async {
         if let web = store.twitchWebToken {
             if twitchFollowed.isEmpty { loadingFollowed = true }
@@ -224,8 +227,22 @@ struct CategoriesView: View {
                 }
                 loadingFollowed = false
             }
+        } else if let login = store.twitchLogin {
+            // Connecté sans session web : celles du compte quand même,
+            // publiques, lues par son pseudo (avant : seulement l'appareil).
+            if twitchFollowed.isEmpty { loadingFollowed = true }
+            let list = await getFollowedCategoriesPublic(login: login)
+            // Session web arrivée, ou autre compte, pendant la lecture : la
+            // lecture suivante conclut.
+            if store.twitchWebToken == nil, store.twitchLogin == login {
+                if let list {
+                    twitchFollowed = list
+                    store.accountFollowedCategoryIds = Set(list.map(\.id))
+                }
+                loadingFollowed = false
+            }
         } else {
-            // Plus de session web : rien n'est suivi sur Twitch ici.
+            // Ni session web ni compte : rien n'est suivi sur Twitch ici.
             twitchFollowed = []
             loadingFollowed = false
         }
@@ -247,7 +264,8 @@ struct CategoriesView: View {
         } else if list.isEmpty {
             PullToReload(reload: { await loadFollowed() }) {
                 TEmptyState(icon: "heart", title: store.t("cat_followed_empty"),
-                            message: store.t(store.twitchWebToken == nil ? "cat_followed_empty_msg_local" : "cat_followed_empty_msg"))
+                            message: store.t(store.twitchWebToken == nil && store.twitchLogin == nil
+                                                 ? "cat_followed_empty_msg_local" : "cat_followed_empty_msg"))
             }
         } else {
             let compact = store.customization.compactFollowedCategories

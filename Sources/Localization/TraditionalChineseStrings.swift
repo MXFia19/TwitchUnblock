@@ -565,6 +565,8 @@ let kTraditionalChineseStrings: [String: String] = [
     "chat_height_bottom": "下方",
     "cfg_edge_swipe": "從邊緣滑動關閉",
     "cfg_edge_swipe_sub": "從螢幕左緣滑入即可關閉播放器，效果與 ✕ 相同。",
+    "cfg_live_dtap": "直播中雙擊 ±10 秒",
+    "cfg_live_dtap_sub": "在畫面左側或右側雙擊可倒退或快轉 10 秒，就像 VOD 一樣，而不是顯示或隱藏聊天室。",
     "reset_defaults": "重設為預設值",
     "vlc_player": "VLC 播放器",
     "vlc_player_sub": "自訂控制項：連點 ±10 秒、直播倒轉（無子母畫面）",

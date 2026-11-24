@@ -115,6 +115,8 @@ final class TVPlayerModel: ObservableObject {
     /// Un chat à montrer : direct, VOD, ou clip dont la VOD existe encore.
     var hasChat: Bool { isLive || vodId != nil || clipVodId != nil }
     private var statusObs: NSKeyValueObservation?
+    /// Élément arrêté en cours de lecture (segment refusé) : voir retryWithoutOriginals.
+    private var failObs: NSObjectProtocol?
     private var timeObs: Any?
     /// Direct : relevé du délai mis par la chaîne (ChannelDelay), toutes les 5 s.
     private var delayObs: Any?
@@ -261,12 +263,25 @@ final class TVPlayerModel: ObservableObject {
         item.externalMetadata = metadata()
         // Chercher avant que la playlist soit chargée ne tient pas.
         statusObs = item.observe(\.status, options: [.new]) { [weak self] item, _ in
-            guard item.status == .readyToPlay, seconds > 5, let model = self else { return }
+            guard let model = self else { return }
+            if item.status == .failed {
+                let reason = item.error?.localizedDescription ?? "?"
+                Task { @MainActor in model.retryWithoutOriginals(url, reason: reason) }
+                return
+            }
+            guard item.status == .readyToPlay, seconds > 5 else { return }
             Task { @MainActor in
                 model.player?.seek(to: CMTime(seconds: seconds, preferredTimescale: 600),
                                    toleranceBefore: .zero, toleranceAfter: .zero)
                 model.statusObs = nil
             }
+        }
+        // Arrêt en cours de lecture (segment refusé) : même relance.
+        if let o = failObs { NotificationCenter.default.removeObserver(o) }
+        failObs = NotificationCenter.default.addObserver(forName: .AVPlayerItemFailedToPlayToEndTime,
+                                                         object: item, queue: .main) { [weak self] note in
+            let reason = (note.userInfo?[AVPlayerItemFailedToPlayToEndTimeErrorKey] as? Error)?.localizedDescription ?? "?"
+            Task { @MainActor in self?.retryWithoutOriginals(url, reason: reason) }
         }
         let p = player ?? AVPlayer()
         p.replaceCurrentItem(with: item)
@@ -349,8 +364,26 @@ final class TVPlayerModel: ObservableObject {
         delayObs = nil
         channelDelay = 0
         statusObs = nil
+        if let o = failObs { NotificationCenter.default.removeObserver(o) }
+        failObs = nil
         player?.pause()
         player?.replaceCurrentItem(with: nil)
+    }
+
+    /// VOD en `tuunmute://` (passages coupés rétablis) arrêtée : l'original
+    /// d'un passage coupé, sondé « servi », est refusé (403) — effacé depuis,
+    /// ou sondé sur un cache du CDN. Relancée une fois au même endroit, sans
+    /// les originaux (`tumuted://`), comme sur l'iPhone ; ceux de cette VOD
+    /// ne sont plus crus jusqu'au prochain lancement. Toute autre adresse, ou
+    /// une seconde fois : la carte d'erreur du lecteur, comme avant.
+    private func retryWithoutOriginals(_ url: URL, reason: String) {
+        guard url.scheme == VodUnmuteLoader.scheme, links[quality] == url.absoluteString,
+              let p = player else { return }
+        let at = p.currentItem?.currentTime().seconds ?? 0
+        VodUnmuteLoader.distrustOriginals(url)
+        links = VodUnmuteLoader.wrapMuted(links)
+        logger.warn("TV/LECTEUR", "VOD interrompue", "\(reason) · relance, passages coupés réécrits")
+        start(at: at.isFinite ? at : 0)
     }
 
     /// Titre et sous-titre du panneau d'infos de tvOS.

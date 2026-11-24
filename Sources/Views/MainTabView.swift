@@ -414,6 +414,9 @@ struct MainTabView: View {
             .onChange(of: showMultiLive) { on in DiscoverGate.shared.blocked = on || playerMode != nil }
             // Source du direct, jointe aux pauses pub comptées pour /stats.
             .onChange(of: menuLiveSource) { UsageService.shared.adSource = $0 }
+            // Chaîne regardée (direct, VOD) : Réglages → Chat → Identité dans
+            // le chat y propose aussi son badge à elle.
+            .onChange(of: playerChannelLogin) { ChatIdentity.watchingLogin = $0 }
             // iPhone : portrait, sauf lecteur ouvert en grand ou multi-live.
             .onChange(of: landscapeAllowed) { OrientationLock.allowLandscape($0) }
             .onAppear { OrientationLock.allowLandscape(landscapeAllowed) }

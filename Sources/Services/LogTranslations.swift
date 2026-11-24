@@ -155,6 +155,7 @@ enum LogTranslator {
         "Badge du chat choisi": ["Chat badge chosen", "Insignia del chat elegida", "Значок чата выбран"],
         "Badge du chat refusé": ["Chat badge refused", "Insignia del chat rechazada", "Значок чата отклонён"],
         "Badges canal": ["Channel badges", "Insignias del canal", "Значки канала"],
+        "Badges de la chaîne indisponibles": ["Channel badges unavailable", "Insignias del canal no disponibles", "Значки канала недоступны"],
         "Badges du compte indisponibles": ["Account badges unavailable", "Insignias de la cuenta no disponibles", "Значки аккаунта недоступны"],
         "Badges globaux chargés": ["Global badges loaded", "Insignias globales cargadas", "Глобальные значки загружены"],
         "Balance diminuée": ["Balance went down", "Saldo reducido", "Баланс уменьшился"],

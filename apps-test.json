@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.7.50",
+          "buildVersion": "422",
+          "date": "2026-11-24",
+          "localizedDescription": "- VODs no longer stop with an error when Twitch has deleted the original sound of a muted part: the VOD starts again at the same place, with that part kept silent\n- iOS 16: the app responds to touches again after minimizing the player",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-422/TwitchUnblock.ipa",
+          "size": 4844579,
+          "commit": "78273a873ba92218db527cce6cd12247c5a73704"
+        },
+        {
           "version": "1.7.49",
           "buildVersion": "421",
           "date": "2026-11-21",
@@ -280,25 +289,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-385/TwitchUnblock.ipa",
           "size": 4542328,
           "commit": "f7eb07ccc86ca413776099bd759b69d171202575"
-        },
-        {
-          "version": "1.7.6",
-          "buildVersion": "384",
-          "date": "2026-11-01",
-          "localizedDescription": "- iPhone Duo: tabs move into the status column, as an icon pill under the clock, and the header gets a top margin\n- New in Features in testing (iOS 26): native Liquid Glass tabs instead of the app's tab bar\n- New \"My source\" option: add your own luminous-ttv server to the live sources (Settings → Player)",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-384/TwitchUnblock.ipa",
-          "size": 4541767,
-          "commit": "3a2e8623ccc6915eb6c9e6492cf6b11668fc6bb6"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.7.49",
-      "versionDate": "2026-11-21",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-421/TwitchUnblock.ipa",
-      "size": 4840121
+      "version": "1.7.50",
+      "versionDate": "2026-11-24",
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-422/TwitchUnblock.ipa",
+      "size": 4844579
     }
   ],
   "news": []

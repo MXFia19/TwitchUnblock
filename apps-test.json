@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.7.53",
+          "buildVersion": "425",
+          "date": "2026-11-24",
+          "localizedDescription": "- Chat identity: also pick the badge shown on the channel you're watching (subscription, bits…), next to the global one",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-425/TwitchUnblock.ipa",
+          "size": 4892105,
+          "commit": "3429ac416f45f1b5410d1d1d02a8ef0593ab12f2"
+        },
+        {
           "version": "1.7.52",
           "buildVersion": "424",
           "date": "2026-11-24",
@@ -280,25 +289,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-388/TwitchUnblock.ipa",
           "size": 4568890,
           "commit": "1428e52fa0911ec1422da562b4fbf366881e20c8"
-        },
-        {
-          "version": "1.7.9",
-          "buildVersion": "387",
-          "date": "2026-11-01",
-          "localizedDescription": "- iPhone Duo: in the full-size player, buttons and text keep clear of the screen's rounded corners",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-387/TwitchUnblock.ipa",
-          "size": 4542829,
-          "commit": "d94fb6e58b235aeb53942ea7d63461e2f9a07c44"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.7.52",
+      "version": "1.7.53",
       "versionDate": "2026-11-24",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-424/TwitchUnblock.ipa",
-      "size": 4880505
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-425/TwitchUnblock.ipa",
+      "size": 4892105
     }
   ],
   "news": []

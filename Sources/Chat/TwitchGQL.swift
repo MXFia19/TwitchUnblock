@@ -77,9 +77,15 @@ final class TwitchGQL {
 
     /// Mutation écrite en toutes lettres, faute de requête enregistrée connue
     /// (création d'un clip) : même jeton d'intégrité, même nouvel essai.
+    /// `named: false` : document anonyme (`mutation { … }`), envoyé sans
+    /// operationName — Twitch refuse un nom qui ne désigne aucune opération
+    /// du document (« operation with name … not found ») ; `op` ne sert
+    /// alors qu'au journal.
     func rawMutation(_ op: String, query: String, variables: [String: Any],
-                     token: String) async -> [String: Any]? {
-        let body: [[String: Any]] = [["operationName": op, "query": query, "variables": variables]]
+                     token: String, named: Bool = true) async -> [String: Any]? {
+        var item: [String: Any] = ["query": query, "variables": variables]
+        if named { item["operationName"] = op }
+        let body: [[String: Any]] = [item]
         guard let payload = try? JSONSerialization.data(withJSONObject: body) else { return nil }
         return await send(op, payload: payload, token: token)
     }

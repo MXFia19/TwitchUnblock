@@ -81,13 +81,16 @@ enum ChatIdentity {
                             what: "\(login) · \(badge.id)", token: token)
     }
 
-    /// Mutation de l'app, valeurs écrites dans la requête. Réussie si son
-    /// champ rend un `user`, sans erreur.
+    /// Mutation de l'app, valeurs écrites dans la requête. Document anonyme,
+    /// sans operationName, comme le rachat d'une récompense : avec, Twitch
+    /// répondait « operation with name 'ChatIdentity_SelectGlobalBadge' not
+    /// found » (fb_mwu4tse2, 1.7.53). Réussie si son champ rend un `user`,
+    /// sans erreur.
     @MainActor
     private static func select(_ op: String, field: String, input: String, what: String,
                                token: String) async -> Bool {
         let q = "mutation { \(field)(input: { \(input) }) { user { id } } }"
-        let res = await TwitchGQL.shared.rawMutation(op, query: q, variables: [:], token: token)
+        let res = await TwitchGQL.shared.rawMutation(op, query: q, variables: [:], token: token, named: false)
         let user = ((res?["data"] as? [String: Any])?[field] as? [String: Any])?["user"] as? [String: Any]
         guard user != nil, res?["errors"] == nil else {
             let messages = ((res?["errors"] as? [[String: Any]]) ?? []).compactMap { $0["message"] as? String }

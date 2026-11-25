@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.7.55",
+          "buildVersion": "427",
+          "date": "2026-11-25",
+          "localizedDescription": "- VODs by game: the filter now finds VODs where the game was played mid-stream, not only the one they started with",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-427/TwitchUnblock.ipa",
+          "size": 4898625,
+          "commit": "18598b9d0a93122ffce62c2d5f7b526d965f9388"
+        },
+        {
           "version": "1.7.54",
           "buildVersion": "426",
           "date": "2026-11-24",
@@ -280,25 +289,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-390/TwitchUnblock.ipa",
           "size": 4569268,
           "commit": "eea4414913442e5bbf00c2426e5024149d3baf9e"
-        },
-        {
-          "version": "1.7.11",
-          "buildVersion": "389",
-          "date": "2026-11-04",
-          "localizedDescription": "- Every category shows its viewer count again (Top, search and followed), not only the ones followed on your Twitch account",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-389/TwitchUnblock.ipa",
-          "size": 4568792,
-          "commit": "90d837c32313ef1a42f2714b243f0196c6aea08a"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.7.54",
-      "versionDate": "2026-11-24",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-426/TwitchUnblock.ipa",
-      "size": 4892988
+      "version": "1.7.55",
+      "versionDate": "2026-11-25",
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-427/TwitchUnblock.ipa",
+      "size": 4898625
     }
   ],
   "news": []

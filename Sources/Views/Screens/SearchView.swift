@@ -150,13 +150,14 @@ struct SearchView: View {
         return store.accountFollowLogins.contains(l)
     }
 
-    /// VODs chargées, filtrées par le mot-clé et par le jeu.
+    /// VODs chargées, filtrées par le mot-clé et par le jeu (joué au début
+    /// ou en cours de stream : chapitres de la VOD).
     private var filteredVods: [VodData] {
         let kw = filterText.trimmingCharacters(in: .whitespaces).lowercased()
         let game = gameFilter
         guard !kw.isEmpty || game != nil else { return vods }
         return vods.filter { v in
-            (game == nil || v.gameId == game) && (kw.isEmpty || v.title.lowercased().contains(kw))
+            (game.map { v.hasGame($0) } ?? true) && (kw.isEmpty || v.title.lowercased().contains(kw))
         }
     }
 
@@ -168,14 +169,16 @@ struct SearchView: View {
         var title: String { "\(name) (\(count))" }
     }
 
-    /// Jeux présents dans les VODs chargées, le plus représenté d'abord.
+    /// Jeux présents dans les VODs chargées (chapitres compris), le plus
+    /// représenté d'abord ; une VOD compte une fois par jeu.
     private var vodGames: [VodGame] {
         var counts: [String: Int] = [:]
         var names: [String: String] = [:]
         for v in vods {
-            guard let id = v.gameId, !id.isEmpty else { continue }
-            counts[id, default: 0] += 1
-            if names[id] == nil, let name = v.gameName, !name.isEmpty { names[id] = name }
+            for g in v.allGames {
+                counts[g.id, default: 0] += 1
+                if names[g.id] == nil, !g.name.isEmpty { names[g.id] = g.name }
+            }
         }
         return counts.map { VodGame(id: $0.key, name: names[$0.key] ?? $0.key, count: $0.value) }
             .sorted { $0.count != $1.count ? $0.count > $1.count
@@ -185,7 +188,8 @@ struct SearchView: View {
     /// Nom du jeu choisi dans le filtre ; nil = tous les jeux.
     private var gameFilterName: String? {
         guard let id = gameFilter else { return nil }
-        return vods.first { $0.gameId == id }?.gameName ?? id
+        for v in vods { if let g = v.allGames.first(where: { $0.id == id }) { return g.name } }
+        return id
     }
 
     /// Moins de VODs du jeu choisi parmi celles chargées : la suite est cherchée.

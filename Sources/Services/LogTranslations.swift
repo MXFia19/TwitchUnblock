@@ -204,6 +204,7 @@ enum LogTranslator {
         "Changement de compte…": ["Switching account…", "Cambiando de cuenta…", "Смена аккаунта…"],
         "changement de sortie": ["output change", "cambio de salida", "смена выхода"],
         "channelId manquant": ["channelId missing", "falta channelId", "нет channelId"],
+        "Chapitres des VODs refusés : liste sans eux": ["VOD chapters refused: list without them", "Capítulos de los VODs rechazados: lista sin ellos", "Главы VOD отклонены: список без них"],
         "chargées": ["loaded", "cargadas", "загружено"],
         "Chargement annulé": ["Loading cancelled", "Carga cancelada", "Загрузка отменена"],
         "Chargement canal": ["Loading channel", "Cargando canal", "Загрузка канала"],

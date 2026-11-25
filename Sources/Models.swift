@@ -59,6 +59,29 @@ struct VodData: Identifiable {
     /// ne le demande pas (seule la liste des VODs d'une chaîne le demande).
     var gameId: String? = nil
     var gameName: String? = nil
+    /// Tous ses jeux : le principal, puis ceux des chapitres (changements de
+    /// jeu en cours de stream), sans doublon. Vide si la requête ne les
+    /// demande pas : `allGames` se rabat alors sur le jeu principal.
+    var games: [VodGameRef] = []
+}
+
+/// Jeu joué dans une VOD (principal ou chapitre), pour le filtre par jeu.
+struct VodGameRef: Hashable {
+    let id: String
+    let name: String
+}
+
+extension VodData {
+    /// Ses jeux, principal compris (fb_mwvs798g : le filtre ne voyait que
+    /// le jeu du début de la VOD).
+    var allGames: [VodGameRef] {
+        if !games.isEmpty { return games }
+        guard let id = gameId, !id.isEmpty else { return [] }
+        return [VodGameRef(id: id, name: gameName ?? id)]
+    }
+
+    /// La VOD contient ce jeu, au début ou en cours de route.
+    func hasGame(_ id: String) -> Bool { allGames.contains { $0.id == id } }
 }
 
 /// Playlist (collection) d'une chaîne et ses vidéos.

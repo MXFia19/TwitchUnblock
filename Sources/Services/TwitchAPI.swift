@@ -1257,26 +1257,38 @@ func getChannelVideosPage(channelName: String, cursor: String? = nil) async
     logger.info("VIDEOS", "Chargement VODs de \"\(channelName)\"\(cursor != nil ? " (Page suivante)" : "")")
 
     let afterCursor = cursor != nil ? ", after: \"\(gqlStr(cursor!))\"" : ""
-    // `game` : filtre par jeu de la liste des VODs (SearchView).
-    let q = """
-    query {
-        user(login: "\(gqlStr(channelName))") {
-            profileImageURL(width: 70)
-            videos(first: 100, type: ARCHIVE, sort: TIME\(afterCursor)) {
-                edges { cursor node { id title previewThumbnailURL(height: 180, width: 320) publishedAt lengthSeconds game { id displayName } } }
-                pageInfo { hasNextPage }
+    // `game` et les chapitres (`moments`, comme le site) : filtre par jeu de
+    // la liste des VODs (SearchView), changements de jeu en cours de stream
+    // compris (fb_mwvs798g). Requête vérifiée le 25/11 : 100 VODs ≈ 35 Ko.
+    let chapterFields = " moments(first: 25, momentRequestType: VIDEO_CHAPTER_MARKERS) { edges { node { details "
+        + "{ ... on GameChangeMomentDetails { game { id displayName } } } } } }"
+    func query(chapters: Bool) -> String {
+        """
+        query {
+            user(login: "\(gqlStr(channelName))") {
+                profileImageURL(width: 70)
+                videos(first: 100, type: ARCHIVE, sort: TIME\(afterCursor)) {
+                    edges { cursor node { id title previewThumbnailURL(height: 180, width: 320) publishedAt lengthSeconds game { id displayName }\(chapters ? chapterFields : "") } }
+                    pageInfo { hasNextPage }
+                }
             }
         }
+        """
     }
-    """
 
     let data: [String: Any]?
     if let cursor {
         // Suite : même règle que les autres listes (gqlNextRequest) : refus
         // d'intégrité ou rejet en 400/401/403 = refus, nil = panne.
-        guard let page = await gqlNextRequest(q, [:]) else {
+        guard var page = await gqlNextRequest(query(chapters: true), [:]) else {
             logger.warn("VIDEOS", "Suite des VODs de \"\(channelName)\" indisponible (réseau)")
             return (videos: [], avatar: nil, error: "network", cursor: cursor, refused: false)
+        }
+        // Chapitres refusés un jour par Twitch : la liste sans eux plutôt que rien.
+        if !page.refused, page.data?["user"] == nil,
+           let plain = await gqlNextRequest(query(chapters: false), [:]), plain.data?["user"] != nil {
+            logger.warn("VIDEOS", "Chapitres des VODs refusés : liste sans eux", channelName)
+            page = plain
         }
         if page.refused {
             logger.warn("VIDEOS", "Twitch refuse la suite des VODs de \"\(channelName)\"")
@@ -1284,7 +1296,14 @@ func getChannelVideosPage(channelName: String, cursor: String? = nil) async
         }
         data = page.data
     } else {
-        data = (try? await twitchGQL(q) as? [String: Any])?["data"] as? [String: Any]
+        var first = (try? await twitchGQL(query(chapters: true)) as? [String: Any])?["data"] as? [String: Any]
+        if first?["user"] == nil,
+           let plain = (try? await twitchGQL(query(chapters: false)) as? [String: Any])?["data"] as? [String: Any],
+           plain["user"] != nil {
+            logger.warn("VIDEOS", "Chapitres des VODs refusés : liste sans eux", channelName)
+            first = plain
+        }
+        data = first
     }
     guard let user = data?["user"] as? [String: Any] else {
         logger.error("VIDEOS", "Streamer \"\(channelName)\" introuvable")
@@ -1300,13 +1319,24 @@ func getChannelVideosPage(channelName: String, cursor: String? = nil) async
               let id    = node["id"] as? String,
               let title = node["title"] as? String else { return nil }
         let game = node["game"] as? [String: Any]
+        // Jeu principal, puis ceux des chapitres, dans l'ordre, sans doublon.
+        let chapters: [[String: Any]?] = (((node["moments"] as? [String: Any])?["edges"] as? [[String: Any]]) ?? []).map {
+            (($0["node"] as? [String: Any])?["details"] as? [String: Any])?["game"] as? [String: Any]
+        }
+        var games: [VodGameRef] = []
+        var seen = Set<String>()
+        for g in [game] + chapters {
+            guard let gid = g?["id"] as? String, !gid.isEmpty, seen.insert(gid).inserted else { continue }
+            games.append(VodGameRef(id: gid, name: (g?["displayName"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? gid))
+        }
         return VodData(
             id: id, title: title,
             previewThumbnailURL: node["previewThumbnailURL"] as? String ?? "",
             publishedAt: node["publishedAt"] as? String ?? "",
             lengthSeconds: node["lengthSeconds"] as? Int ?? 0,
             gameId: game?["id"] as? String,
-            gameName: game?["displayName"] as? String
+            gameName: game?["displayName"] as? String,
+            games: games
         )
     }
 

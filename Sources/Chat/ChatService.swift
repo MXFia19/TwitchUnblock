@@ -35,7 +35,7 @@ final class ChatService: NSObject, ObservableObject {
 
     /// Message reçu en attente du retard du chat, avec son heure d'arrivée.
     private struct PendingMessage {
-        let message: ChatMessage
+        var message: ChatMessage
         let arrivedAt: Date
     }
     /// File d'attente, dans l'ordre d'arrivée. Jamais nos messages, ni les
@@ -229,7 +229,43 @@ final class ChatService: NSObject, ObservableObject {
     private var localBadges: [TwitchBadge] = []
 
     // MARK: – Connect
+    /// Emotes BTTV, FFZ ou 7TV arrivées après coup (voir refreshEmotes).
+    private var emotesSub: AnyCancellable?
+
+    /// Emotes BTTV, FFZ ou 7TV arrivées après des messages déjà reçus : plus
+    /// de 3,5 s de chargement (le chat se connecte sans les attendre), nouvel
+    /// essai, « Recharger emotes et badges ». Leurs mots restaient en texte
+    /// dans l'historique et les premiers messages (fb_mwmcdrvb) ; ils
+    /// deviennent des emotes, à l'écran comme dans la file du délai.
+    func refreshEmotes() async {
+        let found = await lateEmotes(in: [messages, pending.map(\.message)], channelId: channelId)
+        guard !found.isEmpty else { return }
+        var list = messages, count = 0
+        for i in list.indices where list[i].userId != "system" {
+            if list[i].adoptEmotes(found) { count += 1 }
+        }
+        if count > 0 { messages = list }
+        for i in pending.indices where pending[i].message.userId != "system" {
+            if pending[i].message.adoptEmotes(found) { count += 1 }
+        }
+        if count > 0 { logger.info("CHAT", "Emotes arrivées après les messages", "\(count) messages relus") }
+    }
+
+    private func observeLateEmotes() {
+        guard emotesSub == nil else { return }
+        emotesSub = NotificationCenter.default.publisher(for: .thirdPartyEmotesLoaded)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] note in
+                let cid = note.userInfo?["channelId"] as? String
+                Task { @MainActor [weak self] in
+                    guard let self, cid == nil || cid == self.channelId else { return }
+                    await self.refreshEmotes()
+                }
+            }
+    }
+
     func connect(channel: String, token: String? = nil, login: String? = nil) {
+        observeLateEmotes()
         // Même chaîne (reconnexion, autre compte) : les messages encore en
         // attente du délai et la modération retenue restent.
         disconnect(keepPending: channel.lowercased() == channelName)
@@ -870,6 +906,18 @@ final class ChatService: NSObject, ObservableObject {
     // MARK: – Modes du salon et règles
     /// ROOMSTATE : complet à l'arrivée, puis seulement ce qui change.
     private func applyRoomState(_ tags: [String: String]) {
+        // Chat ouvert sans l'id de la chaîne (Twitch n'a pas répondu à
+        // l'ouverture du direct) : le salon le donne. Sans lui, ni emotes
+        // BTTV, FFZ et 7TV de la chaîne, ni ses badges, jusqu'à la réouverture.
+        if channelId == nil, let id = tags["room-id"], !id.isEmpty {
+            channelId = id
+            logger.info("CHAT", "Id de la chaîne lu dans le salon", id)
+            let name = channelName, token = lastToken
+            Task {
+                await EmoteService.shared.loadChannel(channelId: id, channelName: name)
+                await BadgeService.shared.loadChannel(channelId: id, token: token)
+            }
+        }
         var m = roomModes
         if let v = tags["followers-only"], let n = Int(v) { m.followersMinutes = n < 0 ? nil : n }
         if let v = tags["subs-only"] { m.subsOnly = v == "1" }

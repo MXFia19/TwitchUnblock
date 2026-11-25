@@ -73,15 +73,23 @@ targets:
       - path: Sources/Localization/TraditionalChineseStrings.swift
       - path: Sources/Services/Logger.swift
       - path: Sources/Services/Keychain.swift
+      # Mon proxy (source « proxy ») : getLive et completeLiveSourceOrder y
+      # font appel ; jamais réglé sur la TV.
+      - path: Sources/Services/LiveProxy.swift
       - path: Sources/Services/TopLanguage.swift
       - path: Sources/Services/TwitchAPI.swift
       - path: Sources/Services/LivePlaylistLoader.swift
       - path: Sources/Services/TwitchAdPlaylist.swift
       - path: Sources/Services/VodUnmute.swift
+      # VOD sans son chez Twitch (piste audio vide) : avis de TVPlayer.
+      - path: Sources/Services/VodSilence.swift
       # Pauses pub du direct : VodUnmuteLoader.playerItem y fait appel.
       - path: Sources/Services/AdBreakMonitor.swift
       - path: Sources/Services/SpatialAudio.swift
       - path: Sources/Services/HiddenContent.swift
+      - path: Sources/Services/ChannelDelay.swift
+      # Réserve du quota du Worker : comptage en pause (TVUsage).
+      - path: Sources/Services/QuotaPause.swift
       # Reprise après une interruption du son (Siri, FaceTime) : TVPlayer.
       - path: Sources/Services/PlaybackAudio.swift
       - path: Sources/Services/PlaybackDiagnostics.swift

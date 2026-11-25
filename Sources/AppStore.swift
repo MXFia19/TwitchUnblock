@@ -323,7 +323,7 @@ final class AppStore: ObservableObject {
         }
     }
 
-    /// Ordre des sources du direct (« as », « al », « eu », « twitch ») :
+    /// Ordre des sources du direct (« bg », « twitch », « custom », « proxy ») :
     /// getLive les essaie l'une après l'autre (liveSourceSteps, même clé).
     @Published var liveSourceOrder: [String] = kLiveSources {
         didSet { UserDefaults.standard.set(liveSourceOrder, forKey: "liveSourceOrder") }
@@ -334,9 +334,46 @@ final class AppStore: ObservableObject {
         didSet { UserDefaults.standard.set(customSource, forKey: "cfg_custom_source") }
     }
 
-    /// Ordre par défaut : l'automatique, Ma source en tête si elle est réglée.
+    /// « Mon proxy » : « hôte:port » d'un proxy HTTP à soi et son identifiant
+    /// (voir LiveProxy) ; le mot de passe est dans le trousseau.
+    @Published private(set) var liveProxy: String = "" {
+        didSet { UserDefaults.standard.set(liveProxy, forKey: LiveProxy.addressKey) }
+    }
+    @Published private(set) var liveProxyUser: String = "" {
+        didSet { UserDefaults.standard.set(liveProxyUser, forKey: LiveProxy.userKey) }
+    }
+
+    /// Ordre par défaut : l'automatique, Ma source puis Mon proxy en tête
+    /// s'ils sont réglés.
     var defaultLiveSourceOrder: [String] {
-        customSourceBase(customSource) != nil ? ["custom"] + kLiveSources : kLiveSources
+        var order: [String] = []
+        if customSourceBase(customSource) != nil { order.append("custom") }
+        if !liveProxy.isEmpty { order.append("proxy") }
+        return order + kLiveSources
+    }
+
+    /// Mon proxy changé : en tête de l'ordre à l'ajout ou au changement
+    /// d'adresse (comme Ma source), retiré avec ses identifiants quand on
+    /// l'efface. `password` nil : celui du trousseau ne change pas (sauvegarde
+    /// reprise). Rend faux si l'adresse est refusée.
+    @discardableResult
+    func setLiveProxy(_ raw: String, user: String, password: String?) -> Bool {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        let address = trimmed.isEmpty ? nil : LiveProxy.normalized(trimmed)
+        if !trimmed.isEmpty && address == nil { return false }
+        let was = liveProxy
+        liveProxyUser = address == nil ? "" : String(user.trimmingCharacters(in: .whitespacesAndNewlines).prefix(200))
+        if address == nil {
+            LiveProxy.setPassword(nil)
+        } else if let password {
+            LiveProxy.setPassword(password)
+        }
+        liveProxy = address ?? ""
+        if was != liveProxy {
+            let rest = liveSourceOrder.filter { $0 != "proxy" }
+            liveSourceOrder = address != nil ? ["proxy"] + rest : rest
+        }
+        return true
     }
 
     /// Ma source changée : en tête de l'ordre à l'ajout (comme sur le site),
@@ -460,6 +497,20 @@ final class AppStore: ObservableObject {
     /// (fb_mvxcjl88). Coupé d'office : le geste pourrait surprendre.
     @Published var edgeSwipeClose: Bool = false {
         didSet { UserDefaults.standard.set(edgeSwipeClose, forKey: "cfg_edge_swipe_close") }
+    }
+
+    /// En direct, double appui à gauche ou à droite de l'image : ±10 s, comme
+    /// sur une VOD (carte de dave, 20/11), au lieu d'afficher ou de masquer le
+    /// chat en paysage. Coupé d'office : le double appui garde son rôle connu.
+    @Published var liveDoubleTapSeek: Bool = false {
+        didSet { UserDefaults.standard.set(liveDoubleTapSeek, forKey: "cfg_live_double_tap_seek") }
+    }
+
+    /// Volume et luminosité au doigt dans le lecteur, en paysage
+    /// (PlayerSwipes.swift). Coupé d'office : sur les côtés de l'image, il
+    /// prend la place du glissé vers le bas qui réduit le lecteur.
+    @Published var playerSwipes: Bool = false {
+        didSet { UserDefaults.standard.set(playerSwipes, forKey: "cfg_player_swipes") }
     }
 
     /// Chat affiché ↔ masqué en paysage (double-tap sur un direct) ; rend le
@@ -686,6 +737,14 @@ final class AppStore: ObservableObject {
     @Published var hidden = HiddenContent.load() {
         didSet { if hidden != oldValue { hidden.save() } }
     }
+    /// Tags masqués (demande fb_mwpac0z4, « vtuber ») : un live qui en porte un
+    /// sort du top, des lives d'une catégorie et de la recherche, comme une
+    /// chaîne masquée (ce qu'on suit ou épingle reste). Minuscules, sans « # »
+    /// (HiddenContent.cleanTag), 100 au plus ; « hiddenTags » comme sur le
+    /// site : sauvegarde et section « common » de la synchro.
+    @Published var hiddenTags: [String] = HiddenContent.cleanTags(UserDefaults.standard.stringArray(forKey: "hidden_tags") ?? []) {
+        didSet { if hiddenTags != oldValue { UserDefaults.standard.set(hiddenTags, forKey: "hidden_tags") } }
+    }
 
     /// Chaîne suivie (compte ou appareil) ou épinglée : jamais masquée.
     func isFollowedOrPinned(_ login: String) -> Bool {
@@ -701,11 +760,18 @@ final class AppStore: ObservableObject {
     func showsChannel(_ login: String) -> Bool {
         isFollowedOrPinned(login) || !hidden.hides(channel: login)
     }
-    /// Un live du top : ni sa chaîne ni sa catégorie ne sont masquées, sauf
-    /// si on suit l'une ou l'autre.
+    /// Un live d'une catégorie ouverte : sa chaîne et ses tags comptent (la
+    /// catégorie elle-même, masquée ou non, reste consultable).
+    func showsCategoryStream(_ s: TwitchStream) -> Bool {
+        isFollowedOrPinned(s.userLogin)
+            || (!hidden.hides(channel: s.userLogin) && !HiddenContent.hasHiddenTag(s, in: hiddenTags))
+    }
+    /// Un live du top : ni sa chaîne, ni un de ses tags, ni sa catégorie ne
+    /// sont masqués, sauf si on suit la chaîne ou la catégorie.
     func showsStream(_ s: TwitchStream) -> Bool {
         isFollowedOrPinned(s.userLogin)
-            || (!hidden.hides(channel: s.userLogin) && (followsCategory(s.gameId) || !hidden.hides(category: s.gameId)))
+            || (!hidden.hides(channel: s.userLogin) && !HiddenContent.hasHiddenTag(s, in: hiddenTags)
+                && (followsCategory(s.gameId) || !hidden.hides(category: s.gameId)))
     }
     /// Une carte de la grille « Toutes » des catégories.
     func showsCategory(_ c: TwitchCategory) -> Bool {
@@ -721,6 +787,12 @@ final class AppStore: ObservableObject {
         guard !followsCategory(id) else { return }
         hidden.hide(category: id, name: name, box: box)
         logger.info("MASQUÉS", "Catégorie masquée \(id) (\(name))", nil)
+    }
+    /// Masque les lives qui portent ce tag (appui long sur un live).
+    func hideTag(_ tag: String) {
+        guard let t = HiddenContent.cleanTag(tag), !hiddenTags.contains(t) else { return }
+        hiddenTags = HiddenContent.cleanTags([t] + hiddenTags)
+        logger.info("MASQUÉS", "Tag masqué #\(t)", nil)
     }
     func unhideChannel(_ login: String) {
         guard hidden.hides(channel: login) else { return }
@@ -890,6 +962,15 @@ final class AppStore: ObservableObject {
     @Published var chatHideCommands = false {
         didSet { UserDefaults.standard.set(chatHideCommands, forKey: "chat_hide_commands") }
     }
+    /// Subs offerts à une personne masqués (« X gifted a Tier 1 sub to Y! »,
+    /// USERNOTICE subgift et anonsubgift) : une ligne par personne, des
+    /// dizaines d'un coup quand quelqu'un en offre en lot (demande de
+    /// kayne92). Le résumé du lot (submysterygift) reste. Coupé par défaut ;
+    /// même clé que le site (« hideGiftSubs »), dans la synchro des réglages
+    /// et la sauvegarde.
+    @Published var chatHideGiftSubs = false {
+        didSet { UserDefaults.standard.set(chatHideGiftSubs, forKey: "chat_hide_gift_subs") }
+    }
     /// Mots masqués (minuscules) : les messages qui les contiennent disparaissent.
     @Published var chatMutedWords: [String] = [] {
         didSet { UserDefaults.standard.set(chatMutedWords, forKey: "chat_muted_words") }
@@ -903,8 +984,14 @@ final class AppStore: ObservableObject {
         "wizebot", "soundalerts", "sery_bot", "botisimo", "own3d", "kofistreambot",
         "pokemoncommunitygame", "deepbot", "coebot", "phantombot", "creatisbot", "blerp"]
 
-    /// Vrai si le message doit être masqué (réglages de filtres).
+    /// USERNOTICE d'un sub offert à une personne (chatHideGiftSubs).
+    static let giftSubKinds: Set<String> = ["subgift", "anonsubgift"]
+
+    /// Vrai si le message doit être masqué (réglages de filtres). Appliqué à
+    /// l'affichage : un filtre activé fait aussi disparaître les lignes déjà là.
     func isChatFiltered(_ m: ChatMessage) -> Bool {
+        // Sub offert : avant tout le reste, même offert par soi (comme le site).
+        if chatHideGiftSubs, let kind = m.noticeKind, Self.giftSubKinds.contains(kind) { return true }
         let login = m.userName.lowercased()
         guard !login.isEmpty, m.userId != "system" else { return false }
         if login == twitchLogin?.lowercased() { return false }
@@ -1011,6 +1098,7 @@ final class AppStore: ObservableObject {
         favoriteEmotes     = Array(Self.emoteCodes(ud.stringArray(forKey: "chat_favorite_emotes") ?? []).suffix(Self.maxFavoriteEmotes))
         chatHideBots       = ud.bool(forKey: "chat_hide_bots")
         chatHideCommands   = ud.bool(forKey: "chat_hide_commands")
+        chatHideGiftSubs   = ud.bool(forKey: "chat_hide_gift_subs")
         chatMutedWords     = ud.stringArray(forKey: "chat_muted_words") ?? []
         chatBlockedUsers   = ud.stringArray(forKey: "chat_blocked_users") ?? []
         if let l = ud.string(forKey: "lang"), let parsed = Lang(rawValue: l) { lang = parsed }
@@ -1045,6 +1133,8 @@ final class AppStore: ObservableObject {
         // Ordre des sources ; avant lui, une seule source préférée
         // (« liveSource »), mise en tête. Réécrit pour getLive.
         customSource       = customSourceBase(ud.string(forKey: "cfg_custom_source") ?? "") ?? ""
+        liveProxy          = LiveProxy.normalized(ud.string(forKey: LiveProxy.addressKey) ?? "") ?? ""
+        liveProxyUser      = liveProxy.isEmpty ? "" : (ud.string(forKey: LiveProxy.userKey) ?? "")
         liveSourceOrder    = liveSourceSteps().filter { $0 != "worker" }
         ud.set(liveSourceOrder, forKey: "liveSourceOrder")
         subAdFree          = ud.object(forKey: "cfg_sub_adfree") as? Bool ?? true
@@ -1062,6 +1152,8 @@ final class AppStore: ObservableObject {
         chatOverlayLayout  = ChatOverlayLayout(raw: ud.string(forKey: "cfg_chat_overlay_layout") ?? "")
                              ?? ChatOverlayLayout()
         edgeSwipeClose     = ud.object(forKey: "cfg_edge_swipe_close") as? Bool ?? false
+        liveDoubleTapSeek  = ud.object(forKey: "cfg_live_double_tap_seek") as? Bool ?? false
+        playerSwipes       = ud.object(forKey: "cfg_player_swipes") as? Bool ?? false
         // Ramenées dans les bornes des curseurs : un import d'avant pouvait
         // les en sortir.
         chatFontSize       = Self.clamped(ud.object(forKey: "cfg_chat_font")    as? Double ?? 13, to: Self.chatFontRange)

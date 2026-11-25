@@ -46,8 +46,10 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
 
     func makeUIViewController(context: Context) -> AVPlayerViewController {
         let vc = AVPlayerViewController()
-        vc.allowsPictureInPicturePlayback = true
-        vc.canStartPictureInPictureAutomaticallyFromInline = true
+        // Mode multitâche de LiveContainer : pas d'image dans l'image.
+        vc.allowsPictureInPicturePlayback = !HostEnvironment.pipBlocked
+        vc.canStartPictureInPictureAutomaticallyFromInline = !HostEnvironment.pipBlocked
+        if HostEnvironment.pipBlocked { HostEnvironment.notePiPBlocked() }
         vc.showsPlaybackControls = true
         vc.delegate = context.coordinator
         context.coordinator.playerVC = vc
@@ -188,6 +190,8 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
         private var rateObserver: NSObjectProtocol?
         private var lastCatchUp = Date.distantPast
         private var latency = LiveLatencyController()
+        /// Délai mis par la chaîne (ChannelDelay), annoncé quand il change.
+        private var channelDelay = 0
         private var sync = LiveSyncEstimator()
         private var stallObserver: NSObjectProtocol?
         private var stallTimes: [Date] = []
@@ -317,6 +321,7 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
             // Le Coordinator survit au changement de qualité (nouvel AVPlayer) :
             // la tenue du direct repart de zéro, recalage du démarrage compris.
             latency.reset()
+            channelDelay = 0
             guard lowLatency else { return }
             lastCatchUp = Date()   // laisse le flux démarrer avant tout rattrapage
             logger.info("LIVE", "Mode faible latence actif", "tenue du bord du direct (sauts seulement, vitesse ×1)")
@@ -673,6 +678,12 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
                 // (EXT-X-PROGRAM-DATE-TIME de la playlist HLS). nil si absent.
                 let total = player?.currentItem?.currentDate().map { Date().timeIntervalSince($0) }
                 onLatency(total)
+                // Délai mis par la chaîne (ChannelDelay) : annoncé quand il change.
+                if self.isLive, let item = player?.currentItem,
+                   let edge = item.seekableTimeRanges.last?.timeRangeValue.end, edge.isNumeric {
+                    let d = ChannelDelay.seconds(total: total, behind: (edge - item.currentTime()).seconds)
+                    if d != self.channelDelay { self.channelDelay = d; ChannelDelay.post(d) }
+                }
                 // Retard sur le direct tel que le voient les autres spectateurs :
                 // la base de la synchro du chat (LiveSyncEstimator). Un direct
                 // n'a pas de durée finie.
@@ -956,6 +967,8 @@ struct VideoPlayerView: View {
     @State private var currentTime: Double = 0
     @State private var lastPersisted: Double = -99
     @State private var latency: Double? = nil
+    /// Délai mis par la chaîne (ChannelDelay), écrit sous le choix de qualité.
+    @State private var channelDelay = 0
     /// Pause pub cousue par Twitch dans le direct : bandeau, son coupé.
     @StateObject private var adBreaks = AdBreakWatcher(onBreak: UsageService.adBreakSeen)
     @State private var noticeShown: String? = nil
@@ -1061,12 +1074,24 @@ struct VideoPlayerView: View {
                 .padding(.horizontal, 12)
                 .padding(.bottom, 12)
             }
+            // Délai mis par la chaîne, qualité unique : sous le choix, comme le site.
+            if showQualityPicker, let note = qualityNote {
+                Text(note)
+                    .font(.tMeta).foregroundColor(.tMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 12)
+            }
             } // fin if !compact
         }
         .background(Color.tCard)
         .cornerRadius(16)
         .onAppear {
             if selectedQuality.isEmpty { selectedQuality = preferredSelection(qualityLinks) }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: ChannelDelay.changed)) { n in
+            channelDelay = isLive ? (n.userInfo?["s"] as? Int ?? 0) : 0
         }
         // Autres liens (bascule direct ↔ rembobinage, autre source) : la
         // qualité en cours peut ne plus y être ; on repart de la préférence
@@ -1245,4 +1270,14 @@ struct VideoPlayerView: View {
 
     /// « 1440p (Source) » quand la résolution de Source est connue.
     private func qualityLabel(_ q: String) -> String { qualityText(q, store.lang, variants: variants) }
+
+    /// Sous le choix de qualité d'un direct : le délai mis par la chaîne et la
+    /// qualité unique (chaîne sans transcodage) ; nil s'il n'y a rien à dire.
+    private var qualityNote: String? {
+        guard isLive else { return nil }
+        var parts: [String] = []
+        if channelDelay > 0 { parts.append(store.t("channel_delay_note").replacingOccurrences(of: "{s}", with: "\(channelDelay)")) }
+        if isSourceOnly(Array(qualityLinks.keys)) { parts.append(store.t("q_source_only")) }
+        return parts.isEmpty ? nil : parts.joined(separator: "\n")
+    }
 }

@@ -33,11 +33,14 @@ final class AnnouncementService: ObservableObject {
 
     func refresh(force: Bool = false) async {
         if !force, let lastFetch, Date().timeIntervalSince(lastFetch) < 5 * 60 { pruneExpired(); return }
+        // Réserve du quota du Worker (QuotaPause) : l'annonce déjà là reste, sans relecture.
+        if QuotaPause.active { pruneExpired(); return }
         guard let url = URL(string: "\(APIConfig.base)/api/announcement") else { return }
         var req = URLRequest(url: url)
         req.cachePolicy = .reloadIgnoringLocalCacheData
-        guard let (data, resp) = try? await URLSession.shared.data(for: req),
-              (resp as? HTTPURLResponse)?.statusCode == 200,
+        guard let (data, resp) = try? await URLSession.shared.data(for: req) else { return }
+        QuotaPause.note(resp)
+        guard (resp as? HTTPURLResponse)?.statusCode == 200,
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
         lastFetch = Date()
         guard let a = json["announcement"] as? [String: Any],

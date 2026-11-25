@@ -5,7 +5,7 @@ let kAPIURL          = "https://test2.kurzmathis4.workers.dev"
 let kDiscordURL      = "https://discord.gg/cEsMRdxsVq"
 /// Notifications de live instantanées : le site installé en web app (à la
 /// place de ntfy). Ce lien ouvre ses étapes d'installation et d'activation.
-let kNotifInstallURL = URL(string: "https://twitchunblock.vercel.app/?install=notifications")!
+let kNotifInstallURL = URL(string: "https://twitchunblock-web.pages.dev/?install=notifications")!
 let kHelixClientID   = "1e68ku2ehgzy5cy0di3xvfy82sxpf6"
 let kGQLClientID     = "kimne78kx3ncx6brgo4mv6wki5h1ko"
 /// Client-ID public de l'app Android de Twitch (technique d'Xtra). Twitch
@@ -136,35 +136,28 @@ enum APIConfig {
     }
 }
 
-/// Proxys au format Luminous (/live/<chaîne>) : un serveur par source
-/// (sondés le 2026-10-27 sur trois directs, sans pré-roll). Pas « sans pub »
-/// pour autant : les pauses pub de la chaîne y arrivent comme sur Twitch
-/// (mesuré le 2026-10-14). as = Luminous Asie (sortie Ouzbékistan), pp =
-/// PerfProd Asie (Maurice), al2 = l'autre serveur de nadeko
-/// (twitch.zzls.xyz n'est qu'une redirection vers lui), eu / eu2 = Luminous
-/// Europe et Europe 2 (eu3 ne répondait plus).
-let kLiveProxyHosts = [
-    "as": "as.luminous.dev",
-    "pp": "lb-as.cdn-perfprod.com",
-    "al2": "twitch.nadeko.net",
-    "eu": "eu.luminous.dev",
-    "eu2": "eu2.luminous.dev"
-]
+/// Source « Bulgarie » (id « bg », en test depuis le 2026-11-18) : le relais
+/// TwitchUnblock d'un VPS à Sofia (LIVE_SOURCE=twitch, README du site) prend
+/// le jeton, la liste maîtresse et les playlists de la vidéo depuis la
+/// Bulgarie — par son IPv6 : Twitch situe son IPv4 en Allemagne —, les
+/// segments restant en direct. Pour mesurer si Twitch y sert moins de pubs
+/// (/stats, source « bg »).
+let kBulgariaRelay = "https://2-58-32-226.sslip.io"
 
-/// Proxys au format TTV.LOL v1 (source « al »). Celui-ci est en Albanie ; ses
-/// variantes se lisent de n'importe quelle adresse et annoncent leurs
-/// segments d'avance. Les pauses pub de la chaîne y passent aussi.
-let kTTVLOLHosts = ["twitch-al.nadeko.net"]
+/// Proxys retirés le 2026-11-18 (Luminous, PerfProd, nadeko) : ils
+/// laissaient passer les pubs (des centaines par jour dans /stats). Un ordre
+/// enregistré qui en contient encore date d'avant : il reprend l'ordre
+/// automatique (completeLiveSourceOrder).
+let kRetiredLiveSources: Set<String> = ["as", "pp", "al", "al2", "eu", "eu2"]
 
 /// Sources du direct proposées dans les réglages et le menu du lecteur.
-let kLiveSourceChoices = ["auto", "as", "pp", "al", "al2", "eu", "eu2", "twitch"]
-/// Sources du direct, dans l'ordre automatique : Luminous Asie, PerfProd
-/// Asie, proxy albanais (TTV.LOL) et son second serveur, Luminous Europe et
-/// Europe 2, Twitch officiel (avec ses pubs).
-let kLiveSources = ["as", "pp", "al", "al2", "eu", "eu2", "twitch"]
+let kLiveSourceChoices = ["auto", "bg", "twitch"]
+/// Sources du direct, dans l'ordre automatique : Bulgarie (test), puis
+/// Twitch officiel.
+let kLiveSources = ["bg", "twitch"]
 /// Source ajoutée → celle qu'elle secourt : un ordre enregistré avant elle
-/// la reçoit juste après (comme le site et le Worker).
-let kLiveSourceBackupOf = ["pp": "as", "al2": "al", "eu2": "eu"]
+/// la reçoit juste après (comme le site et le Worker). Aucune aujourd'hui.
+let kLiveSourceBackupOf: [String: String] = [:]
 
 /// « Ma source » (id « custom ») : adresse d'un serveur luminous-ttv à soi,
 /// comme sur le site (demande de hippxrr). https://, un nom de domaine, sans
@@ -192,13 +185,23 @@ func customSourceHost() -> String? {
 
 /// Ordre complet des sources : celles de `saved` connues, sans doublon ;
 /// une source qui manque va juste après celle qu'elle secourt, sinon à la
-/// fin, dans l'ordre automatique. Ma source reste tant qu'elle est réglée.
+/// fin, dans l'ordre automatique. Ma source (« custom ») et Mon proxy
+/// (« proxy », LiveProxy), hors de kLiveSourceChoices, restent tant qu'ils
+/// sont réglés ; Mon proxy réglé mais absent de `saved` (ordre venu d'une
+/// sauvegarde sans lui) va en tête, comme à son ajout. Un ordre qui contient
+/// un proxy retiré reprend l'ordre automatique (Ma source et Mon proxy
+/// gardés, en tête).
 func completeLiveSourceOrder(_ saved: [String]) -> [String] {
+    let mine: Set<String> = ["custom", "proxy"]
+    let saved = saved.contains(where: kRetiredLiveSources.contains) ? saved.filter { mine.contains($0) } : saved
     var order: [String] = []
     let custom = customSourceHost() != nil
-    for id in saved where (kLiveSources.contains(id) || (custom && id == "custom")) && !order.contains(id) {
+    let proxy = LiveProxy.isConfigured
+    for id in saved where !order.contains(id)
+        && (kLiveSources.contains(id) || (custom && id == "custom") || (proxy && id == "proxy")) {
         order.append(id)
     }
+    if proxy && !order.contains("proxy") { order.insert("proxy", at: 0) }
     for id in kLiveSources where !order.contains(id) {
         if let parent = kLiveSourceBackupOf[id], let i = order.firstIndex(of: parent) {
             order.insert(id, at: i + 1)
@@ -653,6 +656,21 @@ private let translations: [Lang: [String: String]] = [
         "chat_height_bottom": "En bas",
         "cfg_edge_swipe": "Fermer en glissant depuis le bord",
         "cfg_edge_swipe_sub": "Glisse depuis le bord gauche de l'écran pour fermer le lecteur, comme avec ✕.",
+        "cfg_live_dtap": "Double appui en direct : ±10 s",
+        "cfg_live_dtap_sub": "Un double appui à gauche ou à droite de l'image recule ou avance de 10 s, comme sur une VOD, au lieu d'afficher ou de masquer le chat.",
+        "chat_identity": "Identité dans le chat",
+        "chat_identity_sub": "Le badge à côté de ton nom, partout ou sur une chaîne",
+        "chat_identity_web": "Demande la session web (Réglages → Compte Twitch).",
+        "chat_identity_empty": "Aucun badge global sur ce compte.",
+        "chat_identity_load_failed": "Impossible de lire tes badges.",
+        "chat_identity_failed": "Twitch a refusé le changement. Réessaie dans un instant.",
+        "chat_identity_footer": "Comme sur twitch.tv : le badge choisi s'affiche dans tous les chats, sur Twitch aussi.",
+        "chat_identity_global": "Badge global",
+        "chat_identity_channel": "Badge sur {c}",
+        "chat_identity_channel_any": "Badge d'une chaîne",
+        "chat_identity_channel_hint": "Lance une chaîne (le lecteur peut rester réduit), puis reviens ici pour choisir son badge.",
+        "chat_identity_channel_footer": "Abonnement, bits… Il remplace le badge global sur cette chaîne, sur Twitch aussi.",
+        "chat_identity_channel_empty": "Aucun badge pour cette chaîne (ni abonnement ni bits ici).",
         "reset_defaults": "Rétablir les valeurs par défaut",
         "vlc_player": "Lecteur VLC",
         "vlc_player_sub": "Contrôles maison : double-tap ±10s, rembobinage live. (pas de PiP)",
@@ -777,6 +795,7 @@ private let translations: [Lang: [String: String]] = [
         "cfg_sync_settings_sub": "Chat, langue du top, vitesse des VODs, personnalisation, chaînes épinglées et masquées : les mêmes sur le site et sur tes appareils connectés à ce compte. La langue, la qualité, les notifications et l'apparence restent propres à chaque appareil.",
         "vod_muted_here": "Son coupé par Twitch (musique protégée)",
         "vod_muted_skip": "Passer",
+        "vod_no_sound": "Cette VOD n’a pas de son chez Twitch",
         "vod_unmuted": "Son d'origine rétabli sur les passages coupés",
         "restore_muted": "Rétablir le son des passages coupés",
         "restore_muted_sub": "Twitch coupe le son des passages avec de la musique protégée. Un jour ou deux après le live, l'original est encore disponible : l'app le remet quand elle peut. Sans effet sur AirPlay.",
@@ -793,6 +812,12 @@ private let translations: [Lang: [String: String]] = [
         "q_auto": "Auto (selon le débit)",
         "q_same_wifi": "Comme en Wi-Fi",
         "slow_network_quality": "Connexion lente : qualité automatique",
+        "multi_audio_only": "Son seul",
+        "multi_audio_only_off": "Remettre l'image",
+        "multi_audio_only_sub": "Moins de données et de batterie",
+        "cfg_chat_overlay_drag": "Dans le lecteur, fais glisser la poignée en haut du chat : il se pose dans le coin ou sur le bord le plus proche.",
+        "cfg_player_swipes": "Volume et luminosité en glissant",
+        "cfg_player_swipes_sub": "En paysage, dans le lecteur immersif : glisse vers le haut ou le bas sur le tiers droit de l'image pour le volume, sur le tiers gauche pour la luminosité. Au milieu, glisser vers le bas réduit toujours le lecteur.",
         "q_source": "Source (originale)",
         "q_audio": "Audio seul",
         "src_up": "Monter",
@@ -801,18 +826,58 @@ private let translations: [Lang: [String: String]] = [
         "src_custom": "Ma source",
         "src_custom_sub": "Adresse de ton propre serveur luminous-ttv (https://…) : il prend place en tête de l'ordre ci-dessus. Vide : pas de source perso.",
         "src_custom_bad": "Adresse refusée : https://, un nom de domaine, sans port ni paramètres.",
+        "src_proxy": "Mon proxy",
+        "src_proxy_sub": "Ton propre proxy HTTP (hôte:port, par exemple un proxy de TTV LOL PRO) : le jeton de lecture et les playlists du direct passent par lui, la vidéo reste lue chez Twitch. Il prend place en tête de l'ordre ci-dessus ; s'il ne répond pas, la source suivante prend le relais. Le mot de passe reste dans le trousseau de l'appareil, hors de la sauvegarde. Vide : pas de proxy.",
+        "src_proxy_bad": "Adresse refusée : hôte:port (port de 1 à 65535), sans https:// ni chemin.",
+        "src_proxy_user": "Identifiant (facultatif)",
+        "src_proxy_password": "Mot de passe (facultatif)",
+        "src_proxy_test": "Tester le proxy",
+        "src_proxy_ok": "Proxy OK : Twitch répond par lui.",
+        "src_proxy_unreachable": "Proxy injoignable : vérifie l'hôte, le port et ta connexion.",
+        "src_proxy_auth": "Le proxy refuse l'accès (407) : vérifie l'identifiant et le mot de passe.",
+        "src_proxy_failed": "Twitch ne répond pas par ce proxy ({c}).",
         "native_tabs": "Onglets natifs (Liquid Glass)",
         "native_tabs_sub": "La barre d'onglets d'iOS 26 au lieu de celle de l'app : elle se replie quand tu défiles et le système la range selon l'écran (iPad, iPhone Duo). En test : signale ce qui cloche.",
         "src_auto": "Automatique",
-        "src_as": "Luminous Asie",
-        "src_al": "Proxy Albanie (TTV.LOL)",
-        "src_eu": "Luminous Europe",
-        "src_pp": "PerfProd Asie",
-        "src_al2": "Proxy Albanie 2",
-        "src_eu2": "Luminous Europe 2",
+        "src_bg": "Bulgarie (test)",
         "src_twitch": "Twitch officiel (pubs)",
         "src_worker": "Serveur TwitchUnblock",
         "chat_unreachable": "Le chat ne répond pas. Vérifie ta connexion (VPN, réseau filtré) ou touche « Reconnecter le chat » dans le menu du chat.",
+        "tvpair_title": "Connecter une TV LG",
+        "tvpair_sub": "Scanne le code affiché par l'app TwitchUnblock de ta TV : elle lira avec ton compte, sans connexion à faire sur la TV.",
+        "tvpair_needs_web": "Connecte d'abord la session web ci-dessus : c'est elle que la TV reçoit.",
+        "tvpair_scan_hint": "Ouvre TwitchUnblock sur ta TV LG et vise le QR code qu'elle affiche.",
+        "tvpair_not_tv_code": "Ce n'est pas un code de TV TwitchUnblock.",
+        "tvpair_bad_code": "Ce code de TV est incomplet ou abîmé. Affiche un nouveau code sur la TV.",
+        "tvpair_new_version": "Ce code vient d'une version plus récente de l'app TV : mets à jour TwitchUnblock sur l'iPhone.",
+        "tvpair_unknown_server": "Ce code envoie vers un serveur que l'app ne connaît pas ({h}) : rien n'est envoyé. Sur la TV, garde le serveur TwitchUnblock ou le même Worker personnel que sur l'iPhone.",
+        "tvpair_confirm_title": "Envoyer ta session Twitch à cette TV ?",
+        "tvpair_confirm_msg": "Elle pourra lire avec ton compte (abonnements sans pub, chaînes suivies). Ne scanne que le code affiché sur TA TV.",
+        "tvpair_send": "Envoyer",
+        "tvpair_sending": "Envoi à la TV…",
+        "tvpair_sent": "C'est envoyé : la TV se connecte à ton compte.",
+        "tvpair_used": "Ce code a déjà servi ou a expiré. Affiche un nouveau code sur la TV, puis scanne-le.",
+        "tvpair_invalid": "Le serveur refuse ce code (invalide). Affiche un nouveau code sur la TV.",
+        "tvpair_too_many": "Trop d'essais d'un coup : attends une minute, puis réessaie.",
+        "tvpair_server": "Le serveur ne répond pas comme prévu (HTTP {c}). Réessaie plus tard.",
+        "tvpair_network": "Pas de réponse du serveur. Vérifie ta connexion, puis réessaie.",
+        "tvpair_session_gone": "Ta session web n'est plus valable : reconnecte-la dans Paramètres → Compte Twitch, puis réessaie.",
+        "tvpair_rescan": "Scanner à nouveau",
+        "tvpair_done": "Terminé",
+        "tvpair_camera_denied": "L'accès à la caméra est coupé. Autorise-le dans les Réglages d'iOS pour scanner le code de la TV.",
+        "tvpair_open_settings": "Ouvrir les Réglages d'iOS",
+        "tvpair_camera_unavailable": "La caméra ne s'ouvre pas (absente, ou prise par une autre app).",
+        "hide_gift_subs": "Masquer les subs offerts",
+        "hide_gift_subs_sub": "« X a offert un sub à Y » : une ligne par personne, des dizaines d’un coup quand quelqu’un en offre en lot. Le message du lot reste.",
+        "vod_games_all": "Tous les jeux",
+        "transfer_send": "Envoyer mes réglages à {app}",
+        "transfer_sub": "Sans fichier : l’autre app s’ouvre et reprend tes chaînes, tes réglages et « Continuer à regarder » après ta confirmation.",
+        "transfer_failed": "{app} ne s’ouvre pas. Passe par Exporter puis Importer.",
+        "transfer_ask_title": "Importer les réglages de {app} ?",
+        "transfer_clip_msg": "Ils passent par le presse-papiers : iOS va te demander l’autorisation de coller.",
+        "transfer_clip_import": "Importer depuis le presse-papiers",
+        "transfer_clip_none": "Pas de réglages TwitchUnblock dans le presse-papiers (ou collage refusé). Renvoie-les depuis l’autre app.",
+        "transfer_bad": "Ces réglages sont illisibles. Renvoie-les depuis l’autre app, ou passe par Exporter puis Importer.",
         "src_account": "Ton compte (sans pub)",
         "src_account_toast": "Sans pub grâce à ton abonnement",
         "src_account_hq": "Ton compte (qualité supérieure)",
@@ -822,6 +887,7 @@ private let translations: [Lang: [String: String]] = [
         "sub_adfree": "Regarder sans pub avec mon abonnement",
         "sub_adfree_sub": "Si tu es abonné à la chaîne (ou Turbo), le direct passe par ton compte Twitch : plus de pauses pub, comme sur Twitch. Twitch voit alors ton compte regarder la chaîne. Nécessite la session web.",
         "sub_adfree_connect": "Connecter la session web",
+        "sub_adfree_hint": "Abonné à cette chaîne ? Connecte la session web (Paramètres → Lecteur vidéo) : le direct passera par ton compte, sans pause pub.",
         "ad_break_title": "Pause pub de la chaîne",
         "ad_break_sub": "Pause publicitaire Twitch. Reprise du direct estimée dans {n} s.",
         "ad_break_login_hint": "Abonné à cette chaîne ? Connecte la session web (Paramètres → Compte Twitch) pour regarder sans pub.",
@@ -964,6 +1030,17 @@ private let translations: [Lang: [String: String]] = [
         "pin_streamer": "Épingler en tête des suivis", "unpin_streamer": "Ne plus épingler",
         "hide_channel": "Masquer cette chaîne", "hide_category": "Masquer la catégorie « {c} »", "hide_this_category": "Masquer cette catégorie", "unhide": "Réafficher", "unhide_all": "Tout réafficher", "hidden_title": "Chaînes et catégories masquées",
         "hidden_sub": "Elles n'apparaissent plus dans le top ni dans les catégories. La recherche les trouve toujours, et ce que tu suis n'est jamais masqué.", "hidden_channels_n": "Chaînes ({n})", "hidden_categories_n": "Catégories ({n})", "hidden_empty": "Rien de masqué. Appui long sur un live ou une catégorie, puis « Masquer ».", "hidden_footer": "{n} masqué(s) ici · Gérer", "hidden_badge": "Masquée",
+        "hidden_tags": "Tags masqués",
+        "hidden_tags_sub": "Les lives qui portent un de ces tags sortent du top, des catégories et de la recherche. Séparés par des virgules.",
+        "hide_tag": "Masquer le tag « {t} »",
+        "channel_delay_title": "Délai de la chaîne",
+        "channel_delay_note": "Délai ajouté par la chaîne : environ {s} s (réglé par le streamer).",
+        "channel_delay_body": "Cette chaîne diffuse avec environ {s} s de délai, réglé par le streamer lui-même (contre le « stream sniping ») : ce retard ne vient pas de TwitchUnblock.",
+        "q_source_only": "Twitch ne propose que la qualité Source pour cette chaîne (elle n’est pas transcodée) : impossible de descendre plus bas. Si la vidéo saccade, prends « Audio seul ».",
+        "q_source_only_short": "Seulement la Source : Twitch ne transcode pas cette chaîne",
+        "bg_blocked_title": "Source Bulgarie bloquée",
+        "bg_blocked_body": "Elle semble bloquée sur ce réseau, souvent par un filtre DNS (NextDNS, AdGuard, Pi-hole…) qui bloque sslip.io : le direct passe par la source suivante. Autorise 2-58-32-226.sslip.io dans ton filtre pour la retrouver.",
+        "pip_lc_off": "Image dans l’image coupée : l’app tourne dans le mode multitâche de LiveContainer, où elle ne marche pas. En mode « une seule app », elle revient.",
         "multi_remove": "Retirer du multi-live",
         "multi_add_sub": "jusqu'à 4 directs ou VODs côte à côte",
         "multi_full": "4 vidéos au plus",
@@ -1444,6 +1521,21 @@ private let translations: [Lang: [String: String]] = [
         "chat_height_bottom": "Bottom",
         "cfg_edge_swipe": "Swipe from the edge to close",
         "cfg_edge_swipe_sub": "Swipe in from the left edge of the screen to close the player, like ✕.",
+        "cfg_live_dtap": "Double-tap ±10 s on lives",
+        "cfg_live_dtap_sub": "Double-tap the left or right of the picture to go back or forward 10 s, like on a VOD, instead of showing or hiding the chat.",
+        "chat_identity": "Chat identity",
+        "chat_identity_sub": "The badge next to your name, everywhere or on one channel",
+        "chat_identity_web": "Needs the web session (Settings → Twitch Account).",
+        "chat_identity_empty": "This account has no global badge.",
+        "chat_identity_load_failed": "Couldn't read your badges.",
+        "chat_identity_failed": "Twitch refused the change. Try again in a moment.",
+        "chat_identity_footer": "Like on twitch.tv: the badge you pick shows in every chat, on Twitch too.",
+        "chat_identity_global": "Global badge",
+        "chat_identity_channel": "Badge on {c}",
+        "chat_identity_channel_any": "Channel badge",
+        "chat_identity_channel_hint": "Start a channel (the player can stay minimized), then come back here to pick its badge.",
+        "chat_identity_channel_footer": "Subscription, bits… It replaces the global badge on this channel, on Twitch too.",
+        "chat_identity_channel_empty": "No badge for this channel (no subscription or bits here).",
         "reset_defaults": "Reset to defaults",
         "vlc_player": "VLC player",
         "vlc_player_sub": "Custom controls: double-tap ±10s, live rewind. (no PiP)",
@@ -1568,6 +1660,7 @@ private let translations: [Lang: [String: String]] = [
         "cfg_sync_settings_sub": "Chat, top streams language, VOD speed, customization, pinned and hidden channels: the same on the website and on your devices signed in to this account. Language, quality, notifications and appearance stay specific to each device.",
         "vod_muted_here": "Sound muted by Twitch (copyrighted music)",
         "vod_muted_skip": "Skip",
+        "vod_no_sound": "This VOD has no sound on Twitch",
         "vod_unmuted": "Original sound restored on muted parts",
         "restore_muted": "Restore muted sound",
         "restore_muted_sub": "Twitch mutes parts with copyrighted music. For a day or two after the stream the original is still available: the app puts it back when it can. No effect over AirPlay.",
@@ -1584,6 +1677,12 @@ private let translations: [Lang: [String: String]] = [
         "q_auto": "Auto (follows speed)",
         "q_same_wifi": "Same as Wi-Fi",
         "slow_network_quality": "Slow connection: automatic quality",
+        "multi_audio_only": "Audio only",
+        "multi_audio_only_off": "Bring the picture back",
+        "multi_audio_only_sub": "Uses less data and battery",
+        "cfg_chat_overlay_drag": "In the player, drag the handle at the top of the chat: it snaps to the nearest corner or edge.",
+        "cfg_player_swipes": "Volume and brightness by swiping",
+        "cfg_player_swipes_sub": "In landscape, in the immersive player: swipe up or down on the right third of the picture for the volume, on the left third for the brightness. In the middle, swiping down still minimizes the player.",
         "q_source": "Source (original)",
         "q_audio": "Audio only",
         "src_up": "Move up",
@@ -1592,18 +1691,58 @@ private let translations: [Lang: [String: String]] = [
         "src_custom": "My source",
         "src_custom_sub": "Address of your own luminous-ttv server (https://…): it goes to the top of the order above. Empty: no custom source.",
         "src_custom_bad": "Address refused: https://, a domain name, no port or parameters.",
+        "src_proxy": "My proxy",
+        "src_proxy_sub": "Your own HTTP proxy (host:port, e.g. a TTV LOL PRO proxy): the playback token and the stream's playlists go through it, the video itself still comes from Twitch. It goes to the top of the order above; if it doesn't answer, the next source takes over. The password stays in the device's keychain, not in the backup. Empty: no proxy.",
+        "src_proxy_bad": "Address refused: host:port (port 1 to 65535), no https:// or path.",
+        "src_proxy_user": "Username (optional)",
+        "src_proxy_password": "Password (optional)",
+        "src_proxy_test": "Test the proxy",
+        "src_proxy_ok": "Proxy OK: Twitch answers through it.",
+        "src_proxy_unreachable": "Proxy unreachable: check the host, the port and your connection.",
+        "src_proxy_auth": "The proxy refuses access (407): check the username and password.",
+        "src_proxy_failed": "Twitch doesn't answer through this proxy ({c}).",
         "native_tabs": "Native tabs (Liquid Glass)",
         "native_tabs_sub": "iOS 26's own tab bar instead of the app's: it shrinks while you scroll and the system places it for the screen (iPad, iPhone Duo). In testing: report what's off.",
         "src_auto": "Automatic",
-        "src_as": "Luminous Asia",
-        "src_al": "Albania proxy (TTV.LOL)",
-        "src_eu": "Luminous Europe",
-        "src_pp": "PerfProd Asia",
-        "src_al2": "Albania proxy 2",
-        "src_eu2": "Luminous Europe 2",
+        "src_bg": "Bulgaria (test)",
         "src_twitch": "Official Twitch (ads)",
         "src_worker": "TwitchUnblock server",
         "chat_unreachable": "The chat isn't responding. Check your connection (VPN, filtered network) or tap “Reconnect chat” in the chat menu.",
+        "tvpair_title": "Connect an LG TV",
+        "tvpair_sub": "Scan the code shown by the TwitchUnblock app on your TV: it will watch with your account, no sign-in needed on the TV.",
+        "tvpair_needs_web": "Connect the web session above first: that's what the TV receives.",
+        "tvpair_scan_hint": "Open TwitchUnblock on your LG TV and point at the QR code it shows.",
+        "tvpair_not_tv_code": "This isn't a TwitchUnblock TV code.",
+        "tvpair_bad_code": "This TV code is incomplete or damaged. Show a new code on the TV.",
+        "tvpair_new_version": "This code comes from a newer version of the TV app: update TwitchUnblock on your iPhone.",
+        "tvpair_unknown_server": "This code points to a server the app doesn't know ({h}): nothing was sent. On the TV, keep the TwitchUnblock server or the same personal Worker as on your iPhone.",
+        "tvpair_confirm_title": "Send your Twitch session to this TV?",
+        "tvpair_confirm_msg": "It will be able to watch with your account (ad-free subs, followed channels). Only scan the code shown on YOUR TV.",
+        "tvpair_send": "Send",
+        "tvpair_sending": "Sending to the TV…",
+        "tvpair_sent": "Sent: the TV is signing in to your account.",
+        "tvpair_used": "This code was already used or has expired. Show a new code on the TV, then scan it.",
+        "tvpair_invalid": "The server rejected this code (invalid). Show a new code on the TV.",
+        "tvpair_too_many": "Too many attempts at once: wait a minute, then try again.",
+        "tvpair_server": "The server didn't answer as expected (HTTP {c}). Try again later.",
+        "tvpair_network": "No answer from the server. Check your connection, then try again.",
+        "tvpair_session_gone": "Your web session is no longer valid: reconnect it in Settings → Twitch Account, then try again.",
+        "tvpair_rescan": "Scan again",
+        "tvpair_done": "Done",
+        "tvpair_camera_denied": "Camera access is turned off. Allow it in iOS Settings to scan the TV's code.",
+        "tvpair_open_settings": "Open iOS Settings",
+        "tvpair_camera_unavailable": "The camera won't open (missing, or in use by another app).",
+        "hide_gift_subs": "Hide gifted subs",
+        "hide_gift_subs_sub": "“X gifted a sub to Y”: one line per person, dozens at once when someone gifts a batch. The batch message stays.",
+        "vod_games_all": "All games",
+        "transfer_send": "Send my settings to {app}",
+        "transfer_sub": "No file needed: the other app opens and takes your channels, settings and Continue watching once you confirm.",
+        "transfer_failed": "{app} doesn’t open. Use Export, then Import.",
+        "transfer_ask_title": "Import settings from {app}?",
+        "transfer_clip_msg": "They come through the clipboard: iOS will ask for permission to paste.",
+        "transfer_clip_import": "Import from clipboard",
+        "transfer_clip_none": "No TwitchUnblock settings in the clipboard (or pasting was denied). Send them again from the other app.",
+        "transfer_bad": "These settings can’t be read. Send them again from the other app, or use Export, then Import.",
         "src_account": "Your account (ad-free)",
         "src_account_toast": "Ad-free thanks to your sub",
         "src_account_hq": "Your account (higher quality)",
@@ -1613,6 +1752,7 @@ private let translations: [Lang: [String: String]] = [
         "sub_adfree": "Watch ad-free with my sub",
         "sub_adfree_sub": "If you're subscribed to the channel (or have Turbo), the stream goes through your Twitch account: no ad breaks, just like on Twitch. Twitch then sees your account watching. Needs the web session.",
         "sub_adfree_connect": "Connect the web session",
+        "sub_adfree_hint": "Subscribed to this channel? Connect the web session (Settings → Video player): the stream will go through your account, without ad breaks.",
         "ad_break_title": "Channel ad break",
         "ad_break_sub": "Twitch ad break. The stream is expected back in {n}s.",
         "ad_break_login_hint": "Subscribed to this channel? Connect the web session (Settings → Twitch Account) to watch ad-free.",
@@ -1755,6 +1895,17 @@ private let translations: [Lang: [String: String]] = [
         "pin_streamer": "Pin to the top of Following", "unpin_streamer": "Unpin",
         "hide_channel": "Hide this channel", "hide_category": "Hide the “{c}” category", "hide_this_category": "Hide this category", "unhide": "Show again", "unhide_all": "Show all again", "hidden_title": "Hidden channels and categories",
         "hidden_sub": "They no longer show up in Top or in categories. Search still finds them, and what you follow is never hidden.", "hidden_channels_n": "Channels ({n})", "hidden_categories_n": "Categories ({n})", "hidden_empty": "Nothing hidden. Long-press a stream or a category, then “Hide”.", "hidden_footer": "{n} hidden here · Manage", "hidden_badge": "Hidden",
+        "hidden_tags": "Hidden tags",
+        "hidden_tags_sub": "Streams with one of these tags leave Top, categories and search. Separate them with commas.",
+        "hide_tag": "Hide the “{t}” tag",
+        "channel_delay_title": "Channel delay",
+        "channel_delay_note": "Delay added by the channel: about {s} s (set by the streamer).",
+        "channel_delay_body": "This channel streams with about {s} s of delay, set by the streamer themselves (against stream sniping): the lag doesn’t come from TwitchUnblock.",
+        "q_source_only": "Twitch only offers the Source quality for this channel (it isn’t transcoded), so there’s nothing lower. If the video stutters, pick “Audio only”.",
+        "q_source_only_short": "Source only: Twitch doesn’t transcode this channel",
+        "bg_blocked_title": "Bulgaria source blocked",
+        "bg_blocked_body": "It seems blocked on this network, often by a DNS filter (NextDNS, AdGuard, Pi-hole…) blocking sslip.io: the live uses the next source. Allow 2-58-32-226.sslip.io in your filter to get it back.",
+        "pip_lc_off": "Picture in Picture is off: the app runs in LiveContainer’s multitasking mode, where it doesn’t work. It comes back in single-app mode.",
         "multi_remove": "Remove from multi-live",
         "multi_add_sub": "up to 4 streams or VODs side by side",
         "multi_full": "4 videos at most",
@@ -2235,6 +2386,21 @@ private let translations: [Lang: [String: String]] = [
         "chat_height_bottom": "Abajo",
         "cfg_edge_swipe": "Cerrar deslizando desde el borde",
         "cfg_edge_swipe_sub": "Desliza desde el borde izquierdo de la pantalla para cerrar el reproductor, como con ✕.",
+        "cfg_live_dtap": "Doble toque ±10 s en directo",
+        "cfg_live_dtap_sub": "Toca dos veces a la izquierda o a la derecha de la imagen para retroceder o avanzar 10 s, como en un VOD, en lugar de mostrar u ocultar el chat.",
+        "chat_identity": "Identidad en el chat",
+        "chat_identity_sub": "La insignia junto a tu nombre, en todas partes o en un canal",
+        "chat_identity_web": "Necesita la sesión web (Ajustes → Cuenta de Twitch).",
+        "chat_identity_empty": "Esta cuenta no tiene insignias globales.",
+        "chat_identity_load_failed": "No se pudieron leer tus insignias.",
+        "chat_identity_failed": "Twitch rechazó el cambio. Vuelve a intentarlo en un momento.",
+        "chat_identity_footer": "Como en twitch.tv: la insignia elegida aparece en todos los chats, también en Twitch.",
+        "chat_identity_global": "Insignia global",
+        "chat_identity_channel": "Insignia en {c}",
+        "chat_identity_channel_any": "Insignia de un canal",
+        "chat_identity_channel_hint": "Abre un canal (el reproductor puede quedarse minimizado) y vuelve aquí para elegir su insignia.",
+        "chat_identity_channel_footer": "Suscripción, bits… Sustituye a la insignia global en este canal, también en Twitch.",
+        "chat_identity_channel_empty": "Ninguna insignia para este canal (sin suscripción ni bits aquí).",
         "reset_defaults": "Restablecer valores por defecto",
         "vlc_player": "Reproductor VLC",
         "vlc_player_sub": "Controles propios: doble toque ±10s, rebobinar directo. (sin PiP)",
@@ -2359,6 +2525,7 @@ private let translations: [Lang: [String: String]] = [
         "cfg_sync_settings_sub": "Chat, idioma del top, velocidad de los VODs, personalización, canales fijados y ocultos: los mismos en el sitio y en tus dispositivos con esta cuenta. El idioma, la calidad, las notificaciones y la apariencia siguen siendo propios de cada dispositivo.",
         "vod_muted_here": "Sonido silenciado por Twitch (música protegida)",
         "vod_muted_skip": "Saltar",
+        "vod_no_sound": "Este VOD no tiene sonido en Twitch",
         "vod_unmuted": "Sonido original restaurado en las partes silenciadas",
         "restore_muted": "Restaurar el sonido silenciado",
         "restore_muted_sub": "Twitch silencia las partes con música protegida. Uno o dos días después del directo, el original aún está disponible: la app lo restaura cuando puede. Sin efecto por AirPlay.",
@@ -2375,6 +2542,12 @@ private let translations: [Lang: [String: String]] = [
         "q_auto": "Auto (según la velocidad)",
         "q_same_wifi": "Igual que en Wi-Fi",
         "slow_network_quality": "Conexión lenta: calidad automática",
+        "multi_audio_only": "Solo audio",
+        "multi_audio_only_off": "Volver a la imagen",
+        "multi_audio_only_sub": "Gasta menos datos y batería",
+        "cfg_chat_overlay_drag": "En el reproductor, arrastra el asa de la parte superior del chat: se coloca en la esquina o el borde más cercanos.",
+        "cfg_player_swipes": "Volumen y brillo deslizando",
+        "cfg_player_swipes_sub": "En horizontal, en el reproductor inmersivo: desliza hacia arriba o hacia abajo en el tercio derecho de la imagen para el volumen y en el tercio izquierdo para el brillo. En el centro, deslizar hacia abajo sigue minimizando el reproductor.",
         "q_source": "Source (original)",
         "q_audio": "Solo audio",
         "src_up": "Subir",
@@ -2383,18 +2556,58 @@ private let translations: [Lang: [String: String]] = [
         "src_custom": "Mi fuente",
         "src_custom_sub": "Dirección de tu propio servidor luminous-ttv (https://…): se coloca al principio del orden de arriba. Vacío: sin fuente propia.",
         "src_custom_bad": "Dirección rechazada: https://, un nombre de dominio, sin puerto ni parámetros.",
+        "src_proxy": "Mi proxy",
+        "src_proxy_sub": "Tu propio proxy HTTP (host:puerto, por ejemplo un proxy de TTV LOL PRO): el token de reproducción y las listas del directo pasan por él, el vídeo se sigue leyendo desde Twitch. Se coloca al principio del orden de arriba; si no responde, la siguiente fuente toma el relevo. La contraseña se queda en el llavero del dispositivo, fuera de la copia de seguridad. Vacío: sin proxy.",
+        "src_proxy_bad": "Dirección rechazada: host:puerto (puerto de 1 a 65535), sin https:// ni ruta.",
+        "src_proxy_user": "Usuario (opcional)",
+        "src_proxy_password": "Contraseña (opcional)",
+        "src_proxy_test": "Probar el proxy",
+        "src_proxy_ok": "Proxy OK: Twitch responde a través de él.",
+        "src_proxy_unreachable": "Proxy inaccesible: revisa el host, el puerto y tu conexión.",
+        "src_proxy_auth": "El proxy rechaza el acceso (407): revisa el usuario y la contraseña.",
+        "src_proxy_failed": "Twitch no responde a través de este proxy ({c}).",
         "native_tabs": "Pestañas nativas (Liquid Glass)",
         "native_tabs_sub": "La barra de pestañas de iOS 26 en lugar de la de la app: se reduce al desplazarte y el sistema la coloca según la pantalla (iPad, iPhone Duo). En pruebas: avisa de lo que falle.",
         "src_auto": "Automática",
-        "src_as": "Luminous Asia",
-        "src_al": "Proxy de Albania (TTV.LOL)",
-        "src_eu": "Luminous Europa",
-        "src_pp": "PerfProd Asia",
-        "src_al2": "Proxy de Albania 2",
-        "src_eu2": "Luminous Europa 2",
+        "src_bg": "Bulgaria (prueba)",
         "src_twitch": "Twitch oficial (anuncios)",
         "src_worker": "Servidor de TwitchUnblock",
         "chat_unreachable": "El chat no responde. Revisa tu conexión (VPN, red filtrada) o toca «Reconectar el chat» en el menú del chat.",
+        "tvpair_title": "Conectar una TV LG",
+        "tvpair_sub": "Escanea el código que muestra la app TwitchUnblock de tu TV: verá con tu cuenta, sin iniciar sesión en la TV.",
+        "tvpair_needs_web": "Primero conecta la sesión web de arriba: es lo que recibe la TV.",
+        "tvpair_scan_hint": "Abre TwitchUnblock en tu TV LG y apunta al código QR que muestra.",
+        "tvpair_not_tv_code": "Esto no es un código de TV de TwitchUnblock.",
+        "tvpair_bad_code": "Este código de TV está incompleto o dañado. Muestra un código nuevo en la TV.",
+        "tvpair_new_version": "Este código viene de una versión más reciente de la app de TV: actualiza TwitchUnblock en el iPhone.",
+        "tvpair_unknown_server": "Este código apunta a un servidor que la app no conoce ({h}): no se envió nada. En la TV, deja el servidor de TwitchUnblock o el mismo Worker personal que en el iPhone.",
+        "tvpair_confirm_title": "¿Enviar tu sesión de Twitch a esta TV?",
+        "tvpair_confirm_msg": "Podrá ver con tu cuenta (suscripciones sin anuncios, canales seguidos). Escanea solo el código que aparece en TU TV.",
+        "tvpair_send": "Enviar",
+        "tvpair_sending": "Enviando a la TV…",
+        "tvpair_sent": "Enviado: la TV está iniciando sesión con tu cuenta.",
+        "tvpair_used": "Este código ya se usó o caducó. Muestra un código nuevo en la TV y escanéalo.",
+        "tvpair_invalid": "El servidor rechazó este código (no válido). Muestra un código nuevo en la TV.",
+        "tvpair_too_many": "Demasiados intentos seguidos: espera un minuto y vuelve a intentarlo.",
+        "tvpair_server": "El servidor no respondió como se esperaba (HTTP {c}). Inténtalo más tarde.",
+        "tvpair_network": "El servidor no responde. Revisa tu conexión y vuelve a intentarlo.",
+        "tvpair_session_gone": "Tu sesión web ya no es válida: vuelve a conectarla en Ajustes → Cuenta de Twitch y vuelve a intentarlo.",
+        "tvpair_rescan": "Escanear de nuevo",
+        "tvpair_done": "Listo",
+        "tvpair_camera_denied": "El acceso a la cámara está desactivado. Permítelo en los Ajustes de iOS para escanear el código de la TV.",
+        "tvpair_open_settings": "Abrir los Ajustes de iOS",
+        "tvpair_camera_unavailable": "La cámara no se abre (no hay, o la está usando otra app).",
+        "hide_gift_subs": "Ocultar suscripciones regaladas",
+        "hide_gift_subs_sub": "«X regaló una suscripción a Y»: una línea por persona, decenas de golpe cuando alguien regala un lote. El mensaje del lote se queda.",
+        "vod_games_all": "Todos los juegos",
+        "transfer_send": "Enviar mis ajustes a {app}",
+        "transfer_sub": "Sin archivo: la otra app se abre y recupera tus canales, tus ajustes y «Seguir viendo» cuando confirmes.",
+        "transfer_failed": "{app} no se abre. Usa Exportar y luego Importar.",
+        "transfer_ask_title": "¿Importar los ajustes de {app}?",
+        "transfer_clip_msg": "Pasan por el portapapeles: iOS te pedirá permiso para pegar.",
+        "transfer_clip_import": "Importar desde el portapapeles",
+        "transfer_clip_none": "No hay ajustes de TwitchUnblock en el portapapeles (o se denegó pegar). Vuelve a enviarlos desde la otra app.",
+        "transfer_bad": "No se pueden leer estos ajustes. Vuelve a enviarlos desde la otra app, o usa Exportar y luego Importar.",
         "src_account": "Tu cuenta (sin anuncios)",
         "src_account_toast": "Sin anuncios gracias a tu suscripción",
         "src_account_hq": "Tu cuenta (calidad superior)",
@@ -2404,6 +2617,7 @@ private let translations: [Lang: [String: String]] = [
         "sub_adfree": "Ver sin anuncios con mi suscripción",
         "sub_adfree_sub": "Si estás suscrito al canal (o tienes Turbo), el directo pasa por tu cuenta de Twitch: sin pausas publicitarias, como en Twitch. Twitch verá que tu cuenta lo está viendo. Requiere la sesión web.",
         "sub_adfree_connect": "Conectar la sesión web",
+        "sub_adfree_hint": "¿Suscrito a este canal? Conecta la sesión web (Ajustes → Reproductor de vídeo): el directo pasará por tu cuenta, sin pausas publicitarias.",
         "ad_break_title": "Pausa publicitaria del canal",
         "ad_break_sub": "Pausa publicitaria de Twitch. El directo volverá aproximadamente en {n} s.",
         "ad_break_login_hint": "¿Suscrito a este canal? Conecta la sesión web (Ajustes → Cuenta de Twitch) para verlo sin anuncios.",
@@ -2546,6 +2760,17 @@ private let translations: [Lang: [String: String]] = [
         "pin_streamer": "Fijar arriba en Seguidos", "unpin_streamer": "Dejar de fijar",
         "hide_channel": "Ocultar este canal", "hide_category": "Ocultar la categoría «{c}»", "hide_this_category": "Ocultar esta categoría", "unhide": "Volver a mostrar", "unhide_all": "Volver a mostrar todo", "hidden_title": "Canales y categorías ocultos",
         "hidden_sub": "Ya no aparecen en el top ni en las categorías. La búsqueda los sigue encontrando, y lo que sigues nunca se oculta.", "hidden_channels_n": "Canales ({n})", "hidden_categories_n": "Categorías ({n})", "hidden_empty": "Nada oculto. Mantén pulsado un directo o una categoría y elige «Ocultar».", "hidden_footer": "{n} oculto(s) aquí · Gestionar", "hidden_badge": "Fuera de las listas",
+        "hidden_tags": "Etiquetas ocultas",
+        "hidden_tags_sub": "Los directos con una de estas etiquetas salen del top, de las categorías y de la búsqueda. Sepáralas con comas.",
+        "hide_tag": "Ocultar la etiqueta «{t}»",
+        "channel_delay_title": "Retraso del canal",
+        "channel_delay_note": "Retraso añadido por el canal: unos {s} s (lo pone el streamer).",
+        "channel_delay_body": "Este canal emite con unos {s} s de retraso, puesto por el propio streamer (contra el stream sniping): ese retraso no viene de TwitchUnblock.",
+        "q_source_only": "Twitch solo ofrece la calidad Source para este canal (no se transcodifica): no hay calidades más bajas. Si el vídeo se corta, elige «Solo audio».",
+        "q_source_only_short": "Solo Source: Twitch no transcodifica este canal",
+        "bg_blocked_title": "Fuente Bulgaria bloqueada",
+        "bg_blocked_body": "Parece bloqueada en esta red, a menudo por un filtro DNS (NextDNS, AdGuard, Pi-hole…) que bloquea sslip.io: el directo usa la siguiente fuente. Permite 2-58-32-226.sslip.io en tu filtro para recuperarla.",
+        "pip_lc_off": "Imagen en imagen desactivada: la app se ejecuta en el modo multitarea de LiveContainer, donde no funciona. Vuelve en el modo de una sola app.",
         "multi_remove": "Quitar del multi-live",
         "multi_add_sub": "hasta 4 directos o VODs lado a lado",
         "multi_full": "4 vídeos como máximo",

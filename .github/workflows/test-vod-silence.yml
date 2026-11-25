@@ -1,0 +1,27 @@
+name: VOD silence probe tests
+
+on:
+  pull_request:
+    paths:
+      - 'Sources/Services/VodSilence.swift'
+      - 'Tests/VodSilenceTests.swift'
+      - 'tools/test-vod-silence.sh'
+      - '.github/workflows/test-vod-silence.yml'
+  push:
+    paths:
+      - 'Sources/Services/VodSilence.swift'
+      - 'Tests/VodSilenceTests.swift'
+      - 'tools/test-vod-silence.sh'
+      - '.github/workflows/test-vod-silence.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run the silence probe checks
+        run: sh tools/test-vod-silence.sh

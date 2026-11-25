@@ -204,12 +204,15 @@ struct CategoriesView: View {
         // Session web partie ou changée : les catégories suivies sur Twitch
         // ne sont plus celles de ce compte (elles restaient affichées).
         .onChange(of: store.twitchWebToken) { _ in Task { await loadFollowed() } }
+        // Autre compte (ou déconnexion) sans session web : ses catégories à lui.
+        .onChange(of: store.twitchLogin) { _ in Task { await loadFollowed() } }
         .sheet(isPresented: $showHidden) {
             HiddenContentSheet().environmentObject(store)
         }
     }
 
-    /// Catégories suivies : Twitch (si session web) + appareil, avec audience.
+    /// Catégories suivies : Twitch (avec la session web, sinon lues par le
+    /// pseudo du compte) + appareil, avec audience.
     @MainActor private func loadFollowed() async {
         if let web = store.twitchWebToken {
             if twitchFollowed.isEmpty { loadingFollowed = true }
@@ -224,8 +227,22 @@ struct CategoriesView: View {
                 }
                 loadingFollowed = false
             }
+        } else if let login = store.twitchLogin {
+            // Connecté sans session web : celles du compte quand même,
+            // publiques, lues par son pseudo (avant : seulement l'appareil).
+            if twitchFollowed.isEmpty { loadingFollowed = true }
+            let list = await getFollowedCategoriesPublic(login: login)
+            // Session web arrivée, ou autre compte, pendant la lecture : la
+            // lecture suivante conclut.
+            if store.twitchWebToken == nil, store.twitchLogin == login {
+                if let list {
+                    twitchFollowed = list
+                    store.accountFollowedCategoryIds = Set(list.map(\.id))
+                }
+                loadingFollowed = false
+            }
         } else {
-            // Plus de session web : rien n'est suivi sur Twitch ici.
+            // Ni session web ni compte : rien n'est suivi sur Twitch ici.
             twitchFollowed = []
             loadingFollowed = false
         }
@@ -247,7 +264,8 @@ struct CategoriesView: View {
         } else if list.isEmpty {
             PullToReload(reload: { await loadFollowed() }) {
                 TEmptyState(icon: "heart", title: store.t("cat_followed_empty"),
-                            message: store.t(store.twitchWebToken == nil ? "cat_followed_empty_msg_local" : "cat_followed_empty_msg"))
+                            message: store.t(store.twitchWebToken == nil && store.twitchLogin == nil
+                                                 ? "cat_followed_empty_msg_local" : "cat_followed_empty_msg"))
             }
         } else {
             let compact = store.customization.compactFollowedCategories
@@ -524,6 +542,8 @@ struct CategoryStreamsView: View {
     @State private var showHidden = false
     /// Suivi Twitch retiré depuis cette page.
     @State private var leftOnTwitch = false
+    /// Suivie sur Twitch depuis cette page (Suivre, session web connectée).
+    @State private var joinedOnTwitch = false
     @State private var confirmTwitchUnfollow = false
     @State private var unfollowBusy = false
     /// Twitch a refusé de la retirer (ou la session web manque).
@@ -540,7 +560,7 @@ struct CategoryStreamsView: View {
 
     /// Chaînes masquées écartées ; la catégorie, elle, reste consultable
     /// même masquée (on l'a ouverte exprès).
-    private var sorted: [TwitchStream] { sort.apply(streams.filter { store.showsChannel($0.userLogin) }) }
+    private var sorted: [TwitchStream] { sort.apply(streams.filter { store.showsCategoryStream($0) }) }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -663,10 +683,12 @@ struct CategoryStreamsView: View {
         !store.followsCategory(category.id) && store.hidden.hides(category: category.id)
     }
 
-    /// Suivre la catégorie (gardé sur cet appareil). Suivie sur Twitch : le
-    /// cœur est plein, et le toucher la retire de Twitch, après confirmation.
+    /// Suivre la catégorie : sur cet appareil, et aussi sur le compte Twitch
+    /// quand la session web est connectée (followOnTwitch). Suivie sur
+    /// Twitch : le cœur est plein, et le toucher la retire de Twitch (et de
+    /// l'appareil), après confirmation.
     @ViewBuilder private var followButton: some View {
-        let onTwitch = followedOnTwitch && !leftOnTwitch
+        let onTwitch = (followedOnTwitch && !leftOnTwitch) || joinedOnTwitch
         let on = onTwitch || store.isCategoryFollowed(category.id)
         Button {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
@@ -674,7 +696,9 @@ struct CategoryStreamsView: View {
                 confirmTwitchUnfollow = true
                 return
             }
+            let follows = !store.isCategoryFollowed(category.id)
             withAnimation(.easeInOut(duration: 0.15)) { store.toggleCategoryFollow(category) }
+            if follows { Task { await followOnTwitch() } }
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: on ? "heart.fill" : "heart")
@@ -712,9 +736,27 @@ struct CategoryStreamsView: View {
             return
         }
         leftOnTwitch = true
+        joinedOnTwitch = false
         store.accountFollowedCategoryIds.remove(category.id)
         if store.isCategoryFollowed(category.id) { store.toggleCategoryFollow(category) }
         onTwitchUnfollowed()
+    }
+
+    /// Suivie ici, session web connectée : aussi sur le compte Twitch, comme
+    /// le cœur de twitch.tv. Twitch refuse (jeton d'intégrité, session) : elle
+    /// reste suivie sur l'appareil, le journal le dit (followCategoryOnTwitch)
+    /// et rien ne bloque. Plus suivie ici quand Twitch répond (second
+    /// toucher) : retirée de Twitch aussi. Sans session : l'appareil seul.
+    @MainActor private func followOnTwitch() async {
+        guard let web = store.twitchWebToken, !web.isEmpty,
+              await followCategoryOnTwitch(gameId: category.id, token: web),
+              store.twitchWebToken == web else { return }
+        guard store.isCategoryFollowed(category.id) else {
+            _ = await unfollowCategoryOnTwitch(gameId: category.id, token: web)
+            return
+        }
+        joinedOnTwitch = true
+        store.accountFollowedCategoryIds.insert(category.id)
     }
 
     /// Masquer la catégorie (œil barré) ; rien si elle est suivie, ni si elle

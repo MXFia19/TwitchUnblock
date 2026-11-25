@@ -73,6 +73,31 @@ final class PlayerLayerUIView: UIView {
     func stopObserving() { geometry.stopObserving() }
 }
 
+/// Adresse interne d'un @pseudo de titre (voir titleWithMentions).
+fileprivate let titleMentionScheme = "tumention"
+
+/// Titre avec ses @pseudo en liens internes (`tumention://c/<pseudo>`), que
+/// la fiche du titre ouvre comme une chaîne. Pas d'adresse e-mail : il faut un
+/// blanc ou une ponctuation avant le @ ; un pseudo Twitch fait 3 à 25 signes.
+fileprivate func titleWithMentions(_ text: String) -> AttributedString {
+    guard let regex = try? NSRegularExpression(pattern: #"(?<![\w@])@([A-Za-z0-9_]{3,25})\b"#) else {
+        return AttributedString(text)
+    }
+    var out = AttributedString()
+    var last = text.startIndex
+    for m in regex.matches(in: text, range: NSRange(text.startIndex..., in: text)) {
+        guard let whole = Range(m.range, in: text), let name = Range(m.range(at: 1), in: text) else { continue }
+        out += AttributedString(String(text[last..<whole.lowerBound]))
+        var link = AttributedString(String(text[whole]))
+        link.link = URL(string: "\(titleMentionScheme)://c/\(text[name].lowercased())")
+        link.foregroundColor = .tPrimary
+        out += link
+        last = whole.upperBound
+    }
+    out += AttributedString(String(text[last...]))
+    return out
+}
+
 struct PlayerLayerView: UIViewRepresentable {
     let player: AVPlayer
     /// `resizeAspectFill` recadre pour occuper toute la surface : plus de bandes
@@ -85,6 +110,11 @@ struct PlayerLayerView: UIViewRepresentable {
         let v = PlayerLayerUIView()
         v.configure(player: player, fill: fill)
         v.backgroundColor = .black
+        // Surface d'affichage seulement : les gestes du lecteur sont ceux de
+        // SwiftUI, autour d'elle. Sous iOS 16, une fois le lecteur réduit
+        // (effacé, allowsHitTesting faux), elle prenait encore les touchers
+        // de tout l'écran (fb_mwens1m9).
+        v.isUserInteractionEnabled = false
         onLayer?(v.playerLayer)
         return v
     }
@@ -268,6 +298,8 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
     private var restoringUI = false
     private var lastCatchUp = Date.distantPast
     private var latency = LiveLatencyController()
+    /// Délai mis par la chaîne (ChannelDelay), annoncé quand il change.
+    private var channelDelay = 0
     private var sync = LiveSyncEstimator()
     private var diagnostics: LiveDiagnostics?
 
@@ -290,7 +322,8 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
     /// Lecteur qui a publié « À l'écoute » en dernier : la fermeture d'un
     /// ancien lecteur, arrivée après l'ouverture du suivant, effaçait ses
     /// infos (écran verrouillé et Centre de contrôle vides quelques secondes).
-    private static weak var nowPlayingOwner: ImmersivePlayerModel?
+    /// Lu aussi par le mini-lecteur (MainTabView), qui montre sa vidéo.
+    private(set) static weak var nowPlayingOwner: ImmersivePlayerModel?
 
     init(url: URL, isLive: Bool, savedTime: Double,
          onProgress: @escaping (Double) -> Void,
@@ -537,6 +570,8 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
         // Même modèle pour un changement de qualité ou une bascule direct ↔
         // enregistrement : la tenue du direct repart de zéro (recalage compris).
         latency.reset()
+        // Délai de la chaîne remesuré pour cette source (annoncé s'il change).
+        channelDelay = 0
         // Nouvelle source, lancée : plus de reprise en attente, ni de pause
         // voulue (l'appelant la remet s'il le faut).
         interruptions?.settle()
@@ -652,8 +687,10 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
         }
         // VOD lue telle quelle : un passage coupé listé « -unmuted.ts », que
         // le CDN refuse, l'arrête net. Relancée une fois au même endroit,
-        // réécrite sur l'appareil (une adresse déjà réécrite ne change plus :
-        // pas de seconde relance).
+        // réécrite sur l'appareil. En `tuunmute://` (passages coupés
+        // rétablis), un original sondé « servi » puis refusé (403) l'arrêtait
+        // à chaque essai : relancée sans les originaux (`tumuted://`). Une
+        // adresse `tumuted://` ne change plus : pas de seconde relance.
         if !isLive, let asset = item.asset as? AVURLAsset {
             let safe = VodUnmuteLoader.mutedSafe(asset.url)
             if safe != asset.url {
@@ -732,6 +769,11 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
         currentDate = item.currentDate()
         let total = isLive ? currentDate.map { Date().timeIntervalSince($0) } : nil
         onLatency(total)
+        // Délai mis par la chaîne : retard affiché moins distance au bord.
+        if isLive, endTime > position {
+            let d = ChannelDelay.seconds(total: total, behind: endTime - position)
+            if d != channelDelay { channelDelay = d; ChannelDelay.post(d) }
+        }
         // Retard sur le direct tel que le voient les autres spectateurs : c'est
         // lui qui sépare le chat de l'image (voir LiveSyncEstimator). Bornes
         // pas encore connues (rechargement, autre qualité) : rien d'envoyé —
@@ -770,7 +812,8 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
         latency.adjust(player: player, item: item, behind: endTime - position,
                        total: currentDate.map { Date().timeIntervalSince($0) },
                        enabled: lowLatency && isLive && isPlaying && endTime > position,
-                       settled: Date().timeIntervalSince(lastCatchUp) > 4)
+                       settled: Date().timeIntervalSince(lastCatchUp) > 4,
+                       catchingUp: liveCatchUpActive)
     }
 
     /// Au bord du direct : à moins de 12 s, ou du recul que le flux
@@ -1123,6 +1166,9 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
 
     // MARK: PiP
     func attachPiP(layer: AVPlayerLayer) {
+        // Mode multitâche de LiveContainer : pas d'image dans l'image (elle n'y
+        // marche pas) — ni bouton, ni départ en quittant l'app ou le lecteur.
+        if HostEnvironment.pipBlocked { HostEnvironment.notePiPBlocked(); return }
         guard pip == nil, !tornDown, AVPictureInPictureController.isPictureInPictureSupported(),
               let p = AVPictureInPictureController(playerLayer: layer) else { return }
         p.delegate = self
@@ -1498,6 +1544,10 @@ struct ImmersivePlayer: View {
     /// barre ; et nombre de segments dont l'app a pu remettre le son.
     var mutedRanges: [MutedRange] = []
     var unmutedCount: Int = 0
+    /// VOD dont la piste audio est vide chez Twitch (VodSilence) : un avis le
+    /// dit, jusqu'à sa croix (`onDismissSilent`).
+    var silentVod = false
+    var onDismissSilent: () -> Void = {}
     /// Rembobinage au-delà de la fenêtre DVR : le direct ne sait pas y aller,
     /// on bascule sur l'enregistrement à ce nombre de secondes du début.
     var onSeekToArchive: (Double) -> Void = { _ in }
@@ -1605,6 +1655,9 @@ struct ImmersivePlayer: View {
     /// touchant le titre ; « Voir la chaîne » l'ouvre une fois la fiche fermée.
     @State private var showInfo = false
     @State private var channelAfterInfo = false
+    /// @pseudo touché dans le titre de la fiche : sa chaîne s'ouvre une fois
+    /// la fiche fermée, comme « Voir la chaîne ».
+    @State private var mentionAfterInfo: String? = nil
     /// Largeur de la bulle du temps visé, mesurée : elle la garde dans la barre
     /// près des bords.
     @State private var bubbleWidth: CGFloat = 0
@@ -1630,6 +1683,15 @@ struct ImmersivePlayer: View {
     /// contrôle, appel) : remis à faux dans onEnded seulement, il bloquait
     /// ensuite le glissé vers le bas.
     @GestureState private var pinching = false
+    /// Volume et luminosité au doigt (PlayerSwipes.swift) : le glissé en
+    /// cours sur un côté de l'image, l'indicateur affiché (son niveau vit
+    /// dans `swipeLevel`, observé par lui seul), le cadre de la boîte dans
+    /// l'écran, et l'effacement prévu de l'indicateur.
+    @State private var swipeAdjust: PlayerSwipeAdjust? = nil
+    @State private var swipeShown = false
+    @State private var swipeLevel = PlayerSwipeLevel()
+    @State private var swipeArea = PlayerSwipeArea()
+    @State private var swipeHideTask: Task<Void, Never>? = nil
     /// Relance prévue au retour du réseau (une seule à la fois).
     @State private var networkRetry: Task<Void, Never>? = nil
 
@@ -1653,6 +1715,8 @@ struct ImmersivePlayer: View {
          chapters: [VodChapter] = [],
          mutedRanges: [MutedRange] = [],
          unmutedCount: Int = 0,
+         silentVod: Bool = false,
+         onDismissSilent: @escaping () -> Void = {},
          nowPlaying: NowPlayingMeta = NowPlayingMeta(),
          speed: Double = 1,
          onSpeedChange: @escaping (Double) -> Void = { _ in },
@@ -1705,6 +1769,7 @@ struct ImmersivePlayer: View {
         self.vodStartedAt = vodStartedAt
         self.onSpeedRestore = onSpeedRestore
         self.mutedRanges = mutedRanges; self.unmutedCount = unmutedCount
+        self.silentVod = silentVod; self.onDismissSilent = onDismissSilent
         self.onReduce = onReduce; self.onClose = onClose
         self.onMenu = onMenu; self.onRefresh = onRefresh
         self.onToggleChat = onToggleChat; self.onSleep = onSleep
@@ -1814,11 +1879,12 @@ struct ImmersivePlayer: View {
             .ignoresSafeArea(isLandscape ? SafeAreaRegions.all : [],
                              edges: isLandscape && !croppingFill && !sideBleed ? .vertical : .all)
 
-            // Double-tap ±10 s, en VOD seulement. En direct, avancer n'a pas
-            // de sens (on est au bord, ou presque) : en paysage, le double-tap
+            // Double-tap ±10 s en VOD. En direct : en paysage, le double-tap
             // affiche ou masque le chat, et le bouton « Direct » des commandes
-            // ramène au bord après une pause ou un retard.
-            if !isLive {
+            // ramène au bord après une pause ou un retard. Avec le réglage
+            // « Double appui en direct : ±10 s » (liveDoubleTapSeek), ±10 s
+            // aussi, dans la fenêtre du direct (seek s'arrête avant le bord).
+            if !isLive || store.liveDoubleTapSeek {
                 HStack(spacing: 0) {
                     tapZone(.back)
                     tapZone(.forward)
@@ -1844,13 +1910,29 @@ struct ImmersivePlayer: View {
 
             if showControls { controls }
 
+            // Volume ou luminosité réglés au doigt : l'indicateur, centré sur
+            // la partie visible de l'image (à la place de ▶).
+            if swipeShown {
+                PlayerSwipeHUD(state: swipeLevel)
+                    .offset(x: centerShift, y: -controlsBottomInset / 2)
+                    .transition(.opacity)
+            }
+
             // Lecture arrêtée sur une erreur : on le dit, avec de quoi relancer
             // (le lecteur relit alors les liens). Visible commandes masquées.
             if model.failed { failureCard }
 
-            // Passage dont Twitch a coupé le son : on le dit (sinon on croit à
-            // une panne) et on propose de le sauter.
-            if let muted = currentMuted {
+            // VOD sans son chez Twitch (piste audio vide, toute la VOD) : on le
+            // dit, sinon on croit à une panne ; la croix le ferme.
+            if silentVod && !isLive {
+                silentNotice
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    .padding(.top, showControls ? 58 : TSpace.sm)
+                    .padding(controlsEdge, controlsInset)
+                    .transition(.opacity)
+            } else if let muted = currentMuted {
+                // Passage dont Twitch a coupé le son : on le dit (sinon on
+                // croit à une panne) et on propose de le sauter.
                 mutedNotice(muted)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                     .padding(.top, showControls ? 58 : TSpace.sm)
@@ -1872,6 +1954,20 @@ struct ImmersivePlayer: View {
         // l'image réellement affichée, y compris pendant un GAP publicitaire.
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.black)
+        // Volume et luminosité au doigt : le cadre de la boîte dans l'écran
+        // (côtés du geste), relevé sans rien redessiner, et le curseur caché
+        // du volume d'iOS. Seulement quand le réglage peut servir.
+        .overlay {
+            if swipesOn {
+                GeometryReader { geo in
+                    SystemVolumeHost()
+                        .frame(width: 1, height: 1)
+                        .onAppear { swipeArea.frame = geo.frame(in: .global) }
+                        .onChange(of: geo.frame(in: .global)) { swipeArea.frame = $0 }
+                }
+                .allowsHitTesting(false)
+            }
+        }
         // Pas de `clipped()` : il rognerait précisément le débordement que
         // « remplir l'écran » vient de demander. AVPlayerLayer borne déjà son
         // image à ses propres limites, y compris en `resizeAspectFill`.
@@ -1892,6 +1988,8 @@ struct ImmersivePlayer: View {
                 pulling = nil
                 PlayerPull.noteEnd()
                 pinch.drag = .zero
+                // Volume ou luminosité : la valeur atteinte reste.
+                endSwipe()
                 // Pincement interrompu avec lui (Centre de contrôle, appel) :
                 // sans onEnded, il se termine ici.
                 if pinch.start != nil, !pinching { finishPinch(showScale: false) }
@@ -2013,6 +2111,9 @@ struct ImmersivePlayer: View {
             // Retirée en plein glissé (relance, rotation) : ni onEnded ni fin
             // du geste, la garde des boutons ne doit pas rester levée.
             if pulling != nil { PlayerPull.noteEnd() }
+            // Ni le réglage du volume en cours (le curseur d'iOS se recache).
+            endSwipe()
+            swipeHideTask?.cancel()
             // Pas de retour au portrait ici : la vue disparaît aussi à chaque
             // relance (⟳, « Réessayer », raid suivi, VOD suivante), et le
             // lecteur suivant s'ouvrait en portrait malgré le paysage forcé.
@@ -2031,8 +2132,11 @@ struct ImmersivePlayer: View {
         }
         .sheet(isPresented: $showInfo, onDismiss: {
             let openChannel = channelAfterInfo
+            let mention = mentionAfterInfo
             channelAfterInfo = false
-            if openChannel { onChannel?() } else { scheduleAutoHide() }
+            mentionAfterInfo = nil
+            if let mention { store.openChannelPage(mention) }
+            else if openChannel { onChannel?() } else { scheduleAutoHide() }
         }) {
             infoSheet
         }
@@ -2043,11 +2147,21 @@ struct ImmersivePlayer: View {
         NavigationStack {
             List {
                 Section {
-                    Text(info.title.isEmpty ? info.channel : info.title)
+                    // Les @pseudo du titre (« playing with @test ») ouvrent leur
+                    // chaîne (carte de deputize7538, 22/11), comme sur le site.
+                    Text(titleWithMentions(info.title.isEmpty ? info.channel : info.title))
                         .font(.system(size: 17, weight: .semibold))
                         .foregroundColor(.tText)
                         .fixedSize(horizontal: false, vertical: true)
                         .textSelection(.enabled)
+                        .environment(\.openURL, OpenURLAction { url in
+                            guard url.scheme == titleMentionScheme else { return .systemAction }
+                            let login = url.lastPathComponent
+                            guard !login.isEmpty, login != "/" else { return .discarded }
+                            mentionAfterInfo = login
+                            showInfo = false
+                            return .handled
+                        })
                 }
                 .listRowBackground(Color.tCard)
                 if !info.game.isEmpty || info.viewers > 0 || !info.uptime.isEmpty || !info.date.isEmpty {
@@ -2172,7 +2286,7 @@ struct ImmersivePlayer: View {
             // restait que les bords. Pas de place au-dessus ni au-dessous : en
             // portrait, la boîte 16:9 ne laisse qu'une vingtaine de points entre
             // la barre du haut et le bouton, et quelques-uns sous lui.
-            if !model.failed, seekFlash == nil {
+            if !model.failed, seekFlash == nil, !swipeShown {
                 Button {
                     PlayerPull.guarded { model.togglePlay(); scheduleAutoHide() }
                 } label: {
@@ -2654,6 +2768,36 @@ struct ImmersivePlayer: View {
         .overlay(Capsule().stroke(Color.tWarning.opacity(0.6), lineWidth: 1))
     }
 
+    /// VOD dont la piste audio est vide chez Twitch : même pastille que les
+    /// passages coupés, avec une croix au lieu de « Passer ».
+    private var silentNotice: some View {
+        HStack(spacing: TSpace.sm) {
+            Image(systemName: "speaker.slash.fill").font(.system(size: 11, weight: .bold))
+            Text(store.t("vod_no_sound"))
+                .font(.system(size: 12, weight: .semibold))
+                .lineLimit(1)
+            Button {
+                PlayerPull.guarded {
+                    onDismissSilent()
+                    scheduleAutoHide()
+                }
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .bold))
+                    .frame(width: 24, height: 24)
+                    .background(Color.white.opacity(0.18))
+                    .clipShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(store.t("close"))
+        }
+        .foregroundColor(.white)
+        .padding(.leading, 11).padding(.trailing, 4).frame(height: 32)
+        .background(Color.black.opacity(0.62))
+        .clipShape(Capsule())
+        .overlay(Capsule().stroke(Color.tWarning.opacity(0.6), lineWidth: 1))
+    }
+
     /// Lecture arrêtée sur une erreur (ImmersivePlayerModel.failed) :
     /// « Réessayer » relit les liens, comme ⟳.
     private var failureCard: some View {
@@ -2684,9 +2828,10 @@ struct ImmersivePlayer: View {
     }
 
     /// Touchers du voile des commandes : mêmes zones que sur l'image (±10 s en
-    /// VOD, chat en paysage pendant un direct), voir `tap`.
+    /// VOD, ou en direct avec liveDoubleTapSeek ; sinon chat en paysage
+    /// pendant un direct), voir `tap`.
     @ViewBuilder private var controlsTapLayer: some View {
-        if !isLive {
+        if !isLive || store.liveDoubleTapSeek {
             HStack(spacing: 0) {
                 tapZone(.back)
                 tapZone(.forward)
@@ -2967,6 +3112,7 @@ struct ImmersivePlayer: View {
                 guard !dragging else {
                     if pulling == true { onPull(0) }
                     pulling = false
+                    endSwipe()
                     return
                 }
                 // Deux doigts : c'est un zoom, le lecteur reste en place, et
@@ -2974,6 +3120,7 @@ struct ImmersivePlayer: View {
                 if pinching {
                     if pulling == true { onPull(0) }
                     pulling = false
+                    endSwipe()
                     return
                 }
                 if zoom > 1 {
@@ -2983,6 +3130,19 @@ struct ImmersivePlayer: View {
                     if pulling == true { onPull(0); pulling = false }
                     pan = clampedPan(CGSize(width: panBase.width + value.translation.width,
                                             height: panBase.height + value.translation.height))
+                    return
+                }
+                // Réglage « Volume et luminosité en glissant », en paysage :
+                // parti d'un côté de l'image, un geste franchement vertical
+                // règle le volume (à droite) ou la luminosité (à gauche) ; de
+                // côté, rien. Le milieu garde le glissé vers le bas.
+                if pulling == nil, let kind = swipeKind(at: value.startLocation) {
+                    guard let vertical = PlayerSwipe.direction(for: value.translation) else { return }
+                    pulling = false
+                    if vertical { beginSwipe(kind) }
+                }
+                if swipeAdjust != nil {
+                    updateSwipe(value.translation)
                     return
                 }
                 // Taille normale : seul un geste qui part vers le bas compte ;
@@ -3003,6 +3163,13 @@ struct ImmersivePlayer: View {
                     PlayerPull.noteEnd()
                 }
                 pinch.drag = .zero
+                // Volume ou luminosité : la dernière valeur, puis l'indicateur
+                // s'efface.
+                if swipeAdjust != nil {
+                    updateSwipe(value.translation)
+                    endSwipe()
+                    return
+                }
                 if zoom > 1 {
                     if pulling == true { onPull(0) }
                     panBase = pan
@@ -3033,6 +3200,62 @@ struct ImmersivePlayer: View {
         }
         panBase = .zero
         pinch.start = nil
+    }
+
+    // MARK: – Volume et luminosité au doigt (PlayerSwipes.swift)
+    /// Réglage allumé, en paysage, pas sur Mac.
+    private var swipesOn: Bool { store.playerSwipes && PlayerSwipe.supported && isLandscape }
+
+    /// Ce que règle un geste parti de ce point (repère de l'écran) : tiers
+    /// droit de la partie visible de l'image, le volume ; tiers gauche, la
+    /// luminosité ; nil au milieu, ou réglage coupé.
+    private func swipeKind(at point: CGPoint) -> PlayerSwipe? {
+        guard swipesOn else { return nil }
+        var area = swipeArea.frame
+        // Chat posé sur l'image : il prend ses propres touchers, les tiers se
+        // comptent sur ce qu'il laisse voir.
+        if controlsInset > 0 {
+            area.size.width -= controlsInset
+            if controlsOnLeft { area.origin.x += controlsInset }
+        }
+        return PlayerSwipe.zone(at: point, in: area)
+    }
+
+    private func beginSwipe(_ kind: PlayerSwipe) {
+        let start = kind == .volume ? SystemVolume.current : ScreenBrightness.current
+        swipeAdjust = PlayerSwipeAdjust(kind: kind, start: start)
+        swipeLevel.show(kind, start)
+        if kind == .volume { SystemVolume.begin() }
+        swipeHideTask?.cancel()
+        withAnimation(.easeOut(duration: 0.15)) { swipeShown = true }
+    }
+
+    /// Vers le haut, plus fort ou plus clair ; vers le bas, l'inverse.
+    private func updateSwipe(_ translation: CGSize) {
+        guard let adjust = swipeAdjust else { return }
+        let travel = PlayerSwipe.travel(for: swipeArea.frame.height)
+        let value = min(1, max(0, adjust.start - translation.height / travel))
+        // Boutons du lecteur sous le doigt : rien au doigt levé (PlayerPull.guarded).
+        PlayerPull.noteMove(abs(translation.height))
+        swipeLevel.set(value)
+        switch adjust.kind {
+        case .volume:     SystemVolume.set(value)
+        case .brightness: ScreenBrightness.set(value)
+        }
+    }
+
+    /// Fin du geste, ou geste interrompu : la valeur atteinte reste,
+    /// l'indicateur s'efface peu après.
+    private func endSwipe() {
+        guard let adjust = swipeAdjust else { return }
+        swipeAdjust = nil
+        if adjust.kind == .volume { SystemVolume.end() }
+        swipeHideTask?.cancel()
+        swipeHideTask = Task {
+            try? await Task.sleep(nanoseconds: 700_000_000)
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeOut(duration: 0.2)) { swipeShown = false }
+        }
     }
 
     /// Retard sur le direct, à côté de « Direct » : « · −45 s », « · −2:05 » ;

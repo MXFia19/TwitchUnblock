@@ -77,9 +77,15 @@ final class TwitchGQL {
 
     /// Mutation écrite en toutes lettres, faute de requête enregistrée connue
     /// (création d'un clip) : même jeton d'intégrité, même nouvel essai.
+    /// `named: false` : document anonyme (`mutation { … }`), envoyé sans
+    /// operationName — Twitch refuse un nom qui ne désigne aucune opération
+    /// du document (« operation with name … not found ») ; `op` ne sert
+    /// alors qu'au journal.
     func rawMutation(_ op: String, query: String, variables: [String: Any],
-                     token: String) async -> [String: Any]? {
-        let body: [[String: Any]] = [["operationName": op, "query": query, "variables": variables]]
+                     token: String, named: Bool = true) async -> [String: Any]? {
+        var item: [String: Any] = ["query": query, "variables": variables]
+        if named { item["operationName"] = op }
+        let body: [[String: Any]] = [item]
         guard let payload = try? JSONSerialization.data(withJSONObject: body) else { return nil }
         return await send(op, payload: payload, token: token)
     }
@@ -273,5 +279,30 @@ func unfollowCategoryOnTwitch(gameId: String, token: String) async -> Bool {
         return false
     }
     logger.success("FOLLOW", "Catégorie retirée des suivis Twitch", gameId)
+    return true
+}
+
+/// Suivre une catégorie sur le compte Twitch (session web), comme le cœur de
+/// twitch.tv : requête enregistrée FollowGameButton_FollowGame, vérifiée le
+/// 2026-11-18 par une sonde publique sans session (Twitch répond
+/// « unauthenticated » sur `followGame`, pas « PersistedQueryNotFound »).
+/// Vrai si Twitch l'a fait ; un refus (jeton d'intégrité, session) est dit
+/// au journal, sans rien bloquer.
+@MainActor
+func followCategoryOnTwitch(gameId: String, token: String) async -> Bool {
+    let res = await TwitchGQL.shared.mutation("FollowGameButton_FollowGame",
+                variables: ["input": ["gameID": gameId]],
+                sha256: "b846b65ba4bc9a3561dbe2d069d95deed9b9e031bcfda2482d1bedd84a1c2eb3",
+                token: token)
+    let payload = (res?["data"] as? [String: Any])?["followGame"] as? [String: Any]
+    guard let payload, (payload["error"] as? [String: Any]) == nil, res?["errors"] == nil else {
+        // Pas de réponse : jeton d'intégrité introuvable, ou réseau. Sinon,
+        // ce que Twitch a répondu (TwitchGQL l'a aussi noté).
+        let messages = ((res?["errors"] as? [[String: Any]]) ?? []).compactMap { $0["message"] as? String }
+        let why = res == nil ? "jeton d'intégrité ou réseau" : messages.joined(separator: " · ")
+        logger.warn("FOLLOW", "Catégorie pas ajoutée aux suivis Twitch", why.isEmpty ? gameId : "\(gameId) · \(why)")
+        return false
+    }
+    logger.success("FOLLOW", "Catégorie ajoutée aux suivis Twitch", gameId)
     return true
 }

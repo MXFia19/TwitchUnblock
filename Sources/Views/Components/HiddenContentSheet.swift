@@ -35,6 +35,8 @@ struct HiddenContentSheet: View {
     @EnvironmentObject private var store: AppStore
     @Environment(\.dismiss) private var dismiss
     @State private var confirmAll = false
+    /// Tags masqués en cours de saisie, séparés par des virgules.
+    @State private var tagsText = ""
 
     var body: some View {
         let hidden = store.hidden
@@ -45,6 +47,22 @@ struct HiddenContentSheet: View {
                         .font(.tMeta).foregroundColor(.tMuted)
                         .fixedSize(horizontal: false, vertical: true)
                         .listRowBackground(Color.tCard)
+                }
+
+                // Tags masqués (« hiddenTags », comme sur le site) : écrits à la
+                // main, séparés par des virgules, ou ajoutés par l'appui long
+                // sur un live (HideMenuButtons).
+                Section {
+                    TextField("vtuber, asmr", text: $tagsText)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .submitLabel(.done)
+                        .onSubmit { saveTags() }
+                        .listRowBackground(Color.tCard)
+                } header: {
+                    Text(store.t("hidden_tags"))
+                } footer: {
+                    Text(store.t("hidden_tags_sub"))
                 }
 
                 if !hidden.channels.isEmpty {
@@ -80,6 +98,9 @@ struct HiddenContentSheet: View {
             }
             .scrollContentBackground(.hidden)
             .background(Color.tDark)
+            .onAppear { tagsText = store.hiddenTags.joined(separator: ", ") }
+            // Fermée sans valider : ce qui est écrit compte quand même.
+            .onDisappear { saveTags() }
             .navigationTitle(store.t("hidden_title"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -96,6 +117,17 @@ struct HiddenContentSheet: View {
         }
         .presentationDetents([.medium, .large])
         .preferredColorScheme(.dark)
+    }
+
+    /// Tags écrits : nettoyés (HiddenContent.cleanTags), puis réécrits tels
+    /// qu'ils sont gardés.
+    private func saveTags() {
+        let list = HiddenContent.cleanTags(tagsText.components(separatedBy: CharacterSet(charactersIn: ", \n")))
+        if list != store.hiddenTags {
+            store.hiddenTags = list
+            logger.settingChanged("Tags masqués", value: list.joined(separator: ", "))
+        }
+        tagsText = list.joined(separator: ", ")
     }
 
     /// Nom, et « Réafficher » en bouton et en balayage (pas `.onDelete`,

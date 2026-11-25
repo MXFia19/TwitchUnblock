@@ -71,6 +71,13 @@ struct ChatView: View {
     @State private var emoteMatches: [TwitchEmote] = []   // autocomplétion en cours
     @State private var sentinelVisible = true   // le bas de la liste est-il visible ?
     @State private var isDragging      = false  // l'utilisateur fait-il défiler à la main ?
+    /// Haut de la sentinelle dans la zone visible (voir checkBottomShown).
+    /// Hors de l'état de la vue : relevé à chaque image d'un défilement, il
+    /// ferait sinon recalculer tout le chat à chaque image.
+    @State private var bottomProbe = ChatBottomProbe()
+    /// Change pour reconstruire la liste, comme le fait une rotation.
+    @State private var listID = 0
+    @State private var lastListRebuild = Date.distantPast
 
     private let bottomAnchor = "chat_bottom_anchor"   // sentinelle de bas de liste
 
@@ -498,6 +505,10 @@ struct ChatView: View {
                                     Color.clear
                                         .frame(height: 1)
                                         .id(bottomAnchor)
+                                        .background(GeometryReader { g in
+                                            Color.clear.preference(key: ChatBottomKey.self,
+                                                                   value: g.frame(in: .named("chatList")).minY)
+                                        })
                                         .onAppear {
                                             sentinelVisible = true
                                             autoScroll = true    // revenu en bas → on suit
@@ -517,6 +528,8 @@ struct ChatView: View {
                                 // grand vide — criant posé sur l'image.
                                 .frame(minHeight: geo.size.height, alignment: .bottom)
                             }
+                            .coordinateSpace(name: "chatList")
+                            .onPreferenceChange(ChatBottomKey.self) { bottomProbe.y = $0 }
                             // Défilement manuel de l'utilisateur → on arrête de le ramener en bas.
                             .simultaneousGesture(
                                 DragGesture(minimumDistance: 10)
@@ -539,6 +552,7 @@ struct ChatView: View {
                                 // visible même en rafale (n'active plus le mode lecture par erreur).
                                 guard autoScroll, !isDragging else { return }
                                 proxy.scrollTo(bottomAnchor, anchor: .bottom)
+                                checkBottomShown(height: geo.size.height)
                             }
                             // En mode lecture (remonté), on met en pause la purge des vieux
                             // messages : sinon retirer les plus anciens (en haut) fait « descendre »
@@ -557,6 +571,9 @@ struct ChatView: View {
                                 guard autoScroll else { return }
                                 DispatchQueue.main.async { proxy.scrollTo(bottomAnchor, anchor: .bottom) }
                             }
+                            // Reconstruite par checkBottomShown, comme par une
+                            // rotation (et recalée en bas par le onAppear).
+                            .id(listID)
 
                             // « Suivre » quand on a remonté le chat ; zone
                             // d'envoi masquée : les points et le menu ⋯, posés
@@ -806,6 +823,25 @@ struct ChatView: View {
         }
         teardownWork = work
         DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
+    }
+
+    /// Chat qui suit le direct, mais dont le bas n'est plus à l'écran une
+    /// demi-seconde après s'y être calé : la liste « paresseuse » de SwiftUI
+    /// s'est trompée dans ses mesures (colonne étroite du paysage, hauteurs
+    /// de messages très variables) et montre un vide. Le chat « disparaissait »
+    /// jusqu'à une rotation, qui la remesure (dave, rykozin). Elle est
+    /// reconstruite de la même façon, au plus toutes les 5 s.
+    private func checkBottomShown(height: CGFloat) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            guard autoScroll, !isDragging, height > 40 else { return }
+            let y = bottomProbe.y
+            let shown = y.map { $0 > -40 && $0 < height + 40 } ?? false
+            guard !shown, Date().timeIntervalSince(lastListRebuild) > 5 else { return }
+            lastListRebuild = Date()
+            listID += 1
+            logger.warn("CHAT", "Bas du chat hors de l'écran : liste reconstruite",
+                        y.map { String(format: "%.0f pt", $0) } ?? "sentinelle absente")
+        }
     }
 
     /// Mise en place toujours voulue : pas démontée entre-temps (tâche annulée).
@@ -1628,6 +1664,20 @@ struct MessageFlowLayout: Layout {
         }
         for j in ls..<subviews.count {lh[j]=mh}
         return (CGSize(width:W,height:cy+mh),pos,lh,sizes)
+    }
+}
+
+/// Haut de la sentinelle de bas de liste dans la zone visible du chat (nil :
+/// pas dessinée, loin de l'écran).
+private final class ChatBottomProbe {
+    var y: CGFloat?
+}
+
+/// Haut de la sentinelle de bas de liste dans la zone visible du chat.
+private struct ChatBottomKey: PreferenceKey {
+    static var defaultValue: CGFloat? = nil
+    static func reduce(value: inout CGFloat?, nextValue: () -> CGFloat?) {
+        value = nextValue() ?? value
     }
 }
 

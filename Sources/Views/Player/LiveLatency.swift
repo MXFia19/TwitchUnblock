@@ -132,7 +132,7 @@ struct LiveLatencyController {
     /// démarrer (quelques secondes) ; seul le recalage du démarrage s'en passe.
     /// À appeler une ou deux fois par seconde.
     mutating func adjust(player: AVPlayer, item: AVPlayerItem, behind: Double, total: Double? = nil,
-                         enabled: Bool, settled: Bool = true) {
+                         enabled: Bool, settled: Bool = true, catchingUp: Bool = false) {
         // AirPlay : la TV lit elle-même le flux, et chaque saut le lui fait
         // recharger ; l'image s'y figeait sans cesse (fb_mw3j4a81). Rien
         // n'est tenu tant que la lecture passe par AirPlay.
@@ -142,8 +142,12 @@ struct LiveLatencyController {
             return
         }
         // Une vitesse restée au-dessus de 1 (ancienne tenue du direct) est
-        // remise à la normale ; on n'en pose jamais d'autre.
-        if player.rate > 1.01 { player.rate = 1 }
+        // remise à la normale ; on n'en pose jamais d'autre. Sauf pendant le
+        // rattrapage d'un direct reculé (`catchingUp`) : le lecteur repasse
+        // lui-même à 1× au bord. Avant, ce 1× tombait à chaque relevé juste
+        // après le 2× du rattrapage : la vitesse changeait deux fois par
+        // seconde et le lecteur se bloquait (fb_mwmgzmve).
+        if !catchingUp, player.rate > 1.01 { player.rate = 1 }
         // Plus de calage depuis 2 min : l'avance gagnée se rend peu à peu.
         if stallMargin > 0, Date().timeIntervalSince(lastStallAt) > 120 {
             stallMargin = max(0, stallMargin - 2)

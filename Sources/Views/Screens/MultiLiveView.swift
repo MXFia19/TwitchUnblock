@@ -209,6 +209,7 @@ struct MultiLiveView: View {
                           onTap: { session.select(entry.id) },
                           onToggleSound: { session.toggleSound(entry.id) },
                           onVolume: { session.setVolume(entry.id, $0) },
+                          onAudioOnly: { session.toggleAudioOnly(entry.id) },
                           onResume: { session.resumeStopped() },
                           onRemove: { multi.remove(id: entry.id) },
                           onSwap: { other in withAnimation(.easeInOut(duration: 0.2)) { multi.swap(entry.id, other) } },
@@ -266,6 +267,8 @@ struct MultiLiveTile: View {
     /// (appui long).
     let onToggleSound: () -> Void
     let onVolume: (Float) -> Void
+    /// « Son seul » (tuile qui a le son), ou l'image de retour.
+    let onAudioOnly: () -> Void
     /// « Lecture » sur une tuile arrêtée par iOS (voir `heldBySystem`).
     let onResume: () -> Void
     let onRemove: () -> Void
@@ -286,6 +289,7 @@ struct MultiLiveTile: View {
         ZStack(alignment: .top) {
             Color.black
             PlayerLayerView(player: model.player)
+            if model.audioOnly { audioOnlyBackground }
             state
             AdBreakBanner(watcher: model.adBreaks, compact: true)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
@@ -400,9 +404,50 @@ struct MultiLiveTile: View {
         .accessibilityLabel(store.t(soundOn ? "multi_sound_off" : "multi_sound_on"))
     }
 
+    /// « Son seul », sur une tuile qui a le son (et lit, ou va lire) : moins
+    /// de données et de batterie. Allumé, le même bouton remet l'image.
+    @ViewBuilder private var audioOnlyButton: some View {
+        let playable = model.phase == .playing || model.phase == .loading
+        if model.audioOnly || (soundOn && playable) {
+            Button(action: onAudioOnly) {
+                Image(systemName: "headphones")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(.white)
+                    .frame(width: 30, height: 30)
+                    .background(Circle().fill(model.audioOnly ? Color.tPrimary : Color.black.opacity(0.5)))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(store.t(model.audioOnly ? "multi_audio_only_off" : "multi_audio_only"))
+        }
+    }
+
+    /// Son seul : un fond à la place de l'image (l'élément n'en a plus). La
+    /// roue du chargement et les messages d'état passent par-dessus.
+    private var audioOnlyBackground: some View {
+        ZStack {
+            LinearGradient(colors: [Color.tPurple.opacity(0.45), Color.black],
+                           startPoint: .topLeading, endPoint: .bottomTrailing)
+            if model.phase == .playing {
+                VStack(spacing: 6) {
+                    Image(systemName: "waveform")
+                        .font(.system(size: 26, weight: .semibold))
+                    Text(store.t("multi_audio_only"))
+                        .font(.system(size: 13, weight: .bold))
+                    Text(store.t("multi_audio_only_sub"))
+                        .font(.tMeta)
+                        .foregroundColor(.white.opacity(0.7))
+                }
+                .foregroundColor(.white)
+                .multilineTextAlignment(.center)
+                .padding(TSpace.md)
+            }
+        }
+    }
+
     private var bar: some View {
         HStack(spacing: 8) {
             soundButton
+            audioOnlyButton
             if entry.isVod {
                 Text("VOD")
                     .font(.system(size: 10, weight: .heavy))

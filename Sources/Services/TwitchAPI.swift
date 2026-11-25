@@ -121,7 +121,17 @@ private func workerVariants(_ value: Any?) -> [String: VariantInfo] {
 /// ses pubs (pré-roll, blocs de 3 min) même pour playerType « embed »
 /// (mesuré le 2026-11-12 : 6 séances sur 28 avec pub, 0 sur 28 sans).
 private func twitchGQL(_ query: String, deviceID: Bool = true) async throws -> Any {
-    guard let url = URL(string: "https://gql.twitch.tv/gql") else { throw URLError(.badURL) }
+    guard let req = gqlPublicRequest(query, deviceID: deviceID) else { throw URLError(.badURL) }
+    let (data, resp) = try await URLSession.shared.data(for: req)
+    guard (resp as? HTTPURLResponse)?.statusCode == 200 else { throw URLError(.badServerResponse) }
+    return try JSONSerialization.jsonObject(with: data)
+}
+
+/// Requête GQL publique (Client-ID web, sans compte) : celle de twitchGQL,
+/// que la source « Mon proxy » envoie par son proxy.
+private func gqlPublicRequest(_ query: String, deviceID: Bool) -> URLRequest? {
+    guard let url = URL(string: "https://gql.twitch.tv/gql"),
+          let body = try? JSONSerialization.data(withJSONObject: ["query": query]) else { return nil }
     // 10 s au plus sans réponse (au lieu de 60) : GQL répond en une seconde
     // quand il marche, et getLive l'attend avant d'essayer les sources.
     var req = URLRequest(url: url, timeoutInterval: 10)
@@ -130,20 +140,24 @@ private func twitchGQL(_ query: String, deviceID: Bool = true) async throws -> A
     req.setValue("application/json", forHTTPHeaderField: "Content-Type")
     req.setValue(requestHeaders["User-Agent"], forHTTPHeaderField: "User-Agent")
     if deviceID { req.setValue("MkMq8a9\(Int.random(in: 100000...999999))", forHTTPHeaderField: "Device-ID") }
-    req.httpBody = try JSONSerialization.data(withJSONObject: ["query": query])
-    let (data, resp) = try await URLSession.shared.data(for: req)
-    guard (resp as? HTTPURLResponse)?.statusCode == 200 else { throw URLError(.badServerResponse) }
-    return try JSONSerialization.jsonObject(with: data)
+    req.httpBody = body
+    return req
 }
 
 // MARK: – Access Token
+/// Requête du jeton d'un direct, comme Streamlink (lecteur « embed ») :
+/// getAccessToken, et Mon proxy qui la fait passer par son proxy.
+private func liveTokenQuery(_ login: String) -> String {
+    "query { streamPlaybackAccessToken(channelName: \"\(gqlStr(login))\", params: {platform: \"site\", playerBackend: \"mediaplayer\", playerType: \"embed\"}) { value signature } }"
+}
+
 /// Jeton du direct demandé comme Streamlink (lecteur « embed », sans
 /// Device-ID ; PR #12 d'ihavenoface) : Twitch y coud bien moins de pubs.
 /// Le Worker (source Twitch officielle du site) et l'app Android font de même.
 private func getAccessToken(id: String, isLive: Bool) async -> (value: String, signature: String)? {
     logger.debug("TOKEN", "Récupération token \(isLive ? "live" : "VOD") pour \"\(id)\"")
     let q = isLive
-        ? "query { streamPlaybackAccessToken(channelName: \"\(gqlStr(id))\", params: {platform: \"site\", playerBackend: \"mediaplayer\", playerType: \"embed\"}) { value signature } }"
+        ? liveTokenQuery(id)
         : "query { videoPlaybackAccessToken(id: \"\(gqlStr(id))\", params: {platform: \"web\", playerBackend: \"mediaplayer\", playerType: \"site\"}) { value signature } }"
     guard let json = try? await twitchGQL(q, deviceID: !isLive) as? [String: Any],
           let data = json["data"] as? [String: Any],
@@ -699,11 +713,10 @@ func getLive(channelName: String, webToken: String? = nil,
     for src in steps where found.links.isEmpty {
         onSource?(src)
         switch src {
-        case "al":     found = await ttvlolLiveLinks(login: login, lowLatency: lowLatency)
+        case "bg":     found = await bulgariaLiveLinks(login: login)
         case "twitch": if let token { found = await usherLiveLinks(login: login, token: token, lowLatency: lowLatency, geo: geo) }
         case "custom": if let host = customSourceHost() { found = await luminousLiveLinks(hosts: [host], login: login, lowLatency: lowLatency) }
-        case let id where kLiveProxyHosts[id] != nil:
-            found = await luminousLiveLinks(hosts: [kLiveProxyHosts[id]!], login: login, lowLatency: lowLatency)
+        case "proxy":  found = await proxyLiveLinks(login: login, lowLatency: lowLatency)
         default:
             let worker = await workerLiveLinks(login: login)
             found = worker.master
@@ -799,6 +812,8 @@ private func higherQualitiesMaster(login: String, token: (value: String, signatu
 private func accountPlaybackIfAsked(login: String, webToken: String?,
                                     integrity: (() async -> (token: String, deviceId: String)?)?) async -> AccountPlayback {
     guard let webToken, !webToken.isEmpty else { return .unavailable }
+    // Jeton sans pub lu à l'instant pendant une pause pub : repris tel quel.
+    if let fresh = FreshAccountToken.shared.take(login: login) { return .token(fresh) }
     let work = Task { await accountPlaybackToken(login: login, webToken: webToken, integrity: integrity) }
     let gate = AccountPlaybackGate()
     return await withTaskCancellationHandler {
@@ -814,6 +829,28 @@ private func accountPlaybackIfAsked(login: String, webToken: String?,
         }
     } onCancel: {
         gate.resume(.unavailable)
+    }
+}
+
+/// Jeton du compte sans pub lu pendant une pause pub (MainTabView) : le
+/// rechargement qui suit le reprend au lieu de le redemander, sans l'attente
+/// de 6 s qui l'avait peut-être fait manquer à l'ouverture. Une minute au
+/// plus, une seule fois.
+final class FreshAccountToken: @unchecked Sendable {
+    static let shared = FreshAccountToken()
+    private let lock = NSLock()
+    private var entry: (login: String, token: AccountPlaybackToken, at: Date)?
+
+    func put(_ token: AccountPlaybackToken, login: String) {
+        lock.lock(); defer { lock.unlock() }
+        entry = (login.lowercased(), token, Date())
+    }
+
+    func take(login: String) -> AccountPlaybackToken? {
+        lock.lock(); defer { lock.unlock() }
+        guard let e = entry, e.login == login.lowercased(), Date().timeIntervalSince(e.at) < 60 else { return nil }
+        entry = nil
+        return e.token
     }
 }
 
@@ -869,10 +906,10 @@ func liveSourceSteps() -> [String] {
     return completeLiveSourceOrder(saved) + ["worker"]
 }
 
-/// Proxys au format Luminous (/live/<chaîne>), essayés dans l'ordre ; vide
-/// si aucun ne répond. Pas « sans pub » : les pré-rolls et les pauses pub
-/// de la chaîne y arrivent comme sur Twitch (écran « Commercial break in
-/// progress » ou vraie pub, cousus dans la playlist ; voir AdBreakMonitor).
+/// Serveurs au format Luminous (/live/<chaîne>), essayés dans l'ordre ; vide
+/// si aucun ne répond. Ne sert plus qu'à « Ma source » (un luminous-ttv à
+/// soi) : les proxys publics ont été retirés le 2026-11-18, ils laissaient
+/// passer les pubs (voir kRetiredLiveSources).
 private func luminousLiveLinks(hosts: [String], login: String, lowLatency: Bool) async -> MasterPlaylist {
     for host in hosts {
         logger.info("LIVE", "Tentative proxy…", host)
@@ -908,32 +945,76 @@ private func luminousLiveLinks(hosts: [String], login: String, lowLatency: Bool)
     return ([:], [:])
 }
 
-/// Proxy albanais (format TTV.LOL : la requête usher encodée après
-/// /playlist/<chaîne>.m3u8). Mêmes pauses pub de la chaîne que Luminous.
-private func ttvlolLiveLinks(login: String, lowLatency: Bool) async -> MasterPlaylist {
-    var allowed = CharacterSet.alphanumerics
-    allowed.insert(charactersIn: "-._~")
-    let query = "allow_source=true&allow_audio_only=true&fast_bread=\(lowLatency)"
-        .addingPercentEncoding(withAllowedCharacters: allowed) ?? ""
-    for host in kTTVLOLHosts {
-        guard let url = URL(string: "https://\(host)/playlist/\(login).m3u8%3F\(query)") else { continue }
-        logger.info("LIVE", "Tentative proxy TTV.LOL…", host)
-        var req = URLRequest(url: url, timeoutInterval: 10)
-        req.setValue("https://ttv.lol/donate", forHTTPHeaderField: "X-Donate-To")
-        guard let (data, resp) = try? await URLSession.shared.data(for: req),
-              (resp as? HTTPURLResponse)?.statusCode == 200 else {
-            logger.warn("LIVE", "⚠️ Proxy \(host) indisponible", "source suivante…")
-            continue
+/// Source « Bulgarie » (bg, test) : le relais du VPS de Sofia
+/// (kBulgariaRelay) prend le jeton, la liste maîtresse et les playlists de la
+/// vidéo depuis la Bulgarie — ses liens passent par lui —, les segments
+/// restant en direct. Même réponse que /api/get-live du Worker ; 404 quand
+/// Twitch ne répond pas de là-bas : Twitch officiel, qui suit, prend le relais.
+private func bulgariaLiveLinks(login: String) async -> MasterPlaylist {
+    logger.info("LIVE", "Tentative relais Bulgarie…", kBulgariaRelay)
+    guard let url = URL(string: "\(kBulgariaRelay)/api/get-live?name=\(login)") else { return ([:], [:]) }
+    do {
+        // 8 s au plus, comme les autres sources : un relais muet ne fait pas
+        // attendre Twitch officiel.
+        let (data, resp) = try await URLSession.shared.data(for: URLRequest(url: url, timeoutInterval: 8))
+        let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+        if code == 200, let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let links = json["links"] as? QualityLinks, !links.isEmpty {
+            logger.success("LIVE", "✅ Relais Bulgarie OK", "\(links.count) qualités")
+            return (links, workerVariants(json["variants"]))
         }
-        let body = String(decoding: data, as: UTF8.self)
-        guard body.contains("#EXT-X-STREAM-INF") else { continue }
-        let master = parseMaster(body, baseURL: url)
-        if !master.links.isEmpty {
-            logger.success("LIVE", "✅ Proxy TTV.LOL OK (\(host))", "\(master.links.count) qualités")
-            return master
-        }
+        logger.warn("LIVE", "⚠️ Relais Bulgarie sans direct (\(code))", "source suivante…")
+    } catch {
+        logger.error("LIVE", "❌ Erreur relais Bulgarie", error.localizedDescription)
+        // Nom introuvable ou connexion refusée : souvent un filtre DNS (dit
+        // une fois par lancement, MainTabView).
+        BulgariaRelayBlock.note(error)
     }
     return ([:], [:])
+}
+
+/// Source « Mon proxy » (proxy) : le jeton de lecture (le même que celui du
+/// flux officiel), la liste maîtresse d'usher et les playlists de la vidéo
+/// demandés par le proxy de l'utilisateur (LiveProxy) — Twitch voit son
+/// adresse et choisit ses pubs pour elle —, les segments restant en direct.
+/// Proxy injoignable, identifiants refusés (407) ou Twitch qui refuse : dit
+/// au journal et dans les réglages, et la source suivante prend le relais.
+private func proxyLiveLinks(login: String, lowLatency: Bool) async -> MasterPlaylist {
+    guard let session = LiveProxy.session,
+          var tokenRequest = gqlPublicRequest(liveTokenQuery(login), deviceID: false) else { return ([:], [:]) }
+    logger.info("LIVE", "Tentative de mon proxy…", LiveProxy.logLabel)
+    // 8 s au plus par demande, comme les autres sources.
+    tokenRequest.timeoutInterval = 8
+    guard let tokenReply = await LiveProxy.send(tokenRequest, through: session) else { return ([:], [:]) }
+    guard tokenReply.status == 200, let token = liveToken(from: tokenReply.data) else {
+        LiveProxy.record(.refused(tokenReply.status))
+        logger.warn("LIVE", "⚠️ Mon proxy : jeton refusé par Twitch (\(tokenReply.status))", "source suivante…")
+        return ([:], [:])
+    }
+    guard let url = usherLiveURL(login: login, token: token, lowLatency: lowLatency),
+          let reply = await LiveProxy.send(URLRequest(url: url, timeoutInterval: 8), through: session)
+    else { return ([:], [:]) }
+    var master: MasterPlaylist = ([:], [:])
+    if reply.status == 200 { master = parseMaster(String(decoding: reply.data, as: UTF8.self), baseURL: url) }
+    guard !master.links.isEmpty else {
+        LiveProxy.record(.refused(reply.status))
+        logger.warn("LIVE", "⚠️ Mon proxy : usher sans direct (\(reply.status))", "source suivante…")
+        return ([:], [:])
+    }
+    // Les playlists de la vidéo repassent par le proxy (LivePlaylistLoader).
+    LivePlaylistLoader.route(Array(master.links.values), through: session)
+    LiveProxy.record(.ok)
+    logger.success("LIVE", "✅ Mon proxy OK", "\(master.links.count) qualités")
+    return master
+}
+
+/// Jeton (value, signature) d'une réponse GQL à liveTokenQuery, ou nil.
+private func liveToken(from data: Data) -> (value: String, signature: String)? {
+    guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+          let token = (json["data"] as? [String: Any])?["streamPlaybackAccessToken"] as? [String: Any],
+          let value = token["value"] as? String,
+          let signature = token["signature"] as? String else { return nil }
+    return (value, signature)
 }
 
 // MARK: – Qualités supérieures (Enhanced Broadcasting)
@@ -979,31 +1060,14 @@ enum HigherQualities {
 private func usherLiveLinks(login: String, token: (value: String, signature: String),
                             lowLatency wantsLowLatency: Bool, codecs: String? = nil,
                             timeout: TimeInterval = 8, geo: GeoBlockFlag? = nil) async -> MasterPlaylist {
-    guard login.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "_" }), !login.isEmpty,
-          var comps = URLComponents(string: "https://usher.ttvnw.net/api/channel/hls/\(login).m3u8")
+    guard let url = usherLiveURL(login: login, token: token, lowLatency: wantsLowLatency, codecs: codecs)
     else { return ([:], [:]) }
     logger.info("LIVE", "Tentative Twitch officiel...")
-    comps.queryItems = [
-        .init(name: "allow_source",              value: "true"),
-        .init(name: "allow_audio_only",           value: "true"),
-        .init(name: "allow_spectre",              value: "true"),
-        .init(name: "fast_bread",                 value: wantsLowLatency ? "true" : "false"),
-        .init(name: "low_latency",                value: wantsLowLatency ? "true" : "false"),
-        .init(name: "player_backend",             value: "mediaplayer"),
-        .init(name: "playlist_include_framerate", value: "true"),
-        .init(name: "segment_preference",         value: "4"),
-        .init(name: "sig",                        value: token.signature),
-        .init(name: "token",                      value: token.value),
-    ]
-    if let codecs {
-        comps.queryItems?.append(.init(name: "supported_codecs", value: codecs))
-        logger.info("LIVE", "Qualités supérieures demandées à Twitch", codecs)
-    }
+    if let codecs { logger.info("LIVE", "Qualités supérieures demandées à Twitch", codecs) }
     if wantsLowLatency { logger.info("LIVE", "Mode faible latence demandé à Twitch") }
     // 8 s au plus par défaut (au lieu des 60 s d'URLSession) : réseau
     // filtré, la source suivante doit prendre le relais sans faire attendre.
-    guard let url = comps.url,
-          let (data, resp) = try? await URLSession.shared.data(for: URLRequest(url: url, timeoutInterval: timeout))
+    guard let (data, resp) = try? await URLSession.shared.data(for: URLRequest(url: url, timeoutInterval: timeout))
     else { return ([:], [:]) }
     let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
     guard status == 200, let body = String(data: data, encoding: .utf8) else {
@@ -1016,6 +1080,29 @@ private func usherLiveLinks(login: String, token: (value: String, signature: Str
     let master = parseMaster(body, baseURL: url)
     logger.success("LIVE", "✅ Twitch officiel : \(master.links.count) qualités")
     return master
+}
+
+/// Adresse de la liste maîtresse d'usher pour ce jeton : flux officiel, et
+/// Mon proxy qui la demande par son proxy. nil pour un nom de chaîne invalide.
+private func usherLiveURL(login: String, token: (value: String, signature: String),
+                          lowLatency: Bool, codecs: String? = nil) -> URL? {
+    guard login.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "_" }), !login.isEmpty,
+          var comps = URLComponents(string: "https://usher.ttvnw.net/api/channel/hls/\(login).m3u8")
+    else { return nil }
+    comps.queryItems = [
+        .init(name: "allow_source",              value: "true"),
+        .init(name: "allow_audio_only",           value: "true"),
+        .init(name: "allow_spectre",              value: "true"),
+        .init(name: "fast_bread",                 value: lowLatency ? "true" : "false"),
+        .init(name: "low_latency",                value: lowLatency ? "true" : "false"),
+        .init(name: "player_backend",             value: "mediaplayer"),
+        .init(name: "playlist_include_framerate", value: "true"),
+        .init(name: "segment_preference",         value: "4"),
+        .init(name: "sig",                        value: token.signature),
+        .init(name: "token",                      value: token.value),
+    ]
+    if let codecs { comps.queryItems?.append(.init(name: "supported_codecs", value: codecs)) }
+    return comps.url
 }
 
 // MARK: – Lives verticaux (Dual Format)
@@ -1085,7 +1172,9 @@ func parsePortraitMaster(_ content: String, baseURL: URL? = nil) -> MasterPlayli
 /// n'a rien dit à l'app.
 private func workerLiveLinks(login: String) async -> (master: MasterPlaylist, info: [String: Any]?) {
     logger.info("LIVE", "Tentative Cloudflare Worker...")
-    guard let json = await workerJSON("/api/get-live?name=\(login)&proxy=false"),
+    // Twitch d'abord chez le Worker : ses proxys (Luminous…), retirés de
+    // l'app parce qu'ils laissaient passer les pubs, ne viennent qu'après.
+    guard let json = await workerJSON("/api/get-live?name=\(login)&source=twitch"),
           let links = json["links"] as? QualityLinks else { return (([:], [:]), nil) }
     logger.success("LIVE", "✅ Cloudflare Worker : \(links.count) qualités")
     return ((links, workerVariants(json["variants"])), json)
@@ -1168,25 +1257,38 @@ func getChannelVideosPage(channelName: String, cursor: String? = nil) async
     logger.info("VIDEOS", "Chargement VODs de \"\(channelName)\"\(cursor != nil ? " (Page suivante)" : "")")
 
     let afterCursor = cursor != nil ? ", after: \"\(gqlStr(cursor!))\"" : ""
-    let q = """
-    query {
-        user(login: "\(gqlStr(channelName))") {
-            profileImageURL(width: 70)
-            videos(first: 100, type: ARCHIVE, sort: TIME\(afterCursor)) {
-                edges { cursor node { id title previewThumbnailURL(height: 180, width: 320) publishedAt lengthSeconds } }
-                pageInfo { hasNextPage }
+    // `game` et les chapitres (`moments`, comme le site) : filtre par jeu de
+    // la liste des VODs (SearchView), changements de jeu en cours de stream
+    // compris (fb_mwvs798g). Requête vérifiée le 25/11 : 100 VODs ≈ 35 Ko.
+    let chapterFields = " moments(first: 25, momentRequestType: VIDEO_CHAPTER_MARKERS) { edges { node { details "
+        + "{ ... on GameChangeMomentDetails { game { id displayName } } } } } }"
+    func query(chapters: Bool) -> String {
+        """
+        query {
+            user(login: "\(gqlStr(channelName))") {
+                profileImageURL(width: 70)
+                videos(first: 100, type: ARCHIVE, sort: TIME\(afterCursor)) {
+                    edges { cursor node { id title previewThumbnailURL(height: 180, width: 320) publishedAt lengthSeconds game { id displayName }\(chapters ? chapterFields : "") } }
+                    pageInfo { hasNextPage }
+                }
             }
         }
+        """
     }
-    """
 
     let data: [String: Any]?
     if let cursor {
         // Suite : même règle que les autres listes (gqlNextRequest) : refus
         // d'intégrité ou rejet en 400/401/403 = refus, nil = panne.
-        guard let page = await gqlNextRequest(q, [:]) else {
+        guard var page = await gqlNextRequest(query(chapters: true), [:]) else {
             logger.warn("VIDEOS", "Suite des VODs de \"\(channelName)\" indisponible (réseau)")
             return (videos: [], avatar: nil, error: "network", cursor: cursor, refused: false)
+        }
+        // Chapitres refusés un jour par Twitch : la liste sans eux plutôt que rien.
+        if !page.refused, page.data?["user"] == nil,
+           let plain = await gqlNextRequest(query(chapters: false), [:]), plain.data?["user"] != nil {
+            logger.warn("VIDEOS", "Chapitres des VODs refusés : liste sans eux", channelName)
+            page = plain
         }
         if page.refused {
             logger.warn("VIDEOS", "Twitch refuse la suite des VODs de \"\(channelName)\"")
@@ -1194,7 +1296,14 @@ func getChannelVideosPage(channelName: String, cursor: String? = nil) async
         }
         data = page.data
     } else {
-        data = (try? await twitchGQL(q) as? [String: Any])?["data"] as? [String: Any]
+        var first = (try? await twitchGQL(query(chapters: true)) as? [String: Any])?["data"] as? [String: Any]
+        if first?["user"] == nil,
+           let plain = (try? await twitchGQL(query(chapters: false)) as? [String: Any])?["data"] as? [String: Any],
+           plain["user"] != nil {
+            logger.warn("VIDEOS", "Chapitres des VODs refusés : liste sans eux", channelName)
+            first = plain
+        }
+        data = first
     }
     guard let user = data?["user"] as? [String: Any] else {
         logger.error("VIDEOS", "Streamer \"\(channelName)\" introuvable")
@@ -1209,11 +1318,25 @@ func getChannelVideosPage(channelName: String, cursor: String? = nil) async
         guard let node  = e["node"] as? [String: Any],
               let id    = node["id"] as? String,
               let title = node["title"] as? String else { return nil }
+        let game = node["game"] as? [String: Any]
+        // Jeu principal, puis ceux des chapitres, dans l'ordre, sans doublon.
+        let chapters: [[String: Any]?] = (((node["moments"] as? [String: Any])?["edges"] as? [[String: Any]]) ?? []).map {
+            (($0["node"] as? [String: Any])?["details"] as? [String: Any])?["game"] as? [String: Any]
+        }
+        var games: [VodGameRef] = []
+        var seen = Set<String>()
+        for g in [game] + chapters {
+            guard let gid = g?["id"] as? String, !gid.isEmpty, seen.insert(gid).inserted else { continue }
+            games.append(VodGameRef(id: gid, name: (g?["displayName"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? gid))
+        }
         return VodData(
             id: id, title: title,
             previewThumbnailURL: node["previewThumbnailURL"] as? String ?? "",
             publishedAt: node["publishedAt"] as? String ?? "",
-            lengthSeconds: node["lengthSeconds"] as? Int ?? 0
+            lengthSeconds: node["lengthSeconds"] as? Int ?? 0,
+            gameId: game?["id"] as? String,
+            gameName: game?["displayName"] as? String,
+            games: games
         )
     }
 
@@ -1828,8 +1951,12 @@ func isValidLogin(_ login: String) -> Bool {
     login.range(of: #"^[a-z0-9_]{1,25}$"#, options: .regularExpression) != nil
 }
 
+/// 950, 27.4k, 1.2M. Avant, tout passait en milliers : « 1234.6k » pour un
+/// direct à plus d'un million de spectateurs (fb_mwm13xxd). Millions dès
+/// 999 950, qui s'écrirait sinon « 1000.0k ».
 func formatViewers(_ count: Int) -> String {
-    count >= 1000 ? String(format: "%.1fk", Double(count) / 1000) : "\(count)"
+    if count >= 999_950 { return String(format: "%.1fM", Double(count) / 1_000_000) }
+    return count >= 1000 ? String(format: "%.1fk", Double(count) / 1000) : "\(count)"
 }
 
 func formatDuration(_ seconds: Int) -> String {
@@ -2331,6 +2458,26 @@ func getFollowedCategoriesGQL(webToken: String) async -> [TwitchCategory]? {
     guard let nodes = (((json["data"] as? [String: Any])?["currentUser"] as? [String: Any])?["followedGames"] as? [String: Any])?["nodes"] as? [[String: Any]]
     else {
         logger.warn("GQL", "Catégories suivies refusées", gqlErrorSummary(json))
+        return nil
+    }
+    return nodes.compactMap { n in
+        guard let id = n["id"] as? String else { return nil }
+        return TwitchCategory(id: id, name: n["displayName"] as? String ?? "",
+                              boxArtURL: n["boxArtURL"] as? String ?? "",
+                              viewers: n["viewersCount"] as? Int)
+    }
+}
+
+/// Catégories suivies par un compte, sans session : publiques, lues par son
+/// pseudo (GQL `user(login:)`). Connecté sans session web, l'onglet « Suivies »
+/// ne montrait que celles de l'appareil — le site s'en sert aussi. nil si
+/// indisponible.
+func getFollowedCategoriesPublic(login: String) async -> [TwitchCategory]? {
+    let l = login.lowercased()
+    guard !l.isEmpty else { return nil }
+    let d = await gqlRequest("query($l: String!) { user(login: $l) { followedGames(first: 100, type: ALL) { nodes { id displayName boxArtURL(width: 285, height: 380) viewersCount } } } }", ["l": l])
+    guard let nodes = ((d?["user"] as? [String: Any])?["followedGames"] as? [String: Any])?["nodes"] as? [[String: Any]] else {
+        logger.warn("GQL", "Catégories suivies refusées", nil)
         return nil
     }
     return nodes.compactMap { n in

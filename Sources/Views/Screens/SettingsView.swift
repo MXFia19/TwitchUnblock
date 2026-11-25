@@ -45,6 +45,7 @@ struct SettingsView: View {
     @State private var showClearAlert  = false
     @State private var showWebLogin    = false   // login web (points de chaîne)
     @State private var webLoginClear   = false
+    @State private var showTVPair      = false   // connecter une TV LG (QR code)
     @State private var apiLoggingIn    = false
     @State private var cacheBytes: Int64 = 0
     @State private var cacheFiles      = 0
@@ -154,6 +155,11 @@ struct SettingsView: View {
                 },
                 onCancel: { showWebLogin = false }
             )
+        }
+        // ── Connecter une TV LG : la session web part vers l'app TV ──
+        .sheet(isPresented: $showTVPair) {
+            TVPairSheet().environmentObject(store)
+                .tTypeRoot()
         }
         // ── Retour : bug, idée ─────────────────────────────────────────
         // Compte admin ? Demandé au Worker à l'ouverture et à chaque
@@ -1209,6 +1215,10 @@ struct SettingsView: View {
                 toggleRow(store.t("hide_bots"), store.t("hide_bots_sub"),
                           $store.chatHideBots, log: "Masquer les bots")
                 Divider().background(Color.tBorder)
+                // « X gifted a sub to Y » : coupé par défaut, synchronisé avec le site.
+                toggleRow(store.t("hide_gift_subs"), store.t("hide_gift_subs_sub"),
+                          $store.chatHideGiftSubs, log: "Masquer les subs offerts")
+                Divider().background(Color.tBorder)
                 toggleRow(store.t("hide_commands"), store.t("hide_commands_sub"),
                           $store.chatHideCommands, log: "Masquer les commandes")
                 Divider().background(Color.tBorder)
@@ -1255,6 +1265,9 @@ struct SettingsView: View {
                 Divider().background(Color.tBorder)
                 // Emotes masquées : affichées comme le mot tapé (HiddenEmotes.swift).
                 HiddenEmotesRow()
+                Divider().background(Color.tBorder)
+                // Badge montré à côté de son nom (ChatIdentity.swift, session web).
+                ChatIdentityRow()
                 Divider().background(Color.tBorder)
                 // Mots surlignés : en plus des mentions, séparés par des virgules.
                 VStack(alignment: .leading, spacing: 6) {
@@ -1351,6 +1364,10 @@ struct SettingsView: View {
                     }
                     .pickerStyle(.segmented)
                     .labelsHidden()
+                    // Aussi au doigt, dans le lecteur (ChatMove.swift).
+                    Text(store.t("cfg_chat_overlay_drag"))
+                        .font(.tMeta).foregroundColor(.tMuted)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
 
                 Button {
@@ -1379,12 +1396,21 @@ struct SettingsView: View {
                           $store.immersivePlayer, log: "Lecteur immersif")
                 Divider().background(Color.tBorder)
                 // Lecteur immersif seulement : le natif ne sait pas lancer son PiP.
-                toggleRow(store.t("pip_on_leave"), store.t("pip_on_leave_sub"),
+                toggleRow(store.t("pip_on_leave"), HostEnvironment.pipBlocked ? store.t("pip_lc_off") : store.t("pip_on_leave_sub"),
                           $store.pipOnLeave, log: "PiP en quittant le lecteur")
                 Divider().background(Color.tBorder)
                 toggleRow(store.t("cfg_edge_swipe"), store.t("cfg_edge_swipe_sub"),
                           $store.edgeSwipeClose, log: "Fermer en glissant depuis le bord")
                 Divider().background(Color.tBorder)
+                toggleRow(store.t("cfg_live_dtap"), store.t("cfg_live_dtap_sub"),
+                          $store.liveDoubleTapSeek, log: "Double appui en direct : ±10 s")
+                Divider().background(Color.tBorder)
+                // Pas sur Mac (PlayerSwipe.supported) : rien à y régler ainsi.
+                if PlayerSwipe.supported {
+                    toggleRow(store.t("cfg_player_swipes"), store.t("cfg_player_swipes_sub"),
+                              $store.playerSwipes, log: "Volume et luminosité en glissant")
+                    Divider().background(Color.tBorder)
+                }
                 backgroundPlaybackRow
                 Divider().background(Color.tBorder)
                 toggleRow(store.t("low_latency"), store.t("low_latency_sub"),
@@ -1631,6 +1657,9 @@ struct SettingsView: View {
             .onChange(of: customSourceFocused) { focused in
                 if !focused { applyCustomSource() }
             }
+            Divider().background(Color.tBorder)
+            // Mon proxy : un proxy HTTP à soi (hôte:port, identifiants).
+            LiveProxyRow()
         }
         .onChange(of: store.liveSourceOrder) { order in
             logger.settingChanged("Ordre des sources", value: order.joined(separator: ","))
@@ -1822,8 +1851,45 @@ struct SettingsView: View {
                         startWebLogin()
                     }
                 }
+
+                Divider().background(Color.tBorder)
+
+                // Connecter une TV LG : la TV reçoit cette session web,
+                // chiffrée (QR code de l'app TV, TVPairSheet).
+                tvPairRow
             }
         }
+    }
+
+    /// « Connecter une TV LG » : seulement avec la session web, que la TV
+    /// reçoit ; sans elle, la ligne dit de la connecter d'abord.
+    @ViewBuilder private var tvPairRow: some View {
+        let ready = store.twitchWebToken != nil
+        Button { showTVPair = true } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "tv")
+                    .font(.tSystem(size: 17))
+                    .foregroundColor(ready ? .tPrimary : .tMuted)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(store.t("tvpair_title"))
+                        .font(.tCardTitle)
+                        .foregroundColor(ready ? .tText : .tMuted)
+                    Text(store.t(ready ? "tvpair_sub" : "tvpair_needs_web"))
+                        .font(.tMeta)
+                        .foregroundColor(.tMuted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 8)
+                if ready {
+                    Image(systemName: "qrcode.viewfinder")
+                        .font(.tSystem(size: 17, weight: .semibold))
+                        .foregroundColor(.tPrimary)
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!ready)
     }
 
     @ViewBuilder private var historiqueCard: some View {
@@ -1871,6 +1937,40 @@ struct SettingsView: View {
                             // instant, sinon iOS refuse de l'ouvrir par-dessus.
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { showImportChoice = true }
                         }
+                    }
+                }
+                // Envoi direct à l'autre app (TwitchUnblock ↔ TU Test), sans
+                // fichier : seulement si elle est installée (BackupTransfer).
+                let targets = BackupTransfer.installedTargets()
+                ForEach(targets) { peer in
+                    TSecondaryButton(title: store.t("transfer_send").replacingOccurrences(of: "{app}", with: peer.name),
+                                     icon: "arrow.up.forward.app", tint: .tPrimary, fullWidth: true) {
+                        backupMessage = nil
+                        BackupTransfer.send(to: peer, store: store) { ok in
+                            if !ok {
+                                backupMessage = store.t("transfer_failed")
+                                    .replacingOccurrences(of: "{app}", with: peer.name)
+                            }
+                        }
+                    }
+                }
+                if !targets.isEmpty {
+                    Text(store.t("transfer_sub"))
+                        .font(.tMeta).foregroundColor(.tMuted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                // Réglages laissés dans le presse-papiers par l'autre app
+                // (sauvegarde trop longue pour un lien).
+                if BackupTransfer.pasteboardHasBackup {
+                    TSecondaryButton(title: store.t("transfer_clip_import"), icon: "doc.on.clipboard",
+                                     tint: .tPrimary, fullWidth: true) {
+                        guard let file = BackupTransfer.readPasteboard() else {
+                            backupMessage = store.t("transfer_clip_none"); return
+                        }
+                        backupMessage = nil
+                        pendingImport = file
+                        // L'alerte de collage d'iOS se ferme encore.
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { showImportChoice = true }
                     }
                 }
                 if let backupMessage {
@@ -1921,7 +2021,7 @@ struct SettingsView: View {
             }
         }
         // Après l'import : dans la langue qu'il a peut-être changée.
-        importSummary = importSummaryText(summary, scope: scope)
+        importSummary = Backup.summaryText(summary, scope: scope, store: store)
         backupMessage = importSummary
         if scope == .all {
             logger.info("SAUVEGARDE", "Import : \(summary.follows) chaîne(s) ajoutée(s)",
@@ -1931,29 +2031,6 @@ struct SettingsView: View {
         }
         // La feuille du choix se ferme encore.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { showImportSummary = true }
-    }
-
-    /// Une ligne par sorte de chose reprise.
-    private func importSummaryText(_ s: Backup.Summary, scope: Backup.Scope) -> String {
-        func line(_ key: String, _ n: Int) -> String {
-            store.t(key).replacingOccurrences(of: "{n}", with: "\(n)")
-        }
-        var follows = line("import_sum_follows", s.follows)
-        // Au-delà de 300 suivis sur l'appareil, le reste n'est pas pris :
-        // dit, plutôt que compté comme ajouté.
-        if s.followsSkipped > 0 { follows += " " + String(format: store.t("import_capped"), s.followsSkipped) }
-        var lines = [follows,
-                     line("import_sum_categories", s.categories),
-                     line("import_sum_pinned", s.pinned),
-                     line("import_sum_hidden", s.hidden)]
-        if scope == .all {
-            lines.append(line("import_sum_settings", s.settings))
-            if s.settingsIgnored > 0 { lines.append(line("import_sum_ignored", s.settingsIgnored)) }
-            lines.append(line("import_sum_continue", s.continueWatching))
-        } else {
-            lines.append(store.t("import_sum_channels_only"))
-        }
-        return lines.joined(separator: "\n")
     }
 
     @ViewBuilder private var usageCard: some View {
@@ -2311,7 +2388,7 @@ struct SettingsView: View {
                            url: "https://github.com/MXFia19/TwitchUnblock")
                 creditLink(icon: "globe",
                            title: store.t("web_version"),
-                           url: "https://twitchunblock.vercel.app")
+                           url: "https://twitchunblock-web.pages.dev")
                 creditLink(icon: "bubble.left.and.bubble.right.fill",
                            title: store.t("discord_join"),
                            url: kDiscordURL)

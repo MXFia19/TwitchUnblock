@@ -43,8 +43,14 @@ struct TwitchUnblockApp: App {
                     Text(store.t("ntfy_retired_body"))
                 }
                 // Lien twitchunblock://live/<chaîne> (twitchunblock-test://
-                // pour TU Test) : ouvre le direct.
+                // pour TU Test) : ouvre le direct. <schéma>://import-settings :
+                // réglages envoyés par l'autre app (TU Test ↔ TwitchUnblock),
+                // importés après confirmation (BackupTransfer).
                 .onOpenURL { url in
+                    if url.scheme == kAppURLScheme, url.host == BackupTransfer.host {
+                        BackupTransfer.receive(url, store: store)
+                        return
+                    }
                     guard url.scheme == kAppURLScheme || url.scheme == "twitchunblock", url.host == "live",
                           let login = url.pathComponents.dropFirst().first, !login.isEmpty else { return }
                     NotificationCenter.default.post(name: .openLiveChannel, object: nil,

@@ -180,6 +180,8 @@ final class UsageService: ObservableObject {
         if !force, let last = lastPing, Date().timeIntervalSince(last) < pingInterval {
             return
         }
+        // Réserve du quota du Worker (QuotaPause) : les compteurs attendent, gardés ici.
+        if QuotaPause.active { return }
         let base = APIConfig.base
         guard let url = URL(string: "\(base)/api/ping") else { return }
 
@@ -214,6 +216,7 @@ final class UsageService: ObservableObject {
 
         do {
             let (_, resp) = try await URLSession.shared.data(for: req)
+            QuotaPause.note(resp)
             let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
             guard code == 200 else {
                 logger.debug("USAGE", "Ping refusé par le serveur", "HTTP \(code)")

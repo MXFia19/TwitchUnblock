@@ -163,7 +163,7 @@ final class UpdateChecker: ObservableObject {
             .compactMap(URL.init(string:))
             .filter { UIApplication.shared.canOpenURL($0) }
         let target = candidates.first
-            ?? URL(string: "https://twitchunblock.vercel.app/?update=ios")!
+            ?? URL(string: "https://twitchunblock-web.pages.dev/?update=ios")!
         UIApplication.shared.open(target)
     }
 

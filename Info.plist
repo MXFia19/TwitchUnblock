@@ -77,11 +77,19 @@
         <string>feather</string>
         <string>sidestore</string>
         <string>altstore</string>
+        <!-- Les autres apps de la famille (TwitchUnblock, TU Test, TU Dev :
+             schémas posés par la CI) : « Envoyer mes réglages à … » ne
+             s'affiche que si l'autre est installée (BackupTransfer). -->
+        <string>twitchunblock</string>
+        <string>twitchunblock-test</string>
+        <string>twitchunblock-dev</string>
     </array>
 
     <!-- ── Privacy ───────────────────────────────────────────── -->
+    <!-- Caméra : seulement pour lire le QR code de l'app TV (Compte
+         Twitch → Connecter une TV LG, TVPairSheet). -->
     <key>NSCameraUsageDescription</key>
-    <string>This app doesn't use the camera.</string>
+    <string>Used only to scan the QR code shown by the TwitchUnblock TV app, to connect your TV. Nothing is recorded.</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>This app doesn't use the microphone.</string>
 

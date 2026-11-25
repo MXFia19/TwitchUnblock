@@ -401,8 +401,13 @@ final class ChannelPointsService: ObservableObject {
             case 400: return nil
             // Route absente : Worker d'avant (personnel pas à jour).
             case 404: Self.spadeWorkerSkip[base] = .distantFuture
-            // Trop d'envois, ou quota du jour : le suivant, et celui-ci plus tard.
-            case 429: Self.spadeWorkerSkip[base] = Date().addingTimeInterval(10 * 60)
+            // Trop d'envois, ou quota du jour : le suivant, et celui-ci plus
+            // tard — jusqu'à minuit UTC pendant la réserve du quota du Worker
+            // (QuotaPause, code « quota_reserve »).
+            case 429:
+                let reserve = (json?["code"] as? String) == "quota_reserve"
+                let wait = reserve ? QuotaPause.wait((json?["retryAfter"] as? NSNumber)?.stringValue) : 10 * 60
+                Self.spadeWorkerSkip[base] = Date().addingTimeInterval(wait)
             // Twitch injoignable depuis ce Worker, panne : le suivant.
             default: break
             }

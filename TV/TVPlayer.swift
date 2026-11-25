@@ -115,7 +115,17 @@ final class TVPlayerModel: ObservableObject {
     /// Un chat à montrer : direct, VOD, ou clip dont la VOD existe encore.
     var hasChat: Bool { isLive || vodId != nil || clipVodId != nil }
     private var statusObs: NSKeyValueObservation?
+    /// Élément arrêté en cours de lecture (segment refusé) : voir retryWithoutOriginals.
+    private var failObs: NSObjectProtocol?
     private var timeObs: Any?
+    /// Direct : relevé du délai mis par la chaîne (ChannelDelay), toutes les 5 s.
+    private var delayObs: Any?
+    /// Délai mis par la chaîne du direct (0 sans) : écrit sous les qualités.
+    @Published private(set) var channelDelay = 0
+    /// Chaînes dont le délai a déjà été dit (avis du haut) pendant ce lancement.
+    private static var delayTold: Set<String> = []
+    /// Textes de la session (avis du délai), pris au chargement.
+    private var tr: @MainActor (String) -> String = { $0 }
     /// Siri, FaceTime… : la lecture mise en pause par tvOS repart à la fin
     /// (PlaybackInterruptions) — VOD à l'endroit, direct relu au bord.
     private var interruptions: PlaybackInterruptions?
@@ -128,11 +138,24 @@ final class TVPlayerModel: ObservableObject {
     /// tvOS n'a pas de bouton pour le remettre.
     let adBreaks = AdBreakWatcher(managesAudio: false, onBreak: { TVUsage.countAdBreak(roll: $0) })
 
-    private func flash(_ text: String) {
+    /// VOD sans son chez Twitch (VodSilence) : sondée 4 s après le départ.
+    private var silenceTask: Task<Void, Never>?
+
+    /// Délai mesuré : gardé pour le menu, et dit une fois par chaîne.
+    private func noteChannelDelay(_ d: Int) {
+        guard isLive, d != channelDelay else { return }
+        channelDelay = d
+        guard d > 0, !title.isEmpty, !Self.delayTold.contains(title) else { return }
+        Self.delayTold.insert(title)
+        logger.info("TV/LECTEUR", "Délai ajouté par la chaîne : \(d) s", title)
+        flash(tr("channel_delay_body").replacingOccurrences(of: "{s}", with: "\(d)"), seconds: 10)
+    }
+
+    private func flash(_ text: String, seconds: UInt64 = 4) {
         notice = text
         noticeTask?.cancel()
         noticeTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 4_000_000_000)
+            try? await Task.sleep(nanoseconds: seconds * 1_000_000_000)
             guard !Task.isCancelled else { return }
             self?.notice = nil
         }
@@ -143,6 +166,10 @@ final class TVPlayerModel: ObservableObject {
     func load(_ item: TVPlayback, session: TVSession) async -> Bool {
         current = item
         error = nil
+        channelDelay = 0
+        tr = { [weak session] key in session?.t(key) ?? key }
+        silenceTask?.cancel()
+        silenceTask = nil
         clipVodId = nil
         clipOffset = 0
         switch item {
@@ -193,6 +220,17 @@ final class TVPlayerModel: ObservableObject {
             // peut-être encore sur le CDN (VodUnmuteLoader).
             links = VodUnmuteLoader.worthTrying(markers) ? VodUnmuteLoader.wrap(data.links) : data.links
             variants = data.variants
+            // VOD dont la piste audio est vide chez Twitch : dit par l'avis du
+            // haut (12 s : pas de croix à la télécommande), comme sur l'iPhone.
+            let raw = data.links
+            silenceTask = Task { [weak self] in
+                try? await Task.sleep(nanoseconds: 4_000_000_000)
+                guard !Task.isCancelled else { return }
+                let verdict = await VodSilence.probe(links: raw)
+                guard !Task.isCancelled, verdict == .silent, let self, self.vodId == id else { return }
+                logger.info("TV/LECTEUR", "VOD sans son chez Twitch : piste audio vide (silence à 10, 50 et 90 %)")
+                self.flash(session.t("vod_no_sound"), seconds: 12)
+            }
         case .clip(let slug, let clipTitle, _):
             isLive = false
             title = clipTitle
@@ -225,12 +263,25 @@ final class TVPlayerModel: ObservableObject {
         item.externalMetadata = metadata()
         // Chercher avant que la playlist soit chargée ne tient pas.
         statusObs = item.observe(\.status, options: [.new]) { [weak self] item, _ in
-            guard item.status == .readyToPlay, seconds > 5, let model = self else { return }
+            guard let model = self else { return }
+            if item.status == .failed {
+                let reason = item.error?.localizedDescription ?? "?"
+                Task { @MainActor in model.retryWithoutOriginals(url, reason: reason) }
+                return
+            }
+            guard item.status == .readyToPlay, seconds > 5 else { return }
             Task { @MainActor in
                 model.player?.seek(to: CMTime(seconds: seconds, preferredTimescale: 600),
                                    toleranceBefore: .zero, toleranceAfter: .zero)
                 model.statusObs = nil
             }
+        }
+        // Arrêt en cours de lecture (segment refusé) : même relance.
+        if let o = failObs { NotificationCenter.default.removeObserver(o) }
+        failObs = NotificationCenter.default.addObserver(forName: .AVPlayerItemFailedToPlayToEndTime,
+                                                         object: item, queue: .main) { [weak self] note in
+            let reason = (note.userInfo?[AVPlayerItemFailedToPlayToEndTimeErrorKey] as? Error)?.localizedDescription ?? "?"
+            Task { @MainActor in self?.retryWithoutOriginals(url, reason: reason) }
         }
         let p = player ?? AVPlayer()
         p.replaceCurrentItem(with: item)
@@ -245,6 +296,18 @@ final class TVPlayerModel: ObservableObject {
             interruptions?.watch(p)
             // Direct : pauses pub suivies d'après l'image affichée.
             if isLive { adBreaks.attach(p) }
+            // Direct : délai mis par la chaîne (retard affiché moins distance au
+            // bord), dit une fois par chaîne, puis écrit sous les qualités.
+            if isLive {
+                delayObs = p.addPeriodicTimeObserver(forInterval: CMTime(seconds: 5, preferredTimescale: 1),
+                                                     queue: .main) { [weak self, weak p] _ in
+                    guard let model = self, let item = p?.currentItem,
+                          let edge = item.seekableTimeRanges.last?.timeRangeValue.end, edge.isNumeric else { return }
+                    let total = item.currentDate().map { Date().timeIntervalSince($0) }
+                    let d = ChannelDelay.seconds(total: total, behind: (edge - item.currentTime()).seconds)
+                    Task { @MainActor in model.noteChannelDelay(d) }
+                }
+            }
             // Avancement d'une VOD gardé toutes les 10 s (reprise au même endroit).
             if let id = vodId {
                 timeObs = p.addPeriodicTimeObserver(forInterval: CMTime(seconds: 10, preferredTimescale: 1),
@@ -288,6 +351,8 @@ final class TVPlayerModel: ObservableObject {
     func stop() {
         // Lecteur fermé : une fin d'interruption ne doit plus le relancer.
         interruptions = nil
+        silenceTask?.cancel()
+        silenceTask = nil
         adBreaks.detach()
         if let p = player, let id = vodId {
             let duration = p.currentItem?.duration.seconds ?? 0
@@ -295,9 +360,30 @@ final class TVPlayerModel: ObservableObject {
         }
         if let o = timeObs { player?.removeTimeObserver(o) }
         timeObs = nil
+        if let o = delayObs { player?.removeTimeObserver(o) }
+        delayObs = nil
+        channelDelay = 0
         statusObs = nil
+        if let o = failObs { NotificationCenter.default.removeObserver(o) }
+        failObs = nil
         player?.pause()
         player?.replaceCurrentItem(with: nil)
+    }
+
+    /// VOD en `tuunmute://` (passages coupés rétablis) arrêtée : l'original
+    /// d'un passage coupé, sondé « servi », est refusé (403) — effacé depuis,
+    /// ou sondé sur un cache du CDN. Relancée une fois au même endroit, sans
+    /// les originaux (`tumuted://`), comme sur l'iPhone ; ceux de cette VOD
+    /// ne sont plus crus jusqu'au prochain lancement. Toute autre adresse, ou
+    /// une seconde fois : la carte d'erreur du lecteur, comme avant.
+    private func retryWithoutOriginals(_ url: URL, reason: String) {
+        guard url.scheme == VodUnmuteLoader.scheme, links[quality] == url.absoluteString,
+              let p = player else { return }
+        let at = p.currentItem?.currentTime().seconds ?? 0
+        VodUnmuteLoader.distrustOriginals(url)
+        links = VodUnmuteLoader.wrapMuted(links)
+        logger.warn("TV/LECTEUR", "VOD interrompue", "\(reason) · relance, passages coupés réécrits")
+        start(at: at.isFinite ? at : 0)
     }
 
     /// Titre et sous-titre du panneau d'infos de tvOS.
@@ -379,9 +465,22 @@ struct TVPlayerController: UIViewControllerRepresentable {
     private func menus() -> [UIMenuElement] {
         let model = self.model
         let session = self.session
-        let qualities: [UIMenuElement] = sortQualities(Array(model.links.keys), variants: model.variants).map { key in
+        var qualities: [UIMenuElement] = sortQualities(Array(model.links.keys), variants: model.variants).map { key in
             UIAction(title: label(key), state: key == model.quality ? .on : .off) { _ in
                 Task { @MainActor in model.setQuality(key, session: session) }
+            }
+        }
+        // Grisés sous les qualités d'un direct : le délai mis par la chaîne, la
+        // qualité unique (chaîne sans transcodage), comme l'iPhone et le site.
+        if model.isLive {
+            var notes: [String] = []
+            if model.channelDelay > 0 {
+                notes.append(session.t("channel_delay_note").replacingOccurrences(of: "{s}", with: "\(model.channelDelay)"))
+            }
+            if isSourceOnly(Array(model.links.keys)) { notes.append(session.t("q_source_only_short")) }
+            if !notes.isEmpty {
+                qualities.append(UIMenu(title: "", options: .displayInline,
+                                        children: notes.map { UIAction(title: $0, attributes: .disabled) { _ in } }))
             }
         }
         var items: [UIMenuElement] = [

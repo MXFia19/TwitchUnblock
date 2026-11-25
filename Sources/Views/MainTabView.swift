@@ -27,6 +27,9 @@ struct MainTabView: View {
     /// iOS 16 : commandes du lecteur retirées juste avant sa réduction
     /// (hidePlayer) ; remis à faux quand il revient en grand.
     @State private var playerControlsAway = false
+    /// iOS 16 : lecteur réduit et effacé, rangé derrière l'app (zIndex) ; remis
+    /// à faux dès qu'il revient. Voir l'onChange de playerVisible.
+    @State private var playerTucked = false
     @State private var loading = false
     @State private var errorMsg: String? = nil
     /// Relance prévue au retour du réseau, lecteur resté sur son erreur.
@@ -65,6 +68,9 @@ struct MainTabView: View {
     /// Bascule annoncée dans le lecteur (4 s), et son effacement.
     @State private var hqNotice: String? = nil
     @State private var hqNoticeTask: Task<Void, Never>? = nil
+    /// Chaîne dont le jeton du compte a été redemandé pendant une pause pub
+    /// (voir subAdFreeOnAdBreak) : une fois par chaîne.
+    @State private var adBreakAccountChecked: String? = nil
     /// Image verticale du direct en cours (Dual Format, voir portraitLive),
     /// quand Twitch en a une ; jouée à la place de l'habituelle quand
     /// `verticalOn`, l'habituelle gardée pour le retour (`verticalBackup`).
@@ -88,6 +94,10 @@ struct MainTabView: View {
     // ── Débogage / synchro ────────────────────────────────────────────────
     /// Latence mesurée du direct, arrondie à la seconde (affichée).
     @State private var liveLatency: Double = 0
+    /// Délai mis par la chaîne du direct en cours (ChannelDelay), 0 sans.
+    @State private var channelDelay = 0
+    /// Chaînes dont le délai a déjà été dit pendant ce lancement.
+    @State private var delayToldFor: Set<String> = []
     /// Glissé vers le bas du lecteur en cours : décalage suivi au doigt.
     /// Objet gardé en @State sans être observé ici : seul PlayerPullEffect
     /// se redessine pendant le geste (voir PlayerPull.swift).
@@ -127,6 +137,11 @@ struct MainTabView: View {
     /// mémorisé qui s'applique ; pendant le geste, cet état local évite de
     /// toucher à l'AppStore à chaque image (voir `playerBody`).
     @State private var chatDragRatio: Double? = nil
+    /// Chat posé sur l'image, glissé par sa poignée (demande de joey) : au
+    /// lâcher, il s'aimante à la plus proche des six places. Objet gardé en
+    /// @State sans être observé ici, comme `pull` : seuls le chat, sa poignée
+    /// et l'aperçu de sa place se redessinent pendant le geste (ChatMove.swift).
+    @State private var chatMove = ChatMove()
     /// Paysage : l'îlot (ou l'encoche) est à droite. La marge de sécurité
     /// d'en face peut servir au chat (voir `playerBody`).
     @State private var notchOnTrailing = false
@@ -187,6 +202,9 @@ struct MainTabView: View {
     /// Passages de la VOD dont Twitch a coupé le son (et que l'app n'a pas pu
     /// rétablir), et nombre de segments rétablis (VodUnmuteLoader).
     @State private var vodMuted: [MutedRange] = []
+    /// VOD sans son chez Twitch (piste audio vide, VodSilence) : avis du
+    /// lecteur, jusqu'à sa croix.
+    @State private var vodSilent = false
     @State private var vodUnmuted = 0
 
     /// Infos affichées par-dessus l'image en mode immersif. Hors direct (VOD,
@@ -396,6 +414,9 @@ struct MainTabView: View {
             .onChange(of: showMultiLive) { on in DiscoverGate.shared.blocked = on || playerMode != nil }
             // Source du direct, jointe aux pauses pub comptées pour /stats.
             .onChange(of: menuLiveSource) { UsageService.shared.adSource = $0 }
+            // Chaîne regardée (direct, VOD) : Réglages → Chat → Identité dans
+            // le chat y propose aussi son badge à elle.
+            .onChange(of: playerChannelLogin) { ChatIdentity.watchingLogin = $0 }
             // iPhone : portrait, sauf lecteur ouvert en grand ou multi-live.
             .onChange(of: landscapeAllowed) { OrientationLock.allowLandscape($0) }
             .onAppear { OrientationLock.allowLandscape(landscapeAllowed) }
@@ -426,9 +447,29 @@ struct MainTabView: View {
                     .background(EdgeSwipeCloser(enabled: store.edgeSwipeClose && playerVisible && !closingPlayer) {
                         stopPlayer()
                     })
-                    .zIndex(100)
+                    // Réduit sous iOS 16, une fois effacé : derrière l'app
+                    // (playerTucked), plus par-dessus tout.
+                    .zIndex(playerVisible || !playerTucked ? 100 : -1)
                     .transition(.opacity)
             }
+        }
+        // Délai mis par la chaîne (lecteurs, ChannelDelay) : dit une fois par
+        // chaîne pendant ce lancement, puis écrit sous les qualités.
+        .onReceive(NotificationCenter.default.publisher(for: ChannelDelay.changed)) { n in
+            let s = n.userInfo?["s"] as? Int ?? 0
+            channelDelay = isLivePlaying ? s : 0
+            guard s > 0, isLivePlaying, case .live(let ch)? = playerMode,
+                  !delayToldFor.contains(ch.lowercased()) else { return }
+            delayToldFor.insert(ch.lowercased())
+            logger.info("LECTEUR", "Délai ajouté par la chaîne : \(s) s", ch)
+            InAppNotices.shared.show(InAppNotice(kind: .info, title: store.t("channel_delay_title"),
+                                                 body: store.t("channel_delay_body").replacingOccurrences(of: "{s}", with: "\(s)")))
+        }
+        // Source Bulgarie refusée par le réseau (filtre DNS) : dit une fois
+        // par lancement (BulgariaRelayBlock).
+        .onReceive(NotificationCenter.default.publisher(for: BulgariaRelayBlock.blocked)) { _ in
+            InAppNotices.shared.show(InAppNotice(kind: .info, title: store.t("bg_blocked_title"),
+                                                 body: store.t("bg_blocked_body")))
         }
         // Menu « ⋯ » du lecteur immersif.
         .sheet(isPresented: $showPlayerMenu) {
@@ -438,6 +479,7 @@ struct MainTabView: View {
                 canRewind: liveDvrVideoId != nil,
                 isDvr: dvrSourceChannel != nil,
                 variants: qualityVariants,
+                qualityNote: menuQualityNote,
                 onSelectQuality: { q in
                     // Toucher la qualité déjà cochée ne change pas la préférence.
                     if q != currentQuality(qualityLinks ?? [:]) {
@@ -830,6 +872,21 @@ struct MainTabView: View {
             UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder),
                                             to: nil, from: nil, for: nil)
         }
+        // Lecteur réduit sous iOS 16 (fb_mwens1m9, fb_mw3h29pt) : effacé mais
+        // resté au-dessus de tout (zIndex 100), avec allowsHitTesting(false).
+        // iOS 16 ne transmet pas toujours ce refus aux vues UIKit qu'il
+        // contient (surface vidéo, listes du chat) : invisibles, elles
+        // prenaient les touchers, et l'app ne répondait plus — le son et le
+        // PiP, eux, continuaient. Une fois le fondu fini, il passe derrière
+        // l'app, sans quitter la fenêtre (son, PiP) ; il repasse devant dès
+        // qu'il revient. iOS 17 et plus : rien ne change.
+        .onChange(of: playerVisible) { visible in
+            if visible { playerTucked = false; return }
+            if #available(iOS 17, *) { return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                if !playerVisible { playerTucked = true }
+            }
+        }
         // Chat seul (empilé, sans image) après le bouton de rotation : retour
         // au portrait aussi. Le lecteur ne le fait plus en disparaissant (il
         // disparaît aussi à chaque relance).
@@ -1097,6 +1154,10 @@ struct MainTabView: View {
         // Chat posé sur l'image : côté et hauteur choisis dans les réglages.
         // La colonne, elle, reste à droite sur toute la hauteur.
         let overlayLayout = split && mode == .overlay ? store.chatOverlayLayout : ChatOverlayLayout()
+        // Posé sur l'image, le chat se déplace aussi au doigt, par sa poignée
+        // du haut (ChatMove.swift), qui a sa place au-dessus des messages.
+        let chatMovable = split && mode == .overlay
+        let chatHandleRoom: CGFloat = chatMovable ? 14 : 0
         let chatOnLeft  = overlayLayout.side == .left
         let overlayHalf = overlayLayout.half
         // Marge de sécurité du côté du chat, reprise quand l'îlot (ou
@@ -1210,6 +1271,8 @@ struct MainTabView: View {
             // il débordait à moitié sur l'image, et la poignée tombait sur
             // le texte des messages.
             chatPane(style: chatStyle)
+                // Posé sur l'image : de la place en haut pour sa poignée.
+                .padding(.top, chatHandleRoom)
                 .padding(.trailing, rightReclaim > 0 ? 16 : 0)
                 .ignoresSafeArea(.container, edges: rightReclaim > 0 ? .trailing : [])
                 .frame(width: chatWidth.map { $0 + leftReclaim }, alignment: chatOnLeft ? .trailing : .leading)
@@ -1222,13 +1285,38 @@ struct MainTabView: View {
                 .overlay(alignment: chatOnLeft ? .trailing : .leading) {
                     if split { chatResizeHandle(totalWidth: size.width, leftSide: chatOnLeft) }
                 }
+                // Haut du chat posé sur l'image : la poignée qui le déplace.
+                // Au lâcher, il se pose à la plus proche des six places (le
+                // réglage « Chat posé sur l'image » suit).
+                .overlay(alignment: .top) {
+                    if chatMovable {
+                        ChatMoveHandle(move: chatMove, layout: overlayLayout, size: size,
+                                       chatWidth: chatWidth ?? 0, onDrop: dropChat)
+                    }
+                }
                 .frame(maxHeight: verticalOverlay ? nil : CGFloat.infinity, alignment: chatAlign)
                 .frame(width: chatColumn, alignment: .trailing)
                 .offset(x: chatOnLeft ? -(size.width - (chatWidth ?? 0)) : 0)
+                // Glissé par sa poignée : le chat suit le doigt.
+                .modifier(ChatMoveEffect(move: chatMove, enabled: chatMovable))
                 .frame(height: verticalOverlay ? 0 : nil, alignment: .bottom)
                 .opacity(chatVisible ? 1 : 0)
                 .allowsHitTesting(chatVisible)
         }
+        // Chat glissé par sa poignée : la place où il va se poser.
+        .overlay(alignment: .topLeading) {
+            if chatMovable {
+                ChatSlotPreview(move: chatMove, layout: overlayLayout, size: size, chatWidth: chatWidth ?? 0)
+            }
+        }
+    }
+
+    /// Chat posé sur l'image lâché par sa poignée (ChatMoveHandle) : sa
+    /// nouvelle place, gardée comme celle des Réglages.
+    private func dropChat(_ target: ChatOverlayLayout) {
+        guard target != store.chatOverlayLayout else { return }
+        store.chatOverlayLayout = target
+        logger.info("LECTEUR", "Chat déplacé au doigt", target.raw)
     }
 
     /// Poignée du bord vidéo / chat, qui se saisit pour régler la largeur.
@@ -1366,6 +1454,8 @@ struct MainTabView: View {
                 chapters: vodChapters,
                 mutedRanges: vodMuted,
                 unmutedCount: vodUnmuted,
+                silentVod: vodSilent,
+                onDismissSilent: { vodSilent = false },
                 nowPlaying: nowPlayingMeta,
                 speed: playbackSpeed,
                 // Toujours une vitesse imposée par le lecteur (voir forcedVodSpeed).
@@ -1654,6 +1744,16 @@ struct MainTabView: View {
     }
 
     /// Arrondi à la seconde : sinon la vue se recalculerait à chaque tick.
+    /// Menu ⋯ : sous les qualités d'un direct, le délai mis par la chaîne et
+    /// la qualité unique (chaîne sans transcodage), comme sur le site.
+    private var menuQualityNote: String? {
+        guard isLivePlaying else { return nil }
+        var parts: [String] = []
+        if channelDelay > 0 { parts.append(store.t("channel_delay_note").replacingOccurrences(of: "{s}", with: "\(channelDelay)")) }
+        if isSourceOnly(Array((qualityLinks ?? [:]).keys)) { parts.append(store.t("q_source_only")) }
+        return parts.isEmpty ? nil : parts.joined(separator: "\n")
+    }
+
     private func updateLatency(_ value: Double?) {
         let rounded = (value ?? 0).rounded()
         if abs(rounded - liveLatency) >= 1 { liveLatency = rounded }
@@ -2091,11 +2191,25 @@ struct MainTabView: View {
     }
 
     // MARK: – Mini-barre (lecteur réduit)
+    /// Lecteur immersif dont la vidéo passe dans la mini-barre (cartes de dave
+    /// et fb_mwsp2g51 : une image plutôt que le son seul, comme sur Android).
+    /// Seulement avec une image à montrer : ni chargement, ni erreur, ni PiP
+    /// (l'image est déjà dans la fenêtre), ni chat seul, ni son seul. Le
+    /// lecteur natif n'a pas d'AVPlayer à partager : la barre reste comme avant.
+    private var miniPlayerModel: ImmersivePlayerModel? {
+        guard store.immersivePlayer, !loading, errorMsg == nil, !pipState.active, !chatOnly,
+              let links = qualityLinks, !isAudioQuality(currentQuality(links)) else { return nil }
+        return ImmersivePlayerModel.nowPlayingOwner
+    }
+
     @ViewBuilder
     private var miniBar: some View {
+        let mini = miniPlayerModel
         HStack(spacing: TSpace.md) {
             // Chargement réduit : il tourne encore ; en échec, on le dit.
-            if loading {
+            if let mini {
+                MiniPlayerVideo(player: mini.player)
+            } else if loading {
                 ProgressView().tint(.tPrimary).scaleEffect(0.7)
                     .frame(width: 16, height: 16)
             } else if errorMsg != nil {
@@ -2116,6 +2230,7 @@ struct MainTabView: View {
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
+            if let mini { MiniPlayerPlayButton(model: mini) }
             TIconButton(icon: "xmark", size: 30) { stopPlayer() }
         }
         .padding(.horizontal, TSpace.md)
@@ -2178,7 +2293,8 @@ struct MainTabView: View {
         .contentShape(Rectangle())
         .padding(.leading, sideTabs && !railInStatusColumn ? SideTabRail.width : 0)
         .padding(.horizontal, TSpace.md)
-        .padding(.bottom, (sideTabs ? Self.sideBarsBottom : 92) + (miniShown ? 60 : 0))
+        // Mini-barre avec sa vidéo (miniPlayerModel) : plus haute.
+        .padding(.bottom, (sideTabs ? Self.sideBarsBottom : 92) + (miniShown ? (miniPlayerModel != nil ? 76 : 60) : 0))
     }
 
     /// Un seul son à la fois : le lecteur se ferme.
@@ -2262,6 +2378,23 @@ struct MainTabView: View {
         startPlayback(.live(channelName: channel), soft: soft, keepVisibility: keepVisibility)
     }
 
+    /// VOD dont la piste audio est vide chez Twitch (VodSilence) : sondée 4 s
+    /// après le départ (les premiers segments d'abord), dite par l'avis du
+    /// lecteur. `links` : adresses du CDN, pas celles du chargeur de son
+    /// rétabli.
+    private func probeSilence(links: [String: String], gen: Int) {
+        Task {
+            try? await Task.sleep(nanoseconds: 4_000_000_000)
+            guard await MainActor.run(body: { gen == loadGeneration }) else { return }
+            let verdict = await VodSilence.probe(links: links)
+            await MainActor.run {
+                guard gen == loadGeneration, verdict == .silent else { return }
+                vodSilent = true
+                logger.info("LECTEUR", "VOD sans son chez Twitch : piste audio vide (silence à 10, 50 et 90 %)", nil)
+            }
+        }
+    }
+
     /// `soft` : on reste sur la même chaîne (direct ↔ enregistrement). Le
     /// lecteur en place continue de jouer pendant que la nouvelle source se
     /// résout, au lieu d'être démonté et remplacé par un écran d'attente.
@@ -2302,6 +2435,7 @@ struct MainTabView: View {
         vodPlaybackTime = 0
         liveDvrVideoId  = nil
         liveLatency     = 0
+        channelDelay    = 0
         ChatSync.shared.reset()
         pull.y          = 0
         loadingSource   = nil
@@ -2361,6 +2495,7 @@ struct MainTabView: View {
         vodChapters = []
         vodMuted = []
         vodUnmuted = 0
+        vodSilent = false
         Task {
             switch mode {
             case .clip(let slug, let title):
@@ -2430,6 +2565,7 @@ struct MainTabView: View {
                         loading         = false
                         switchingSource = false
                     }
+                    probeSilence(links: data.links, gen: gen)
                 }
 
             case .recovered(let rec):
@@ -2451,6 +2587,7 @@ struct MainTabView: View {
                     loading         = false
                     switchingSource = false
                 }
+                probeSilence(links: rec.links, gen: gen)
 
             case .live(let channel):
                 // Abonné sans pub sur cette chaîne : le direct passe par son
@@ -2591,6 +2728,7 @@ struct MainTabView: View {
             liveStartedAt      = nil
             liveUptimeText     = ""
             liveLatency        = 0
+            channelDelay       = 0
             ChatSync.shared.reset()
             pull.y             = 0
             liveAvatar         = nil
@@ -2622,6 +2760,7 @@ struct MainTabView: View {
             vodChapters        = []
             vodMuted           = []
             vodUnmuted         = 0
+            vodSilent          = false
             closingPlayer      = false
         }
     }
@@ -2692,6 +2831,12 @@ struct MainTabView: View {
     /// elle, la refait). Sur la source sans pub : une pause de la chaîne
     /// (écran violet), que le retour attend.
     private func adBreakChanged(_ left: Int?) {
+        // Pause pub sur une source habituelle : un abonné y a peut-être droit
+        // au direct sans pub par son compte.
+        if hqLive == nil, left != nil, linksAreLive, dvrSourceChannel == nil,
+           !switchingSource, !closingPlayer, liveSourceUsed != "account" {
+            subAdFreeOnAdBreak()
+        }
         guard var live = hqLive, linksAreLive, dvrSourceChannel == nil,
               !switchingSource, !closingPlayer else { return }
         if live.onAdFree {
@@ -2700,6 +2845,36 @@ struct MainTabView: View {
             hqLive = live
         } else if let left, playerPlaying {
             switchToAdFree(remaining: left)
+        }
+    }
+
+    /// Pause pub sur une source habituelle (pub coupée, image figée) alors
+    /// qu'un abonné y aurait droit au direct sans pub : jeton du compte trop
+    /// lent à l'ouverture (6 s au plus), ou abonnement pris entre-temps. Il est
+    /// redemandé une fois ; sans pub, le direct est relu par le compte. Sans
+    /// session web, l'app dit une fois comment l'avoir (dave, abonné :
+    /// « Channel ad break », puis image figée).
+    private func subAdFreeOnAdBreak() {
+        guard let channel = currentChannelName, adBreakAccountChecked != channel else { return }
+        adBreakAccountChecked = channel
+        guard let web = store.accountPlaybackWebToken(for: channel) else {
+            if !(store.twitchLogin ?? "").isEmpty, store.subAdFree, (store.twitchWebToken ?? "").isEmpty {
+                showHQNotice(store.t("sub_adfree_hint"), once: "sub_adfree_hint")
+            }
+            return
+        }
+        let gen = loadGeneration
+        Task { @MainActor in
+            let reply = await accountPlaybackToken(login: channel, webToken: web,
+                                                   integrity: dropsIntegrity(for: web))
+            guard gen == loadGeneration, currentChannelName == channel else { return }
+            guard case .token(let pat) = reply, pat.adFree, !pat.forbidden else {
+                logger.info("PUB", "Pause pub : le compte n'est pas sans pub ici", channel)
+                return
+            }
+            FreshAccountToken.shared.put(pat, login: channel)
+            logger.info("PUB", "Pause pub : compte sans pub sur cette chaîne, direct relu par le compte", channel)
+            reloadCurrent()
         }
     }
 
@@ -3229,4 +3404,34 @@ private struct HQLive {
     var quickAds = 0
     /// Bascules faites : l'avis « par ton compte » n'est plus redit après.
     var switches = 0
+}
+
+// MARK: – Mini-lecteur (lecteur réduit)
+/// Image du mini-lecteur : la vidéo du lecteur immersif dans une seconde
+/// surface, sur le même AVPlayer (même son, rien de plus à télécharger). Pas
+/// observée : elle ne se redessine pas à chaque instant de la lecture.
+private struct MiniPlayerVideo: View {
+    let player: AVPlayer
+
+    var body: some View {
+        PlayerLayerView(player: player)
+            .frame(width: 89, height: 50)
+            .background(Color.black)
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+    }
+}
+
+/// Lecture / pause depuis le mini-lecteur, sans rouvrir le lecteur.
+private struct MiniPlayerPlayButton: View {
+    @ObservedObject var model: ImmersivePlayerModel
+    @EnvironmentObject var store: AppStore
+
+    var body: some View {
+        TIconButton(icon: model.isPlaying ? "pause.fill" : "play.fill", tint: .tText, size: 30) {
+            model.setPlaying(!model.isPlaying)
+        }
+        .accessibilityLabel(store.t(model.isPlaying ? "multi_pause" : "multi_play"))
+    }
 }

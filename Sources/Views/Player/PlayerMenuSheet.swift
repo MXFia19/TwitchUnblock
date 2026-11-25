@@ -14,6 +14,9 @@ struct PlayerMenuSheet: View {
     /// Hauteur et cadence de chaque qualité : « 1440p (Source) » plutôt que
     /// « Source » quand on la connaît.
     var variants: [String: VariantInfo] = [:]
+    /// Sous les qualités : le délai mis par la chaîne, la qualité unique
+    /// (chaîne sans transcodage). nil : rien.
+    var qualityNote: String? = nil
 
     var onSelectQuality: (String) -> Void = { _ in }
     /// Vitesse de lecture en cours ; nil masque la section.
@@ -96,6 +99,15 @@ struct PlayerMenuSheet: View {
                             .padding(.horizontal, TSpace.lg)
                         }
                         .padding(.vertical, TSpace.sm)
+
+                        if let qualityNote {
+                            Text(qualityNote)
+                                .font(.tMeta).foregroundColor(.tMuted)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, TSpace.lg)
+                                .padding(.bottom, TSpace.sm)
+                        }
 
                         divider
                     }

@@ -235,6 +235,15 @@ struct HideMenuButtons: View {
                       systemImage: "eye.slash")
             }
         }
+        // Ses tags (5 au plus) : masquer tous les lives qui en portent un.
+        ForEach(Array(HiddenContent.cleanTags(stream.tags).filter { !store.hiddenTags.contains($0) }.prefix(5)),
+                id: \.self) { tag in
+            Button(role: .destructive) {
+                withAnimation { store.hideTag(tag) }
+            } label: {
+                Label(store.t("hide_tag").replacingOccurrences(of: "{t}", with: tag), systemImage: "tag.slash")
+            }
+        }
     }
 }
 

@@ -1,46 +1,47 @@
-# Live playlist checks
+# Tests
 
-Run `sh tools/test-live-playlists.sh` with Swift 5.9 or newer. The fixtures compile
-and exercise the production parser and rewriter without a Twitch account or
-network access. CI additionally typechecks the loader and monitor against real
-AVFoundation and Combine on macOS. The existing iOS/tvOS build workflows remain
-the full app compilation checks.
+Checks that need no Twitch account and no network. CI runs each one on its own when the code it covers changes; the full app builds (`build.yml`, `build-tvos.yml`) stay the compilation checks.
 
-Automatic CI runs only when the parser, loader, monitor, their test sources,
-the test script, or the playlist workflow changes. The longer native macOS and
-iOS simulator playback workflows are manual-only (`workflow_dispatch`).
+| Check | Run it | Workflow |
+|---|---|---|
+| VOD silence probe | `sh tools/test-vod-silence.sh` | `test-vod-silence.yml` |
+| Live playlists (parser, ad filtering) | `sh tools/test-live-playlists.sh` | `test-live-playlists.yml` |
+| Native playback (AVPlayer, macOS) | manual | `test-native-playback.yml`: see [NativePlayback](NativePlayback/README.md) |
+| Playback geometry (iPhone simulator) | manual | `test-ios-playback.yml` |
 
-The ad markers follow [Streamlink's Twitch plugin](https://github.com/streamlink/streamlink/blob/master/src/streamlink/plugins/twitch.py):
-`twitch-stitched-ad` classes, `stitched-ad-` IDs, and `Amazon` EXTINF titles.
-The Swift implementation uses HLS `EXT-X-GAP` instead of Streamlink's progressive
-output filtering. [Apple documents GAP handling](https://developer.apple.com/videos/play/wwdc2017/514/)
-for temporary segment unavailability. Sequence numbers, durations, byte ranges,
-keys, and discontinuities stay intact; the next clean segment keeps its original
-initialization map. Twitch prefetch entries are removed before playback.
+Swift 5.9 or newer, on macOS.
 
-The manual [native playback workflow](NativePlayback/README.md) additionally
-checks decoded AVPlayer frames and segment requests for HTTPS controls, all-ad
-preroll, and midroll recovery on macOS.
+## VOD silence probe
 
-Device validation is still required: parser fixtures cannot prove AVPlayer's
-buffering, background, PiP, or AirPlay behavior. Before release, check:
+Compiles `Sources/Services/VodSilence.swift` with `VodSilenceTests.swift`:
+- TS and fMP4 segments built in the test (silent 6-byte frames, sound, Twitch's 5-sample fMP4 fragments, partial reads, two-track fMP4);
+- the 10/50/90 % segment choice around muted parts;
+- 300 rounds of randomly damaged bytes (no crash, no endless loop).
 
-- Start during an all-ad preroll, wait through a long midroll, and confirm live
-  video resumes. Check MPEG-TS and fMP4 streams and observe segment requests to
-  confirm GAP-marked media is not downloaded.
-- Repeat with low latency on/off, audio-only, native/custom players, multi-live,
-  and Apple TV. A known multi-live preroll gets up to 220 seconds before its
-  startup watchdog retries; stale or failed playlist requests do not get grace.
-- Pause, change quality/channel, and close during a break. No cancelled request
-  should finish into the old player; a paused player must stay paused.
-- Test existing higher-quality account fallback and return after the account
-  playlist's startup window is clear. Buffered clean video must not trigger an
-  early switch just because a future ad is announced.
-- Enter AirPlay: the receiver uses the original CDN playlist, so local GAP
-  filtering is unavailable. This fallback is logged and the original signed URL
-  is preserved. The metadata banner/muting behavior remains available locally.
+The website's copy of the probe has its own checks: `node tools/silence-check.mjs` in the web repo.
 
-Filtering does not recover video Twitch replaced with ads. During a break the
-player may hold its last frame or buffer until clean media arrives. This change
-does not add Streamlink's prefetch downloader or expand proxy switching beyond
-the existing higher-quality account fallback.
+## Live playlists
+
+The fixtures exercise the production parser and rewriter. CI also typechecks the loader and monitor against the real AVFoundation and Combine on macOS. It runs when the parser, loader, monitor, their tests, the script or the workflow change.
+
+<details>
+<summary><b>How ads are filtered</b></summary>
+
+The ad markers follow [Streamlink's Twitch plugin](https://github.com/streamlink/streamlink/blob/master/src/streamlink/plugins/twitch.py): `twitch-stitched-ad` classes, `stitched-ad-` IDs, and `Amazon` EXTINF titles. The Swift implementation uses HLS `EXT-X-GAP` instead of Streamlink's progressive output filtering ([Apple documents GAP handling](https://developer.apple.com/videos/play/wwdc2017/514/) for temporary segment unavailability). Sequence numbers, durations, byte ranges, keys and discontinuities stay intact; the next clean segment keeps its original initialization map. Twitch prefetch entries are removed before playback.
+
+Filtering doesn't recover video Twitch replaced with ads: during a break the player may hold its last frame or buffer until clean media arrives. There's no Streamlink prefetch downloader, and no proxy switching beyond the existing higher-quality account fallback.
+
+</details>
+
+<details>
+<summary><b>Device checks before a release</b></summary>
+
+Parser fixtures can't prove AVPlayer's buffering, background, PiP or AirPlay behavior. Before a release, check:
+
+- Start during an all-ad preroll, wait through a long midroll, and confirm the live video resumes. Check MPEG-TS and fMP4 streams, and watch the segment requests to confirm GAP-marked media isn't downloaded.
+- Repeat with low latency on and off, audio only, the native and custom players, multi-live and Apple TV. A known multi-live preroll gets up to 220 seconds before its startup watchdog retries; stale or failed playlist requests get no grace.
+- Pause, change quality or channel, and close during a break. No cancelled request should finish into the old player; a paused player must stay paused.
+- Test the higher-quality account fallback and the return once the account playlist's startup window is clear. Buffered clean video must not trigger an early switch just because a future ad is announced.
+- Enter AirPlay: the receiver uses the original CDN playlist, so local GAP filtering isn't available. This fallback is logged and the original signed URL is kept; the ad banner and muting still work locally.
+
+</details>

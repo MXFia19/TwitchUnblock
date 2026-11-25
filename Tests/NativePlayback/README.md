@@ -1,55 +1,38 @@
 # Native playback regression
 
-The manual `Native playback regression tests` GitHub Actions workflow compiles
-`Playback.swift` with the production playlist parser, resource loader, and ad
-monitor, then plays synthetic H.264/AAC MPEG-TS streams with AVPlayer on macOS.
-No Twitch account or live Twitch stream is used.
+Manual GitHub Actions workflows that play synthetic streams through the production playlist parser, resource loader and ad monitor. No Twitch account, no live stream.
 
-The checks also attach the production `PlayerLayerGeometry` controller to a
-rendered AVPlayerLayer. They compare its frame proportions with decoded video
-through ad discontinuities, including a viewport resize and fit/fill changes
-while the last clean frame is held. A passing result requires the geometry
-controller to be active; merely falling back to AVPlayer's default sizing does
-not pass.
+| Workflow | What it checks |
+|---|---|
+| `Native playback regression tests` (`test-native-playback.yml`) | AVPlayer on macOS with H.264/AAC MPEG-TS streams: the five cases below, and the video's proportions through ad gaps (the production `PlayerLayerGeometry` controller on a rendered `AVPlayerLayer`, with a viewport resize and fit/fill changes while the last clean frame is held) |
+| `iOS playback geometry regression` (`test-ios-playback.yml`) | A small iPhone simulator app built with the exact `PlayerLayerUIView` and `PlayerLayerView` from `ImmersivePlayer.swift`: the ad banner, and the proportions before, during and after the gap, with a JSON report and a screenshot |
 
-The separate manual `iOS playback geometry regression` workflow builds a small
-iPhone simulator app using the exact `PlayerLayerUIView` and `PlayerLayerView`
-definitions extracted from `ImmersivePlayer.swift`. It shows the ad banner,
-checks video proportions before/during/after the gap, and saves a JSON report
-and screenshot. This validates the guard on iOS but does not guarantee that a
-particular physical-device/Twitch rendering failure can be reproduced.
+A pass needs the geometry controller to be active: falling back to AVPlayer's default sizing doesn't pass. The simulator run validates the guard on iOS, but can't reproduce every physical device or Twitch rendering failure.
 
-The five cases require:
+## The five cases
 
-- Direct HTTPS control: advancing playback and decoded video frames.
-- Wrapped control: the same through the production resource loader.
-- All-ad preroll: an observed waiting indicator, followed by decoded clean video.
-- Midroll: decoded frames before and after the break.
-- Title-only sliding midroll: observed ad indication and decoded clean video
-  before and after the break, while older segments leave the playlist window.
+- **Direct HTTPS control:** playback advances and video frames are decoded.
+- **Wrapped control:** the same, through the production resource loader.
+- **All-ad preroll:** a waiting indicator shows, then clean video is decoded.
+- **Midroll:** frames are decoded before and after the break.
+- **Title-only sliding midroll:** the ad is seen, and clean video is decoded before and after the break, while older segments leave the playlist window.
 
-A separate deterministic check feeds playlist notifications into the production
-ad monitor with a simulated waiting player and held playback date. It requires
-the indicator to survive twelve sliding-window refreshes and clear on clean
-content. This covers the held-clock branch even when native macOS playback
-advances its clock through GAPs. Run the compiled check with `--held-clock-only`
-to exercise this branch without the HTTPS server.
+A separate deterministic check feeds playlist notifications into the production ad monitor, with a simulated waiting player and a held playback date: the indicator must survive twelve sliding-window refreshes and clear on clean content. It covers the held-clock branch even when native macOS playback moves its clock through gaps. Run the compiled check with `--held-clock-only` to try that branch without the HTTPS server.
 
-Server request logs must show no marked ad segments fetched in any ad case.
-Each case uses its own URL and request history. Any failed preflight or playback
-assertion fails the workflow; an empty request log cannot count as success.
+## Rules
 
-The fixture uses a real HTTPS server bound to `127.0.0.1:8765`. The workflow
-creates a one-day localhost certificate and trusts it only on its disposable
-hosted runner. It waits for HTTPS health checks before launching the test.
-The server avoids reverse DNS on startup. Do not install its temporary trust
-certificate on a personal machine simply to run this workflow.
+- The server's request logs must show **no marked ad segment fetched** in any ad case.
+- Each case has its own URL and request history.
+- Any failed preflight or playback assertion fails the workflow; an empty request log never counts as a success.
 
-This replaces the broken `fixture.invalid` URLProtocol interceptor, which the
-loader's URLSession did not use. Readiness checks also replace a fixed one-second
-startup delay. Neither change requires a production networking exception.
+<details>
+<summary><b>Test server and media</b></summary>
 
-The media is a synthetic blue image and sine tone, generated with:
+The fixture uses a real HTTPS server bound to `127.0.0.1:8765` (`server.py`). The workflow creates a one-day localhost certificate and trusts it only on its disposable hosted runner, then waits for HTTPS health checks before launching the test. The server skips reverse DNS on startup. **Don't install its temporary certificate on a personal machine** just to run this workflow.
+
+This replaced the broken `fixture.invalid` URLProtocol interceptor, which the loader's URLSession didn't use; readiness checks also replaced a fixed one-second startup delay. Neither needs a networking exception in the app.
+
+The media is a synthetic blue image and a sine tone, made with:
 
 ```sh
 ffmpeg -f lavfi -i color=c=blue:s=160x90:r=10 \
@@ -59,7 +42,6 @@ ffmpeg -f lavfi -i color=c=blue:s=160x90:r=10 \
   -hls_segment_filename media/segment%03d.ts media/source.m3u8
 ```
 
-Coverage is buffered MPEG-TS playback on macOS. Physical iOS/tvOS devices,
-fMP4, low-latency timing, AirPlay, background playback, and live Twitch behavior
-remain separate device checks. Pure parser regressions additionally cover
-quoted attribute values, END-ON-NEXT boundaries, and retained title-only history.
+Coverage is buffered MPEG-TS playback on macOS. Physical iOS and tvOS devices, fMP4, low-latency timing, AirPlay, background playback and live Twitch behavior remain device checks. Pure parser regressions also cover quoted attribute values, END-ON-NEXT boundaries and kept title-only history.
+
+</details>

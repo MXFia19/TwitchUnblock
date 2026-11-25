@@ -220,7 +220,9 @@ struct ChatMessage: Identifiable {
     let displayName: String
     let color: Color
     let badges: [TwitchBadge]
-    let tokens: [MessageToken]
+    /// Variable : des emotes tierces arrivées après coup y remplacent leurs
+    /// mots (adoptEmotes).
+    var tokens: [MessageToken]
     let timestamp: Date
     var isAction: Bool = false
     var isHighlight: Bool = false
@@ -244,6 +246,39 @@ struct ChatMessage: Identifiable {
     var raider: String? = nil
     /// Annonce : couleur choisie par le modérateur.
     var accent: Color? = nil
+}
+
+// MARK: – Emotes tierces arrivées après les messages
+extension ChatMessage {
+    /// Mots restés en texte : ceux qui peuvent être une emote BTTV, FFZ ou 7TV.
+    var plainWords: [String] {
+        tokens.compactMap { token -> String? in
+            if case .text(let word) = token, !word.isEmpty, !word.contains(" ") { return word }
+            return nil
+        }
+    }
+
+    /// Ses mots trouvés dans `found` deviennent des emotes, comme à la
+    /// réception si elles avaient déjà été là. Faux si rien ne change.
+    mutating func adoptEmotes(_ found: [String: TwitchEmote]) -> Bool {
+        guard tokens.contains(where: { if case .text(let w) = $0 { return found[w] != nil }; return false }) else {
+            return false
+        }
+        tokens = tokens.map { token -> MessageToken in
+            if case .text(let word) = token, let e = found[word] { return .emote(e) }
+            return token
+        }
+        return true
+    }
+}
+
+/// Emotes tierces des mots restés en texte de ces messages (lignes de l'app
+/// exclues), en une requête au service d'emotes.
+func lateEmotes(in lists: [[ChatMessage]], channelId: String?) async -> [String: TwitchEmote] {
+    var names = Set<String>()
+    for list in lists { for m in list where m.userId != "system" { names.formUnion(m.plainWords) } }
+    guard !names.isEmpty else { return [:] }
+    return await EmoteService.shared.resolveMany(names, channelId: channelId)
 }
 
 // MARK: – Tokenisation d'un segment de texte

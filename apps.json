@@ -203,6 +203,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.7.55",
+          "buildVersion": "427",
+          "date": "2026-11-25",
+          "localizedDescription": "- VODs by game: the filter now finds VODs where the game was played mid-stream, not only the one they started with",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-427/TwitchUnblock.ipa",
+          "size": 4898625,
+          "commit": "18598b9d0a93122ffce62c2d5f7b526d965f9388"
+        },
+        {
           "version": "1.7.54",
           "buildVersion": "426",
           "date": "2026-11-24",
@@ -282,25 +291,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-418/TwitchUnblock.ipa",
           "size": 4817415,
           "commit": "719f8b7c24a5d91f171164e0d40acb281549814d"
-        },
-        {
-          "version": "1.7.45",
-          "buildVersion": "417",
-          "date": "2026-11-18",
-          "localizedDescription": "- Connect an LG TV: Settings → Twitch Account → Connect an LG TV scans the QR code shown by the TwitchUnblock app on an LG TV and, after you confirm, sends it your Twitch web session, encrypted end to end, so the TV watches with your account (ad-free subs, followed channels). Only TwitchUnblock's Workers (or your own Worker) can receive it.",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-417/TwitchUnblock.ipa",
-          "size": 4800349,
-          "commit": "bb272b6de899ec97716740da43c64e9fa9c4524f"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.7.54",
-      "versionDate": "2026-11-24",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-426/TwitchUnblock.ipa",
-      "size": 4892988
+      "version": "1.7.55",
+      "versionDate": "2026-11-25",
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-427/TwitchUnblock.ipa",
+      "size": 4898625
     }
   ],
   "news": []

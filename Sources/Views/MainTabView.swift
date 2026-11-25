@@ -969,6 +969,7 @@ struct MainTabView: View {
     /// du PiP si le lecteur reste réduit.
     private var miniBarShown: Bool {
         playerMode != nil && !playerVisible && !closingPlayer && !pipState.active
+            && (!isLivePlaying || store.showLiveMiniPlayer)
     }
 
     /// Feuilles et mosaïque attachées à cet écran : une notification touchée

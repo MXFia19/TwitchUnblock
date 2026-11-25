@@ -2108,6 +2108,9 @@ struct SettingsView: View {
                     .font(.tMeta)
                     .foregroundColor(.tMuted)
                     .fixedSize(horizontal: false, vertical: true)
+                toggleRow(store.t("show_live_mini_player"), store.t("show_live_mini_player_sub"),
+                          $store.showLiveMiniPlayer, log: "Mini-barre des directs")
+                Divider().background(Color.tBorder)
                 // Notifications quand une chaîne suivie passe en live.
                 toggleRow(store.t("notif_live"), store.t("notif_live_sub"),
                           Binding(get: { liveNotif }, set: { on in

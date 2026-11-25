@@ -909,6 +909,10 @@ final class AppStore: ObservableObject {
     var themeID: String { "\(accent.rawValue)-\(background.rawValue)-\(liquidGlass)" }
 
     // MARK: – Débogage (section temporaire)
+    @Published var showLiveMiniPlayer: Bool = UserDefaults.standard.object(forKey: "cfg_show_live_mini_player") as? Bool ?? true {
+        didSet { UserDefaults.standard.set(showLiveMiniPlayer, forKey: "cfg_show_live_mini_player") }
+    }
+
     /// Afficher la latence du direct par-dessus le lecteur.
     @Published var showLatency: Bool = false {
         didSet { UserDefaults.standard.set(showLatency, forKey: "dbg_latency") }

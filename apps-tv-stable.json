@@ -25,6 +25,15 @@
       },
       "versions": [
         {
+          "version": "0.1.57",
+          "buildVersion": "57",
+          "date": "2026-11-25",
+          "localizedDescription": "- VODs no longer stop with an error when Twitch has deleted the original sound of a muted part: the VOD starts again at the same place\n- VODs with no sound on Twitch are now announced at the top of the video.\n- Other improvements and fixes",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-57/TwitchUnblockTV.ipa",
+          "size": 2978165,
+          "commit": "abf28a13f6c98a38bb9c79c0b6b47ff5d0059304"
+        },
+        {
           "version": "0.1.49",
           "buildVersion": "49",
           "date": "2026-11-12",
@@ -52,10 +61,10 @@
           "commit": "31361aace31427663ca25a06adabd44206b8dd28"
         }
       ],
-      "version": "0.1.49",
-      "versionDate": "2026-11-12",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-49/TwitchUnblockTV.ipa",
-      "size": 2896512
+      "version": "0.1.57",
+      "versionDate": "2026-11-25",
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/tv-57/TwitchUnblockTV.ipa",
+      "size": 2978165
     }
   ]
 }

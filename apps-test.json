@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.7.56",
+          "buildVersion": "429",
+          "date": "2026-11-26",
+          "localizedDescription": "- Other improvements and fixes",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-429/TwitchUnblock.ipa",
+          "size": 4899301,
+          "commit": "eb6f7b5c96bcc9047649e0516afdf072bcf4a56f"
+        },
+        {
           "version": "1.7.55",
           "buildVersion": "427",
           "date": "2026-11-25",
@@ -280,25 +289,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-391/TwitchUnblock.ipa",
           "size": 4582203,
           "commit": "aceb92805268a7297555d7dd3d1755fa2edc3139"
-        },
-        {
-          "version": "1.7.12",
-          "buildVersion": "390",
-          "date": "2026-11-05",
-          "localizedDescription": "- The player's seek bar no longer stays on screen after minimizing the player (iOS 16)",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-390/TwitchUnblock.ipa",
-          "size": 4569268,
-          "commit": "eea4414913442e5bbf00c2426e5024149d3baf9e"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.7.55",
-      "versionDate": "2026-11-25",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-427/TwitchUnblock.ipa",
-      "size": 4898625
+      "version": "1.7.56",
+      "versionDate": "2026-11-26",
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-429/TwitchUnblock.ipa",
+      "size": 4899301
     }
   ],
   "news": []

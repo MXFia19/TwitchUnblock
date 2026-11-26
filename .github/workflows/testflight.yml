@@ -1,0 +1,381 @@
+name: TestFlight
+
+# App iPhone sur TestFlight, versions stables seulement (DOCUMENTATION.md →
+# « TestFlight » pour la mise en place) :
+#  - après chaque build réussi de master (build.yml) : même commit, même
+#    version et même numéro de build que l'IPA d'AltStore/SideStore, lus dans
+#    apps.json où build.yml vient de les écrire ;
+#  - à la main (Actions → TestFlight → Run workflow) : la dernière version de
+#    apps.json, pour réessayer un envoi ;
+#  - sur la branche de test, quand ce fichier ou tools/testflight changent :
+#    même build sans signature ni envoi, avec les mêmes vérifications.
+# Sans les secrets (ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_P8, TF_DIST_KEY, posés
+# par tools/testflight/asc.mjs setup), rien n'est construit.
+on:
+  workflow_run:
+    workflows: ["Build and upload nightly"]
+    types: [completed]
+    branches: [master]
+  workflow_dispatch:
+  push:
+    branches: [test-17d298]
+    paths:
+      - '.github/workflows/testflight.yml'
+      - 'tools/testflight/**'
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+concurrency:
+  group: testflight
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: Pick the build
+    runs-on: ubuntu-latest
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    outputs:
+      mode: ${{ steps.pick.outputs.mode }}
+      commit: ${{ steps.pick.outputs.commit }}
+      version: ${{ steps.pick.outputs.version }}
+      build: ${{ steps.pick.outputs.build }}
+    steps:
+      - name: Version, build number and commit from apps.json
+        id: pick
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+          HAS_SECRETS: ${{ secrets.ASC_KEY_ID != '' && secrets.ASC_ISSUER_ID != '' && secrets.ASC_KEY_P8 != '' && secrets.TF_DIST_KEY != '' }}
+        run: |
+          # Par l'API (pas raw.githubusercontent.com, en cache quelques minutes) :
+          # build.yml vient d'y ajouter le build à envoyer.
+          gh api -H "Accept: application/vnd.github.raw" "repos/${{ github.repository }}/contents/apps.json?ref=master" > apps.json
+          python3 - <<'PY'
+          import json, os
+          d = json.load(open('apps.json'))
+          app = next((a for a in d['apps'] if a.get('bundleIdentifier') == 'com.mxfia19.TwitchUnblock'), d['apps'][0])
+          versions = app.get('versions', [])
+          event, sha = os.environ['EVENT'], os.environ.get('RUN_SHA', '')
+          if event == 'workflow_run':
+              entry = next((v for v in versions if v.get('commit') == sha), None)
+              if not entry:
+                  raise SystemExit(f'Build {sha[:7]} absent de apps.json : source pas mise à jour par build.yml ?')
+          else:
+              entry = versions[0]
+          mode, commit = 'upload', entry.get('commit', '')
+          if event == 'push':
+              # Essai sur la branche de test : son propre commit, numéros du dernier build stable.
+              mode, commit = 'dry-run', os.environ['GITHUB_SHA']
+          elif os.environ['HAS_SECRETS'] != 'true':
+              mode = 'skip'
+              print('::notice::Secrets TestFlight absents : rien envoyé (DOCUMENTATION.md → TestFlight).')
+          elif not commit:
+              raise SystemExit('Commit du build absent de apps.json')
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as out:
+              out.write(f"mode={mode}\ncommit={commit}\nversion={entry['version']}\nbuild={entry['buildVersion']}\n")
+          print(f"{mode} : {entry['version']} (build {entry['buildVersion']}), commit {commit[:7]}")
+          PY
+
+  testflight:
+    name: ${{ needs.prepare.outputs.mode == 'dry-run' && 'TestFlight build (dry run)' || 'TestFlight upload' }}
+    needs: prepare
+    if: needs.prepare.outputs.mode == 'upload' || needs.prepare.outputs.mode == 'dry-run'
+    # Même image que build.yml : Xcode 27.1 (27A9275, version finale, acceptée
+    # par App Store Connect) et SDK iOS 27.1, exigé pour l'écran intérieur de
+    # l'iPhone Duo.
+    runs-on: xcode-27
+    env:
+      MODE: ${{ needs.prepare.outputs.mode }}
+      VERSION: ${{ needs.prepare.outputs.version }}
+      BUILD: ${{ needs.prepare.outputs.build }}
+      ARCHIVE: ${{ github.workspace }}/build/TwitchUnblock.xcarchive
+    steps:
+      - name: Checkout the build's commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.commit }}
+
+      - name: Checkout TestFlight tools
+        # Outils pris sur la branche de ce workflow : un build stable fait
+        # avant leur arrivée s'envoie quand même.
+        uses: actions/checkout@v4
+        with:
+          path: tf-tools
+          sparse-checkout: tools/testflight
+
+      - name: TestFlight settings
+        id: cfg
+        run: |
+          python3 - <<'PY'
+          import json, os
+          c = json.load(open('tf-tools/tools/testflight/config.json'))
+          bundle, name = c['bundleId'].strip(), str(c.get('displayName') or '').strip()
+          if not name:
+              if os.environ['MODE'] == 'upload':
+                  raise SystemExit('Nom de l’app manquant : displayName dans tools/testflight/config.json')
+              name = 'TU TestFlight'
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as out:
+              out.write(f'bundle={bundle}\nname={name}\n')
+          print(f'{bundle} « {name} »')
+          PY
+
+      - name: App icons (opaque, alternate icons in the catalog)
+        run: |
+          # Comme « Create App Icon Folder » de build.yml, avec deux différences
+          # exigées par App Store Connect :
+          #  - icônes sans couche alpha (ITMS-90717) : posées sur du noir, comme
+          #    iOS affiche déjà l'icône transparente (make_icons.py, aperçu Default) ;
+          #  - icônes au choix (AppIcon-Purple…) dans le catalogue, déclarées
+          #    par Xcode lui-même ; l'IPA d'AltStore les ajoute en fichiers
+          #    séparés (buildipa.sh) parce que Feather refuse celles du catalogue.
+          xcrun swiftc -O -o "$RUNNER_TEMP/flatten_icon" tf-tools/tools/testflight/flatten_icon.swift
+          python3 - <<'PY'
+          import json, os, shutil, subprocess
+          CAT = 'Sources/Assets.xcassets'
+          flat = os.path.join(os.environ['RUNNER_TEMP'], 'flatten_icon')
+          def entry(name, appearance=None):
+              e = {'filename': name, 'idiom': 'universal', 'platform': 'ios', 'size': '1024x1024'}
+              if appearance:
+                  e['appearances'] = [{'appearance': 'luminosity', 'value': appearance}]
+              return e
+          def contents(folder, images):
+              with open(f'{folder}/Contents.json', 'w') as f:
+                  json.dump({'images': images, 'info': {'author': 'xcode', 'version': 1}}, f, indent=2)
+          def iconset(name, image, variants=None):
+              folder = f'{CAT}/{name}.appiconset'
+              os.makedirs(folder, exist_ok=True)
+              subprocess.run([flat, image, f'{folder}/icon.png'], check=True)
+              alpha = subprocess.run(['sips', '-g', 'hasAlpha', f'{folder}/icon.png'],
+                                     capture_output=True, text=True, check=True).stdout
+              if 'hasAlpha: no' not in alpha:
+                  raise SystemExit(f'{name} : couche alpha restée')
+              images = [entry('icon.png')]
+              for kind in (('dark', 'tinted') if variants else ()):
+                  shutil.copy(f'assets/icons/{variants}-{kind}.png', f'{folder}/icon-{kind}.png')
+                  images.append(entry(f'icon-{kind}.png', kind))
+              contents(folder, images)
+          def preview(name):
+              folder = f'{CAT}/IconPreview-{name}.imageset'
+              os.makedirs(folder, exist_ok=True)
+              shutil.copy(f'assets/icons/previews/{name}.png', f'{folder}/preview.png')
+              contents(folder, [{'filename': 'preview.png', 'idiom': 'universal'}])
+          iconset('AppIcon', 'assets/icon.png', 'AppIcon')
+          preview('Default')
+          for name in ['Purple', 'Night', 'Light', 'Contrast', 'Neon']:
+              iconset(f'AppIcon-{name}', f'assets/icons/{name}.png')
+              preview(name)
+          print('Icônes : AppIcon et 5 icônes au choix, opaques')
+          PY
+
+      - name: Info.plist for TestFlight
+        env:
+          TF_BUNDLE: ${{ steps.cfg.outputs.bundle }}
+          TF_NAME: ${{ steps.cfg.outputs.name }}
+          # Même jeton de comptage que l'IPA officielle (UsageService).
+          PING_KEY: ${{ secrets.PING_KEY }}
+        run: |
+          python3 - <<'PY'
+          import os, plistlib
+          env = os.environ
+          def edit(path, change):
+              with open(path, 'rb') as f:
+                  d = plistlib.load(f)
+              change(d)
+              with open(path, 'wb') as f:
+                  plistlib.dump(d, f)
+          def app(d):
+              d.update(CFBundleIdentifier=env['TF_BUNDLE'], CFBundleDisplayName=env['TF_NAME'],
+                       CFBundleName=env['TF_NAME'], CFBundleShortVersionString=env['VERSION'],
+                       CFBundleVersion=env['BUILD'], CFBundleIconName='AppIcon',
+                       # Canal lu par l'app : pas de recherche de mise à jour
+                       # (TestFlight s'en charge), voir UpdateChecker.
+                       TUChannel='testflight', TUPingKey=env.get('PING_KEY', ''),
+                       ITSAppUsesNonExemptEncryption=False, UILaunchScreen={})
+              d.pop('UILaunchStoryboardName', None)
+              d['CFBundleURLTypes'][0]['CFBundleURLName'] = env['TF_BUNDLE']
+              # Ni Feather, ni SideStore, ni AltStore : rien à leur renvoyer.
+              d['LSApplicationQueriesSchemes'] = [s for s in d.get('LSApplicationQueriesSchemes', [])
+                                                  if s not in ('feather', 'sidestore', 'altstore')]
+          def extension(d):
+              d.update(CFBundleDisplayName=env['TF_NAME'], CFBundleShortVersionString=env['VERSION'],
+                       CFBundleVersion=env['BUILD'])
+          edit('Info.plist', app)
+          edit('Widgets/Info.plist', extension)
+          PY
+
+      - name: Generate the Xcode project
+        env:
+          TF_BUNDLE: ${{ steps.cfg.outputs.bundle }}
+        run: |
+          # project.yml tel quel, plus ce qui change pour TestFlight, fusionné
+          # cible par cible par XcodeGen (include) : identifiants, profils App
+          # Store (noms de tools/testflight/asc.mjs), icônes du catalogue.
+          cat > project-testflight.yml <<EOF
+          include:
+            - project.yml
+          targets:
+            TwitchUnblock:
+              settings:
+                base:
+                  PRODUCT_BUNDLE_IDENTIFIER: $TF_BUNDLE
+                  PROVISIONING_PROFILE_SPECIFIER: TU TestFlight App
+                  ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+                  ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES: AppIcon-Purple AppIcon-Night AppIcon-Light AppIcon-Contrast AppIcon-Neon
+            TwitchUnblockWidgets:
+              settings:
+                base:
+                  PRODUCT_BUNDLE_IDENTIFIER: $TF_BUNDLE.Widgets
+                  PROVISIONING_PROFILE_SPECIFIER: TU TestFlight Widgets
+          EOF
+          brew install xcodegen
+          xcodegen generate --spec project-testflight.yml
+
+      - name: Signing (certificate, App Store profiles, keychain)
+        id: sign
+        if: env.MODE == 'upload'
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          TF_DIST_KEY: ${{ secrets.TF_DIST_KEY }}
+          TF_BUNDLE: ${{ steps.cfg.outputs.bundle }}
+        run: |
+          # En premier : masque le nom du titulaire (dans le certificat) avant
+          # que xcodebuild ne l'affiche.
+          node tf-tools/tools/testflight/asc.mjs signing
+          umask 077
+          printf '%s\n' "$TF_DIST_KEY" > "$RUNNER_TEMP/tf-dist-key.pem"
+          printf '%s\n' "$ASC_KEY_P8" > "$RUNNER_TEMP/AuthKey.p8"
+          # LibreSSL de macOS : un .p12 que le trousseau sait lire.
+          OPENSSL=/usr/bin/openssl
+          LEGACY=""; $OPENSSL version | grep -q '^OpenSSL 3' && LEGACY=-legacy
+          P12_PW=$($OPENSSL rand -hex 16); KC_PW=$($OPENSSL rand -hex 16)
+          echo "::add-mask::$P12_PW"; echo "::add-mask::$KC_PW"
+          $OPENSSL pkcs12 -export $LEGACY -inkey "$RUNNER_TEMP/tf-dist-key.pem" -in "$RUNNER_TEMP/tf-dist-cert.pem" \
+            -out "$RUNNER_TEMP/tf-dist.p12" -passout "pass:$P12_PW"
+          KC="$RUNNER_TEMP/testflight.keychain-db"
+          security create-keychain -p "$KC_PW" "$KC"
+          security set-keychain-settings -lut 21600 "$KC"
+          security unlock-keychain -p "$KC_PW" "$KC"
+          security import "$RUNNER_TEMP/tf-dist.p12" -k "$KC" -P "$P12_PW" -f pkcs12 -T /usr/bin/codesign -T /usr/bin/security
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KC_PW" "$KC" > /dev/null
+          security list-keychains -d user -s "$KC" $(security list-keychains -d user | tr -d '"')
+          echo "keychain=$KC" >> "$GITHUB_OUTPUT"
+
+      - name: Archive
+        env:
+          TEAM_ID: ${{ steps.sign.outputs.team_id }}
+          KC: ${{ steps.sign.outputs.keychain }}
+        run: |
+          if [ "$MODE" = upload ]; then
+            SIGNING=(CODE_SIGN_STYLE=Manual CODE_SIGNING_ALLOWED=YES CODE_SIGNING_REQUIRED=YES
+                     "CODE_SIGN_IDENTITY=Apple Distribution" "DEVELOPMENT_TEAM=$TEAM_ID"
+                     "OTHER_CODE_SIGN_FLAGS=--keychain $KC")
+          else
+            SIGNING=(CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO "CODE_SIGN_IDENTITY=")
+          fi
+          LOG="$RUNNER_TEMP/archive.log"
+          if ! xcodebuild archive -project TwitchUnblock.xcodeproj -scheme TwitchUnblock \
+              -configuration Release -destination 'generic/platform=iOS' \
+              -archivePath "$ARCHIVE" "${SIGNING[@]}" > "$LOG" 2>&1; then
+            grep -E 'error:|\*\* ARCHIVE FAILED' "$LOG" | head -40
+            tail -n 40 "$LOG"
+            exit 1
+          fi
+          grep -iE 'warning: .*(icon|privacy)' "$LOG" | sort -u | head -20 || true
+          tail -n 3 "$LOG"
+
+      - name: Check the archived app
+        env:
+          TF_BUNDLE: ${{ steps.cfg.outputs.bundle }}
+        run: |
+          # Ce qu'App Store Connect refuse ou que l'app TestFlight doit avoir,
+          # vérifié avant l'envoi (et dans l'essai de la branche de test).
+          python3 - <<'PY'
+          import os, plistlib, subprocess
+          env = os.environ
+          app = f"{env['ARCHIVE']}/Products/Applications/TwitchUnblock.app"
+          ext = f'{app}/PlugIns/TwitchUnblockWidgets.appex'
+          p = plistlib.load(open(f'{app}/Info.plist', 'rb'))
+          e = plistlib.load(open(f'{ext}/Info.plist', 'rb'))
+          problems = []
+          def need(ok, what):
+              if not ok:
+                  problems.append(what)
+          need(os.path.exists(f'{app}/PrivacyInfo.xcprivacy'), 'PrivacyInfo.xcprivacy absent de l’app')
+          need(p.get('CFBundleIdentifier') == env['TF_BUNDLE'], f"identifiant de l'app : {p.get('CFBundleIdentifier')}")
+          need(e.get('CFBundleIdentifier') == env['TF_BUNDLE'] + '.Widgets', f"identifiant de l'extension : {e.get('CFBundleIdentifier')}")
+          for d, who in ((p, 'app'), (e, 'extension')):
+              need(d.get('CFBundleShortVersionString') == env['VERSION'], f"version ({who}) : {d.get('CFBundleShortVersionString')}")
+              need(d.get('CFBundleVersion') == env['BUILD'], f"build ({who}) : {d.get('CFBundleVersion')}")
+          need(p.get('ITSAppUsesNonExemptEncryption') is False, 'ITSAppUsesNonExemptEncryption absent')
+          need(p.get('TUChannel') == 'testflight', f"canal : {p.get('TUChannel')}")
+          alternates = sorted((p.get('CFBundleIcons') or {}).get('CFBundleAlternateIcons') or {})
+          wanted = sorted(f'AppIcon-{n}' for n in ['Purple', 'Night', 'Light', 'Contrast', 'Neon'])
+          need(alternates == wanted, f'icônes au choix : {alternates}')
+          need(not {'feather', 'sidestore', 'altstore'} & set(p.get('LSApplicationQueriesSchemes', [])), 'schémas de sideload restés')
+          need(os.path.exists(f'{app}/Assets.car'), 'catalogue (Assets.car) absent')
+          # Icônes posées par Xcode dans l'app (iOS 16 à 17) : signalées
+          # seulement, App Store Connect contrôle celle du catalogue (1024).
+          for icon in sorted(f for f in os.listdir(app) if f.startswith('AppIcon') and f.endswith('.png')):
+              out = subprocess.run(['sips', '-g', 'hasAlpha', f'{app}/{icon}'], capture_output=True, text=True).stdout
+              if 'hasAlpha: no' not in out:
+                  print(f'::warning::{icon} : couche alpha')
+          if problems:
+              print('\n'.join(f'::error::{x}' for x in problems))
+              raise SystemExit(1)
+          print(f"OK : {p['CFBundleDisplayName']} {env['VERSION']} ({env['BUILD']}), {len(alternates)} icônes au choix, manifeste de confidentialité")
+          PY
+
+      - name: Export and upload to App Store Connect
+        if: env.MODE == 'upload'
+        env:
+          TEAM_ID: ${{ steps.sign.outputs.team_id }}
+          TF_BUNDLE: ${{ steps.cfg.outputs.bundle }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          python3 - <<'PY'
+          import os, plistlib
+          env = os.environ
+          options = {
+              'method': 'app-store-connect',
+              'destination': 'upload',
+              'teamID': env['TEAM_ID'],
+              'signingStyle': 'manual',
+              'signingCertificate': 'Apple Distribution',
+              'provisioningProfiles': {
+                  env['TF_BUNDLE']: 'TU TestFlight App',
+                  env['TF_BUNDLE'] + '.Widgets': 'TU TestFlight Widgets',
+              },
+              'manageAppVersionAndBuildNumber': False,
+              'uploadSymbols': True,
+              'testFlightInternalTestingOnly': False,
+          }
+          with open(os.path.join(env['RUNNER_TEMP'], 'ExportOptions.plist'), 'wb') as f:
+              plistlib.dump(options, f)
+          PY
+          xcodebuild -exportArchive -archivePath "$ARCHIVE" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" -exportPath "$RUNNER_TEMP/export" \
+            -allowProvisioningUpdates -authenticationKeyPath "$RUNNER_TEMP/AuthKey.p8" \
+            -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+          {
+            echo "### TestFlight"
+            echo "Sent: version $VERSION (build $BUILD). App Store Connect processes it in 10-30 minutes, then it shows up in TestFlight."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove signing files
+        if: always() && env.MODE == 'upload'
+        run: |
+          security delete-keychain "$RUNNER_TEMP/testflight.keychain-db" 2>/dev/null || true
+          rm -f "$RUNNER_TEMP/AuthKey.p8" "$RUNNER_TEMP/tf-dist-key.pem" "$RUNNER_TEMP/tf-dist.p12" "$RUNNER_TEMP/tf-dist-cert.pem"
+
+      - name: Archive log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: testflight-archive-log
+          path: ${{ runner.temp }}/archive.log
+          if-no-files-found: ignore

@@ -62,6 +62,13 @@ final class UpdateChecker: ObservableObject {
     static var isTestBuild: Bool {
         (Bundle.main.object(forInfoDictionaryKey: "TUChannel") as? String) == "test"
     }
+    /// Build TestFlight (canal « testflight », testflight.yml) : TestFlight
+    /// annonce et installe lui-même les mises à jour. Pas de vérification ni
+    /// de renvoi vers AltStore, SideStore ou Feather ; le journal des
+    /// modifications lit toujours apps.json (mêmes numéros de build).
+    static var isTestFlightBuild: Bool {
+        (Bundle.main.object(forInfoDictionaryKey: "TUChannel") as? String) == "testflight"
+    }
     static var sourceURL: String {
         isTestBuild
             ? "https://raw.githubusercontent.com/MXFia19/TwitchUnblock/test-17d298/apps-test.json"
@@ -91,6 +98,7 @@ final class UpdateChecker: ObservableObject {
     /// « Plus tard » a été choisi lors d'un lancement précédent.
     @discardableResult
     func checkIfDue(force: Bool = false, atLaunch: Bool = false) async -> Outcome {
+        guard !Self.isTestFlightBuild else { return .skipped }
         let force = force || atLaunch
         if atLaunch { UserDefaults.standard.removeObject(forKey: dismissedKey) }
         let ud = UserDefaults.standard

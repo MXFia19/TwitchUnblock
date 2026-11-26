@@ -1208,6 +1208,69 @@ minutes through the fallback. Past 95%, the main Worker answers playback like
 Cloudflare's daily limit (`1027`), and the app already moves to the fallback
 until midnight UTC.
 
+### TestFlight
+
+Stable releases can also go to TestFlight, built and sent by GitHub Actions
+([`testflight.yml`](.github/workflows/testflight.yml)) without a Mac. It is
+ready, but sends nothing until the Apple developer account is set up (below).
+
+**When.** After every successful `master` build (`build.yml`): same commit, same
+version and same build number as the AltStore/SideStore IPA, read from
+`apps.json`. It can also be run by hand (Actions → TestFlight → Run workflow)
+to send the latest version again. On the test branch, a change to the workflow
+or to [`tools/testflight/`](tools/testflight) runs the same build unsigned
+(dry run), with the same checks, and sends nothing.
+
+**What differs from the IPA.**
+
+- **Its own app.** Bundle ID `com.mxfia19.TwitchUnblock.tf` (Live Activities:
+  `.tf.Widgets`), so it installs next to a sideloaded copy. Its name comes from
+  `displayName` in [`config.json`](tools/testflight/config.json), without
+  “Twitch”.
+- **Updates through TestFlight.** The channel is `testflight` (`TUChannel`):
+  no update check, no “Check for updates” button, and no
+  Feather/SideStore/AltStore URL schemes. The changelog still reads
+  `apps.json`, where the build numbers are the same.
+- **Opaque icon.** App Store Connect refuses icons with an alpha channel, so
+  `assets/icon.png` is placed on black ([`flatten_icon.swift`](tools/testflight/flatten_icon.swift)).
+  iOS already shows it on black, so it looks the same.
+- **Alternate icons from the asset catalog** (`AppIcon-Purple`…), which Xcode
+  declares itself. The IPA adds them as loose files instead, because Feather
+  refuses the catalog ones.
+
+The privacy manifest ([`Sources/PrivacyInfo.xcprivacy`](Sources/PrivacyInfo.xcprivacy))
+and `ITSAppUsesNonExemptEncryption = NO` (HTTPS only, so no export compliance
+question) are in every build.
+
+**Setting it up (once, on a PC).**
+
+1. Join the Apple Developer Program.
+2. Create a key in App Store Connect: Users and Access → Integrations →
+   App Store Connect API → Team Keys → *Admin* role. Download the
+   `AuthKey_XXXXXXXXXX.p8` file (Apple gives it only once) and note the Issuer ID.
+3. Run the setup script, with the GitHub CLI logged in:
+   ```bash
+   node tools/testflight/asc.mjs setup --key AuthKey_XXXXXXXXXX.p8 --issuer <Issuer ID>
+   ```
+   It checks the key and registers both bundle IDs. It creates the
+   distribution certificate with a private key made on the PC, never sent to
+   Apple and kept in `~/.twitchunblock/testflight/`. It then creates the
+   App Store profiles and sets the repository secrets (`ASC_KEY_ID`,
+   `ASC_ISSUER_ID`, `ASC_KEY_P8`, `TF_DIST_KEY`) without printing them. It
+   also says whether the app exists yet. Running it again reuses what is
+   already there.
+4. Create the app in App Store Connect (Apps → + → New App, iOS, bundle ID
+   `com.mxfia19.TwitchUnblock.tf`). The API can't create apps. For external
+   testers, fill in the TestFlight test information (beta description, feedback
+   email, privacy policy) and answer App Privacy as listed in the privacy
+   manifest's header.
+5. Put the app's name in `displayName` ([`config.json`](tools/testflight/config.json)).
+   The upload stops while it is empty.
+
+**Every year.** The certificate lasts a year. When it expires, run the setup
+script again. The workflow redoes the profiles by itself. In CI logs, the
+account holder's name (it is in the certificate) is masked.
+
 ---
 
 ## 🙌 Contributors

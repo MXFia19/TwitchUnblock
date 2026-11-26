@@ -103,6 +103,11 @@
         <true/>
     </dict>
 
+    <!-- ── Chiffrement : HTTPS du système seulement (exempté) ─────
+         Évite la question « Export Compliance » à chaque build TestFlight. -->
+    <key>ITSAppUsesNonExemptEncryption</key>
+    <false/>
+
     <!-- ── Orientation ────────────────────────────────────────── -->
     <key>UISupportedInterfaceOrientations</key>
     <array>

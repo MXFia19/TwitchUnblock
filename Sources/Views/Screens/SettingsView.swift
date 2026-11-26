@@ -2299,7 +2299,8 @@ struct SettingsView: View {
                     Circle().fill(Color.tPrimary).frame(width: 26, height: 26)
                 }
 
-                // Mise à jour : disponible → bouton ; sinon, vérification manuelle.
+                // Mise à jour : disponible → bouton ; sinon, vérification manuelle
+                // (rien pour un build TestFlight : TestFlight s'en charge).
                 if let up = updater.available {
                     // Installation ratée (vieil IPA sous le dernier numéro) :
                     // l'IPA à réinstaller, et pourquoi.
@@ -2330,7 +2331,7 @@ struct SettingsView: View {
                             .font(.tMeta).foregroundColor(.tMuted)
                             .fixedSize(horizontal: false, vertical: true)
                     }
-                } else {
+                } else if !UpdateChecker.isTestFlightBuild {
                     Button {
                         checkingUpdate = true
                         Task {

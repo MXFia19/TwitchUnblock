@@ -212,6 +212,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.7.57",
+          "buildVersion": "430",
+          "date": "2026-11-27",
+          "localizedDescription": "- Chat: in landscape, the chat no longer rebuilds itself every few seconds when it can't find its last message — it made the chat jump and could end up freezing the app\n- Channel points: iOS 27.0 refuses Twitch's statistics address, so the watched minutes now go through the TwitchUnblock server right away, and the log no longer shows an error when they did\n- Logs: a frozen app is now told apart from a crash, and playback errors show iOS's error code, to find what freezes the app when switching quality\n- After iOS restarts its media services, the audio session is set up again, so the next playback isn't silent",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-430/TwitchUnblock.ipa",
+          "size": 4906498,
+          "commit": "f4be64a47b1c3e4f062f3e1f80fdf2e49312c80e"
+        },
+        {
           "version": "1.7.56",
           "buildVersion": "429",
           "date": "2026-11-26",
@@ -291,25 +300,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-420/TwitchUnblock.ipa",
           "size": 4840107,
           "commit": "0a45b0112b0d63b88b661aaa4598bcaa120cf308"
-        },
-        {
-          "version": "1.7.47",
-          "buildVersion": "419",
-          "date": "2026-11-21",
-          "localizedDescription": "- Hidden tags: type the tags whose streams you don't want to see (“vtuber”, for example) in the hidden list in Settings, or long-press a stream → Hide the tag. Those streams leave Top, categories and search; synced with your account and the website.\n- Picture in Picture is turned off in LiveContainer's multitasking mode, where it doesn't work (it stays in single-app mode).\n- When a streamer delays their own stream (against stream sniping), the app says so once and shows the delay under the qualities, so it isn't mistaken for lag from the app.\n- Channels that Twitch doesn't transcode only have the Source quality: the quality picker now explains it instead of looking broken.\n- If your network blocks the Bulgaria source (often a DNS filter such as NextDNS or AdGuard), the app tells you which address to allow.",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-419/TwitchUnblock.ipa",
-          "size": 4839696,
-          "commit": "900924dfa3f08b886767d3b9c6d409535252aa0e"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.7.56",
-      "versionDate": "2026-11-26",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-429/TwitchUnblock.ipa",
-      "size": 4899301
+      "version": "1.7.57",
+      "versionDate": "2026-11-27",
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-430/TwitchUnblock.ipa",
+      "size": 4906498
     }
   ],
   "news": []

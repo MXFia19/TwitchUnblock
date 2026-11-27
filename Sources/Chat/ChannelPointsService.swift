@@ -299,7 +299,14 @@ final class ChannelPointsService: ObservableObject {
                      "HTTP \(sent.status)" + (sent.relayed ? " · par le Worker" : ""))
         // Minute que Twitch compte pour les points (Réglages → Points de chaîne),
         // qu'elle soit partie en direct ou par le Worker.
-        if (200..<300).contains(sent.status) { PointsTracker.shared.addMinute(login) }
+        if (200..<300).contains(sent.status) {
+            PointsTracker.shared.addMinute(login)
+        } else {
+            // Partie, mais refusée : elle ne compte pas. Notée une fois par
+            // code ; elle ne restait qu'au niveau « debug », absent des signalements.
+            noteSpadeOnce("http \(sent.status)", "Minute refusée par Twitch",
+                          "HTTP \(sent.status)" + (sent.relayed ? " · par le Worker" : ""))
+        }
     }
 
     // MARK: – Envoi au spade : en direct, ou par le Worker
@@ -312,6 +319,9 @@ final class ChannelPointsService: ObservableObject {
     private static var spadeViaWorker = false
     private static var spadeNextDirectTry = Date.distantPast
     private static let spadeDirectRetry: TimeInterval = 15 * 60
+    /// Adresse refusée par l'appareil lui-même (voir sendSpade) : l'envoi
+    /// direct n'est retenté qu'au bout de 6 h.
+    private static let spadeBlockedRetry: TimeInterval = 6 * 3600
     private static var spadeWorkerNoted = false
     /// Erreurs déjà notées au journal : une fois chacune par séance, plus à
     /// chaque minute.
@@ -334,12 +344,38 @@ final class ChannelPointsService: ObservableObject {
             return (code, false)
         } catch {
             Self.spadeDirectFailures += 1
-            if Self.spadeViaWorker { Self.spadeNextDirectTry = Date().addingTimeInterval(Self.spadeDirectRetry) }
-            let urlCode = (error as? URLError).map { " (URLError \($0.code.rawValue))" } ?? ""
-            noteSpadeOnce("direct" + urlCode + error.localizedDescription, "minute-watched échoué",
-                          error.localizedDescription + urlCode + " · hôte: \(url.host ?? "?")")
-            // Le Worker vient déjà d'échouer pour cette minute.
-            guard directFirst, let code = await relaySpade(url, b64) else { return nil }
+            let urlError = error as? URLError
+            let urlCode = urlError.map { " (URLError \($0.code.rawValue))" } ?? ""
+            let detail = error.localizedDescription + urlCode + " · hôte: \(url.host ?? "?")"
+            // Adresse refusée par l'appareil lui-même : « bad URL » d'iOS 27.0
+            // pour https://spade.twitch.tv/track, pourtant valide (trois
+            // appareils sous 27.0 et 27.0.1, novembre 2026) ; hôte introuvable
+            // derrière un DNS filtrant. Rien ne changera pendant la séance.
+            let blocked = urlError.map { [URLError.Code.badURL, .cannotFindHost, .dnsLookupFailed].contains($0.code) } ?? false
+            if Self.spadeViaWorker {
+                Self.spadeNextDirectTry = Date().addingTimeInterval(blocked ? Self.spadeBlockedRetry
+                                                                            : Self.spadeDirectRetry)
+            }
+            // Le Worker vient déjà d'échouer pour cette minute : elle est perdue.
+            guard directFirst, let code = await relaySpade(url, b64) else {
+                noteSpadeOnce("direct" + urlCode + error.localizedDescription, "minute-watched échoué", detail)
+                return nil
+            }
+            // Partie par le Worker : rien de perdu, une simple information.
+            // Avant, l'échec direct était noté comme une erreur même quand le
+            // Worker transmettait la minute, et paraissait dans les signalements.
+            if blocked {
+                Self.spadeViaWorker = true
+                Self.spadeNextDirectTry = Date().addingTimeInterval(Self.spadeBlockedRetry)
+                if !Self.spadeWorkerNoted {
+                    Self.spadeWorkerNoted = true
+                    logger.info("POINTS/WATCH", "Minutes envoyées par le Worker",
+                                "adresse refusée sur l'appareil — " + detail + " · nouvel essai direct dans 6 h")
+                }
+                return (code, true)
+            }
+            noteSpadeOnce("relayed" + urlCode + error.localizedDescription,
+                          "Envoi direct échoué : minute passée par le Worker", detail, warn: false)
             if Self.spadeDirectFailures >= 2, !Self.spadeViaWorker {
                 Self.spadeViaWorker = true
                 Self.spadeNextDirectTry = Date().addingTimeInterval(Self.spadeDirectRetry)
@@ -415,10 +451,11 @@ final class ChannelPointsService: ObservableObject {
         return nil
     }
 
-    /// Note au journal une fois par erreur distincte et par séance.
-    private func noteSpadeOnce(_ key: String, _ message: String, _ detail: String) {
+    /// Note au journal une fois par erreur distincte et par séance ; `warn`
+    /// faux : une information (rien de perdu), absente des signalements.
+    private func noteSpadeOnce(_ key: String, _ message: String, _ detail: String, warn: Bool = true) {
         guard Self.spadeLogged.insert(key).inserted else { return }
-        logger.warn("POINTS/WATCH", message, detail)
+        if warn { logger.warn("POINTS/WATCH", message, detail) } else { logger.info("POINTS/WATCH", message, detail) }
     }
 
     /// Récupère l'ID du viewer connecté via le token web.

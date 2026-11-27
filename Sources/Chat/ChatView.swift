@@ -78,6 +78,8 @@ struct ChatView: View {
     /// Change pour reconstruire la liste, comme le fait une rotation.
     @State private var listID = 0
     @State private var lastListRebuild = Date.distantPast
+    /// Reconstructions d'affilée sans que le bas ne revienne (voir checkBottomShown).
+    @State private var rebuildStreak = 0
 
     private let bottomAnchor = "chat_bottom_anchor"   // sentinelle de bas de liste
 
@@ -537,7 +539,11 @@ struct ChatView: View {
                                         isDragging = true
                                         if !sentinelVisible { autoScroll = false }
                                     }
-                                    .onEnded { _ in isDragging = false }
+                                    .onEnded { _ in
+                                        isDragging = false
+                                        // Geste de l'utilisateur : le garde-fou repart (checkBottomShown).
+                                        rebuildStreak = 0
+                                    }
                             )
                             // Clavier ouvert : faire glisser le chat vers le bas ou
                             // le toucher le referme, sans envoyer (Entrée était le
@@ -562,6 +568,7 @@ struct ChatView: View {
                             // reste calé en bas si on suivait, sinon
                             // le bas sort de l'écran et le suivi semble s'arrêter.
                             .onChange(of: geo.size.height) { _ in
+                                rebuildStreak = 0   // autre taille : le garde-fou repart
                                 guard autoScroll else { return }
                                 DispatchQueue.main.async { proxy.scrollTo(bottomAnchor, anchor: .bottom) }
                             }
@@ -830,17 +837,33 @@ struct ChatView: View {
     /// s'est trompée dans ses mesures (colonne étroite du paysage, hauteurs
     /// de messages très variables) et montre un vide. Le chat « disparaissait »
     /// jusqu'à une rotation, qui la remesure (dave, rykozin). Elle est
-    /// reconstruite de la même façon, au plus toutes les 5 s.
+    /// reconstruite de la même façon.
+    /// Une reconstruction qui ne ramène pas le bas n'est retentée qu'après
+    /// 30 s, puis 2 min, puis plus jusqu'au prochain geste ou changement de
+    /// taille. Toutes les 5 s sans fin (1.7.2), quand la mesure ne remontait
+    /// pas : « sentinelle absente » ~80 fois en 11 min chez un iPhone 17
+    /// sous iOS 27, chat qui saute, app qui finissait par geler.
+    private static let rebuildWaits: [TimeInterval] = [5, 30, 120]
+
     private func checkBottomShown(height: CGFloat) {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             guard autoScroll, !isDragging, height > 40 else { return }
             let y = bottomProbe.y
             let shown = y.map { $0 > -40 && $0 < height + 40 } ?? false
-            guard !shown, Date().timeIntervalSince(lastListRebuild) > 5 else { return }
+            if shown { rebuildStreak = 0; return }
+            let waits = Self.rebuildWaits
+            guard rebuildStreak < waits.count,
+                  Date().timeIntervalSince(lastListRebuild) > waits[rebuildStreak] else { return }
+            rebuildStreak += 1
             lastListRebuild = Date()
             listID += 1
-            logger.warn("CHAT", "Bas du chat hors de l'écran : liste reconstruite",
-                        y.map { String(format: "%.0f pt", $0) } ?? "sentinelle absente")
+            if rebuildStreak == 1 {
+                logger.warn("CHAT", "Bas du chat hors de l'écran : liste reconstruite",
+                            y.map { String(format: "%.0f pt", $0) } ?? "sentinelle absente")
+            } else if rebuildStreak == waits.count {
+                logger.info("CHAT", "Reconstruction du chat sans effet : garde-fou en pause",
+                            "jusqu'au prochain geste ou changement de taille")
+            }
         }
     }
 

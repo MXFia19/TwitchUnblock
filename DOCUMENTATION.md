@@ -479,7 +479,10 @@ iPhone apps.
   when the chat follows the live but its last message is no longer on screen
   (SwiftUI's lazy list measuring wrong in a narrow column: the chat looked
   empty until you rotated the phone), the list is rebuilt like a rotation
-  would.
+  would. A rebuild that doesn't bring the last message back is only tried
+  again after 30 s, then 2 minutes, then not until you scroll or the chat
+  changes size: in 1.7.2 it could repeat every 5 seconds without end, which
+  made the chat jump and could end up freezing the app.
 * 🚫 **Banned from a chat? Still readable** — when Twitch refuses your account
   in a channel's chat (banned), the chat keeps going read-only without your
   account, with a banner in place of the message box and a **Retry with my
@@ -611,8 +614,14 @@ iPhone apps.
   every minute; when an ad blocker or a filtering DNS cuts that address off,
   the minute goes through the TwitchUnblock server instead (your own Worker
   first, if set), so it still counts. After two failures in a row the server
-  is used first, and the direct route is tried again every 15 minutes. The
-  log keeps the exact error once per session instead of a line every minute.
+  is used first, and the direct route is tried again every 15 minutes. When
+  the device itself refuses the address — iOS 27.0 answers "bad URL" for
+  Twitch's perfectly valid `https://spade.twitch.tv/track`, a filtering DNS
+  says the host doesn't exist — the server is used right away and the direct
+  route only tried again after 6 hours. A minute that went through the
+  server is only an information line in the log (nothing was lost); an error
+  is logged, once per session, only when a minute couldn't go at all, or
+  when Twitch refused it.
 * ⏱ **Chat synced with the video** (Settings → Chat, on by default) — live
   messages arrive almost instantly while the picture is seconds behind, so
   each one waits until the video catches up: your delay behind live as the
@@ -1013,6 +1022,15 @@ iPhone apps.
   (Files, AirDrop, Mail…): shared or exported, they're in English whatever
   the app's language, like the recent errors attached to a bug report.
   Categories (PLAYER, NETWORK…), settings changes and details built on the fly are translated too; only iOS's own error messages stay in iOS's language.
+  The log also tells a freeze from a crash: while the app is in the
+  foreground, a separate thread checks every half second that the main
+  thread still answers. Blocked for 3 seconds or more, it writes "Main thread
+  blocked" with how long once it's free again; closed while still frozen,
+  the next launch says "The app was stopped while frozen" instead of "probable
+  crash". A playback error shows iOS's error domain and code next to its
+  message ("Cannot Complete Action" alone didn't say which error it was),
+  and a restart of iOS's media services is logged, with the audio session set
+  up again so the next playback isn't silent.
 
 ---
 

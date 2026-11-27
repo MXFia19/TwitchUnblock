@@ -60,12 +60,25 @@ final class AppLogger: ObservableObject {
         let ud = UserDefaults.standard
         if ud.bool(forKey: Self.foregroundKey) {
             ud.set(false, forKey: Self.foregroundKey)
-            logs.insert(LogEntry(id: counter, timestamp: Self.stamp(Date()), level: .error, category: "APP",
-                                 message: "Arrêt brutal de l'app pendant la session précédente (plantage probable)",
-                                 detail: "Elle était au premier plan : les lignes juste en dessous montrent ce qui se passait."),
-                        at: 0)
+            // Figée avant l'arrêt (MainThreadWatch) : fermée de force, pas un
+            // plantage — « App just freezes and have to hard close ».
+            let start = ud.double(forKey: MainThreadWatch.startKey)
+            let frozen = start > 0 ? Int(max(ud.double(forKey: MainThreadWatch.lastKey) - start, 3)) : nil
+            if let frozen {
+                logs.insert(LogEntry(id: counter, timestamp: Self.stamp(Date()), level: .error, category: "APP",
+                                     message: "Arrêt de l'app figée pendant la session précédente",
+                                     detail: "Fil principal bloqué depuis au moins \(frozen) s, puis app fermée : les lignes juste en dessous montrent ce qui se passait."),
+                            at: 0)
+            } else {
+                logs.insert(LogEntry(id: counter, timestamp: Self.stamp(Date()), level: .error, category: "APP",
+                                     message: "Arrêt brutal de l'app pendant la session précédente (plantage probable)",
+                                     detail: "Elle était au premier plan : les lignes juste en dessous montrent ce qui se passait."),
+                            at: 0)
+            }
             counter += 1
         }
+        ud.removeObject(forKey: MainThreadWatch.startKey)
+        ud.removeObject(forKey: MainThreadWatch.lastKey)
         let nc = NotificationCenter.default
         nc.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
             UserDefaults.standard.set(true, forKey: Self.foregroundKey)
@@ -84,6 +97,7 @@ final class AppLogger: ObservableObject {
         NSSetUncaughtExceptionHandler { exception in
             AppLogger.shared.recordCrash(exception)
         }
+        MainThreadWatch.shared.start()
     }
 
     private static func stamp(_ date: Date) -> String {
@@ -279,3 +293,94 @@ final class AppLogger: ObservableObject {
 }
 
 let logger = AppLogger.shared
+
+// MARK: – Fil principal bloqué
+/// L'app gèle (le fil principal ne répond plus) et finit fermée de force, ce
+/// que le journal prenait pour un plantage (fb_mwy5ueg4 : « App just freezes
+/// and have to hard close »). Un fil à part demande un signe de vie au fil
+/// principal toutes les demi-secondes, app au premier plan seulement.
+/// Débloqué : une ligne avec la durée. Fermée pendant le blocage : le
+/// lancement suivant le dit (début, et dernier instant vu bloqué, gardés dans
+/// les réglages, lisibles d'un fil à l'autre).
+private final class MainThreadWatch {
+    static let shared = MainThreadWatch()
+    static let startKey = "log_hang_start"
+    static let lastKey = "log_hang_last"
+    /// Blocage noté à partir de 3 s.
+    private static let threshold: TimeInterval = 3
+
+    private let lock = NSLock()
+    // Sous `lock`.
+    private var lastPong = Date()
+    /// Premier plan depuis ; nil hors du premier plan (l'app suspendue en
+    /// arrière-plan ne répond pas non plus, sans être bloquée).
+    private var activeSince: Date?
+    // Sur `queue`.
+    private var hangStart: Date?
+    private let queue = DispatchQueue(label: "twitchunblock.mainwatch", qos: .utility)
+    private var timer: DispatchSourceTimer?
+
+    func start() {
+        guard timer == nil else { return }
+        let nc = NotificationCenter.default
+        nc.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
+            self?.setActive(true)
+        }
+        nc.addObserver(forName: UIApplication.willResignActiveNotification, object: nil, queue: .main) { [weak self] _ in
+            self?.setActive(false)
+        }
+        DispatchQueue.main.async { [weak self] in
+            if UIApplication.shared.applicationState == .active { self?.setActive(true) }
+        }
+        let t = DispatchSource.makeTimerSource(queue: queue)
+        t.schedule(deadline: .now() + 1, repeating: 0.5, leeway: .milliseconds(100))
+        t.setEventHandler { [weak self] in self?.tick() }
+        t.resume()
+        timer = t
+    }
+
+    private func setActive(_ on: Bool) {
+        lock.lock()
+        activeSince = on ? Date() : nil
+        lastPong = Date()
+        lock.unlock()
+    }
+
+    /// Sur `queue` : signe de vie demandé ; sans réponse depuis le seuil, le
+    /// blocage est retenu pour le lancement suivant.
+    private func tick() {
+        DispatchQueue.main.async { [weak self] in self?.pong() }
+        lock.lock()
+        let since = Date().timeIntervalSince(lastPong)
+        let active = activeSince != nil
+        lock.unlock()
+        guard active, since >= Self.threshold else { return }
+        let now = Date()
+        let ud = UserDefaults.standard
+        if hangStart == nil {
+            let start = now.addingTimeInterval(-since)
+            hangStart = start
+            ud.set(start.timeIntervalSince1970, forKey: Self.startKey)
+        }
+        ud.set(now.timeIntervalSince1970, forKey: Self.lastKey)
+    }
+
+    /// Fil principal : signe de vie. Après un blocage, sa durée au journal.
+    private func pong() {
+        let now = Date()
+        lock.lock()
+        let gap = now.timeIntervalSince(lastPong)
+        // Attente commencée au premier plan : pas une suspension de l'app.
+        let counted = activeSince.map { lastPong >= $0 } ?? false
+        lastPong = now
+        lock.unlock()
+        queue.async { [weak self] in
+            guard let self, self.hangStart != nil else { return }
+            self.hangStart = nil
+            UserDefaults.standard.removeObject(forKey: Self.startKey)
+            UserDefaults.standard.removeObject(forKey: Self.lastKey)
+        }
+        guard counted, gap >= Self.threshold else { return }
+        logger.warn("APP", "Fil principal bloqué", String(format: "%.1f s", gap))
+    }
+}

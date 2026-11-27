@@ -52,6 +52,23 @@ final class PlaybackAudio {
         } catch {
             logger.warn("LECTEUR", "Session audio : catégorie refusée", error.localizedDescription)
         }
+        // Services média d'iOS redémarrés (leur processus a planté) : la
+        // session audio repart de zéro, réglages perdus, et la lecture en
+        // cours s'arrête (« Cannot Complete Action », AVFoundation -11819).
+        // Catégorie reposée et session réactivée si un lecteur la tient :
+        // sans ça, la lecture suivante pouvait rester muette ou échouer.
+        NotificationCenter.default.addObserver(forName: AVAudioSession.mediaServicesWereResetNotification,
+                                               object: nil, queue: nil) { _ in
+            shared.mediaServicesReset()
+        }
+    }
+
+    private func mediaServicesReset() {
+        queue.async { [self] in
+            logger.warn("LECTEUR", "Services média d'iOS redémarrés", "session audio reconfigurée")
+            try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
+            if !owners.isEmpty { try? AVAudioSession.sharedInstance().setActive(true) }
+        }
     }
 
     /// Un lecteur s'ouvre : le son passe à l'app (celui des autres apps

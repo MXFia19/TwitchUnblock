@@ -667,7 +667,7 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
     private func itemFailed(_ item: AVPlayerItem, error: Error?) {
         guard !tornDown, player.currentItem === item, failedItem !== item else { return }
         failedItem = item
-        let reason = error?.localizedDescription ?? "?"
+        let reason = Self.describe(error)
         if Date().timeIntervalSince(lastAutoReload) > 60 { autoReloads = 0 }
         if isLive, autoReloads < 2, !pausedByUser, let asset = item.asset as? AVURLAsset {
             autoReloads += 1
@@ -708,6 +708,19 @@ final class ImmersivePlayerModel: NSObject, ObservableObject {
             }
         }
         showFailure(isLive && pausedByUser ? reason + " · en pause, pas de relance" : reason)
+    }
+
+    /// Message d'iOS, son domaine et son code, et l'erreur d'en dessous.
+    /// « Cannot Complete Action » seul ne disait pas laquelle (services
+    /// média d'iOS redémarrés, mémoire épuisée…) : fb_mwy5t87f, plantage au
+    /// changement de qualité.
+    private static func describe(_ error: Error?) -> String {
+        guard let ns = error as NSError? else { return "?" }
+        var out = ns.localizedDescription + " (\(ns.domain) \(ns.code))"
+        if let under = ns.userInfo[NSUnderlyingErrorKey] as? NSError {
+            out += " ← \(under.domain) \(under.code)"
+        }
+        return out
     }
 
     /// « Passer » un passage coupé alors que la lecture s'est arrêtée : un

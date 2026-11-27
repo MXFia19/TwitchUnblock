@@ -21,6 +21,15 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "1.7.57",
+          "buildVersion": "430",
+          "date": "2026-11-27",
+          "localizedDescription": "- Chat: in landscape, the chat no longer rebuilds itself every few seconds when it can't find its last message — it made the chat jump and could end up freezing the app\n- Channel points: iOS 27.0 refuses Twitch's statistics address, so the watched minutes now go through the TwitchUnblock server right away, and the log no longer shows an error when they did\n- Logs: a frozen app is now told apart from a crash, and playback errors show iOS's error code, to find what freezes the app when switching quality\n- After iOS restarts its media services, the audio session is set up again, so the next playback isn't silent",
+          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-430/TwitchUnblock.ipa",
+          "size": 4906498,
+          "commit": "f4be64a47b1c3e4f062f3e1f80fdf2e49312c80e"
+        },
+        {
           "version": "1.7.56",
           "buildVersion": "429",
           "date": "2026-11-26",
@@ -280,25 +289,16 @@
           "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-392/TwitchUnblock.ipa",
           "size": 4605890,
           "commit": "581034a55a31be31d80a2384c2eaceeba9460cd0"
-        },
-        {
-          "version": "1.7.13",
-          "buildVersion": "391",
-          "date": "2026-11-06",
-          "localizedDescription": "- iOS 16: the player's seek bar no longer stays on screen after minimizing the player\n- AirPlay: low latency no longer jumps to the live edge while the stream plays on the TV, which kept freezing the picture\n- An offline channel's page has a Chat button: Twitch keeps its chat open between streams, to read and write there",
-          "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-391/TwitchUnblock.ipa",
-          "size": 4582203,
-          "commit": "aceb92805268a7297555d7dd3d1755fa2edc3139"
         }
       ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {}
       },
-      "version": "1.7.56",
-      "versionDate": "2026-11-26",
-      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-429/TwitchUnblock.ipa",
-      "size": 4899301
+      "version": "1.7.57",
+      "versionDate": "2026-11-27",
+      "downloadURL": "https://github.com/MXFia19/TwitchUnblock/releases/download/test-430/TwitchUnblock.ipa",
+      "size": 4906498
     }
   ],
   "news": []
